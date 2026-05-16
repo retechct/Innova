@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Innova Mobili | Vendedor Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="pantalla-login" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white;">
+        
+        <div style="text-align: center; margin-bottom: 30px;">
+            <div style="font-weight: 900; font-size: 2.5rem; color: #d4af37; letter-spacing: -1px;">INNOVA <span style="color: white;">MOBILI</span></div>
+            <p style="color: #94a3b8; font-size: 14px; margin-top: 5px;">Sistema ERP y Punto de Venta</p>
+        </div>
+
+        <div style="background: white; padding: 30px; border-radius: 15px; width: 90%; max-width: 350px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+            <h3 style="color: #0f172a; text-align: center; margin-top: 0; margin-bottom: 20px;">Iniciar Sesión</h3>
+            
+            <div class="form-group">
+                <label style="color: #475569;">1. Ubicación / Sede</label>
+                <select id="login-tienda" class="form-input" style="border-color: #cbd5e1; font-weight: bold; color: var(--primary);">
+                    <option value="Tienda del medio">🏪 Tienda del medio</option>
+                    <option value="Tienda del sol">☀️ Tienda del sol</option>
+                    <option value="Tienda de plaza vea">🛒 Tienda de plaza vea</option>
+                    <option value="Tienda grande">🏢 Tienda grande</option>
+                    <option value="Taller">🛠️ Taller (Venta/Producción)</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label style="color: #475569;">2. Selecciona tu perfil</label>
+                <select id="login-usuario" class="form-input" style="border-color: #cbd5e1;"></select>
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label style="color: #475569;">3. PIN de Acceso (4 dígitos)</label>
+                <input type="password" id="login-pin" class="form-input" placeholder="****" maxlength="4" style="text-align: center; font-size: 24px; letter-spacing: 10px; border-color: #cbd5e1;">
+            </div>
+
+           <button class="btn-primary" style="width: 100%; margin-top: 20px; font-size: 16px; padding: 12px; background-color: #d4af37;" onclick="entrarAlSistema()">
+               <i class="fa-solid fa-unlock-keyhole"></i> INGRESAR
+           </button>
+       </div>
+       
+       <div style="margin-top: 30px; font-size: 12px; color: #475569;">
+           Protegido bajo arquitectura Multi-Empresa
+       </div>
+    </div>
+
+    <div class="overlay" id="overlay-sidebar" onclick="toggleSidebar()"></div>
+    <div class="overlay" id="overlay-cart" onclick="toggleCart()"></div>
+
+    <header>
+        <button class="menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars-staggered"></i></button>
+        <div class="logo">INNOVA <span>MOBILI</span></div>
+        <div style="width: 40px;"></div>
+    </header>
+
+<nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">MENÚ ERP</div>
+    
+    <div class="sidebar-item" onclick="changeView('stock')"><i class="fa-solid fa-boxes-stacked"></i> Stock (Tienda)</div>
+    <div class="sidebar-item" onclick="changeView('catalogo')"><i class="fa-solid fa-book-open"></i> Carta de Modelos</div>
+    <div class="sidebar-item" onclick="changeView('contrato')"><i class="fa-solid fa-pen-ruler"></i> Plantillas (A Medida)</div>
+    
+    <div class="sidebar-item" onclick="changeView('pedidos')" style="margin-top:20px; color:var(--success)"><i class="fa-solid fa-clock-rotate-left"></i> Mis Pedidos</div>
+    
+    <div class="sidebar-item" onclick="verMisCreaciones()" style="color: #b8860b; border-top: 1px solid #1e293b; margin-top: 5px;">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Mis Creaciones
+    </div>
+
+    <div class="sidebar-item" onclick="abrirModalSugerencia(); toggleSidebar();" style="background: #451a03; color: #fbbf24; font-weight: bold; border: 1px solid #92400e; margin: 5px 10px; border-radius: 8px; font-size: 13px;">
+    <i class="fa-solid fa-lightbulb"></i> SUGERIR NUEVO INSUMO
+</div>
+    
+    <div id="btn-menu-taller" class="sidebar-item" style="display: none; background: #1e293b; color: #d4af37; font-weight: bold;" onclick="changeView('taller')">
+        <i class="fa-solid fa-industry"></i> GESTIÓN DE TALLER
+    </div>
+
+    <div id="btn-menu-inventario" class="sidebar-item" style="display: none; background: #0f172a; color: #6fcc86; font-weight: bold;" onclick="changeView('inventario')">
+        <i class="fa-solid fa-layer-group"></i> CONTROL DE INSUMOS
+    </div>
+    <div id="btn-menu-gestor" class="sidebar-item" style="display: none; background: #0f172a; color: #38bdf8; font-weight: bold;" onclick="changeView('gestor-aprobacion')">
+        <i class="fa-solid fa-clipboard-check"></i> GESTOR DE MODELOS
+    </div>
+    <div id="btn-menu-logistica" class="sidebar-item" style="display: none; background: #0f172a; color: #fbbf24; font-weight: bold;" onclick="changeView('logistica')">
+        <i class="fa-solid fa-truck-ramp-box"></i> LOGÍSTICA EXTERNA
+    </div>
+    <div id="btn-menu-usuarios" class="sidebar-item" style="display: none; background: #0f172a; color: #a78bfa; font-weight: bold;" onclick="changeView('usuarios-admin')">
+        <i class="fa-solid fa-users-gear"></i> GESTIÓN DE PERSONAL
+    </div>
+    <div id="btn-menu-proveedores" class="sidebar-item" style="display: none; background: #0f172a; color: #2dd4bf; font-weight: bold;" onclick="changeView('proveedores')">
+        <i class="fa-solid fa-address-book"></i> PROVEEDORES
+    </div>
+
+    <div class="sidebar-item" onclick="cerrarSesion()" style="color: #ef4444; border-top: 1px solid #334155; margin-top: 20px;">
+        <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
+    </div>
+</nav>
+
+<main class="main-content">
+    <div class="view-title-container" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <i id="view-icon" class="fa-solid fa-book-open"></i>
+            <h2 id="view-title" style="margin: 0;">NUESTRA CARTA DE MODELOS</h2>
+        </div>
+        <button id="btn-add-producto" class="btn-primary" style="display: none; font-size: 11px; padding: 8px 15px; border-radius: 6px; background: #0f172a;" onclick="abrirModalProductoDirecto()">
+            <i class="fa-solid fa-plus"></i> Añadir Producto
+        </button>
+    </div>
+    
+    <div id="view-productos">
+        <div id="product-grid" class="grid"></div>
+    </div>
+
+    <div id="view-plantillas" style="display: none;">
+        <div class="grid"> 
+            <div class="card card-template"> 
+                <img src="imagenes/sin_foto.jpg">
+                <div class="card-info">
+                    <span class="status-badge status-template">DISEÑO A MEDIDA</span>
+                    <h4>Plantilla de Sofá</h4>
+                    <span class="price-tag">A Cotizar</span>
+                    <button class="btn-action btn-primary" onclick="openConfig('Plantilla de Sofá', 'imagenes/plantilla_sofa.jpg')">
+                        <i class="fa-solid fa-gears"></i> CONFIGURAR
+                    </button>
+                </div>
+            </div>
+
+            <div class="card card-template">
+                <img src="imagenes/sin_foto.jpg">
+                <div class="card-info">
+                    <span class="status-badge status-template">DISEÑO A MEDIDA</span>
+                    <h4>Plantilla de Comedor</h4>
+                    <span class="price-tag">A Cotizar</span>
+                    <button class="btn-action btn-primary" onclick="openConfigComedor()">
+                        <i class="fa-solid fa-gears"></i> CONFIGURAR
+                    </button>
+                </div>
+            </div>
+            <div class="card card-template">
+                <img src="imagenes/sin_foto.jpg">
+                <div class="card-info">
+                    <span class="status-badge status-template">DISEÑO A MEDIDA</span>
+                    <h4>Mesas de Centro y Consolas</h4>
+                    <span class="price-tag">A Cotizar</span>
+                    <button class="btn-action btn-primary" onclick="openConfigCentro()">
+                        <i class="fa-solid fa-gears"></i> CONFIGURAR
+                    </button>
+                </div>
+            </div>
+            <div class="card card-template">
+                <img src="imagenes/sin_foto.jpg">
+                <div class="card-info">
+                    <span class="status-badge status-template">DISEÑO A MEDIDA</span>
+                    <h4>Butacas y Sillería Suelta</h4>
+                    <span class="price-tag">A Cotizar</span>
+                    <button class="btn-action btn-primary" onclick="openConfigButaca()">
+                        <i class="fa-solid fa-gears"></i> CONFIGURAR
+                    </button>
+                </div>
+            </div>
+        </div> 
+    </div> 
+
+    <div id="view-pedidos" style="display: none;">
+        <div id="pedidos-container"></div>
+    </div>
+
+    <div id="view-taller" class="view-section" style="display:none; padding: 20px;">
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px;">
+            <h2 style="font-family: 'Inter', sans-serif; font-weight: 800; color: #0f172a; margin:0; letter-spacing: -1px;">
+                <i class="fa-solid fa-industry" style="color: #d4af37; margin-right: 10px;"></i> CONTROL DE PRODUCCIÓN
+            </h2>
+            <div id="stats-taller" style="font-size: 11px; font-weight: 900; color: #64748b; background: #f1f5f9; padding: 8px 16px; border-radius: 50px; text-transform: uppercase;">
+                Sincronizando con taller...
+            </div>
+        </div>
+
+        <div id="contenedor-tickets-taller" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+        </div>
+    </div>
+<div id="view-inventario" class="view-section" style="display:none; padding: 20px;">
+    <div style="background: #0f172a; padding: 20px; color: white; border-radius: 12px; margin-bottom: 30px;">
+        <h2 style="margin:0; font-size: 18px;"><i class="fa-solid fa-plus-circle"></i> REGISTRAR NUEVAS PARTES</h2>
+        <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+            <button class="btn-primary" onclick="abrirModalNuevo('tela', 'inventario')" style="background: #7c3aed; border:none;">+ Registrar Tela</button>
+            <button class="btn-primary" onclick="abrirModalNuevo('tablero', 'inventario')" style="background: #059669; border:none;">+ Registrar Tablero</button>
+            <button class="btn-primary" onclick="abrirModalNuevo('base', 'inventario')" style="background: #0284c7; border:none;">+ Pata/Zócalo Sofá</button>
+            <button class="btn-primary" onclick="abrirModalNuevo('base-comedor', 'inventario')" style="background: #0369a1; border:none;">+ Base de Mesa</button>
+            <button class="btn-primary" onclick="abrirModalNuevo('silla', 'inventario')" style="background: #b45309; border:none;">+ Estructura Silla</button>
+            <button class="btn-primary" onclick="abrirModalNuevo('butaca', 'inventario')" style="background: #92400e; border:none;">+ Estructura Butaca</button>
+            <button class="btn-primary" onclick="abrirModalNuevo('cojin', 'inventario')" style="background: #ec4899; border:none;">+ Registrar Cojín</button>
+        </div>
+    </div>
+
+    <h3 style="color:#0f172a; border-bottom: 2px solid #7c3aed; padding-bottom: 5px; margin-bottom: 15px;">
+        <i class="fa-solid fa-scroll"></i> MAESTRO DE TELAS
+    </h3>
+    <div id="contenedor-telas-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;">
+        </div>
+
+    <h3 style="color:#0f172a; border-bottom: 2px solid #ec4899; padding-bottom: 5px; margin-bottom: 15px;">
+        <i class="fa-solid fa-palette"></i> DISEÑOS DE COJINES DECORATIVOS
+    </h3>
+    <div id="contenedor-cojines-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
+
+    <h3 style="color:#0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 5px; margin-bottom: 15px;">
+        <i class="fa-solid fa-table-cells-large"></i> TABLEROS (MÁRMOL / MADERA)
+    </h3>
+    <div id="contenedor-tableros-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
+
+    <h3 style="color:#0f172a; border-bottom: 2px solid #0369a1; padding-bottom: 5px; margin-bottom: 15px;">
+        <i class="fa-solid fa-microchip"></i> BASES Y SOPORTES METÁLICOS
+    </h3>
+    <div id="contenedor-metal-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
+
+    <h3 style="color:#0f172a; border-bottom: 2px solid #b45309; padding-bottom: 5px; margin-bottom: 15px;">
+        <i class="fa-solid fa-hammer"></i> ESTRUCTURAS DE MADERA (SILLERÍA)
+    </h3>
+    <div id="contenedor-madera-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
+    
+    <div id="lista-insumos-maestra" class="grid-productos" style="display: none;"></div>
+</div>
+    <div id="view-gestor-aprobacion" class="view-section" style="display:none; padding: 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px;">
+            <h2 style="font-family: 'Inter', sans-serif; font-weight: 800; color: #0f172a; margin:0; letter-spacing: -1px;">
+                <i class="fa-solid fa-clipboard-check" style="color: #38bdf8; margin-right: 10px;"></i> GESTOR DE APROBACIÓN
+            </h2>
+            <button class="btn-primary" onclick="cargarGestorAprobacion()" style="font-size: 11px; padding: 8px 15px; background: #0f172a; border-radius: 6px;">
+                <i class="fa-solid fa-rotate"></i> Actualizar Bandeja
+            </button>
+        </div>
+
+        <div id="lista-aprobacion-pendientes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+            </div>
+    </div>
+
+    <div id="view-logistica" class="view-section" style="display:none; padding: 20px;">
+        <div class="view-title-container">
+            <h2 style="color: #b45309;"><i class="fa-solid fa-truck-fast"></i> REQUERIMIENTOS EXTERNOS (PROCURA)</h2>
+        </div>
+        <div id="tabla-logistica-externa" style="background: white; border-radius: 12px; padding: 15px; border: 1px solid #e2e8f0;">
+            <!-- Cargado vía JS -->
+        </div>
+    </div>
+
+    <div id="view-usuarios-admin" class="view-section" style="display:none; padding: 20px;">
+        <div style="background: #0f172a; padding: 20px; color: white; border-radius: 12px; margin-bottom: 20px;">
+            <h3><i class="fa-solid fa-user-plus"></i> REGISTRAR PERSONAL</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px;">
+                <input type="text" id="nu-nombre" class="form-input-sm" placeholder="Nombre completo">
+                <input type="email" id="nu-correo" class="form-input-sm" placeholder="Correo electrónico">
+                <input type="password" id="nu-pin" class="form-input-sm" placeholder="PIN (4 dígitos)" maxlength="4">
+                <select id="nu-rol" class="form-input-sm" onchange="actualizarReglasEmpresa()">
+                    <option value="Operario">🛠️ Operario</option>
+                    <option value="Vendedor">💼 Vendedor</option>
+                    <option value="Jefe_Taller">🏢 Jefe de Taller</option>
+                    <option value="Admin">🔑 Administrador</option>
+                </select>
+                <select id="nu-empresa" class="form-input-sm">
+                    <option value="20600768175">INNOVA MOBILI S.A.C.</option>
+                    <option value="20614763044">INNOVA MOBILI LIMA E.I.R.L.</option>
+                </select>
+                <select id="nu-area" class="form-input-sm">
+                    <option value="VENTAS">Área: Ventas</option>
+                    <option value="ESTRUCTURAS_MUEBLES">Área: Carpintería Sofás</option>
+                    <option value="ESTRUCTURAS_SILLAS">Área: Carpintería Sillas</option>
+                    <option value="TELAS">Área: Corte y Costura</option>
+                    <option value="TAPICERIA_SOFAS">Área: Tapicería Sofás</option>
+                    <option value="TAPICERIA_SILLAS">Área: Tapicería Sillas</option>
+                    <option value="ARMADO_COJINES">Área: Armado de Cojines</option>
+                    <option value="DESPACHO">Área: Despacho / Chofer</option>
+                    <option value="ALMACEN">Área: Almacén / Inventario</option>
+                </select>
+                <button class="btn-primary" onclick="guardarUsuario()" style="background:#7c3aed;">CREAR ACCESO</button>
+            </div>
+        </div>
+        <div id="lista-usuarios-sistema" class="grid"></div>
+    </div>
+
+    <div id="view-proveedores" class="view-section" style="display:none; padding: 20px;">
+        <div style="background: #0f172a; padding: 20px; color: white; border-radius: 12px; margin-bottom: 20px;">
+            <h3><i class="fa-solid fa-handshake"></i> DIRECTORIO DE PROVEEDORES</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px;">
+                <input type="text" id="np-nombre" class="form-input-sm" placeholder="Empresa / Contacto">
+                <select id="np-especialidad" class="form-input-sm">
+                    <option value="Vidrio">💎 Vidrio / Espejos</option>
+                    <option value="Marmol">⛰️ Mármol / Piedras</option>
+                    <option value="Soldadura">🔥 Soldadura / Metalmecánica</option>
+                    <option value="Telas">🧵 Telas (Importación)</option>
+                </select>
+                <input type="email" id="np-correo" class="form-input-sm" placeholder="Email">
+                <input type="text" id="np-whatsapp" class="form-input-sm" placeholder="WhatsApp (Ej: 51999888777)">
+                <button class="btn-primary" onclick="guardarProveedor()" style="background:#2dd4bf;">REGISTRAR</button>
+            </div>
+        </div>
+        <div id="lista-proveedores-sistema" class="grid"></div>
+    </div>
+
+</main>
+    <div class="fab" onclick="toggleCart()">
+        <i class="fa-solid fa-cart-shopping"></i>
+        <div class="badge" id="cart-count">0</div>
+    </div>
+
+    <div id="modal-config" class="modal-overlay">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="conf-title">Configurar Sofá</h3>
+                <button class="close-btn" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body-split">
+                <div class="modal-left">
+                    <div class="form-group">
+                        <label>Modelo Base</label>
+                        <select id="sofa-modelo" class="form-input" onchange="actualizarVistaSofa()">
+                            <option value="multi3">Multifuncional (3 Piezas)</option>
+                            <option value="multi4">Multifuncional (4 Piezas)</option>
+                            <option value="seccional">Seccional Normal</option>
+                            <option value="seccional_inv">Seccional Invertido</option>
+                            <option value="curvo">Curvo</option>
+                            <option value="u">En U</option>
+                            <option value="juego">Juego de Sala (3-2-1)</option>
+                        </select>
+                    </div>
+                    <div class="img-preview-container">
+                        <img id="preview-sofa" src="imagenes/sin_foto.jpg" alt="Vista Previa">
+                    </div>
+                    
+                    <div id="medidas-container" style="margin-top: 15px;"></div>
+                    <div style="margin-top: 20px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
+                        <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-bottom:5px;">
+                            <i class="fa-solid fa-clipboard-list"></i> NOTAS PARA CASQUERÍA / ESTRUCTURA
+                        </label>
+                        <textarea id="sofa-notas" class="form-input-sm" rows="3" placeholder="Ej: El cliente lo quiere con espuma zebra más dura, y el asiento 5cm más profundo..."></textarea>
+                        
+                        <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
+                            <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
+                        </label>
+                        <input type="file" id="sofa-fotos" class="form-input-sm" accept="image/*" capture="environment" multiple style="background: #fff;">
+                    </div>
+                </div>
+
+
+                <div class="modal-right">
+                    
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-layer-group"></i> A. Tapicería Principal</h4>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-tela" class="form-input-sm" placeholder="🔍 Buscar Tela Principal..." onkeyup="filtrarMaterial('tela')" onclick="filtrarMaterial('tela')">
+                                <div id="list-tela" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-tela" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
+                        </div>
+                        <input type="hidden" id="sku-tela"> 
+                            <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('tela', 'tela')"><i class="fa-solid fa-plus"></i> Añadir Nueva Tela al Catálogo</button> -->
+                    </div>
+
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-couch"></i> B. Estructura y Cojinería</h4>
+                        
+                        <label style="font-size:10px; font-weight:800; color:var(--accent); display:block; margin-bottom:5px;">INTERIOR Y ACABADO:</label>
+                        <div class="row">
+                            <select id="c-espuma" class="form-input-sm">
+                                <option value="Zebra 400 (Estándar)">Espuma Zebra 400 (Estándar)</option>
+                                <option value="Zebra 600 (Alta Densidad)">Espuma Zebra 600 (Alta Dens)</option>
+                                <option value="Lila (Premium)">Espuma Lila (Premium)</option>
+                                <option value="Casata (Dura)">Espuma Casata (Dura)</option>
+                            </select>
+                            <select id="c-costura" class="form-input-sm">
+                                <option value="Costura Estándar">Costura Estándar</option>
+                                <option value="Doble Pespunte">Doble Pespunte</option>
+                                <option value="Con Vivo (Ribete)">Con Vivo (Ribete)</option>
+                                <option value="Capitoné (Botones)">Capitoné (Botones)</option>
+                            </select>
+                        </div>
+
+                        <div class="row">
+                            <select id="c-respaldo" class="form-input-sm">
+                                <option value="Con Respaldo">Con Respaldo</option>
+                                <option value="Sin Respaldo">Sin Respaldo</option>
+                            </select>
+                            <input type="number" id="med-brazo" placeholder="Medida Brazo (Ej: 20cm)" class="form-input-sm" style="border-color:var(--accent);">
+                        </div>
+                        
+                        <label style="font-size:10px; font-weight:800; color:var(--accent); margin-top:10px; display:block;">COJINES DECORATIVOS:</label>
+                        <div class="row">
+                            <input type="number" id="c-enteros" placeholder="Cant. Enteros" class="form-input-sm">
+                            <input type="number" id="c-diseno" placeholder="Cant. c/Diseño" class="form-input-sm">
+                        </div>
+
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-cojin-entero" class="form-input-sm" placeholder="🔍 Tela Cojines Enteros..." onkeyup="filtrarMaterial('cojin-entero')" onclick="filtrarMaterial('cojin-entero')">
+                                <div id="list-cojin-entero" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-cojin-entero" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
+                        </div>
+                        <input type="hidden" id="sku-cojin-entero">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px; margin-bottom: 12px;" onclick="abrirModalNuevo('tela', 'cojin-entero')"><i class="fa-solid fa-plus"></i> Añadir Nueva Tela (Para Enteros)</button> -->
+
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-cojin-diseno" class="form-input-sm" placeholder="🔍 Diseño Cojines c/Patrón..." onkeyup="filtrarMaterial('cojin-diseno')" onclick="filtrarMaterial('cojin-diseno')">
+                                <div id="list-cojin-diseno" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-cojin-diseno" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
+                        </div>
+                        <input type="hidden" id="sku-cojin-diseno">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('cojin', 'cojin-diseno')"><i class="fa-solid fa-plus"></i> Añadir Nuevo Diseño (Patrones)</button> -->
+
+                    </div>
+
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-shoe-prints"></i> C. Bases (Patas/Zócalos)</h4>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-base" class="form-input-sm" placeholder="🔍 Buscar Pata o Zócalo..." onkeyup="filtrarMaterial('base')" onclick="filtrarMaterial('base')">
+                                <div id="list-base" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-base" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
+                        </div>
+                        <input type="hidden" id="sku-base">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('base', 'base')"><i class="fa-solid fa-plus"></i> Añadir Nueva Base</button> -->
+                    </div>
+
+                    <div class="specs-section">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; color: var(--accent); cursor: pointer; margin-bottom: 5px;">
+                            <input type="checkbox" id="check-banqueta" onchange="toggleBanqueta()" style="width: 16px; height: 16px; cursor: pointer;"> 
+                            <i class="fa-solid fa-plus"></i> D. INCLUIR BANQUETA (PUFF)
+                        </label>
+                        
+                        <div id="banqueta-inputs" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #cbd5e1;">
+                            <input type="text" id="bq-mod" placeholder="Modelo de Banqueta" class="form-input-sm" style="margin-bottom: 8px;">
+                            <div class="row">
+                                <input type="number" id="bq-largo" placeholder="Largo" class="form-input-sm">
+                                <input type="number" id="bq-ancho" placeholder="Ancho" class="form-input-sm">
+                            </div>
+                            <div class="row">
+                                <input type="number" id="bq-fondo" placeholder="Fondo" class="form-input-sm">
+                                <input type="number" id="bq-alto" placeholder="Alto" class="form-input-sm">
+                            </div>
+                        </div>
+                    </div>
+            
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label style="font-size: 12px; color:var(--primary);">Precio Negociado Total (S/)</label>
+                        <input type="number" id="conf-precio" class="form-input" style="font-size: 1.2rem; font-weight: bold; color: var(--success);" placeholder="0.00">
+                    </div>
+                </div>
+
+                
+            </div>
+            
+            <div class="modal-footer" style="margin-top: 20px;">
+                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: #b8860b; border: 1px solid #d4af37; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
+                    <i class="fa-solid fa-star"></i> Guardar como Mi Plantilla
+                </button>
+                
+                <button class="btn-action btn-primary" style="width: 100%;" onclick="confirmarPersonalizadoSofa()">CONFIRMAR Y AÑADIR AL CARRO</button>
+            </div>
+        </div>
+   
+    </div>
+<div id="modal-config-comedor" class="modal-overlay">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Configurar Comedor</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-config-comedor').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="modal-body-split">
+                <div class="modal-left">
+                    <div class="form-group">
+                        <label>Formato y Capacidad</label>
+                        <select id="comedor-formato" class="form-input" onchange="actualizarVistaComedor()">
+                            <option value="rect-6">Rectangular - 6 Sillas</option>
+                            <option value="rect-8">Rectangular - 8 Sillas</option>
+                            <option value="rect-10">Rectangular - 10 Sillas</option>
+                            <option value="rect-12">Rectangular - 12 Sillas</option>
+                            <option value="circ-4">Circular - 4 Sillas</option>
+                            <option value="circ-6">Circular - 6 Sillas</option>
+                        </select>
+                    </div>
+                    
+                    <div class="img-preview-container" style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 10px;">
+                        <img id="preview-comedor" src="imagenes/sin_foto.jpg" alt="Plano Comedor">
+                    </div>
+                    
+                    <div id="medidas-comedor-container" style="margin-top: 15px;">
+                        </div>
+                        <div style="margin-top: 20px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
+                        <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-bottom:5px;">
+                            <i class="fa-solid fa-clipboard-list"></i> NOTAS PARA CASQUERÍA / ESTRUCTURA
+                        </label>
+                        <textarea id="comedor-notas" class="form-input-sm" rows="3" placeholder="Ej: Reforzar la base para aguantar peso extra..."></textarea>
+                        
+                        <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
+                            <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
+                        </label>
+                        <input type="file" id="comedor-fotos" class="form-input-sm" accept="image/*" capture="environment" multiple style="background: #fff;">
+                    </div>
+                </div>
+
+                <div class="modal-right">
+                    
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-table-cells-large"></i> A. Tablero (Superficie)</h4>
+                        
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-tablero" class="form-input-sm" placeholder="🔍 Buscar nombre/modelo del tablero..." onkeyup="filtrarMaterial('tablero')" onclick="filtrarMaterial('tablero')">
+                                <div id="list-tablero" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-tablero" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
+                        </div>
+                        <input type="hidden" id="sku-tablero">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('tablero', 'tablero')"><i class="fa-solid fa-plus"></i> Añadir Nuevo Tablero al Catálogo</button> -->
+                        
+                        <div class="row" style="margin-top: 8px;">
+                            <select id="tablero-corte" class="form-input-sm">
+                                <option value="Corte Recto">Corte Recto</option>
+                                <option value="Codito">Codito</option>
+                                <option value="Balde">Balde</option>
+                                <option value="Media Luna">Media Luna</option>
+                                <option value="Ovalada">Ovalada</option>
+                                <option value="Circular">Circular</option>
+                            </select>
+                            <select id="tablero-canto" class="form-input-sm">
+                                <option value="Canto Pulido">Canto Pulido</option>
+                                <option value="Engrozado">Engrozado</option>
+                                <option value="Con Falda">Con Falda</option>
+                                <option value="Biselado">Biselado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-table"></i> B. Base de Mesa</h4>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-base-mesa" class="form-input-sm" placeholder="🔍 Buscar modelo de base..." onkeyup="filtrarMaterial('base-mesa')" onclick="filtrarMaterial('base-mesa')">
+                                <div id="list-base-mesa" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-base-mesa" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
+                        </div>
+                        <input type="hidden" id="sku-base-mesa">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('base-comedor', 'base-mesa')"><i class="fa-solid fa-plus"></i> Añadir Nueva Base de Mesa</button> -->
+                        <div class="row">
+                            <input type="number" id="base-altura" class="form-input-sm" placeholder="Altura Base (cm)">
+                            <input type="number" id="base-ancho" class="form-input-sm" placeholder="Ancho/Diám Base (cm)">
+                        
+                        </div>
+                    </div>
+
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-chair"></i> C. Sillería</h4>
+                        <label style="font-size:10px; font-weight:bold; color:gray;">ESTRUCTURA DE LA SILLA:</label>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-silla" class="form-input-sm" placeholder="🔍 Buscar modelo de silla..." onkeyup="filtrarMaterial('silla')" onclick="filtrarMaterial('silla')">
+                                <div id="list-silla" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-silla" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
+                        </div>
+                        <input type="hidden" id="sku-silla">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('silla', 'silla')"><i class="fa-solid fa-plus"></i> Añadir Nuevo Modelo de Silla</button> -->
+
+                        <label style="font-size:10px; font-weight:bold; color:gray;">TELA DE LA SILLA:</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-tela-silla" class="form-input-sm" placeholder="🔍 Buscar tela para tapizado..." onkeyup="filtrarMaterial('tela-silla')" onclick="filtrarMaterial('tela-silla')">
+                                <div id="list-tela-silla" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-tela-silla" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
+                        </div>
+                        <input type="hidden" id="sku-tela-silla">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('tela', 'tela-silla')"><i class="fa-solid fa-plus"></i> Añadir Nueva Tela al Catálogo</button> -->
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label style="font-size: 12px; color:var(--primary);">Precio Negociado Total (S/)</label>
+                        <input type="number" id="conf-precio-comedor" class="form-input" style="font-size: 1.2rem; font-weight: bold; color: var(--success);" placeholder="0.00">
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="margin-top: 20px;">
+                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: #b8860b; border: 1px solid #d4af37; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
+                    <i class="fa-solid fa-star"></i> Guardar como Mi Plantilla
+                </button>
+                
+                <button class="btn-action btn-primary" style="width: 100%;" onclick="confirmarComedor()">CONFIRMAR COMEDOR AL CARRO</button>
+            </div>
+        </div>
+    </div> 
+<div id="modal-config-centro" class="modal-overlay">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Configurar Mesa Auxiliar</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-config-centro').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="modal-body-split">
+                <div class="modal-left">
+                    <div class="form-group">
+                        <label>Tipo de Mueble</label>
+                        <select id="centro-tipo" class="form-input" onchange="actualizarVistaCentro()">
+                            <option value="Mesa de Centro">Mesa de Centro</option>
+                            <option value="Consola">Consola / Recibidor</option>
+                            <option value="Mesa Lateral">Mesa Lateral (Esquinera)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="img-preview-container" style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 10px;">
+                        <img id="preview-centro" src="imagenes/sin_foto.jpg" alt="Vista Previa">
+                    </div>
+                    
+                    <div style="margin-top: 15px;">
+                        <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS DEL TABLERO (cm)</label>
+                        <div style="display:flex; gap:10px; margin-top:5px;">
+                            <input type="number" id="centro-largo" class="form-input-sm" placeholder="Largo" style="flex:1;">
+                            <input type="number" id="centro-ancho" class="form-input-sm" placeholder="Ancho" style="flex:1;">
+                            <input type="number" id="centro-espesor" class="form-input-sm" placeholder="Espesor" style="flex:1;">
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 20px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
+                        <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-bottom:5px;">
+                            <i class="fa-solid fa-clipboard-list"></i> NOTAS TÉCNICAS
+                        </label>
+                        <textarea id="centro-notas" class="form-input-sm" rows="3" placeholder="Ej: Tablero sobrepuesto, base pintada al horno con acabado mate..."></textarea>
+                        
+                        <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
+                            <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
+                        </label>
+                        <input type="file" id="centro-fotos" class="form-input-sm" accept="image/*" capture="environment" multiple style="background: #fff;">
+                    </div>
+                </div>
+
+                <div class="modal-right">
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-table-cells-large"></i> A. Tablero / Superficie</h4>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-tablero-centro" class="form-input-sm" placeholder="🔍 Buscar tablero..." onkeyup="filtrarMaterial('tablero-centro')" onclick="filtrarMaterial('tablero-centro')">
+                                <div id="list-tablero-centro" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-tablero-centro" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
+                        </div>
+                        <input type="hidden" id="sku-tablero-centro">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('tablero', 'tablero-centro')"><i class="fa-solid fa-plus"></i> Añadir Nuevo Tablero</button> -->
+                    </div>
+
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-table"></i> B. Base / Estructura</h4>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-base-centro" class="form-input-sm" placeholder="🔍 Buscar modelo de base..." onkeyup="filtrarMaterial('base-centro')" onclick="filtrarMaterial('base-centro')">
+                                <div id="list-base-centro" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-base-centro" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
+                        </div>
+                        <input type="hidden" id="sku-base-centro">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px; margin-bottom: 8px;" onclick="abrirModalNuevo('base-comedor', 'base-centro')"><i class="fa-solid fa-plus"></i> Añadir Nueva Base</button> -->
+                        
+                        <div class="row">
+                            <input type="number" id="base-centro-altura" class="form-input-sm" placeholder="Altura Base (cm)">
+                            <input type="number" id="base-centro-ancho" class="form-input-sm" placeholder="Ancho/Diám Base (cm)">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label style="font-size: 12px; color:var(--primary);">Precio Negociado Total (S/)</label>
+                        <input type="number" id="conf-precio-centro" class="form-input" style="font-size: 1.2rem; font-weight: bold; color: var(--success);" placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="margin-top: 20px;">
+                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: #b8860b; border: 1px solid #d4af37; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
+                    <i class="fa-solid fa-star"></i> Guardar como Mi Plantilla
+                </button>
+                <button class="btn-action btn-primary" style="width: 100%;" onclick="confirmarCentro()">CONFIRMAR AL CARRO</button>
+            </div>
+        </div>
+    </div> <div id="modal-config-butaca" class="modal-overlay">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Configurar Asiento Individual</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-config-butaca').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="modal-body-split">
+                <div class="modal-left">
+                    <div class="form-group">
+                        <label>Tipo de Asiento</label>
+                        <select id="butaca-tipo" class="form-input" onchange="actualizarVistaButaca()">
+                            <option value="Butaca">Butaca de Sala</option>
+                            <option value="Silla Suelta">Silla (Comedor/Escritorio)</option>
+                            <option value="Sitial">Sitial (Con brazos de madera)</option>
+                            <option value="Puff / Banqueta">Puff / Banqueta</option>
+                        </select>
+                    </div>
+                    
+                    <div class="img-preview-container" style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 10px;">
+                        <img id="preview-butaca" src="imagenes/sin_foto.jpg" alt="Vista Previa">
+                    </div>
+
+                    <div style="margin-top: 15px;">
+                        <label style="font-size:10px; font-weight:bold; color:gray;">CANTIDAD A FABRICAR</label>
+                        <input type="number" id="butaca-cantidad" class="form-input-sm" placeholder="Ej: 2 unidades" value="1" style="font-weight: bold; color: var(--primary); font-size: 14px;">
+                    </div>
+                    
+                    <div style="margin-top: 20px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
+                        <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-bottom:5px;">
+                            <i class="fa-solid fa-clipboard-list"></i> NOTAS TÉCNICAS
+                        </label>
+                        <textarea id="butaca-notas" class="form-input-sm" rows="3" placeholder="Ej: Asiento 5cm más ancho, tachuelas doradas..."></textarea>
+                        
+                        <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
+                            <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
+                        </label>
+                        <input type="file" id="butaca-fotos" class="form-input-sm" accept="image/*" capture="environment" multiple style="background: #fff;">
+                    </div>
+                </div>
+
+                <div class="modal-right">
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-chair"></i> A. Estructura / Modelo Base</h4>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-estructura-butaca" class="form-input-sm" placeholder="🔍 Buscar modelo (Madera/Metal)..." onkeyup="filtrarMaterial('estructura-butaca')" onclick="filtrarMaterial('estructura-butaca')">
+                                <div id="list-estructura-butaca" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-estructura-butaca" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
+                        </div>
+                        <input type="hidden" id="sku-estructura-butaca">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('butaca', 'estructura-butaca')"><i class="fa-solid fa-plus"></i> Añadir Nuevo Modelo</button>-->
+                    </div>
+
+                    <div class="specs-section">
+                        <h4><i class="fa-solid fa-layer-group"></i> B. Tapiz Principal</h4>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
+                            <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                <input type="text" id="search-tela-butaca" class="form-input-sm" placeholder="🔍 Buscar tela para tapizado..." onkeyup="filtrarMaterial('tela-butaca')" onclick="filtrarMaterial('tela-butaca')">
+                                <div id="list-tela-butaca" class="custom-options"></div>
+                            </div>
+                            <img id="img-preview-tela-butaca" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
+                        </div>
+                        <input type="hidden" id="sku-tela-butaca">
+                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('tela', 'tela-butaca')"><i class="fa-solid fa-plus"></i> Añadir Nueva Tela</button> -->
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label style="font-size: 12px; color:var(--primary);">Precio Negociado Total (S/)</label>
+                        <p style="font-size: 10px; color: gray; margin: 0 0 5px 0;">* Ingrese el precio total por todas las unidades solicitadas.</p>
+                        <input type="number" id="conf-precio-butaca" class="form-input" style="font-size: 1.2rem; font-weight: bold; color: var(--success);" placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="margin-top: 20px;">
+                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: #b8860b; border: 1px solid #d4af37; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
+                    <i class="fa-solid fa-star"></i> Guardar como Mi Plantilla
+                </button>
+                <button class="btn-action btn-primary" style="width: 100%;" onclick="confirmarButaca()">CONFIRMAR AL CARRO</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="slider" id="cart-slider">
+        <div class="stepper">
+            <div class="step active" id="s1"><i class="fa-solid fa-1"></i> Carro</div>
+            <div class="step" id="s2"><i class="fa-solid fa-2"></i> Cliente</div>
+            <div class="step" id="s3"><i class="fa-solid fa-3"></i> Pago</div>
+            <button class="close-slider" onclick="toggleCart()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div id="step-1" class="step-content active"><div id="lista-carrito"></div></div>
+
+        <div id="step-2" class="step-content">
+            <button class="btn-ghost" onclick="goToStep(1)"><i class="fa-solid fa-arrow-left"></i> Volver a Items</button>
+            
+            <div class="form-group" style="margin-top: 15px;">
+                <label style="font-size: 11px; font-weight: bold; color: gray;">N° CONTRATO FÍSICO</label>
+                <input type="text" id="c-codigo" class="form-input">
+            </div>
+            
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: gray;">DATOS DEL CLIENTE</label>
+                <input type="text" id="c-nombre" class="form-input" placeholder="Nombre completo" style="margin-bottom: 10px;">
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+                    <input type="number" id="c-dni" placeholder="DNI" class="form-input" style="flex: 1; min-width: 120px; margin: 0;">
+                    <input type="number" id="c-celular" placeholder="Celular" class="form-input" style="flex: 1; min-width: 120px; margin: 0;">
+                </div>
+                
+                <input type="text" id="c-direccion" class="form-input" placeholder="Dirección de entrega" style="margin: 0;">
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 20px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                    <div style="flex: 1; min-width: 130px;">
+                        <label style="font-size: 10px; font-weight: bold; color: var(--accent);">FECHA EMISIÓN</label>
+                        <input type="date" id="c-emision" class="form-input" style="margin: 0; width: 100%;">
+                    </div>
+                    <div style="flex: 1; min-width: 130px;">
+                        <label style="font-size: 10px; font-weight: bold; color: var(--accent);">FECHA ENTREGA</label>
+                        <input type="date" id="c-entrega" class="form-input" style="margin: 0; width: 100%;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+       <div id="step-3" class="step-content">
+            <button class="btn-ghost" onclick="goToStep(2)"><i class="fa-solid fa-arrow-left"></i> Volver a Cliente</button>
+            
+            <div class="form-group" style="margin-top:15px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                <label style="font-size: 12px; font-weight: 800; color: var(--accent); margin-bottom: 10px; display: block;"><i class="fa-solid fa-cash-register"></i> REGISTRAR NUEVO PAGO</label>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                    <select id="pago-tipo" class="form-input-sm" onchange="actualizarCamposPago()">
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Transferencia">Transferencia / App</option>
+                        <option value="POS">Tarjeta (POS)</option>
+                    </select>
+                    
+                    <select id="pago-entidad" class="form-input-sm" style="display: none; background-color: #fff;">
+                        </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                    <input type="number" id="pago-monto" class="form-input-sm" placeholder="Monto S/" style="font-weight: bold; color: var(--success);">
+                    <input type="text" id="pago-operacion" class="form-input-sm" placeholder="N° Operación" style="display: none;">
+                </div>
+
+               <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                    <div style="background: #fff; border: 1px dashed #cbd5e1; padding: 5px; border-radius: 5px;">
+                        <input type="file" id="pago-comprobante" class="form-input-sm" accept="image/*" capture="environment" style="width: 100%; font-size: 11px; border: none; background: transparent;">
+                    </div>
+                    <button type="button" class="btn-action btn-primary" onclick="agregarMetodoPago()" style="width: 100%; height: 42px; border-radius: 6px; font-weight: bold;">
+                        <i class="fa-solid fa-plus"></i> AGREGAR PAGO
+                    </button>
+                </div>
+            </div>
+            
+            <div id="lista-pagos-agregados" style="margin-bottom: 15px;"></div>
+
+            <div class="payment-summary" style="background: #fff; padding: 15px; border-radius: 10px; border: 2px dashed #cbd5e1;">
+                <div class="pay-row" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;">
+                    <span style="font-weight: 600;">Total Venta:</span> <strong id="res-total">S/ 0.00</strong>
+                </div>
+                <div class="pay-row" style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; color: var(--success);">
+                    <span style="font-weight: 600;">Total Pagado:</span> <strong id="res-adelanto">S/ 0.00</strong>
+                </div>
+                <div class="pay-row" style="display: flex; justify-content: space-between; color: var(--danger); border-top: 1px dashed #cbd5e1; padding-top: 8px; margin-top: 8px; font-size: 15px;">
+                    <span style="font-weight: 800;">Saldo Pendiente:</span> <strong id="res-saldo">S/ 0.00</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="slider-footer"><button id="btn-main" class="btn-action btn-primary" onclick="handleNextStep()">CONTINUAR <i class="fa-solid fa-arrow-right"></i></button></div>
+    </div>
+
+    <div id="area-impresion">
+        <h1 style="text-align: center; border-bottom: 2px solid black;">INNOVA MOBILI</h1>
+        <p style="text-align: center;">CONTRATO N° <strong id="p-codigo"></strong></p>
+        <div style="margin: 20px 0; display: flex; justify-content: space-between; font-size: 14px;">
+            <div><p>Cliente: <strong id="p-nombre"></strong></p><p>DNI: <strong id="p-dni-print"></strong></p></div>
+            <div style="text-align: right;"><p>Emisión: <strong id="p-emision-p"></strong></p><p>Entrega: <strong id="p-entrega-p"></strong></p></div>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px; font-size:12px;">
+            <thead><tr style="background: #eee;"><th style="border: 1px solid black; padding: 8px;">Mueble</th><th style="border: 1px solid black; padding: 8px;">Detalles y Desglose</th><th style="border: 1px solid black; padding: 8px;">Subtotal</th></tr></thead>
+            <tbody id="p-items"></tbody>
+        </table>
+        <h2 style="text-align: right; margin-top: 20px;">TOTAL: S/ <span id="p-total"></span></h2>
+    </div>
+    
+
+  <div id="modal-creacion" class="modal-overlay" style="z-index: 4000; display: none;">
+        <div class="modal-content" style="max-width: 400px; width: 90%;">
+            <div class="modal-header">
+                <h3 style="color: #b8860b;"><i class="fa-solid fa-star"></i> Guardar Plantilla</h3>
+                <button type="button" class="close-btn" onclick="document.getElementById('modal-creacion').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div style="padding: 10px;">
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">Las notas técnicas y fotos de referencia se guardarán automáticamente con esta plantilla.</p>
+                
+                <div class="form-group">
+                    <label>Nombre Comercial de tu diseño <span style="color:red;">*</span></label>
+                    <input type="text" id="creacion-nombre" class="form-input" placeholder="Ej: Seccional Henry XL...">
+                </div>
+
+                <button class="btn-primary" style="width: 100%; margin-top: 15px; font-size: 16px; background-color: #1a1a1a;" onclick="enviarCreacionBD()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Guardar en mi Catálogo
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="modal-producto-directo" class="modal-overlay" style="z-index: 4500;">
+        <div class="modal-content" style="max-width: 400px; width: 90%;">
+            <div class="modal-header">
+                <h3 style="color: #0f172a;"><i class="fa-solid fa-box-open"></i> Nuevo Producto</h3>
+                <button type="button" class="close-btn" onclick="document.getElementById('modal-producto-directo').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div style="padding: 10px;">
+                <div class="form-group" style="background:#f8fafc; padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
+                    <label style="color:var(--accent);"><i class="fa-solid fa-camera"></i> Subir Foto del Producto</label>
+                    <input type="file" id="pd-foto" class="form-input-sm" accept="image/*" style="margin-top:10px;">
+                </div>
+
+                <div class="form-group">
+                    <label>Nombre del Producto</label>
+                    <input type="text" id="pd-nombre" class="form-input" placeholder="Ej: Espejo Sol, Cuadro Abstracto...">
+                </div>
+
+                <div class="row">
+                    <div class="form-group" style="flex: 1;">
+                        <label style="color:var(--success);">Precio Etiqueta (S/)</label>
+                        <input type="number" id="pd-precio" class="form-input" placeholder="0.00" style="font-weight: bold; color: var(--success);">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label>Stock (Cantidad)</label>
+                        <input type="number" id="pd-cantidad" class="form-input" placeholder="Ej: 5" value="1">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 5px;">
+                    <label style="color:var(--accent);">Origen (Make vs Buy)</label>
+                    <select id="pd-origen" class="form-input">
+                        <option value="Externo">📦 Comprado (Revender directo)</option>
+                        <option value="Interno">🛠️ Fabricado (Mandar al taller)</option>
+                    </select>
+                </div>
+
+                <button class="btn-primary" style="width: 100%; margin-top: 15px; background-color: #0f172a;" onclick="guardarProductoDirecto()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Publicar en Catálogo
+                </button>
+            </div>
+        </div>
+    </div>
+            <div id="modal-sugerencia" class="modal-overlay" style="z-index: 5500; display: none;">
+    <!-- Este modal ya existía, lo mantengo -->
+    <div class="modal-content" style="max-width: 380px; width: 90%;">
+        <div class="modal-header">
+            <h3 style="color: #b45309;"><i class="fa-solid fa-lightbulb"></i> Sugerir Nuevo Insumo</h3>
+            <button type="button" class="close-btn" onclick="document.getElementById('modal-sugerencia').style.display='none'">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        
+        <div style="padding: 15px;">
+            <p style="font-size: 12px; color: #64748b; margin-bottom: 15px; text-align: center;">
+                Si el cliente pide algo que no está en el sistema, sube la foto aquí para que el Admin lo oficialice.
+            </p>
+
+            <div class="form-group" style="background:#fffbeb; padding:15px; border-radius:10px; text-align:center; border:2px dashed #fcd34d; margin-bottom: 15px;">
+                <label style="color:#b45309; font-weight: bold; cursor: pointer;">
+                    <i class="fa-solid fa-camera"></i> Foto de Referencia
+                    <input type="file" id="sug-foto" class="form-input-sm" accept="image/*" style="margin-top:10px; width: 100%;">
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label>¿Qué tipo de pieza es?</label>
+                <select id="sug-tipo" class="form-input">
+                    <option value="Tela">🧵 Nueva Tela / Tapiz</option>
+                    <option value="Base">🛠️ Nueva Base / Pata / Estructura</option>
+                    <option value="Tablero">💎 Nuevo Tablero (Mármol, Vidrio, etc)</option>
+                    <option value="Modelo">🛋️ Nuevo Modelo de Mueble</option>
+                    <option value="Otro">📦 Otro accesorio / jalador</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Nombre o descripción corta</label>
+                <input type="text" id="sug-nombre" class="form-input" placeholder="Ej: Pata Lyon Oro, Tela Velvet Azul...">
+            </div>
+
+            <button class="btn-primary" style="width: 100%; margin-top: 15px; background-color: #d97706; border: none;" onclick="enviarSugerencia()">
+                <i class="fa-solid fa-paper-plane"></i> Enviar Sugerencia
+            </button>
+        </div>
+    </div>
+</div>
+<div id="modal-nuevo-material" class="modal-overlay" style="z-index: 5000; display: none;">
+    <div class="modal-content" style="max-width: 450px; width: 95%;">
+        <div class="modal-header">
+            <h3 id="nm-title" style="color: #0f172a;">Añadir Parte</h3>
+            <button type="button" class="close-btn" onclick="document.getElementById('modal-nuevo-material').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div style="padding: 15px;">
+            <!-- ID nm-tipo añadido para evitar error de consola -->
+            <input type="hidden" id="nm-tipo"> 
+            
+            <div class="form-group" style="background:#f8fafc; padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
+                <label style="color:var(--accent); font-weight: bold;"><i class="fa-solid fa-camera"></i> Foto de la Parte</label>
+                <input type="file" id="nm-foto" class="form-input-sm" accept="image/*" style="margin-top:10px;">
+            </div>
+
+            <!-- Punto 3: Lógica de Origen de Producción -->
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Origen de la Pieza</label>
+                <select id="nm-origen" class="form-input" style="margin-bottom: 15px; border-color: var(--accent);">
+                    <option value="Interno">🛠️ Fabricación Interna (Taller)</option>
+                    <option value="Externo" selected>📦 Compra Externa (Proveedor)</option>
+                </select>
+            </div>
+
+            <div id="nm-campos-dinamicos">
+                </div>
+
+            <button class="btn-primary" style="width: 100%; margin-top: 5px; background-color: #0f172a;" onclick="guardarNuevoMaterial()">
+                <i class="fa-solid fa-save"></i> GUARDAR EN MAESTRO
+            </button>
+        </div>
+    </div>
+</div>
+    <script src="script.js"></script>
+</body>
+</html>

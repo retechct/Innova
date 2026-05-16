@@ -1,0 +1,9 @@
+# Contraseñas y variables de entorno
+.env
+
+# Carpetas de imágenes locales
+uploads/
+
+# Archivos basura de Python
+__pycache__/
+*.pyc
