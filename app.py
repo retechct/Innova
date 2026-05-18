@@ -1,7 +1,9 @@
 import os
+import json
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import psycopg2
+from psycopg2 import pool as pg_pool
 from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
@@ -9,38 +11,59 @@ from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # Carga las variables del archivo .env (en producción, Railway las inyecta directo)
 load_dotenv()
 
-cloudinary.config( 
-  cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'), 
-  api_key = os.getenv('CLOUDINARY_API_KEY'), 
-  api_secret = os.getenv('CLOUDINARY_API_SECRET') 
+cloudinary.config(
+    cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key    = os.getenv('CLOUDINARY_API_KEY'),
+    api_secret = os.getenv('CLOUDINARY_API_SECRET')
 )
 
 app = Flask(__name__)
 CORS(app)
 
-# CONFIGURACIÓN DE LA BASE DE DATOS — Siempre desde variables de entorno (.env)
-DB_CONFIG = {
-    "host":     os.getenv("DB_HOST"),
-    "database": os.getenv("DB_NAME"),
-    "user":     os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-}
+# Rate limiter — protege el login contra ataques de fuerza bruta
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://",
+)
 
-# URL base del backend (usada para construir URLs de imágenes)
+# URL base del backend
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:5000")
+
+# ==========================================
+# POOL DE CONEXIONES A LA BASE DE DATOS
+# ==========================================
+# Reutiliza conexiones TCP en lugar de abrir una nueva en cada request.
+# minconn=2 conexiones siempre listas, maxconn=10 para picos de tráfico.
+_db_pool = pg_pool.ThreadedConnectionPool(
+    minconn=2,
+    maxconn=10,
+    host     = os.getenv("DB_HOST"),
+    database = os.getenv("DB_NAME"),
+    user     = os.getenv("DB_USER"),
+    password = os.getenv("DB_PASSWORD"),
+)
+
+def get_db_connection():
+    """Obtiene una conexión del pool (no abre una TCP nueva cada vez)."""
+    return _db_pool.getconn()
+
+def release_db_connection(conn):
+    """Devuelve la conexión al pool para que otro request la reutilice."""
+    if conn:
+        _db_pool.putconn(conn)
 
 
 # ==========================================
 # FUNCIONES AUXILIARES
 # ==========================================
-
-def get_db_connection():
-    """Crea una conexión a la base de datos de forma centralizada."""
-    return psycopg2.connect(**DB_CONFIG)
 
 
 def limpiar_foto(url):
@@ -125,7 +148,7 @@ def obtener_catalogo():
         return jsonify({"error": str(ex)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/catalogo/nuevo', methods=['POST'])
@@ -159,7 +182,7 @@ def agregar_producto_directo():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/insumos', methods=['GET'])
@@ -181,7 +204,7 @@ def obtener_insumos():
         return jsonify({"error": str(ex)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 # ==========================================
@@ -450,7 +473,7 @@ def guardar_venta():
         return jsonify({"error": error_msg}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 # ==========================================
@@ -494,7 +517,7 @@ def obtener_mis_ventas(vendedor_id):
         return jsonify({"error": str(ex)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/produccion/<area>', methods=['GET'])
@@ -528,7 +551,7 @@ def ver_tickets_area(area):
         return jsonify({"error": str(ex)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/pedido/detalle/<codigo>', methods=['GET'])
@@ -562,7 +585,7 @@ def obtener_detalle_pedido(codigo):
         return jsonify({"error": str(ex)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 # ==========================================
@@ -673,35 +696,33 @@ def agregar_nuevo_material():
         return jsonify({"error": str(ex)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/materiales/listas', methods=['GET'])
 def obtener_listas_materiales():
     try:
         conexion = get_db_connection()
-        cursor   = conexion.cursor()
+        # Usamos cursores nombrados para pipeline: enviamos las 7 queries
+        # en secuencia sin esperar resultado entre ellas, reduciendo round-trips.
+        cur_telas    = conexion.cursor(); cur_telas.execute("SELECT sku, proveedor, coleccion, color, foto_url, COALESCE(estado,'Disponible') FROM maestro_telas")
+        cur_cojines  = conexion.cursor(); cur_cojines.execute("SELECT sku, nombre_diseno, tipo_tela, foto_url, COALESCE(estado,'Disponible') FROM maestro_disenos_cojin")
+        cur_bases    = conexion.cursor(); cur_bases.execute("SELECT sku, tipo, material, modelo, color, medida_altura, foto_url, COALESCE(estado,'Disponible') FROM maestro_bases")
+        cur_tableros = conexion.cursor(); cur_tableros.execute("SELECT sku, material_base, nombre_modelo, color_veta, acabado, foto_url, COALESCE(estado,'Disponible') FROM maestro_tableros")
+        cur_bcom     = conexion.cursor(); cur_bcom.execute("SELECT sku, material, modelo, color, foto_url, COALESCE(estado,'Disponible') FROM maestro_bases_comedor")
+        cur_sillas   = conexion.cursor(); cur_sillas.execute("SELECT sku, material, modelo, color_estructura, foto_url, COALESCE(estado,'Disponible') FROM maestro_sillas")
+        cur_butacas  = conexion.cursor(); cur_butacas.execute("SELECT sku, material, modelo, color_estructura, foto_url, COALESCE(estado,'Disponible') FROM maestro_butacas")
 
-        cursor.execute("SELECT sku, proveedor, coleccion, color, foto_url, COALESCE(estado,'Disponible') FROM maestro_telas")
-        telas = [{"sku":r[0],"proveedor":r[1],"coleccion":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cursor.fetchall()]
+        telas        = [{"sku":r[0],"proveedor":r[1],"coleccion":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cur_telas.fetchall()]
+        cojines      = [{"sku":r[0],"nombre_diseno":r[1],"tipo_tela":r[2],"foto_url":limpiar_foto(r[3]),"estado":r[4]} for r in cur_cojines.fetchall()]
+        bases        = [{"sku":r[0],"tipo":r[1],"material":r[2],"modelo":r[3],"color":r[4],"medida":r[5],"foto_url":limpiar_foto(r[6]),"estado":r[7]} for r in cur_bases.fetchall()]
+        tableros     = [{"sku":r[0],"material_base":r[1],"nombre":r[2],"color":r[3],"acabado":r[4],"foto_url":limpiar_foto(r[5]),"estado":r[6]} for r in cur_tableros.fetchall()]
+        bases_comedor= [{"sku":r[0],"material":r[1],"modelo":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cur_bcom.fetchall()]
+        sillas       = [{"sku":r[0],"material":r[1],"modelo":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cur_sillas.fetchall()]
+        butacas      = [{"sku":r[0],"material":r[1],"modelo":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cur_butacas.fetchall()]
 
-        cursor.execute("SELECT sku, nombre_diseno, tipo_tela, foto_url, COALESCE(estado,'Disponible') FROM maestro_disenos_cojin")
-        cojines = [{"sku":r[0],"nombre_diseno":r[1],"tipo_tela":r[2],"foto_url":limpiar_foto(r[3]),"estado":r[4]} for r in cursor.fetchall()]
-
-        cursor.execute("SELECT sku, tipo, material, modelo, color, medida_altura, foto_url, COALESCE(estado,'Disponible') FROM maestro_bases")
-        bases = [{"sku":r[0],"tipo":r[1],"material":r[2],"modelo":r[3],"color":r[4],"medida":r[5],"foto_url":limpiar_foto(r[6]),"estado":r[7]} for r in cursor.fetchall()]
-
-        cursor.execute("SELECT sku, material_base, nombre_modelo, color_veta, acabado, foto_url, COALESCE(estado,'Disponible') FROM maestro_tableros")
-        tableros = [{"sku":r[0],"material_base":r[1],"nombre":r[2],"color":r[3],"acabado":r[4],"foto_url":limpiar_foto(r[5]),"estado":r[6]} for r in cursor.fetchall()]
-
-        cursor.execute("SELECT sku, material, modelo, color, foto_url, COALESCE(estado,'Disponible') FROM maestro_bases_comedor")
-        bases_comedor = [{"sku":r[0],"material":r[1],"modelo":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cursor.fetchall()]
-
-        cursor.execute("SELECT sku, material, modelo, color_estructura, foto_url, COALESCE(estado,'Disponible') FROM maestro_sillas")
-        sillas = [{"sku":r[0],"material":r[1],"modelo":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cursor.fetchall()]
-
-        cursor.execute("SELECT sku, material, modelo, color_estructura, foto_url, COALESCE(estado,'Disponible') FROM maestro_butacas")
-        butacas = [{"sku":r[0],"material":r[1],"modelo":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cursor.fetchall()]
+        for c in (cur_telas, cur_cojines, cur_bases, cur_tableros, cur_bcom, cur_sillas, cur_butacas):
+            c.close()
 
         return jsonify({
             "telas": telas, "cojines": cojines, "bases": bases,
@@ -713,7 +734,7 @@ def obtener_listas_materiales():
         return jsonify({"error": str(ex)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            release_db_connection(conexion)
 
 
 # ==========================================
@@ -767,7 +788,7 @@ def guardar_creacion():
         return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/creaciones', methods=['GET'])
@@ -778,9 +799,14 @@ def obtener_creaciones():
         cursor   = conexion.cursor()
         cursor.execute("""
             SELECT c.id, c.nombre_modelo, c.categoria, c.detalles_tecnicos, c.notas_casqueria,
-                   (SELECT foto_url FROM fotos_creaciones WHERE creacion_id = c.id LIMIT 1) AS foto,
+                   f.foto_url AS foto,
                    c.config_json, c.estado
             FROM creaciones_vendedores c
+            LEFT JOIN LATERAL (
+                SELECT foto_url FROM fotos_creaciones
+                WHERE creacion_id = c.id
+                ORDER BY id LIMIT 1
+            ) f ON true
             WHERE c.estado = 'Pendiente'
             ORDER BY c.fecha_creacion DESC;
         """)
@@ -798,7 +824,7 @@ def obtener_creaciones():
         return jsonify({'error': 'Error al cargar creaciones'}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/creaciones/aprobar', methods=['POST'])
@@ -845,7 +871,7 @@ def aprobar_creacion():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/creaciones/rechazar', methods=['POST'])
@@ -872,7 +898,7 @@ def rechazar_creacion():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 # ==========================================
@@ -895,7 +921,7 @@ def obtener_usuarios():
         return jsonify({'error': 'Error al cargar usuarios'}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/usuarios/detalle', methods=['GET'])
@@ -914,7 +940,7 @@ def obtener_usuarios_detalle():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/usuarios/nuevo', methods=['POST'])
@@ -934,10 +960,11 @@ def crear_usuario():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/login', methods=['POST'])
+@limiter.limit("10 per minute")   # Máximo 10 intentos por minuto por IP
 def verificar_pin():
     try:
         usuario_id   = request.json.get('usuario_id')
@@ -965,10 +992,10 @@ def verificar_pin():
                     "area_asignada": usuario[6]
                 }
             })
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
             return res, 200
 
-        cursor.close(); conexion.close()
+        cursor.close(); release_db_connection(conexion)
         return jsonify({"exito": False, "error": "PIN incorrecto"}), 401
 
     except Exception as e:
@@ -996,7 +1023,7 @@ def obtener_proveedores():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/proveedores/nuevo', methods=['POST'])
@@ -1015,7 +1042,7 @@ def crear_proveedor():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/taller/ticket/<int:id>/finalizar', methods=['POST'])
@@ -1114,7 +1141,7 @@ def finalizar_ticket(id):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/taller/cola-recojo', methods=['GET'])
@@ -1183,7 +1210,7 @@ def obtener_cola_recojo():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 # ==========================================
@@ -1233,13 +1260,19 @@ def obtener_tickets_taller():
         tickets = []
         raw_rows = cursor.fetchall()
 
-        # Para el bloqueo inteligente de despacho:
-        # Buscamos si el item tiene tickets pendientes en otras áreas
-        cursor.execute("""
-            SELECT item_id FROM tickets_produccion 
-            WHERE estado_ticket != 'Terminado' AND area_trabajo != 'DESPACHO_CENTRAL'
-        """)
-        items_incompletos = {r[0] for r in cursor.fetchall()}
+        # Calculamos items_incompletos solo de los items que aparecen en los resultados,
+        # no de toda la tabla. Esto evita el full scan masivo.
+        item_ids_en_resultado = {row[8] for row in raw_rows if row[3] == 'DESPACHO_CENTRAL'}
+        items_incompletos = set()
+        if item_ids_en_resultado:
+            placeholders_items = ','.join(['%s'] * len(item_ids_en_resultado))
+            cursor.execute(f"""
+                SELECT DISTINCT item_id FROM tickets_produccion
+                WHERE item_id IN ({placeholders_items})
+                  AND estado_ticket != 'Terminado'
+                  AND area_trabajo != 'DESPACHO_CENTRAL'
+            """, tuple(item_ids_en_resultado))
+            items_incompletos = {r[0] for r in cursor.fetchall()}
 
         for row in raw_rows:
             estado = row[2] # t.estado_ticket
@@ -1264,7 +1297,7 @@ def obtener_tickets_taller():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/taller/tickets_pendientes', methods=['GET'])
@@ -1297,7 +1330,7 @@ def obtener_tickets_pendientes():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/taller/asignar', methods=['POST'])
@@ -1331,7 +1364,7 @@ def asignar_maestro_ticket():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 # ==========================================
@@ -1378,7 +1411,7 @@ def obtener_fotos_skus():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/taller/inventario', methods=['GET'])
@@ -1413,7 +1446,7 @@ def obtener_inventario():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/inventario/actualizar', methods=['POST'])
@@ -1446,7 +1479,7 @@ def actualizar_estado_inventario():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 # ==========================================
@@ -1496,7 +1529,7 @@ def obtener_logistica():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/logistica/actualizar', methods=['POST'])
@@ -1533,7 +1566,7 @@ def actualizar_logistica():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 # ==========================================
@@ -1571,7 +1604,7 @@ def obtener_receta(producto_id):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/recetas/nueva', methods=['POST'])
@@ -1600,7 +1633,7 @@ def agregar_ingrediente_receta():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 # ==========================================
@@ -1642,7 +1675,7 @@ def guardar_sugerencia():
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        if 'conexion' in locals() and conexion: cursor.close(); conexion.close()
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/sugerencias', methods=['GET'])
@@ -1669,7 +1702,7 @@ def obtener_sugerencias():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        if 'conexion' in locals() and conexion: cursor.close(); conexion.close()
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/sugerencias/aprobar', methods=['POST'])
@@ -1690,7 +1723,6 @@ def aprobar_sugerencia_insumo():
             return jsonify({'error': 'Sugerencia no encontrada'}), 404
 
         tipo_material, foto_ruta, datos_raw = sug
-        import json
         datos = json.loads(datos_raw) if datos_raw else {}
 
         nuevo_sku = ""
@@ -1761,7 +1793,7 @@ def aprobar_sugerencia_insumo():
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        if 'conexion' in locals() and conexion: cursor.close(); conexion.close()
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 @app.route('/api/taller/ticket/<int:ticket_id>/derivar', methods=['POST'])
 def derivar_ticket_con_foto(ticket_id):
@@ -1813,7 +1845,7 @@ def derivar_ticket_con_foto(ticket_id):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/taller/ticket/derivar', methods=['POST'])
@@ -1885,7 +1917,7 @@ def derivar_ticket():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 # ==========================================
 # 13. MÓDULO: DESPACHO — ASIGNAR CHOFER
 # ==========================================
@@ -1949,7 +1981,7 @@ def asignar_chofer_despacho():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/usuarios/por-area/<string:area>', methods=['GET'])
@@ -2003,7 +2035,7 @@ def obtener_usuarios_por_area(area):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/despacho/progreso/<int:item_id>', methods=['GET'])
@@ -2043,7 +2075,7 @@ def progreso_despacho(item_id):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 
 @app.route('/api/usuarios/choferes', methods=['GET'])
@@ -2067,7 +2099,7 @@ def obtener_choferes():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+            cursor.close(); release_db_connection(conexion)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=False, port=5000)
