@@ -3,23 +3,24 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import psycopg2
 from datetime import datetime
-from werkzeug.utils import secure_filename
-import uuid
 import smtplib
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 # Carga las variables del archivo .env (en producción, Railway las inyecta directo)
 load_dotenv()
 
+cloudinary.config( 
+  cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'), 
+  api_key = os.getenv('CLOUDINARY_API_KEY'), 
+  api_secret = os.getenv('CLOUDINARY_API_SECRET') 
+)
+
 app = Flask(__name__)
 CORS(app)
-
-# --- CONFIGURACIÓN DE CARPETA DE FOTOS ---
-UPLOAD_FOLDER = 'uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # CONFIGURACIÓN DE LA BASE DE DATOS — Siempre desde variables de entorno (.env)
 DB_CONFIG = {
@@ -46,6 +47,7 @@ def limpiar_foto(url):
     """Evita placeholders o URLs vacías en campos de foto."""
     if not url or 'via.placeholder.com' in url:
         return "imagenes/sin_foto.jpg"
+    # Las URLs de Cloudinary ya son https completas; las locales antiguas se devuelven con la URL base
     if url.startswith('http'):
         return url
     return f"{BACKEND_URL}/uploads/{url}"
@@ -84,7 +86,8 @@ def enviar_notificacion_venta(correo_destino, codigo_venta, cliente):
 
 @app.route('/uploads/<filename>')
 def mostrar_foto(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    """Ruta de compatibilidad para fotos antiguas guardadas localmente."""
+    return send_from_directory('uploads', filename)
 
 
 @app.route('/', methods=['GET'])
@@ -137,11 +140,9 @@ def agregar_producto_directo():
         if 'foto' not in request.files or request.files['foto'].filename == '':
             return jsonify({'error': 'La foto del producto es obligatoria'}), 400
 
-        foto_file   = request.files['foto']
-        nombre_limpio = secure_filename(foto_file.filename)
-        nombre_final  = f"prod_{datetime.now().strftime('%Y%m%d%H%M%S')}_{nombre_limpio}"
-        foto_file.save(os.path.join(app.config['UPLOAD_FOLDER'], nombre_final))
-        foto_ruta = f"{BACKEND_URL}/uploads/{nombre_final}"
+        foto_file = request.files['foto']
+        respuesta_nube = cloudinary.uploader.upload(foto_file, folder="catalogo")
+        foto_ruta = respuesta_nube.get('secure_url')
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -578,9 +579,8 @@ def agregar_nuevo_material():
         if 'foto' in request.files:
             foto_file = request.files['foto']
             if foto_file.filename != '':
-                nombre_final = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{secure_filename(foto_file.filename)}"
-                foto_file.save(os.path.join(app.config['UPLOAD_FOLDER'], nombre_final))
-                foto_ruta = f"{BACKEND_URL}/uploads/{nombre_final}"
+                respuesta_nube = cloudinary.uploader.upload(foto_file, folder="materiales")
+                foto_ruta = respuesta_nube.get('secure_url')
 
         conexion  = get_db_connection()
         cursor    = conexion.cursor()
@@ -751,12 +751,11 @@ def guardar_creacion():
 
         for archivo in request.files.getlist('fotos'):
             if archivo and archivo.filename != '':
-                ext = archivo.filename.rsplit('.', 1)[-1].lower() if '.' in archivo.filename else 'jpg'
-                nombre_seguro = f"creador_{creacion_id}_{uuid.uuid4().hex[:6]}.{ext}"
-                archivo.save(os.path.join(app.config['UPLOAD_FOLDER'], nombre_seguro))
+                respuesta_nube = cloudinary.uploader.upload(archivo, folder="creaciones")
+                foto_url_nube = respuesta_nube.get('secure_url')
                 cursor.execute(
                     "INSERT INTO fotos_creaciones (creacion_id, foto_url) VALUES (%s,%s);",
-                    (creacion_id, nombre_seguro)
+                    (creacion_id, foto_url_nube)
                 )
 
         conexion.commit()
@@ -1031,10 +1030,9 @@ def finalizar_ticket(id):
         if foto.filename == '':
             return jsonify({'error': 'No se seleccionó ninguna foto'}), 400
 
-        # Guardar archivo localmente
-        nombre_limpio = secure_filename(foto.filename)
-        nombre_final  = f"evid_{id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{nombre_limpio}"
-        foto.save(os.path.join(app.config['UPLOAD_FOLDER'], nombre_final))
+        # Subir foto de evidencia a Cloudinary
+        respuesta_nube = cloudinary.uploader.upload(foto, folder="evidencias")
+        foto_url_final = respuesta_nube.get('secure_url')
 
         conexion = get_db_connection()
         conexion.autocommit = False
@@ -1048,7 +1046,7 @@ def finalizar_ticket(id):
                 fecha_fin      = CURRENT_TIMESTAMP
             WHERE id = %s
             RETURNING item_id, area_trabajo;
-        """, (nombre_final, id))
+        """, (foto_url_final, id))
         row = cursor.fetchone()
 
         desbloqueados = 0
@@ -1606,61 +1604,57 @@ def agregar_ingrediente_receta():
 
 
 # ==========================================
-# 12. MÓDULO: SUGERENCIAS DE INSUMOS
+# 12. MÓDULO: SUGERENCIAS DE INSUMOS (OPTIMIZADO)
 # ==========================================
 
 @app.route('/api/sugerencias', methods=['POST'])
 def guardar_sugerencia():
-    data      = request.json
-    nombre    = data.get('nombre', '').strip()
-    tipo      = data.get('tipo', 'General')
-    foto_ref  = data.get('foto_ref', '')
-    usuario_id = data.get('usuario_id')
-
-    if not nombre:
-        return jsonify({'error': 'El nombre del insumo es obligatorio'}), 400
-
+    """Vendedor sugiere un insumo usando los formularios detallados."""
     try:
+        nombre     = request.form.get('nombre')
+        tipo       = request.form.get('tipo') # 'tela', 'tablero', 'base', etc.
+        usuario_id = request.form.get('usuario_id')
+        datos_json = request.form.get('datos_json')
+
+        if not nombre or not tipo:
+            return jsonify({'error': 'El nombre y tipo de insumo son obligatorios'}), 400
+
+        foto_ruta = "imagenes/sin_foto.jpg"
+        if 'foto' in request.files:
+            foto_file = request.files['foto']
+            if foto_file.filename != '':
+                respuesta_nube = cloudinary.uploader.upload(foto_file, folder="sugerencias")
+                foto_ruta = respuesta_nube.get('secure_url')
+
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        # Migración segura: crea la tabla si aún no existe
+        
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sugerencias_insumos (
-                id             SERIAL PRIMARY KEY,
-                nombre         TEXT NOT NULL,
-                tipo           TEXT DEFAULT 'General',
-                foto_ref       TEXT,
-                usuario_id     INTEGER,
-                estado         TEXT DEFAULT 'Pendiente',
-                fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        cursor.execute("""
-            INSERT INTO sugerencias_insumos (nombre, tipo, foto_ref, usuario_id)
-            VALUES (%s,%s,%s,%s) RETURNING id;
-        """, (nombre, tipo, foto_ref, usuario_id))
-        nueva_id = cursor.fetchone()[0]
+            INSERT INTO sugerencias_insumos (nombre, tipo, foto_ref, usuario_id, datos_json, estado)
+            VALUES (%s, %s, %s, %s, %s, 'Pendiente') RETURNING id;
+        """, (nombre, tipo, foto_ruta, usuario_id, datos_json))
+        
+        sugerencia_id = cursor.fetchone()[0]
         conexion.commit()
-        return jsonify({'exito': True, 'id': nueva_id, 'mensaje': 'Sugerencia enviada al Administrador'}), 201
+        return jsonify({'exito': True, 'id': sugerencia_id, 'mensaje': 'Sugerencia enviada al Gestor de Aprobación'}), 201
+
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
-        print("Error al guardar sugerencia:", e)
         return jsonify({'error': str(e)}), 500
     finally:
-        if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+        if 'conexion' in locals() and conexion: cursor.close(); conexion.close()
 
 
 @app.route('/api/sugerencias', methods=['GET'])
 def obtener_sugerencias():
-    """Panel Admin: lista todas las sugerencias pendientes."""
+    """Trae todas las sugerencias de insumos pendientes para el panel Admin."""
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("""
-            SELECT s.id, s.nombre, s.tipo, s.foto_ref,
-                   COALESCE(u.nombre, 'Desconocido') AS vendedor,
-                   s.estado, s.fecha_registro
+            SELECT s.id, s.nombre, s.tipo, s.foto_ref, 
+                   COALESCE(u.nombre, 'Vendedor') AS vendedor, 
+                   s.datos_json, s.estado
             FROM sugerencias_insumos s
             LEFT JOIN usuarios u ON s.usuario_id = u.id
             WHERE s.estado = 'Pendiente'
@@ -1668,15 +1662,106 @@ def obtener_sugerencias():
         """)
         resultado = [{
             "id": r[0], "nombre": r[1], "tipo": r[2],
-            "foto_ref": r[3], "vendedor": r[4], "estado": r[5],
-            "fecha": r[6].strftime('%d/%m/%Y %H:%M') if r[6] else ""
+            "foto_url": r[3], "vendedor": r[4], 
+            "datos_json": r[5], "estado": r[6]
         } for r in cursor.fetchall()]
         return jsonify(resultado), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        if 'conexion' in locals() and conexion:
-            cursor.close(); conexion.close()
+        if 'conexion' in locals() and conexion: cursor.close(); conexion.close()
+
+
+@app.route('/api/sugerencias/aprobar', methods=['POST'])
+def aprobar_sugerencia_insumo():
+    """Admin aprueba la sugerencia del vendedor, define Origen (Make vs Buy) y genera SKU."""
+    data          = request.json
+    sugerencia_id = data.get('sugerencia_id')
+    origen        = data.get('origen', 'Value') # 'Interno' o 'Externo'
+    
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        # Buscar la sugerencia
+        cursor.execute("SELECT tipo, foto_ref, datos_json FROM sugerencias_insumos WHERE id = %s;", (sugerencia_id,))
+        sug = cursor.fetchone()
+        if not sug:
+            return jsonify({'error': 'Sugerencia no encontrada'}), 404
+
+        tipo_material, foto_ruta, datos_raw = sug
+        import json
+        datos = json.loads(datos_raw) if datos_raw else {}
+
+        nuevo_sku = ""
+
+        if tipo_material == 'tela':
+            cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_telas")
+            nuevo_sku = f"TEL-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            cursor.execute("""
+                INSERT INTO maestro_telas (sku, proveedor, coleccion, color, foto_url, origen_produccion, estado)
+                VALUES (%s,%s,%s,%s,%s,%s,'Disponible');
+            """, (nuevo_sku, datos.get('proveedor'), datos.get('coleccion'), datos.get('color'), foto_ruta, origen))
+
+        elif tipo_material == 'cojin':
+            cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_disenos_cojin")
+            nuevo_sku = f"COJ-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            cursor.execute("""
+                INSERT INTO maestro_disenos_cojin (sku, nombre_diseno, tipo_tela, foto_url, origen_produccion, estado)
+                VALUES (%s,%s,%s,%s,%s,'Disponible');
+            """, (nuevo_sku, datos.get('nombre_diseno'), datos.get('tipo_tela'), foto_ruta, origen))
+
+        elif tipo_material == 'base':
+            cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_bases")
+            nuevo_sku = f"BAS-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            cursor.execute("""
+                INSERT INTO maestro_bases (sku, tipo, material, modelo, color, medida_altura, foto_url, origen_produccion, estado)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'Disponible');
+            """, (nuevo_sku, datos.get('tipo'), datos.get('material'), datos.get('modelo'), datos.get('color'), datos.get('medida_altura'), foto_ruta, origen))
+
+        elif tipo_material == 'tablero':
+            cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_tableros")
+            nuevo_sku = f"TAB-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            cursor.execute("""
+                INSERT INTO maestro_tableros (sku, material_base, nombre_modelo, color_veta, acabado, foto_url, origen_produccion, estado)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'Disponible');
+            """, (nuevo_sku, datos.get('material_base'), datos.get('nombre_modelo'), datos.get('color_veta'), datos.get('acabado'), foto_ruta, origen))
+
+        elif tipo_material == 'base-comedor':
+            cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_bases_comedor")
+            nuevo_sku = f"BAC-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            cursor.execute("""
+                INSERT INTO maestro_bases_comedor (sku, material, modelo, color, foto_url, origen_produccion, estado)
+                VALUES (%s,%s,%s,%s,%s,%s,'Disponible');
+            """, (nuevo_sku, datos.get('material'), datos.get('modelo'), datos.get('color'), foto_ruta, origen))
+
+        elif tipo_material == 'silla':
+            cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_sillas")
+            nuevo_sku = f"SIL-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            cursor.execute("""
+                INSERT INTO maestro_sillas (sku, material, modelo, color_estructura, foto_url, origen_produccion, estado)
+                VALUES (%s,%s,%s,%s,%s,%s,'Disponible');
+            """, (nuevo_sku, datos.get('material'), datos.get('modelo'), datos.get('color_estructura'), foto_ruta, origen))
+
+        elif tipo_material == 'butaca':
+            cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_butacas")
+            nuevo_sku = f"BUT-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            cursor.execute("""
+                INSERT INTO maestro_butacas (sku, material, modelo, color_estructura, foto_url, origen_produccion, estado)
+                VALUES (%s,%s,%s,%s,%s,%s,'Disponible');
+            """, (nuevo_sku, datos.get('material'), datos.get('modelo'), datos.get('color_estructura'), foto_ruta, origen))
+
+        # Marcar sugerencia como aprobada
+        cursor.execute("UPDATE sugerencias_insumos SET estado = 'Aprobado' WHERE id = %s;", (sugerencia_id,))
+        conexion.commit()
+
+        return jsonify({'exito': True, 'mensaje': f'Insumo oficializado con éxito. Nuevo SKU: {nuevo_sku}'}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion: cursor.close(); conexion.close()
 
 @app.route('/api/taller/ticket/<int:ticket_id>/derivar', methods=['POST'])
 def derivar_ticket_con_foto(ticket_id):
@@ -1692,13 +1777,12 @@ def derivar_ticket_con_foto(ticket_id):
     if not nueva_area or not nuevo_trabajador_id:
         return jsonify({'error': 'nueva_area y nuevo_trabajador_id son obligatorios'}), 400
 
-    # Guardar foto de evidencia
+    # Subir foto de evidencia a Cloudinary
     foto_ruta = None
     if 'foto' in request.files and request.files['foto'].filename != '':
-        foto_file  = request.files['foto']
-        nombre_final = f"derivar_{ticket_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{secure_filename(foto_file.filename)}"
-        foto_file.save(os.path.join(app.config['UPLOAD_FOLDER'], nombre_final))
-        foto_ruta = f"{BACKEND_URL}/uploads/{nombre_final}"
+        foto_file = request.files['foto']
+        respuesta_nube = cloudinary.uploader.upload(foto_file, folder="derivaciones")
+        foto_ruta = respuesta_nube.get('secure_url')
 
     try:
         conexion = get_db_connection()

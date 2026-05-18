@@ -952,8 +952,7 @@
         </div>
     </div>
             <div id="modal-sugerencia" class="modal-overlay" style="z-index: 5500; display: none;">
-    <!-- Este modal ya existía, lo mantengo -->
-    <div class="modal-content" style="max-width: 380px; width: 90%;">
+    <div class="modal-content" style="max-width: 420px; width: 90%;">
         <div class="modal-header">
             <h3 style="color: #b45309;"><i class="fa-solid fa-lightbulb"></i> Sugerir Nuevo Insumo</h3>
             <button type="button" class="close-btn" onclick="document.getElementById('modal-sugerencia').style.display='none'">
@@ -961,37 +960,20 @@
             </button>
         </div>
         
-        <div style="padding: 15px;">
-            <p style="font-size: 12px; color: #64748b; margin-bottom: 15px; text-align: center;">
-                Si el cliente pide algo que no está en el sistema, sube la foto aquí para que el Admin lo oficialice.
+        <div style="padding: 15px; text-align: center;">
+            <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
+                Selecciona la categoría exacta de la pieza solicitada por el cliente para abrir su ficha técnica descriptiva:
             </p>
 
-            <div class="form-group" style="background:#fffbeb; padding:15px; border-radius:10px; text-align:center; border:2px dashed #fcd34d; margin-bottom: 15px;">
-                <label style="color:#b45309; font-weight: bold; cursor: pointer;">
-                    <i class="fa-solid fa-camera"></i> Foto de Referencia
-                    <input type="file" id="sug-foto" class="form-input-sm" accept="image/*" style="margin-top:10px; width: 100%;">
-                </label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('tela', 'sugerencia')" style="background: #7c3aed; border:none; padding:12px; font-size:12px;">🧵 Nueva Tela</button>
+                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('tablero', 'sugerencia')" style="background: #059669; border:none; padding:12px; font-size:12px;">💎 Nuevo Tablero</button>
+                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('base', 'sugerencia')" style="background: #0284c7; border:none; padding:12px; font-size:12px;"> Couch Pata/Zócalo</button>
+                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('base-comedor', 'sugerencia')" style="background: #0369a1; border:none; padding:12px; font-size:12px;">🍽️ Base de Mesa</button>
+                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('silla', 'sugerencia')" style="background: #b45309; border:none; padding:12px; font-size:12px;">🪑 Estructura Silla</button>
+                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('butaca', 'sugerencia')" style="background: #92400e; border:none; padding:12px; font-size:12px;">🪑 Estructura Butaca</button>
+                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('cojin', 'sugerencia')" style="background: #ec4899; border:none; padding:12px; font-size:12px;">🎨 Nuevo Cojín</button>
             </div>
-
-            <div class="form-group">
-                <label>¿Qué tipo de pieza es?</label>
-                <select id="sug-tipo" class="form-input">
-                    <option value="Tela">🧵 Nueva Tela / Tapiz</option>
-                    <option value="Base">🛠️ Nueva Base / Pata / Estructura</option>
-                    <option value="Tablero">💎 Nuevo Tablero (Mármol, Vidrio, etc)</option>
-                    <option value="Modelo">🛋️ Nuevo Modelo de Mueble</option>
-                    <option value="Otro">📦 Otro accesorio / jalador</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Nombre o descripción corta</label>
-                <input type="text" id="sug-nombre" class="form-input" placeholder="Ej: Pata Lyon Oro, Tela Velvet Azul...">
-            </div>
-
-            <button class="btn-primary" style="width: 100%; margin-top: 15px; background-color: #d97706; border: none;" onclick="enviarSugerencia()">
-                <i class="fa-solid fa-paper-plane"></i> Enviar Sugerencia
-            </button>
         </div>
     </div>
 </div>

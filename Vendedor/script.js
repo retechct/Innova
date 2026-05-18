@@ -747,167 +747,220 @@ let destinoActual = "";
 let tipoActual = "";
 
 function abrirModalNuevo(tipo, destino) {
-    destinoActual = destino;
     tipoActual = tipo;
-    
-    document.getElementById('nm-foto').value = ""; 
-    document.getElementById('nm-tipo').value = tipo;
-    document.getElementById('modal-nuevo-material').style.display = 'flex';
-    
-    const container = document.getElementById('nm-campos-dinamicos');
-    let html = '';
+    destinoActual = destino; // 'directo' (Admin) o 'sugerencia' (Vendedor)
 
-    // --- LÓGICA DE CAMPOS SEGÚN TIPO ---
-    if (tipo === 'tela') {
-        document.getElementById('nm-title').innerText = '🧵 Registrar Nueva Tela';
-        html = `
-            <input type="text" id="nm-proveedor" class="form-input" placeholder="Proveedor (Ej: Textil San Juan)" required style="margin-bottom:8px;">
-            <input type="text" id="nm-coleccion" class="form-input" placeholder="Colección/Textura (Ej: Lino Premium)" required style="margin-bottom:8px;">
-            <input type="text" id="nm-color" class="form-input" placeholder="Color (Ej: Beige Claro)" required>`;
-    } else if (tipo === 'cojin') {
-        document.getElementById('nm-title').innerText = '🎨 Registrar Diseño de Cojín';
-        html = `
-            <input type="text" id="nm-nombre-diseno" class="form-input" placeholder="Nombre del Diseño (Ej: Geométrico Otoño)" required style="margin-bottom:8px;">
-            <input type="text" id="nm-tipo-tela" class="form-input" placeholder="Tipo de Tela (Ej: Jacquard)" required>`;
-    } else if (tipo === 'base' || tipo === 'base-comedor') {
-        document.getElementById('nm-title').innerText = tipo === 'base' ? '🛋️ Pata / Zócalo de Sofá' : '🍽️ Base de Mesa de Comedor';
-        html = `
-            <input type="text" id="nm-modelo" class="form-input" placeholder="Modelo (Ej: Araña, Cilíndrica, Reina)" required style="margin-bottom:8px;">
-            <select id="nm-material" class="form-input" style="margin-bottom:8px;">
-                <option value="Acero Inoxidable">Acero Inoxidable</option>
-                <option value="Fierro Pintado">Fierro Pintado</option>
-                <option value="Madera">Madera / Tornillo</option>
-            </select>
-            ${tipo === 'base' ? '<input type="number" id="nm-medida-altura" class="form-input" placeholder="Altura (cm)" style="margin-bottom:8px;">' : ''}
-            ${tipo === 'base' ? '<input type="text" id="nm-tipo-base" class="form-input" placeholder="Tipo (Ej: Pata, Zócalo)" style="margin-bottom:8px;">' : ''}
-            <input type="text" id="nm-color" class="form-input" placeholder="Color/Acabado (Ej: Dorado, Negro Mate)" required>`;
-    } else if (tipo === 'tablero') {
-        document.getElementById('nm-title').innerText = '💎 Registrar Nuevo Tablero';
-        html = `
-            <input type="text" id="nm-nombre-modelo" class="form-input" placeholder="Nombre Veta/Modelo (Ej: Calacatta, Carrara)" required style="margin-bottom:8px;">
-            <select id="nm-material-base" class="form-input" style="margin-bottom:8px;">
-                <option value="Piedra Sinterizada">Piedra Sinterizada</option>
-                <option value="Madera">Madera Natural / Melamina</option>
-                <option value="Vidrio Templado">Vidrio Templado</option>
-            </select>
-            <input type="text" id="nm-color-veta" class="form-input" placeholder="Color de Veta / Tono" style="margin-bottom:8px;">
-            <select id="nm-acabado" class="form-input">
-                <option value="Brillante">Brillante</option>
-                <option value="Mate">Mate / Natural</option>
-            </select>`;
-    } else if (tipo === 'silla' || tipo === 'butaca') {
-        document.getElementById('nm-title').innerText = '🪑 Registrar Estructura Silla/Butaca';
-        html = `
-            <input type="text" id="nm-modelo" class="form-input" placeholder="Modelo (Ej: Medallón, Nórdica)" required style="margin-bottom:8px;">
-            <input type="text" id="nm-color-estructura" class="form-input" placeholder="Color de Estructura (Ej: Nogal, Dorado)" required>`;
+    const modal = document.getElementById('modal-nuevo-material');
+    const contenedorCampos = document.getElementById('nm-campos-dinamicos');
+    const titleElem = document.getElementById('nm-title');
+    
+    if (!modal || !contenedorCampos) return;
+
+    // Limpiar archivos e imágenes previas
+    document.getElementById('nm-foto').value = '';
+
+    // Ajuste dinámico del encabezado para dar contexto
+    if (destino === 'sugerencia') {
+        titleElem.innerText = `💡 Sugerir Insumo: ${tipo.toUpperCase()}`;
+    } else {
+        titleElem.innerText = `➕ Registrar Insumo: ${tipo.toUpperCase()}`;
     }
 
-    // --- BLOQUE MAESTRO: ORIGEN DE PRODUCCIÓN (OBLIGATORIO PARA ADMIN) ---
-    html += `
-        <div style="margin-top:15px; padding:12px; background:#f8fafc; border: 1px solid #e2e8f0; border-radius:8px;">
-            <label style="color:#0f172a; font-weight:800; font-size:11px; display:block; margin-bottom:5px;">
-                <i class="fa-solid fa-industry"></i> ESPECIFICACIÓN DE PRODUCCIÓN:
-            </label>
-            <select id="nm-origen" class="form-input" style="border-color:#cbd5e1; background: white;">
-                <option value="Interno">🛠️ INTERNO (Se fabrica en taller)</option>
-                <option value="Externo" selected>📦 EXTERNO (Compra a proveedor)</option>
-            </select>
-            <p style="font-size:10px; color:#64748b; margin-top:5px; line-height:1.2;">
-                * Selecciona <b>Interno</b> para generar tickets automáticos a tus áreas de producción.
-            </p>
-        </div>
-    `;
+    // Ocultar el selector de origen para el vendedor (tú lo decides al aprobar)
+    const divOrigen = document.getElementById('nm-origen')?.parentElement;
+    if (divOrigen) {
+        divOrigen.style.display = (destino === 'sugerencia') ? 'none' : 'block';
+    }
 
-    container.innerHTML = html;
+    // INYECCIÓN DE CAMPOS TÉCNICOS COMPLETOS
+    let htmlCampos = "";
+
+    if (tipo === 'tela') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Proveedor</label>
+                <input type="text" id="nm-proveedor" class="form-input" placeholder="Ej. Textil San Jacinto" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Colección / Línea</label>
+                <input type="text" id="nm-coleccion" class="form-input" placeholder="Ej. Velvet, Ipanema, lino Rustico" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Color / Código de Color</label>
+                <input type="text" id="nm-color" class="form-input" placeholder="Ej. Gris Plata, Beige 05" required>
+            </div>
+        `;
+    } 
+    else if (tipo === 'cojin') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Nombre del Diseño / Modelo</label>
+                <input type="text" id="nm-nombre-diseno" class="form-input" placeholder="Ej. Cojín de Respaldar Capitoneado" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Tipo de Tela Requerida</label>
+                <input type="text" id="nm-tipo-tela" class="form-input" placeholder="Ej. Terciopelo o Lino" required>
+            </div>
+        `;
+    } 
+    else if (tipo === 'base' || tipo === 'base-comedor') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Tipo de Base</label>
+                <input type="text" id="nm-tipo-base" class="form-input" placeholder="Ej. Pata Metálica, Zócalo" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Material Estructural</label>
+                <input type="text" id="nm-material" class="form-input" placeholder="Ej. Acero Inoxidable, Madera Pino" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Modelo / Estilo</label>
+                <input type="text" id="nm-modelo" class="form-input" placeholder="Ej. Pata Aguja, Base de Mesa Cruzada" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Color / Acabado Superficial</label>
+                <input type="text" id="nm-color" class="form-input" placeholder="Ej. Dorado Cromado, Negro Mate" required>
+            </div>
+            ${tipo === 'base' ? `
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Medida de Altura (cm)</label>
+                <input type="text" id="nm-medida-altura" class="form-input" placeholder="Ej. 15 cm" required>
+            </div>` : ''}
+        `;
+    } 
+    else if (tipo === 'tablero') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Material Base</label>
+                <input type="text" id="nm-material-base" class="form-input" placeholder="Ej. MDF, Cuarzo, Vidrio Templado" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Nombre del Modelo / Diseño</label>
+                <input type="text" id="nm-nombre-modelo" class="form-input" placeholder="Ej. Blanco Carrara, Roble Novopán" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Color de Veta / Tonalidad</label>
+                <input type="text" id="nm-color-veta" class="form-input" placeholder="Ej. Gris tenue, Tonalidad Miel">
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Acabado / Textura</label>
+                <input type="text" id="nm-acabado" class="form-input" placeholder="Ej. Alto Brillo, Mate texturizado" required>
+            </div>
+        `;
+    } 
+    else if (tipo === 'silla' || tipo === 'butaca') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Modelo / Diseño Estructural</label>
+                <input type="text" id="nm-modelo" class="form-input" placeholder="Ej. Escandinava, Capitoné" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Material de la Estructura</label>
+                <input type="text" id="nm-material" class="form-input" placeholder="Ej. Madera Cachimbo, Fierro" required>
+            </div>
+            <div class="form-group">
+                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Color de Estructura / Barniz</label>
+                <input type="text" id="nm-color-estructura" class="form-input" placeholder="Ej. Nogal, Negro Satinado" required>
+            </div>
+        `;
+    }
+
+    contenedorCampos.innerHTML = htmlCampos;
+    modal.style.display = 'flex';
 }
-
 async function guardarNuevoMaterial() {
     const fotoInput = document.getElementById('nm-foto');
-    
-    // 1. Validación de foto
     if (!fotoInput || fotoInput.files.length === 0) {
         return Swal.fire('Error', 'Debe adjuntar una foto de referencia', 'warning');
     }
 
+    // Detectamos si el guardado actual es una sugerencia de vendedor
+    const esSugerencia = (destinoActual === 'sugerencia' || (usuarioActivo && usuarioActivo.role === 'Vendedor'));
+
     const formData = new FormData();
-    formData.append('tipo_material', tipoActual);
     formData.append('foto', fotoInput.files[0]);
 
-    // 2. Captura segura del Origen (Interno/Externo)
-    const origenElem = document.getElementById('nm-origen');
-    const origen = origenElem ? origenElem.value : 'Externo';
-    formData.append('origen_produccion', origen);
+    // Recolectamos dinámicamente las propiedades según el tipo actual
+    let datosObj = {};
+    let nombreInsumoCalculado = "";
 
-    // 3. Captura dinámica por tipo (Evita errores de "null")
     try {
         if (tipoActual === 'tela') {
-            formData.append('proveedor', document.getElementById('nm-proveedor').value);
-            formData.append('coleccion', document.getElementById('nm-coleccion').value);
-            formData.append('color', document.getElementById('nm-color').value);
+            datosObj.proveedor = document.getElementById('nm-proveedor').value;
+            datosObj.coleccion = document.getElementById('nm-coleccion').value;
+            datosObj.color = document.getElementById('nm-color').value;
+            nombreInsumoCalculado = `Tela ${datosObj.coleccion} - ${datosObj.color}`;
         } 
         else if (tipoActual === 'cojin') {
-            formData.append('nombre_diseno', document.getElementById('nm-nombre-diseno').value);
-            formData.append('tipo_tela', document.getElementById('nm-tipo-tela').value);
+            datosObj.nombre_diseno = document.getElementById('nm-nombre-diseno').value;
+            datosObj.tipo_tela = document.getElementById('nm-tipo-tela').value;
+            nombreInsumoCalculado = `Cojín ${datosObj.nombre_diseno}`;
         } 
         else if (tipoActual === 'base' || tipoActual === 'base-comedor') {
-            // Unificamos la captura de bases
             const matBase = document.getElementById('nm-material');
-            formData.append('material', matBase ? matBase.value : 'No especificado');
-            formData.append('modelo', document.getElementById('nm-modelo').value);
-            formData.append('color', document.getElementById('nm-color').value);
-            
-            // Altura solo existe en bases de sofá
-            const altura = document.getElementById('nm-medida-altura');
-            if (altura) formData.append('medida_altura', altura.value);
-            
-            const tipoBase = document.getElementById('nm-tipo-base');
-            if (tipoBase) formData.append('tipo', tipoBase.value);
+            datosObj.material = matBase ? matBase.value : 'No especificado';
+            datosObj.modelo = document.getElementById('nm-modelo').value;
+            datosObj.color = document.getElementById('nm-color').value;
+            if (document.getElementById('nm-medida-altura')) datosObj.medida_altura = document.getElementById('nm-medida-altura').value;
+            if (document.getElementById('nm-tipo-base')) datosObj.tipo = document.getElementById('nm-tipo-base').value;
+            nombreInsumoCalculado = `Base ${datosObj.modelo} ${datosObj.color}`;
         } 
         else if (tipoActual === 'tablero') {
-            formData.append('material_base', document.getElementById('nm-material-base').value);
-            formData.append('nombre_modelo', document.getElementById('nm-nombre-modelo').value);
-            
-            const veta = document.getElementById('nm-color-veta'); // Agregado por seguridad
-            if (veta) formData.append('color_veta', veta.value);
-            
-            formData.append('acabado', document.getElementById('nm-acabado').value);
+            datosObj.material_base = document.getElementById('nm-material-base').value;
+            datosObj.nombre_modelo = document.getElementById('nm-nombre-modelo').value;
+            if (document.getElementById('nm-color-veta')) datosObj.color_veta = document.getElementById('nm-color-veta').value;
+            datosObj.acabado = document.getElementById('nm-acabado').value;
+            nombreInsumoCalculado = `Tablero ${datosObj.nombre_modelo}`;
         } 
         else if (tipoActual === 'silla' || tipoActual === 'butaca') {
-            formData.append('modelo', document.getElementById('nm-modelo').value);
-            formData.append('color_estructura', document.getElementById('nm-color-estructura').value);
+            datosObj.modelo = document.getElementById('nm-modelo').value;
+            datosObj.color_estructura = document.getElementById('nm-color-estructura').value;
+            nombreInsumoCalculado = `${tipoActual.capitalize()} ${datosObj.modelo}`;
         }
     } catch (error) {
-        console.error("Error capturando campos:", error);
-        return Swal.fire('Error', 'Faltan completar campos obligatorios del formulario', 'warning');
+        return Swal.fire('Formulario Incompleto', 'Por favor llena los campos requeridos', 'warning');
     }
 
-    Swal.fire({ 
-        title: 'Guardando en Base de Datos...', 
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading() 
-    });
+    Swal.fire({ title: 'Procesando requerimiento...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    // RUTA BIFURCADA INTELIGENTE
+    let endpointUrl = `${API_URL}/api/materiales/nuevo`;
+    
+    if (esSugerencia) {
+        endpointUrl = `${API_URL}/api/sugerencias`;
+        formData.append('nombre', nombreInsumoCalculado);
+        formData.append('tipo', tipoActual);
+        formData.append('usuario_id', usuarioActivo ? usuarioActivo.id : 1);
+        formData.append('datos_json', JSON.stringify(datosObj));
+    } else {
+        // Flujo tradicional Admin Directo
+        formData.append('tipo_material', tipoActual);
+        const origenElem = document.getElementById('nm-origen');
+        formData.append('origen_produccion', origenElem ? origenElem.value : 'Externo');
+        
+        // Mapear al formData tradicional para no romper el backend original de inserción directa
+        for (const [key, value] of Object.entries(datosObj)) {
+            formData.append(key, value);
+        }
+    }
 
     try {
-        const res = await fetch(`${API_URL}/api/materiales/nuevo`, {
-            method: 'POST',
-            body: formData
-        });
-
+        const res = await fetch(endpointUrl, { method: 'POST', body: formData });
         if (res.ok) {
             Swal.fire({
                 icon: 'success',
-                title: '¡Pieza Registrada!',
-                text: `El insumo se guardó como origen: ${origen}`,
+                title: esSugerencia ? '¡Sugerencia Enviada!' : '¡Insumo Guardado!',
+                text: esSugerencia ? 'Aparecerá en el Gestor del Admin para su oficialización.' : 'Disponible inmediatamente.',
                 confirmButtonColor: '#0f172a'
             });
             document.getElementById('modal-nuevo-material').style.display = 'none';
-            init(); // Recarga las listas para que aparezca la nueva pieza
+            init();
         } else {
             const err = await res.json();
-            Swal.fire('Error del Servidor', err.error || 'No se pudo guardar', 'error');
+            Swal.fire('Error', err.error || 'No se pudo procesar', 'error');
         }
     } catch (e) {
-        Swal.fire('Error de Conexión', 'El servidor no responde. Revisa si app.py está corriendo.', 'error');
+        Swal.fire('Error de red', 'No se pudo contactar al servidor', 'error');
     }
 }
 /* --- LÓGICA PARA AMPLIAR IMAGEN (ZOOM) --- */
@@ -3430,50 +3483,126 @@ changeView = function(view) {
 
 async function cargarGestorAprobacion() {
     const contenedor = document.getElementById('lista-aprobacion-pendientes');
-    contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; grid-column: 1/-1;">Buscando creaciones de los vendedores...</p>';
+    if (!contenedor) return;
+    contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; grid-column: 1/-1;">Sincronizando modelos e insumos pendientes...</p>';
 
     try {
-        const res = await fetch(`${API_URL}/api/creaciones`);
-        const creaciones = await res.json();
+        // Ejecutamos ambas consultas simultáneamente
+        const [resMuebles, resInsumos] = await Promise.all([
+            fetch(`${API_URL}/api/creaciones`),
+            fetch(`${API_URL}/api/sugerencias`)
+        ]);
 
-        // Filtramos solo los que están 'Pendiente' (por seguridad)
-        const pendientes = creaciones.filter(c => c.estado === 'Pendiente');
+        const creaciones = await resMuebles.json();
+        const sugerenciasInsumos = await resInsumos.json();
 
-        if (pendientes.length === 0) {
+        const mueblesPendientes = creaciones.filter(c => c.estado === 'Pendiente');
+        const insumosPendientes = sugerenciasInsumos.filter(i => i.estado === 'Pendiente');
+
+        if (mueblesPendientes.length === 0 && insumosPendientes.length === 0) {
             contenedor.innerHTML = `
                 <div style="grid-column: 1/-1; text-align: center; padding: 50px; background: white; border-radius: 15px; border: 1px dashed #cbd5e1;">
                     <i class="fa-solid fa-check-double" style="font-size: 3rem; color: var(--success); margin-bottom: 15px;"></i>
-                    <h3 style="margin:0 0 5px 0;">¡Bandeja Limpia!</h3>
-                    <p style="margin:0; color:gray; font-size:13px;">No hay modelos nuevos esperando tu aprobación.</p>
+                    <h3 style="margin:0 0 5px 0;">¡Bandeja de Aprobaciones Vacía!</h3>
+                    <p style="margin:0; color:gray; font-size:13px;">Todo el catálogo e insumos están al día.</p>
                 </div>`;
             return;
         }
 
-        contenedor.innerHTML = pendientes.map(item => `
-            <div class="card-produccion" style="position:relative;">
-                <div class="badge-area" style="position:absolute; top:15px; left:15px; background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">${item.categoria}</div>
-                <img src="${item.foto_url.startsWith('http') ? item.foto_url : `${API_URL}/uploads/` + item.foto_url}" 
-                     style="width: 100%; height: 180px; object-fit: cover; border-radius: 10px; margin-bottom: 15px;">
-                
-                <h4 style="margin: 0 0 8px 0; color:#0f172a;">${item.nombre}</h4>
-                <div style="font-size: 11px; color: #64748b; margin-bottom: 15px; background: #f8fafc; padding: 10px; border-radius: 8px;">
+        let htmlFinal = "";
+
+        // Renderizado de Modelos de Muebles Personalizados
+        mueblesPendientes.forEach(item => {
+            htmlFinal += `
+            <div class="card-produccion" style="position:relative; background: #ffffff; border: 1px solid #e2e8f0; border-radius:14px; padding:15px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div class="badge-area" style="position:absolute; top:15px; left:15px; background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">MUEBLE: ${item.categoria}</div>
+                <img src="${item.foto_url.startsWith('http') ? item.foto_url : `${API_URL}/uploads/` + item.foto_url}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 12px;" onerror="this.src='imagenes/sin_foto.jpg'">
+                <h4 style="margin: 0 0 4px 0; color:#0f172a; font-size:14px;">${item.nombre}</h4>
+                <small style="color:gray; display:block; margin-bottom:8px;">Subido por: <b>${item.vendedor || 'Vendedor'}</b></small>
+                <div style="font-size: 11px; color: #64748b; margin-bottom: 15px; background: #f8fafc; padding: 8px; border-radius: 6px; line-height:1.4;">
                     ${item.detalles.replace(/\n/g, '<br>')}
                 </div>
+                <button class="btn-action btn-primary" style="font-size: 11px; padding: 10px; border-radius:8px;" onclick="procesarAprobacion(${item.id}, '${item.nombre}')">
+                    <i class="fa-solid fa-check"></i> APROBAR MUEBLE
+                </button>
+            </div>`;
+        });
 
-                <div style="border-top: 1px solid #f1f5f9; padding-top: 15px; display: flex; gap: 8px;">
-                    <button class="btn-action btn-primary" style="flex: 1; font-size: 11px; padding: 10px;" onclick="procesarAprobacion(${item.id}, '${item.nombre}')">
-                        <i class="fa-solid fa-check"></i> APROBAR OFICIAL
-                    </button>
-                    <button class="btn-action" style="background: #fef2f2; color: #ef4444; flex: 0.3; padding: 10px; border: 1px solid #fca5a5;">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
+        // Renderizado de Insumos / Partes Sugeridas
+        insumosPendientes.forEach(insumo => {
+            let datos = {};
+            try { datos = JSON.parse(insumo.datos_json); } catch(e) {}
+            
+            // Construir desglose legible de las propiedades técnicas enviadas en el JSON
+            let especificacionesInsumo = "";
+            for (const [key, value] of Object.entries(datos || {})) {
+                if (key !== 'nombre_insumo') {
+                    especificacionesInsumo += `<b>${key.toUpperCase()}:</b> ${value}<br>`;
+                }
+            }
+
+            htmlFinal += `
+            <div class="card-produccion" style="position:relative; background: #fffdf5; border: 1px dashed #d4af37; border-radius:14px; padding:15px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div class="badge-template" style="position:absolute; top:15px; left:15px; background: #f59e0b; color:white;">📌 INSUMO: ${insumo.tipo.toUpperCase()}</div>
+                <img src="${insumo.foto_url}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 12px;" onerror="this.src='imagenes/sin_foto.jpg'">
+                <h4 style="margin: 0 0 4px 0; color:#0f172a; font-size:14px;">${insumo.nombre}</h4>
+                <small style="color:gray; display:block; margin-bottom:8px;">Sugerido por: <b>${insumo.vendedor}</b></small>
+                <div style="font-size: 11px; color: #b45309; margin-bottom: 15px; background: #fffbeb; padding: 8px; border-radius: 6px; line-height:1.4; text-align:left;">
+                    ${especificacionesInsumo || 'Instrucciones estándar básicas.'}
                 </div>
-            </div>
-        `).join('');
+                <button class="btn-primary" style="font-size: 11px; padding: 10px; border-radius:8px; background:#d97706; border:none; color:white; font-weight:bold; cursor:pointer;" onclick="procesarAprobacionInsumo(${insumo.id}, '${insumo.nombre}')">
+                    <i class="fa-solid fa-stamp"></i> EVALUAR INSUMO
+                </button>
+            </div>`;
+        });
+
+        contenedor.innerHTML = htmlFinal;
 
     } catch (error) {
-        console.error("Error cargando gestor:", error);
-        contenedor.innerHTML = '<p style="color:red; text-align:center; grid-column: 1/-1;">❌ Error de conexión con el servidor.</p>';
+        console.error("Error unificando gestor:", error);
+        contenedor.innerHTML = '<p style="color:red; text-align:center; grid-column: 1/-1;">❌ Error de sincronización con la base de datos.</p>';
+    }
+}
+
+// Ventana de evaluación contable/operativa de insumos para el Admin
+async function procesarAprobacionInsumo(id, nombre) {
+    const { value: origenEstrategia } = await Swal.fire({
+        title: 'Evaluación Estratégica de Insumo',
+        html: `
+            <div style="text-align: left; padding: 5px; font-size:13px;">
+                <p style="color:#475569; margin-bottom:15px;">Estás a punto de oficializar el insumo: <b style="color:#0f172a;">${nombre}</b> en el maestro del sistema.</p>
+                <label style="font-weight:900; font-size:11px; color:var(--primary); display:block; margin-bottom:5px;">DEFINIR ORIGEN DE PRODUCCIÓN (Make vs Buy):</label>
+                <select id="swal-insumo-origen" class="swal2-input" style="width:100%; margin:0; height:40px; font-size:14px;">
+                    <option value="Externo">📦 COMPRA EXTERNA (Se compra directo a proveedor)</option>
+                    <option value="Interno">🛠️ FABRICACIÓN INTERNA (Se procesa en el taller)</option>
+                </select>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Oficializar e Inyectar SKU',
+        cancelButtonText: 'Rechazar',
+        confirmButtonColor: '#d97706',
+        preConfirm: () => document.getElementById('swal-insumo-origen').value
+    });
+
+    if (origenEstrategia) {
+        Swal.fire({ title: 'Insertando en maestros...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        try {
+            const res = await fetch(`${API_URL}/api/sugerencias/aprobar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sugerencia_id: id, origen: origenEstrategia })
+            });
+            const data = await res.json();
+            if (data.exito) {
+                Swal.fire('¡Aprobado Oficial!', data.mensaje, 'success');
+                cargarGestorAprobacion();
+            } else {
+                Swal.fire('Error', data.error, 'error');
+            }
+        } catch (e) {
+            Swal.fire('Error', 'Error de comunicación con Flask', 'error');
+        }
     }
 }
 
@@ -3654,9 +3783,6 @@ async function abrirModalPinterest(tipoInput) {
 /* ================================================================= */
 
 function abrirModalSugerencia() {
-    document.getElementById('sug-foto').value = '';
-    document.getElementById('sug-nombre').value = '';
-    document.getElementById('sug-tipo').selectedIndex = 0;
     document.getElementById('modal-sugerencia').style.display = 'flex';
 }
 
