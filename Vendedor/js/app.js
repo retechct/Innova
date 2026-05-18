@@ -97,8 +97,6 @@ async function loadMisPedidos() {
             return;
         }
 
-        // Usamos tus campos de Python: v.codigo, v.cliente, v.entrega, v.progreso
-        // Usamos tus campos de Python: v.codigo, v.cliente, v.entrega, v.progreso
         container.innerHTML = data.map(v => `
             <div class="pedido-card" onclick="abrirDetallePedido('${v.codigo}')" style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border:1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; transition: 0.2s;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -154,64 +152,7 @@ function changeView(view) {
         document.getElementById('view-pedidos').style.display = 'block';
         loadMisPedidos();
     }
- else if (view === 'taller') {
-        document.getElementById('view-taller').style.display = 'block';
-        cargarTicketsTaller(); 
-    }
-    else if (view === 'inventario') {
-        document.getElementById('view-inventario').style.display = 'block';
-        cargarInventarioTaller(); 
-    }
-    else if (view === 'logistica') {
-        document.getElementById('view-logistica').style.display = 'block';
-        cargarLogisticaExterna();
-    }
-    else if (view === 'usuarios-admin') {
-        document.getElementById('view-usuarios-admin').style.display = 'block';
-        listarUsuarios();
-    }
-    else if (view === 'proveedores') {
-        document.getElementById('view-proveedores').style.display = 'block';
-        listarProveedores();
-    }
-function changeView(view) {
-    currentMode = view;
-    if (document.getElementById('sidebar').classList.contains('active')) toggleSidebar();
-    
-    // Actualizar encabezado
-    const titles = { 
-        'stock': 'STOCK EN TIENDA', 
-        'catalogo': 'NUESTRA CARTA', 
-        'contrato': 'DISEÑOS A MEDIDA', 
-        'pedidos': 'SEGUIMIENTO', 
-        'taller': 'GESTIÓN DE TALLER' ,
-        'inventario': 'CONTROL DE INSUMOS'
-    };
-    
-    if (titles[view]) {
-        document.getElementById('view-title').innerText = titles[view];
-    }
-
-    // Ocultar TODAS las vistas que tienes en el HTML
-    const secciones = ['view-productos', 'view-plantillas', 'view-pedidos', 'view-taller', 'view-inventario', 'view-gestor-aprobacion', 'view-logistica', 'view-usuarios-admin', 'view-proveedores'];
-    secciones.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-    });
-
-    // Mostrar la vista seleccionada
-    if (view === 'stock' || view === 'catalogo') {
-        document.getElementById('view-productos').style.display = 'block';
-        renderGrid(); 
-    } 
-    else if (view === 'contrato') {
-        document.getElementById('view-plantillas').style.display = 'block';
-    } 
-    else if (view === 'pedidos') {
-        document.getElementById('view-pedidos').style.display = 'block';
-        loadMisPedidos();
-    }
- else if (view === 'taller') {
+    else if (view === 'taller') {
         document.getElementById('view-taller').style.display = 'block';
         cargarTicketsTaller(); 
     }
@@ -232,6 +173,7 @@ function changeView(view) {
         listarProveedores();
     }
 }
+
 function renderGrid() {
     const grid = document.getElementById('product-grid');
     let filtered = [];
@@ -263,12 +205,6 @@ function renderGrid() {
     `).join('');
 }
 
-/* --- LÓGICA DEL NUEVO MODAL DE SOFÁS --- */
-/* --- REEMPLAZA TU FUNCIÓN openConfig COMPLETA --- */
-document.addEventListener('DOMContentLoaded', () => {
-    cargarUsuariosLogin();
-    verificarSesionExistente(); // <--- Nueva función
-});
 async function cargarUsuariosLogin() {
     try {
         const response = await fetch(`${API_URL}/api/usuarios`);
@@ -283,26 +219,23 @@ async function cargarUsuariosLogin() {
         console.error("No hay conexión con el servidor para cargar usuarios", error);
     }
 }
+
 function verificarSesionExistente() {
     const sesionGuardada = localStorage.getItem('usuarioInnova');
     
     if (sesionGuardada) {
         usuarioActivo = JSON.parse(sesionGuardada);
         document.getElementById('pantalla-login').style.display = 'none';
-        configurarInterfazPorRol(); // Centraliza la configuración de la UI
-        // Lógica de ruteo inicial al cargar la sesión
-        if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER') {
-            changeView('taller');
-        } else {
-            changeView('catalogo');
-        }
+        configurarInterfazPorRol();
+        // El ruteo real lo hará init() una vez cargue los productos
     }
 }
+
 async function entrarAlSistema() {
     const usuarioId = document.getElementById('login-usuario').value;
     const pin = document.getElementById('login-pin').value;
     
-    // NUEVO: Capturamos la tienda que seleccionó en el dropdown
+    // Capturamos la tienda que seleccionó en el dropdown
     const tiendaSelect = document.getElementById('login-tienda');
     const tiendaSeleccionada = tiendaSelect ? tiendaSelect.value : 'No especificada';
 
@@ -320,19 +253,19 @@ async function entrarAlSistema() {
         const result = await response.json();
 
         if (result.exito) {
-            usuarioActivo = result.usuario; // Aquí guardamos id, nombre, rol, empresa y ruc
+            usuarioActivo = result.usuario;
             
-            // NUEVO: Agregamos la tienda y la hora al perfil del usuario
+            // Agregamos la tienda y la hora al perfil del usuario
             usuarioActivo.tienda = tiendaSeleccionada;
             usuarioActivo.horaLogin = new Date().toLocaleTimeString();
             
             // Guardamos todo junto en la memoria del navegador
             localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
             
-            // 1. Ocultamos el login
+            // Ocultamos el login
             document.getElementById('pantalla-login').style.display = 'none';
             
-            configurarInterfazPorRol(); // Centraliza la configuración de la UI
+            configurarInterfazPorRol();
 
             // Lógica de ruteo inicial después del login
             if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER') {
@@ -395,14 +328,14 @@ async function editarPlantilla(id) {
             }
         }
 
-        // 3. MAGIA: Esperamos un instante a que el HTML reaccione, y rellenamos todo
+        // 3. Esperamos un instante a que el HTML reaccione, y rellenamos todo
         setTimeout(() => {
             for (const [idElemento, valor] of Object.entries(adn)) {
                 const el = document.getElementById(idElemento);
                 if (el) {
                     if (el.type === 'checkbox') {
                         el.checked = valor;
-                        if (el.onchange) el.onchange(); // Dispara la banqueta si estaba activa
+                        if (el.onchange) el.onchange();
                     } else {
                         el.value = valor;
                     }
@@ -413,14 +346,15 @@ async function editarPlantilla(id) {
             const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
             Toast.fire({ icon: 'success', title: 'Diseño cargado y listo para modificar.' });
             
-        }, 300); // 300ms es el tiempo perfecto para que el DOM se dibuje
+        }, 300);
 
     } catch (error) {
         console.error("Error al editar plantilla:", error);
         Swal.fire('Error', 'No se pudo conectar con el servidor para cargar el diseño.', 'error');
     }
 }
-// FUNCIÓN PARA CERRAR SESIÓN (Importante para que otro vendedor pueda entrar)
+
+// FUNCIÓN PARA CERRAR SESIÓN
 function cerrarSesion() {
     Swal.fire({
         title: '¿Cerrar Sesión?',
@@ -432,14 +366,18 @@ function cerrarSesion() {
         cancelButtonText: 'Cancelar'
     }).then((result) => {
         if (result.isConfirmed) {
-            localStorage.removeItem('usuarioInnova'); // Borramos la memoria
-            location.reload(); // Recargamos para mostrar el login de nuevo
+            localStorage.removeItem('usuarioInnova');
+            location.reload();
         }
     });
 }
 
-// Hacemos que los usuarios se carguen apenas se abre la página
+// ==========================================
+// PUNTO DE ENTRADA — se ejecuta al cargar la página
+// FIX: un solo DOMContentLoaded que llama init() + cargarUsuariosLogin()
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    cargarUsuariosLogin();
+    cargarUsuariosLogin();   // llena el dropdown de usuarios en el login
+    verificarSesionExistente(); // oculta el login si ya hay sesión guardada
+    init();                  // carga catálogo + materiales y rutea según sesión
 });
-}
