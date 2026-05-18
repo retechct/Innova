@@ -23,7 +23,7 @@ cloudinary.config(
     api_secret = os.getenv('CLOUDINARY_API_SECRET')
 )
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='Vendedor', static_url_path='')
 CORS(app)
 
 # Rate limiter — protege el login contra ataques de fuerza bruta
@@ -35,7 +35,7 @@ limiter = Limiter(
 )
 
 # URL base del backend
-BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:5000")
+BACKEND_URL = os.getenv("BACKEND_URL", "https://innova-4cnn.onrender.com")
 
 # ==========================================
 # POOL DE CONEXIONES A LA BASE DE DATOS
@@ -115,7 +115,7 @@ def mostrar_foto(filename):
 
 @app.route('/', methods=['GET'])
 def bienvenida():
-    return "¡Servidor Central Innova Mobili Activo!"
+    return send_from_directory('Vendedor', 'index.html')
 
 
 # ==========================================
