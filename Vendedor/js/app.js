@@ -172,6 +172,11 @@ function changeView(view) {
         document.getElementById('view-proveedores').style.display = 'block';
         listarProveedores();
     }
+    else if (view === 'gestor-aprobacion') {
+        document.getElementById('view-gestor-aprobacion').style.display = 'block';
+        document.getElementById('view-title').innerText = 'GESTOR DE MODELOS (Make vs Buy)';
+        cargarGestorAprobacion();
+    }
 }
 
 function renderGrid() {

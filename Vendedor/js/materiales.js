@@ -94,8 +94,7 @@ document.addEventListener('click', function(e) {
         document.querySelectorAll('.custom-options').forEach(el => el.classList.remove('show'));
     }
 });
-let destinoActual = "";
-let tipoActual = "";
+// NOTA: destinoActual y tipoActual se declaran en config.js — no redeclarar aquí
 
 function abrirModalNuevo(tipo, destino) {
     tipoActual = tipo;

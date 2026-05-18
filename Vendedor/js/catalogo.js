@@ -581,31 +581,5 @@ function confirmarButaca() {
         if (result.isConfirmed) toggleCart();
     });
 }
-/* ================================================================= */
-/* --- MÓDULO: GESTOR DE APROBACIÓN (ADMIN) --- */
-/* ================================================================= */
-
-// Asegurarnos de que el menú cambia a esta pantalla
-const oldChangeView = changeView;
-changeView = function(view) {
-    oldChangeView(view); // Llama a tu función original
-    
-    // Ocultamos la vista del gestor por defecto
-    const gestorView = document.getElementById('view-gestor-aprobacion');
-    if (gestorView) gestorView.style.display = 'none';
-
-    // Si la vista solicitada es el gestor, la mostramos y cargamos los datos
-    if (view === 'gestor-aprobacion') {
-        document.getElementById('view-productos').style.display = 'none';
-        document.getElementById('view-plantillas').style.display = 'none';
-        document.getElementById('view-pedidos').style.display = 'none';
-        document.getElementById('view-taller').style.display = 'none';
-        document.getElementById('view-inventario').style.display = 'none';
-        
-        document.getElementById('view-title').innerText = 'GESTOR DE MODELOS (Make vs Buy)';
-        document.getElementById('view-icon').className = 'fa-solid fa-clipboard-check';
-        
-        gestorView.style.display = 'block';
-        cargarGestorAprobacion();
-    }
-};
+// NOTA: El manejo de 'gestor-aprobacion' en changeView se hace en app.js,
+// donde changeView ya está definida. No hacerlo aquí para evitar ReferenceError.
