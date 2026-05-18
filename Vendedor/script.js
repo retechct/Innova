@@ -1,7 +1,7 @@
 // =============================================================
 // INNOVA MOBILI ERP — Configuración Global
 // Para subir a producción, cambia SOLO esta línea:
-const API_URL = "http://127.0.0.1:5000";
+const API_URL = "https://innova-4cnn.onrender.com";
 // =============================================================
 
 const imagenesSofa = {
