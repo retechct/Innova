@@ -52,26 +52,6 @@ function calcularTotales() {
     if (elSaldo) elSaldo.innerText = `S/ ${(total - adelanto).toFixed(2)}`;
 }
 
-function calcularTotales() {
-    // 1. Sumar el total de los muebles en el carrito
-    const total = cart.reduce((s, i) => s + i.price, 0);
-    
-    // 2. Sumar el total de los adelantos usando la nueva lógica de Múltiples Pagos
-    let adelanto = 0;
-    if (typeof listaPagos !== 'undefined') {
-        adelanto = listaPagos.reduce((sum, p) => sum + p.monto, 0);
-    }
-    
-    // 3. Imprimir los resultados en el carrito (protegido por si no existen los IDs)
-    const elTotal = document.getElementById('res-total');
-    const elAdelanto = document.getElementById('res-adelanto');
-    const elSaldo = document.getElementById('res-saldo');
-
-    if (elTotal) elTotal.innerText = `S/ ${total.toFixed(2)}`;
-    if (elAdelanto) elAdelanto.innerText = `S/ ${adelanto.toFixed(2)}`;
-    if (elSaldo) elSaldo.innerText = `S/ ${(total - adelanto).toFixed(2)}`;
-}
-
 function goToStep(step) {
     currentStep = step;
     document.querySelectorAll('.step-content').forEach(c => c.classList.remove('active'));
@@ -112,7 +92,7 @@ function handleNextStep() {
         guardarVenta(); 
     }
 }
-let listaPagos = [];
+// NOTA: listaPagos se declara en config.js — no redeclarar aquí
 
 function actualizarCamposPago() {
     const tipo = document.getElementById('pago-tipo').value;
