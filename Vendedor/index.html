@@ -242,8 +242,11 @@
     </div>
 
     <div id="view-logistica" class="view-section" style="display:none; padding: 20px;">
-        <div class="view-title-container">
+        <div class="view-title-container" style="justify-content: space-between;">
             <h2 style="color: #b45309;"><i class="fa-solid fa-truck-fast"></i> REQUERIMIENTOS EXTERNOS (PROCURA)</h2>
+            <button onclick="exportarVentas()" style="background:#166534; color:white; border:none; padding:10px 18px; border-radius:8px; font-weight:800; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-file-excel"></i> EXPORTAR VENTAS (.xlsx)
+            </button>
         </div>
         <div id="tabla-logistica-externa" style="background: white; border-radius: 12px; padding: 15px; border: 1px solid #e2e8f0;">
             <!-- Cargado vía JS -->
@@ -796,12 +799,20 @@
                 <input type="text" id="c-codigo" class="form-input">
             </div>
             
-            <div class="form-group">
+            <div class="form-group" style="margin-top: 15px;">
                 <label style="font-size: 11px; font-weight: bold; color: gray;">DATOS DEL CLIENTE</label>
                 <input type="text" id="c-nombre" class="form-input" placeholder="Nombre completo" style="margin-bottom: 10px;">
                 
                 <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
-                    <input type="number" id="c-dni" placeholder="DNI" class="form-input" style="flex: 1; min-width: 120px; margin: 0;">
+                    <select id="c-tipo-doc" class="form-input" style="flex: 1; min-width: 120px; margin: 0;" onchange="actualizarValidacionDoc()">
+                        <option value="DNI">🪪 DNI (8 dígitos)</option>
+                        <option value="RUC">🏢 RUC (11 dígitos)</option>
+                        <option value="CE">🌐 Carnet Extranjería</option>
+                    </select>
+                    <input type="text" id="c-dni" placeholder="Número de documento" class="form-input" style="flex: 1; min-width: 120px; margin: 0;" maxlength="11">
+                </div>
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
                     <input type="number" id="c-celular" placeholder="Celular" class="form-input" style="flex: 1; min-width: 120px; margin: 0;">
                 </div>
                 
@@ -837,6 +848,14 @@
                     
                     <select id="pago-entidad" class="form-input-sm" style="display: none; background-color: #fff;">
                         </select>
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <select id="pago-empresa" class="form-input-sm" style="width:100%; background:#fffdf0; border-color:#d4af37; font-weight:bold;">
+                        <option value="">⚠️ ¿A qué empresa entró el dinero?</option>
+                        <option value="INNOVA MOBILI S.A.C.">🏢 INNOVA MOBILI S.A.C. (RUC: 20600768175)</option>
+                        <option value="INNOVA MOBILI LIMA E.I.R.L.">🏢 INNOVA MOBILI LIMA E.I.R.L. (RUC: 20614763044)</option>
+                    </select>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
@@ -1010,6 +1029,12 @@
         </div>
     </div>
 </div>
-    <script src="script.js"></script>
+    <!-- Módulos JS (orden importa: config primero, app al final) -->
+    <script src="js/config.js"></script>
+    <script src="js/catalogo.js"></script>
+    <script src="js/carrito.js"></script>
+    <script src="js/materiales.js"></script>
+    <script src="js/taller.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

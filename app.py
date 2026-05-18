@@ -1,6 +1,6 @@
 import os
 import json
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, send_file
 from flask_cors import CORS
 import psycopg2
 from psycopg2 import pool as pg_pool
@@ -13,6 +13,9 @@ import cloudinary.uploader
 import cloudinary.api
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+import io
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # Carga las variables del archivo .env (en producción, Railway las inyecta directo)
 load_dotenv()
@@ -230,8 +233,9 @@ def guardar_venta():
             INSERT INTO ventas (
                 codigo_venta, nombre_cliente, dni_cliente, celular_cliente,
                 direccion_cliente, vendedor_id, fecha_emision, fecha_entrega,
-                metodo_pago, monto_adelanto, monto_total, empresa_ruc, vendedor_nombre
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id;
+                metodo_pago, monto_adelanto, monto_total, empresa_ruc, vendedor_nombre,
+                tipo_documento, empresa_pago
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id;
         """, (
             datos['codigo'],          datos['cliente'],
             datos.get('dni'),         datos.get('celular'),
@@ -239,7 +243,9 @@ def guardar_venta():
             datos['fecha_emision'],   datos.get('fecha_entrega'),
             datos.get('metodo_pago'), datos.get('monto_adelanto', 0),
             datos.get('monto_total', 0),
-            datos.get('empresa_ruc'), datos.get('vendedor_nombre')
+            datos.get('empresa_ruc'), datos.get('vendedor_nombre'),
+            datos.get('tipo_documento', 'DNI'),
+            datos.get('empresa_pago', '')
         ))
         venta_id = cursor.fetchone()[0]
 
@@ -2100,6 +2106,128 @@ def obtener_choferes():
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+
+# ==========================================
+# 14. MÓDULO: EXPORTAR VENTAS A EXCEL
+# ==========================================
+
+@app.route('/api/ventas/exportar', methods=['GET'])
+def exportar_ventas_excel():
+    """Exporta todas las ventas a un archivo Excel con el formato solicitado."""
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT
+                v.codigo_venta,
+                v.nombre_cliente,
+                COALESCE(v.tipo_documento, 'DNI')   AS tipo_doc,
+                v.dni_cliente,
+                v.fecha_emision,
+                v.fecha_entrega,
+                v.monto_total,
+                STRING_AGG(DISTINCT i.producto, ' / ')  AS productos,
+                v.direccion_cliente,
+                v.metodo_pago,
+                v.monto_adelanto,
+                COALESCE(v.empresa_pago, '')         AS empresa_pago,
+                v.created_at,
+                v.celular_cliente,
+                v.empresa_ruc,
+                v.vendedor_nombre
+            FROM ventas v
+            LEFT JOIN items_venta i ON i.venta_id = v.id
+            GROUP BY v.id
+            ORDER BY v.id DESC;
+        """)
+        filas = cursor.fetchall()
+
+        # ── Crear workbook ──
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Ventas"
+
+        # Estilos
+        header_font    = Font(bold=True, color="FFFFFF", size=10)
+        header_fill    = PatternFill("solid", fgColor="0F172A")
+        center         = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin           = Side(style="thin", color="CBD5E0")
+        border         = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        headers = [
+            "Cód. Venta", "Cliente", "Tipo Doc.", "RUC/DNI/CE",
+            "F. Emisión", "F. Entrega", "Monto Total",
+            "Producto(s)", "Dirección", "Método Pago",
+            "Adelanto", "Empresa que recibió pago",
+            "Fecha Registro", "Teléfono", "RUC Empresa", "Vendedor"
+        ]
+
+        # Cabecera
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.font      = header_font
+            cell.fill      = header_fill
+            cell.alignment = center
+            cell.border    = border
+
+        # Anchos de columna
+        anchos = [12, 25, 10, 14, 14, 14, 12, 40, 30, 20, 12, 30, 14, 14, 16, 20]
+        for col, ancho in enumerate(anchos, 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = ancho
+
+        # Datos
+        fill_par  = PatternFill("solid", fgColor="F8FAFC")
+        fill_impar = PatternFill("solid", fgColor="FFFFFF")
+
+        for row_num, f in enumerate(filas, 2):
+            fill = fill_par if row_num % 2 == 0 else fill_impar
+            valores = [
+                f[0],   # codigo_venta
+                f[1],   # nombre_cliente
+                f[2],   # tipo_documento
+                f[3],   # dni_cliente
+                f[4].strftime('%d/%m/%Y') if f[4] else '',
+                f[5].strftime('%d/%m/%Y') if f[5] else '',
+                float(f[6]) if f[6] else 0,
+                f[7],   # productos
+                f[8],   # direccion
+                f[9],   # metodo_pago
+                float(f[10]) if f[10] else 0,
+                f[11],  # empresa_pago
+                f[12].strftime('%d/%m/%Y') if f[12] else '',
+                f[13],  # celular
+                f[14],  # empresa_ruc
+                f[15],  # vendedor_nombre
+            ]
+            for col, val in enumerate(valores, 1):
+                cell = ws.cell(row=row_num, column=col, value=val)
+                cell.fill      = fill
+                cell.border    = border
+                cell.alignment = Alignment(vertical="center", wrap_text=True)
+
+        # Congelar primera fila
+        ws.freeze_panes = "A2"
+
+        # Guardar en memoria
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        fecha_hoy = datetime.now().strftime('%Y%m%d_%H%M')
+        return send_file(
+            buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'ventas_innova_{fecha_hoy}.xlsx'
+        )
+
+    except Exception as e:
+        print("Error al exportar ventas:", e)
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
