@@ -6,3 +6,8 @@ cloudinary
 python-dotenv
 gunicorn
 openpyxl
+Flask-SQLAlchemy 
+Flask-Migrate 
+Flask-JWT-Extended 
+Werkzeug
+pip install pytz

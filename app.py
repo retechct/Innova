@@ -16,7 +16,9 @@ from flask_limiter.util import get_remote_address
 import io
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-
+from models import db
+from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
 # Carga las variables del archivo .env (en producción, Railway las inyecta directo)
 load_dotenv()
 
@@ -28,7 +30,16 @@ cloudinary.config(
 
 app = Flask(__name__, static_folder='Vendedor', static_url_path='')
 CORS(app)
+# --- CONFIGURACIÓN E INICIALIZACIÓN DE BASE DE DATOS Y SEGURIDAD ---
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'clave-secreta-de-innova-mobili')
 
+# Inicializar las extensiones con tu app actual sin alterar tus rutas existentes
+db.init_app(app)
+migrate = Migrate(app, db)
+jwt = JWTManager(app)
+# ------------------------------------------------------------------
 # Rate limiter — protege el login contra ataques de fuerza bruta
 limiter = Limiter(
     get_remote_address,
