@@ -45,6 +45,7 @@ function configurarInterfazPorRol() {
     const btnLogistica = document.getElementById('btn-menu-logistica');
     const btnUsuarios = document.getElementById('btn-menu-usuarios');
     const btnProv = document.getElementById('btn-menu-proveedores');
+    const btnContratos = document.getElementById('btn-menu-contratos'); // NUEVO ACCESO
 
     // Ocultar todos los botones por defecto
     if (btnTaller) btnTaller.style.display = 'none';
@@ -54,6 +55,7 @@ function configurarInterfazPorRol() {
     if (btnLogistica) btnLogistica.style.display = 'none';
     if (btnUsuarios) btnUsuarios.style.display = 'none';
     if (btnProv) btnProv.style.display = 'none';
+    if (btnContratos) btnContratos.style.display = 'none'; // NUEVO ACCESO
 
     // Mostrar botones según el rol
     if (['Admin', 'Jefe_Taller', 'JEFE_TALLER', 'Operario'].includes(usuarioActivo.rol)) {
@@ -68,8 +70,10 @@ function configurarInterfazPorRol() {
         if (btnLogistica) btnLogistica.style.display = 'flex'; // LOGÍSTICA EXTERNA
         if (btnUsuarios) btnUsuarios.style.display = 'flex';   // GESTIÓN DE PERSONAL
         if (btnProv) btnProv.style.display = 'flex';         // PROVEEDORES
+        if (btnContratos) btnContratos.style.display = 'block'; // NUEVO ACCESO: REPORTES Y VENTAS
     }
 }
+
 function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('active');
     document.getElementById('overlay-sidebar').classList.toggle('active');
@@ -78,8 +82,6 @@ function toggleSidebar() {
 /* ================================================================= */
 /* --- SEGUIMIENTO DE PEDIDOS (CONEXIÓN CON PYTHON) --- */
 /* ================================================================= */
-/* --- FUNCIÓN DE SEGUIMIENTO (Dibuja en tu div "pedidos-container") --- */
-/* --- FUNCIÓN DE SEGUIMIENTO (Dibuja en tu div "pedidos-container") --- */
 async function loadMisPedidos() {
     const container = document.getElementById('pedidos-container');
     if (!container) return;
@@ -87,7 +89,6 @@ async function loadMisPedidos() {
     container.innerHTML = `<p style="text-align:center; padding:20px; color:gray;">Cargando seguimiento...</p>`;
 
     try {
-        // CORRECCIÓN APLICADA: Leemos quién inició sesión en lugar de usar el "1" fijo
         const idVendedor = typeof usuarioActivo !== 'undefined' && usuarioActivo ? usuarioActivo.id : 1; 
         const res = await fetch(`${API_URL}/api/mis-ventas/${idVendedor}`);
         const data = await res.json();
@@ -114,27 +115,53 @@ async function loadMisPedidos() {
         container.innerHTML = `<p style="text-align:center; color:red; padding:20px;">Error al conectar con el servidor.</p>`;
     }
 }
+
+// Función encargada de recopilar el rango de fechas y descargar el reporte Excel
+function descargarExcelContratos() {
+    const inicio = document.getElementById('excel-fecha-inicio').value;
+    const fin = document.getElementById('excel-fecha-fin').value;
+    
+    if (!inicio || !fin) {
+        Swal.fire('Atención', 'Por favor selecciona un rango de fechas.', 'warning');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Generando Reporte...',
+        text: 'Por favor espera un momento.',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    const urlDescarga = `${API_URL}/api/ventas/exportar?inicio=${inicio}&fin=${fin}`;
+    window.open(urlDescarga, '_blank');
+    Swal.close();
+}
 /* --- FUNCIÓN BLINDADA CONTRA ERRORES "NULL" --- */
 function changeView(view) {
     currentMode = view;
     if (document.getElementById('sidebar').classList.contains('active')) toggleSidebar();
     
-    // Actualizar encabezado
+    // 1. ACTUALIZADO: Se agregó el título 'contratos'
     const titles = { 
         'stock': 'STOCK EN TIENDA', 
         'catalogo': 'NUESTRA CARTA', 
         'contrato': 'DISEÑOS A MEDIDA', 
         'pedidos': 'SEGUIMIENTO', 
         'taller': 'GESTIÓN DE TALLER' ,
-        'inventario': 'CONTROL DE INSUMOS'
+        'inventario': 'CONTROL DE INSUMOS',
+        'contratos': 'REPORTES Y VENTAS' // <-- NUEVO
     };
     
     if (titles[view]) {
         document.getElementById('view-title').innerText = titles[view];
     }
 
-    // Ocultar TODAS las vistas que tienes en el HTML
-    const secciones = ['view-productos', 'view-plantillas', 'view-pedidos', 'view-taller', 'view-inventario', 'view-gestor-aprobacion', 'view-logistica', 'view-usuarios-admin', 'view-proveedores'];
+    // 2. ACTUALIZADO: Se agregó 'vista-contratos' a la lista para que se oculte correctamente
+    const secciones = ['view-productos', 'view-plantillas', 'view-pedidos', 'view-taller', 'view-inventario', 'view-gestor-aprobacion', 'view-logistica', 'view-usuarios-admin', 'view-proveedores', 'vista-contratos']; // <-- NUEVO AL FINAL
+    
     secciones.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -145,9 +172,10 @@ function changeView(view) {
         document.getElementById('view-productos').style.display = 'block';
         renderGrid(); 
     } 
-    else if (view === 'contrato') {
-        document.getElementById('view-plantillas').style.display = 'block';
-    } 
+    else if (view === 'contratos') {
+    document.getElementById('vista-contratos').style.display = 'block';
+    loadContratos();   // <-- esta línea es la que faltaba
+}
     else if (view === 'pedidos') {
         document.getElementById('view-pedidos').style.display = 'block';
         loadMisPedidos();
@@ -178,7 +206,6 @@ function changeView(view) {
         cargarGestorAprobacion();
     }
 }
-
 function renderGrid() {
     const grid = document.getElementById('product-grid');
     let filtered = [];
@@ -376,7 +403,160 @@ function cerrarSesion() {
         }
     });
 }
+// ==========================================
+// MÓDULO: CONTRATOS / REPORTES Y VENTAS
+// ==========================================
+let _contratosData = [];
 
+async function loadContratos() {
+    const tbody = document.getElementById('contratos-tbody');
+    const cards = document.getElementById('contratos-cards');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">
+        <i class="fa-solid fa-spinner fa-spin"></i> Cargando contratos...</td></tr>`;
+
+    try {
+        const res = await fetch(`${API_URL}/api/ventas`);
+        _contratosData = await res.json();
+        if (_contratosData.error) throw new Error(_contratosData.error);
+        filtrarContratos();
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:#ef4444;">
+            Error al cargar: ${e.message}</td></tr>`;
+    }
+}
+
+function filtrarContratos() {
+    const q      = (document.getElementById('contratos-search')?.value || '').toLowerCase();
+    const estado = document.getElementById('contratos-filtro-estado')?.value || '';
+    const desde  = document.getElementById('contratos-desde')?.value || '';
+    const hasta  = document.getElementById('contratos-hasta')?.value || '';
+
+    const filtrado = _contratosData.filter(v => {
+        const texto = `${v.codigo} ${v.cliente} ${v.productos || ''}`.toLowerCase();
+        const okQ      = !q      || texto.includes(q);
+        const okEstado = !estado || v.estado === estado;
+        const okDesde  = !desde  || v.fecha_entrega >= desde;
+        const okHasta  = !hasta  || v.fecha_entrega <= hasta;
+        return okQ && okEstado && okDesde && okHasta;
+    });
+
+    renderContratos(filtrado);
+}
+
+const ESTADO_COLORS = {
+    'Pendiente':      { bg:'#fef3c7', color:'#92400e' },
+    'En producción':  { bg:'#dbeafe', color:'#1e40af' },
+    'Listo':          { bg:'#d1fae5', color:'#065f46' },
+    'Entregado':      { bg:'#f1f5f9', color:'#475569' },
+};
+
+function renderContratos(lista) {
+    const tbody  = document.getElementById('contratos-tbody');
+    const cards  = document.getElementById('contratos-cards');
+    const stats  = document.getElementById('contratos-stats');
+    const isMobile = window.innerWidth < 640;
+
+    // Estadísticas rápidas
+    const totalVentas  = lista.reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
+    const totalSaldo   = lista.reduce((s, v) => s + (parseFloat(v.saldo)  || 0), 0);
+    stats.innerHTML = `
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 18px; flex:1; min-width:150px;">
+            <div style="font-size:11px; color:#64748b; font-weight:700;">CONTRATOS</div>
+            <div style="font-size:22px; font-weight:900; color:#0f172a;">${lista.length}</div>
+        </div>
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px 18px; flex:1; min-width:150px;">
+            <div style="font-size:11px; color:#166534; font-weight:700;">TOTAL VENTAS</div>
+            <div style="font-size:22px; font-weight:900; color:#166534;">S/ ${totalVentas.toFixed(2)}</div>
+        </div>
+        <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:12px 18px; flex:1; min-width:150px;">
+            <div style="font-size:11px; color:#9a3412; font-weight:700;">SALDO PENDIENTE</div>
+            <div style="font-size:22px; font-weight:900; color:#9a3412;">S/ ${totalSaldo.toFixed(2)}</div>
+        </div>`;
+
+    if (lista.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">No hay contratos para estos filtros.</td></tr>`;
+        cards.innerHTML = `<p style="text-align:center; color:#94a3b8; padding:40px;">No hay contratos para estos filtros.</p>`;
+        return;
+    }
+
+    // === Tabla (desktop) ===
+    document.getElementById('contratos-table-wrapper').style.display = isMobile ? 'none' : 'block';
+    cards.style.display = isMobile ? 'block' : 'none';
+
+    const ec = (v) => {
+        const e = ESTADO_COLORS[v.estado] || { bg:'#f1f5f9', color:'#475569' };
+        return `<span style="background:${e.bg}; color:${e.color}; font-size:10px; font-weight:800;
+                        padding:3px 8px; border-radius:20px; white-space:nowrap;">${v.estado || '—'}</span>`;
+    };
+
+    tbody.innerHTML = lista.map((v, i) => `
+        <tr style="border-bottom:1px solid #f1f5f9; background:${i%2===0?'white':'#fafafa'};"
+            onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='${i%2===0?'white':'#fafafa'}'">
+            <td style="padding:11px 14px; font-weight:800; color:#d4af37;">#${v.codigo}</td>
+            <td style="padding:11px 14px;">
+                <div style="font-weight:700; font-size:13px;">${v.cliente}</div>
+                <div style="font-size:11px; color:#94a3b8;">${v.vendedor || ''}</div>
+            </td>
+            <td style="padding:11px 14px; font-size:12px; color:#475569; max-width:180px; display:none;" class="col-extra">${(v.productos||'').substring(0,60)}${(v.productos||'').length>60?'...':''}</td>
+            <td style="padding:11px 14px; font-weight:800; color:#10b981;">S/ ${parseFloat(v.total||0).toFixed(2)}</td>
+            <td style="padding:11px 14px; color:#0f172a;">S/ ${parseFloat(v.adelanto||0).toFixed(2)}</td>
+            <td style="padding:11px 14px; color:#ef4444; font-weight:700; display:none;" class="col-extra">S/ ${parseFloat(v.saldo||0).toFixed(2)}</td>
+            <td style="padding:11px 14px;">${ec(v)}</td>
+            <td style="padding:11px 14px; font-size:12px; color:#64748b;">${v.fecha_entrega || '—'}</td>
+            <td style="padding:11px 14px;">
+                <button onclick="verDetalleContrato('${v.codigo}')"
+                        style="background:#0f172a; color:white; border:none; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
+                    <i class="fa-solid fa-eye"></i> Ver
+                </button>
+            </td>
+        </tr>`).join('');
+
+    // === Cards (mobile) ===
+    cards.innerHTML = lista.map(v => `
+        <div style="background:white; border-radius:12px; border:1px solid #e2e8f0; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                <span style="font-weight:900; font-size:15px; color:#d4af37;">#${v.codigo}</span>
+                ${ec(v)}
+            </div>
+            <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${v.cliente}</div>
+            <div style="font-size:12px; color:#64748b; margin-bottom:10px;">${v.vendedor || ''} · Entrega: ${v.fecha_entrega || '—'}</div>
+            <div style="display:flex; gap:10px; font-size:13px; margin-bottom:12px;">
+                <div style="flex:1; background:#f0fdf4; border-radius:8px; padding:8px; text-align:center;">
+                    <div style="font-size:10px; color:#166534; font-weight:700;">TOTAL</div>
+                    <div style="font-weight:900; color:#166534;">S/ ${parseFloat(v.total||0).toFixed(2)}</div>
+                </div>
+                <div style="flex:1; background:#fff7ed; border-radius:8px; padding:8px; text-align:center;">
+                    <div style="font-size:10px; color:#9a3412; font-weight:700;">SALDO</div>
+                    <div style="font-weight:900; color:#9a3412;">S/ ${parseFloat(v.saldo||0).toFixed(2)}</div>
+                </div>
+            </div>
+            <button onclick="verDetalleContrato('${v.codigo}')"
+                    style="width:100%; background:#0f172a; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">
+                <i class="fa-solid fa-eye"></i> Ver contrato
+            </button>
+        </div>`).join('');
+}
+
+function verDetalleContrato(codigo) {
+    // Abre el modal de detalle de pedido que ya existe en el sistema
+    abrirDetallePedido(codigo);
+}
+
+function descargarExcelContratos() {
+    const desde = document.getElementById('contratos-desde')?.value;
+    const hasta = document.getElementById('contratos-hasta')?.value;
+
+    if (!desde || !hasta) {
+        // Si no hay fechas, exportar todo usando la ruta correcta
+        const url = `${API_URL}/api/ventas/exportar`;
+        window.open(url, '_blank');
+        return;
+    }
+    const url = `${API_URL}/api/ventas/exportar?inicio=${desde}&fin=${hasta}`;
+    window.open(url, '_blank');
+}
 // ==========================================
 // PUNTO DE ENTRADA — se ejecuta al cargar la página
 // FIX: un solo DOMContentLoaded que llama init() + cargarUsuariosLogin()

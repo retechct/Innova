@@ -97,6 +97,10 @@
         <i class="fa-solid fa-address-book"></i> PROVEEDORES
     </div>
 
+    <div id="btn-menu-contratos" class="sidebar-item" style="display: none; background: #0f172a; color: #10b981; font-weight: bold;" onclick="changeView('contratos')">
+        <i class="fa-solid fa-file-excel"></i> REPORTES Y VENTAS
+    </div>
+
     <div class="sidebar-item" onclick="cerrarSesion()" style="color: #ef4444; border-top: 1px solid #334155; margin-top: 20px;">
         <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
     </div>
@@ -305,6 +309,65 @@
         </div>
         <div id="lista-proveedores-sistema" class="grid"></div>
     </div>
+
+    <div id="vista-contratos" class="view-section" style="display:none; padding: 20px;">
+
+    <!-- Barra de búsqueda y filtros -->
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; align-items:center;">
+        <input type="text" id="contratos-search" class="form-input-sm"
+               placeholder="🔍 Buscar por cliente, código..."
+               oninput="filtrarContratos()"
+               style="flex:1; min-width:200px;">
+
+        <select id="contratos-filtro-estado" class="form-input-sm" onchange="filtrarContratos()" style="min-width:150px;">
+            <option value="">Todos los estados</option>
+            <option value="Pendiente">⏳ Pendiente</option>
+            <option value="En producción">🏭 En producción</option>
+            <option value="Listo">✅ Listo</option>
+            <option value="Entregado">🚚 Entregado</option>
+        </select>
+
+        <input type="date" id="contratos-desde" class="form-input-sm" onchange="filtrarContratos()">
+        <input type="date" id="contratos-hasta" class="form-input-sm" onchange="filtrarContratos()">
+
+        <button class="btn-primary" onclick="descargarExcelContratos()"
+                style="background:#10b981; min-width:160px; white-space:nowrap;">
+            <i class="fa-solid fa-file-excel"></i> Exportar Excel
+        </button>
+    </div>
+
+    <!-- Inputs de fechas para el Excel (ocultos, usados por descargarExcelContratos) -->
+    <input type="hidden" id="excel-fecha-inicio">
+    <input type="hidden" id="excel-fecha-fin">
+
+    <!-- Tabla desktop / Cards mobile -->
+    <div id="contratos-table-wrapper" style="background:white; border-radius:12px; border:1px solid #e2e8f0; overflow-x:auto;">
+        <table id="tabla-contratos" style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+                <tr style="background:#0f172a; color:white; text-align:left;">
+                    <th style="padding:12px 14px;">Código</th>
+                    <th style="padding:12px 14px;">Cliente</th>
+                    <th style="padding:12px 14px; display:none;" class="col-extra">Producto(s)</th>
+                    <th style="padding:12px 14px;">Total</th>
+                    <th style="padding:12px 14px;">Adelanto</th>
+                    <th style="padding:12px 14px; display:none;" class="col-extra">Saldo</th>
+                    <th style="padding:12px 14px;">Estado</th>
+                    <th style="padding:12px 14px;">Entrega</th>
+                    <th style="padding:12px 14px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="contratos-tbody">
+                <tr><td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">Cargando contratos...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Cards mobile (se muestra solo en pantallas pequeñas) -->
+    <div id="contratos-cards" style="display:none;"></div>
+
+    <!-- Resumen stats -->
+    <div id="contratos-stats" style="display:flex; gap:12px; flex-wrap:wrap; margin-top:16px;"></div>
+</div>
 
 </main>
     <div class="fab" onclick="toggleCart()">
