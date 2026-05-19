@@ -39,6 +39,10 @@ app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'clave-secreta-de-inn
 db.init_app(app)
 migrate = Migrate(app, db)
 jwt = JWTManager(app)
+
+# --- IMPORTAR Y REGISTRAR LAS RUTAS DEL KARDEX ---
+from routes_kardex import kardex_bp
+app.register_blueprint(kardex_bp, url_prefix='/api/kardex')
 # ------------------------------------------------------------------
 # Rate limiter — protege el login contra ataques de fuerza bruta
 limiter = Limiter(

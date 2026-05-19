@@ -69,3 +69,21 @@ class MovimientoKardex(db.Model):
     
     fecha = db.Column(db.DateTime, default=lambda: datetime.now(tz_peru))
     notas = db.Column(db.String(255), nullable=True) # Ej: "Se rompió en tránsito", "Venta #001"
+    
+class SugerenciaInsumo(db.Model):
+    __tablename__ = 'sugerencias_erp'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    nombre_insumo = db.Column(db.String(150), nullable=False)
+    vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    
+    # Pendiente, Aprobado (pasa al catálogo), o Rechazado
+    estado = db.Column(db.String(50), default='Pendiente') 
+    
+    # Aquí el Admin indicará si es Interno o Externo al aprobarlo
+    tipo_origen = db.Column(db.String(50), nullable=True) 
+    
+    fecha_sugerencia = db.Column(db.DateTime, default=lambda: datetime.now(tz_peru))
+    
+    # Relación con el usuario que la creó
+    vendedor = db.relationship('Usuario', backref='sugerencias_hechas', lazy=True)
