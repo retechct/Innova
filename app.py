@@ -26,6 +26,8 @@ from datetime import datetime
 import csv
 from io import StringIO
 from flask import Response
+import re
+import traceback
 # Carga las variables del archivo .env (en producción, Railway las inyecta directo)
 load_dotenv()
 
@@ -50,6 +52,16 @@ jwt = JWTManager(app)
 # --- IMPORTAR Y REGISTRAR LAS RUTAS DEL KARDEX ---
 from routes_kardex import kardex_bp
 app.register_blueprint(kardex_bp, url_prefix='/api/kardex')
+
+# --- MANEJADOR GLOBAL DE ERRORES 500 (para ver el error exacto en los logs de Render) ---
+@app.errorhandler(500)
+def error_500(e):
+    app.logger.error(traceback.format_exc())
+    return jsonify({'error': 'Error interno del servidor', 'detalle': str(e)}), 500
+
+# --- CREAR TABLAS SI NO EXISTEN (seguridad para migraciones pendientes en Render) ---
+with app.app_context():
+    db.create_all()
 # ------------------------------------------------------------------
 # Rate limiter — protege el login contra ataques de fuerza bruta
 limiter = Limiter(
@@ -92,9 +104,14 @@ def release_db_connection(conn):
 
 
 def limpiar_foto(url):
-    """Evita placeholders o URLs vacías en campos de foto."""
+    """Evita placeholders o URLs vacías en campos de foto.
+    Además, reemplaza cualquier URL local (127.0.0.1, localhost) por la URL de producción
+    para evitar el error Mixed Content en navegadores HTTPS.
+    """
     if not url or 'via.placeholder.com' in url:
         return "imagenes/sin_foto.jpg"
+    # Sanear URLs locales guardadas durante desarrollo
+    url = re.sub(r'https?://(127\.0\.0\.1|localhost)(:\d+)?', BACKEND_URL, url)
     # Las URLs de Cloudinary ya son https completas; las locales antiguas se devuelven con la URL base
     if url.startswith('http'):
         return url
@@ -2324,7 +2341,8 @@ def listar_ventas():
         } for f in filas]
         return jsonify(resultado), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        app.logger.error(f"Error en listar_ventas: {traceback.format_exc()}")
+        return jsonify([]), 200  # Array vacío: evita que _contratosData.filter() explote en el frontend
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)

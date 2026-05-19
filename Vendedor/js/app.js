@@ -418,8 +418,10 @@ async function loadContratos() {
 
     try {
         const res = await fetch(`${API_URL}/api/ventas`);
-        _contratosData = await res.json();
-        if (_contratosData.error) throw new Error(_contratosData.error);
+        const data = await res.json();
+        // Blindaje: nos aseguramos de que siempre sea un array (nunca un objeto de error)
+        _contratosData = Array.isArray(data) ? data : [];
+        if (!Array.isArray(data) && data.error) throw new Error(data.error);
         filtrarContratos();
     } catch (e) {
         tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:#ef4444;">
@@ -428,6 +430,9 @@ async function loadContratos() {
 }
 
 function filtrarContratos() {
+    // Guardia: si por algún motivo _contratosData no es un array, salimos sin explotar
+    if (!Array.isArray(_contratosData)) return;
+
     const q      = (document.getElementById('contratos-search')?.value || '').toLowerCase();
     const estado = document.getElementById('contratos-filtro-estado')?.value || '';
     const desde  = document.getElementById('contratos-desde')?.value || '';
