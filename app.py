@@ -19,6 +19,13 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from models import db
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
+import pandas as pd
+from io import BytesIO
+from flask import send_file
+from datetime import datetime
+import csv
+from io import StringIO
+from flask import Response
 # Carga las variables del archivo .env (en producción, Railway las inyecta directo)
 load_dotenv()
 
@@ -229,14 +236,10 @@ def obtener_insumos():
 # 2. MÓDULO: VENTAS
 # ==========================================
 
-@app.route('/api/ventas', methods=['POST'])
+@app.route('/api/ventas', methods=['GET', 'POST'])
 def guardar_venta():
-    """
-    Registra una venta completa.
-    Motor Make-vs-Buy: genera tickets de producción (Interno) o
-    registros de logística externa (Externo) según el origen del componente.
-    También descuenta stock de inventario_insumos usando recetas_muebles.
-    """
+    if request.method == 'GET':
+        return listar_ventas()
     datos = request.json
     try:
         conexion = get_db_connection()
@@ -2242,7 +2245,89 @@ def exportar_ventas_excel():
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+# ==========================================
+# EXPORTACIÓN DE VENTAS (FORMATO COMPATIBLE CON EXCEL)
+# ==========================================
+@app.route('/api/exportar_ventas', methods=['GET'])
+def exportar_ventas():
+    # 1. Obtenemos las fechas que enviaste desde el calendario HTML
+    inicio = request.args.get('inicio')
+    fin = request.args.get('fin')
+    
+    if not inicio or not fin:
+        return jsonify({'error': 'Faltan fechas de inicio y fin'}), 400
 
+    # 2. Preparamos el archivo en la memoria del servidor
+    si = StringIO()
+    cw = csv.writer(si)
+    
+    # 3. Escribimos las cabeceras (las columnas de tu Excel)
+    cw.writerow([
+        'Codigo Contrato', 
+        'Cliente', 
+        'Documento', 
+        'Fecha Emision', 
+        'Total Venta (S/)', 
+        'Total Pagado (S/)', 
+        'Saldo (S/)', 
+        'Sede'
+    ])
+    
+    # NOTA: Aquí más adelante conectaremos tu base de datos real. 
+    # Por ahora enviamos una fila de prueba para validar que la descarga funcione.
+    cw.writerow(['INV-0001', 'Cliente de Prueba', '12345678', inicio, '1500.00', '500.00', '1000.00', 'Tienda Principal'])
+
+    # 4. Empaquetamos y enviamos el archivo de texto estructurado
+    output = si.getvalue()
+    
+    # Al enviarlo con extensión .csv, Excel lo abrirá automáticamente con formato de tabla
+    nombre_archivo = f"Reporte_Ventas_{inicio}_al_{fin}.csv"
+    
+    return Response(
+        output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment;filename={nombre_archivo}"}
+    )
+
+def listar_ventas():
+    """Devuelve todas las ventas para la tabla de Reportes y Ventas."""
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT
+                v.codigo_venta,
+                v.nombre_cliente,
+                v.monto_total,
+                v.monto_adelanto,
+                COALESCE(v.monto_total, 0) - COALESCE(v.monto_adelanto, 0) AS saldo,
+                v.estado,
+                v.fecha_entrega,
+                v.vendedor_nombre,
+                STRING_AGG(DISTINCT i.producto, ' / ') AS productos
+            FROM ventas v
+            LEFT JOIN items_venta i ON i.venta_id = v.id
+            GROUP BY v.id
+            ORDER BY v.id DESC;
+        """)
+        filas = cursor.fetchall()
+        resultado = [{
+            'codigo':        f[0],
+            'cliente':       f[1],
+            'total':         float(f[2]) if f[2] else 0,
+            'adelanto':      float(f[3]) if f[3] else 0,
+            'saldo':         float(f[4]) if f[4] else 0,
+            'estado':        f[5] or 'Pendiente',
+            'fecha_entrega': f[6].strftime('%Y-%m-%d') if f[6] else None,
+            'vendedor':      f[7],
+            'productos':     f[8],
+        } for f in filas]
+        return jsonify(resultado), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
