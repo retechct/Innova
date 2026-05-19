@@ -26,8 +26,6 @@ from datetime import datetime
 import csv
 from io import StringIO
 from flask import Response
-import re
-import traceback
 # Carga las variables del archivo .env (en producción, Railway las inyecta directo)
 load_dotenv()
 
@@ -52,16 +50,6 @@ jwt = JWTManager(app)
 # --- IMPORTAR Y REGISTRAR LAS RUTAS DEL KARDEX ---
 from routes_kardex import kardex_bp
 app.register_blueprint(kardex_bp, url_prefix='/api/kardex')
-
-# --- MANEJADOR GLOBAL DE ERRORES 500 (para ver el error exacto en los logs de Render) ---
-@app.errorhandler(500)
-def error_500(e):
-    app.logger.error(traceback.format_exc())
-    return jsonify({'error': 'Error interno del servidor', 'detalle': str(e)}), 500
-
-# --- CREAR TABLAS SI NO EXISTEN (seguridad para migraciones pendientes en Render) ---
-with app.app_context():
-    db.create_all()
 # ------------------------------------------------------------------
 # Rate limiter — protege el login contra ataques de fuerza bruta
 limiter = Limiter(
@@ -104,14 +92,9 @@ def release_db_connection(conn):
 
 
 def limpiar_foto(url):
-    """Evita placeholders o URLs vacías en campos de foto.
-    Además, reemplaza cualquier URL local (127.0.0.1, localhost) por la URL de producción
-    para evitar el error Mixed Content en navegadores HTTPS.
-    """
+    """Evita placeholders o URLs vacías en campos de foto."""
     if not url or 'via.placeholder.com' in url:
         return "imagenes/sin_foto.jpg"
-    # Sanear URLs locales guardadas durante desarrollo
-    url = re.sub(r'https?://(127\.0\.0\.1|localhost)(:\d+)?', BACKEND_URL, url)
     # Las URLs de Cloudinary ya son https completas; las locales antiguas se devuelven con la URL base
     if url.startswith('http'):
         return url
@@ -1238,7 +1221,7 @@ def obtener_cola_recojo():
                 "fecha_fin":       r[6].strftime('%d/%m/%Y %H:%M') if r[6] else 'S/F',
                 "foto_url":        limpiar_foto(r[7]),
                 "especificaciones": r[8] or '',
-                "foto_evidencia":  f"{BACKEND_URL}/uploads/{r[9]}" if r[9] else '',
+                "foto_evidencia":  r[9] if r[9] else '',  # foto_evidencia_url de Cloudinary
                 "direccion":       r[10] or '',
                 "fecha_entrega":   r[11].strftime('%d/%m/%Y') if r[11] else 'S/F',
                 "item_id":         r[12],
@@ -2166,13 +2149,16 @@ def exportar_ventas_excel():
                 v.metodo_pago,
                 v.monto_adelanto,
                 COALESCE(v.empresa_pago, '')         AS empresa_pago,
-                v.created_at,
+                v.fecha_creacion,
                 v.celular_cliente,
                 v.empresa_ruc,
                 v.vendedor_nombre
             FROM ventas v
             LEFT JOIN items_venta i ON i.venta_id = v.id
-            GROUP BY v.id
+            GROUP BY v.id, v.codigo_venta, v.nombre_cliente, v.tipo_documento,
+                     v.dni_cliente, v.fecha_emision, v.fecha_entrega, v.monto_total,
+                     v.direccion_cliente, v.metodo_pago, v.monto_adelanto, v.empresa_pago,
+                     v.fecha_creacion, v.celular_cliente, v.empresa_ruc, v.vendedor_nombre
             ORDER BY v.id DESC;
         """)
         filas = cursor.fetchall()
@@ -2318,13 +2304,14 @@ def listar_ventas():
                 v.monto_total,
                 v.monto_adelanto,
                 COALESCE(v.monto_total, 0) - COALESCE(v.monto_adelanto, 0) AS saldo,
-                v.estado,
+                COALESCE(v.estado_general, 'En Producción') AS estado,
                 v.fecha_entrega,
                 v.vendedor_nombre,
                 STRING_AGG(DISTINCT i.producto, ' / ') AS productos
             FROM ventas v
             LEFT JOIN items_venta i ON i.venta_id = v.id
-            GROUP BY v.id
+            GROUP BY v.id, v.codigo_venta, v.nombre_cliente, v.monto_total,
+                     v.monto_adelanto, v.estado_general, v.fecha_entrega, v.vendedor_nombre
             ORDER BY v.id DESC;
         """)
         filas = cursor.fetchall()
@@ -2341,8 +2328,7 @@ def listar_ventas():
         } for f in filas]
         return jsonify(resultado), 200
     except Exception as e:
-        app.logger.error(f"Error en listar_ventas: {traceback.format_exc()}")
-        return jsonify([]), 200  # Array vacío: evita que _contratosData.filter() explote en el frontend
+        return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
