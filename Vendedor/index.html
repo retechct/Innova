@@ -1096,7 +1096,20 @@
             
             <div class="form-group" style="background:#f8fafc; padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
                 <label style="color:var(--accent); font-weight: bold;"><i class="fa-solid fa-camera"></i> Foto de la Parte</label>
-                <input type="file" id="nm-foto" class="form-input-sm" accept="image/*" style="margin-top:10px;">
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <label style="flex:1; cursor:pointer; background:#0f172a; color:white; padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
+                        <i class="fa-solid fa-camera"></i> Tomar Foto
+                        <input type="file" id="nm-foto-camara" accept="image/*" capture="environment" style="display:none;" onchange="sincronizarFoto(this)">
+                    </label>
+                    <label style="flex:1; cursor:pointer; background:#e2e8f0; color:#0f172a; padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
+                        <i class="fa-solid fa-folder-open"></i> Subir Archivo
+                        <input type="file" id="nm-foto" accept="image/*" style="display:none;" onchange="sincronizarFoto(this)">
+                    </label>
+                </div>
+                <div id="nm-foto-preview-container" style="display:none; margin-top:10px;">
+                    <img id="nm-foto-preview" style="max-height:80px; border-radius:8px; border:1px solid #e2e8f0;">
+                    <p id="nm-foto-nombre" style="font-size:11px; color:#64748b; margin:4px 0 0;"></p>
+                </div>
             </div>
 
             <!-- Punto 3: Lógica de Origen de Producción -->

@@ -107,7 +107,12 @@ function abrirModalNuevo(tipo, destino) {
     if (!modal || !contenedorCampos) return;
 
     // Limpiar archivos e imágenes previas
-    document.getElementById('nm-foto').value = '';
+    const nmFoto = document.getElementById('nm-foto');
+    const nmFotoCamara = document.getElementById('nm-foto-camara');
+    if (nmFoto) nmFoto.value = '';
+    if (nmFotoCamara) nmFotoCamara.value = '';
+    const prevContainer = document.getElementById('nm-foto-preview-container');
+    if (prevContainer) prevContainer.style.display = 'none';
 
     // Ajuste dinámico del encabezado para dar contexto
     if (destino === 'sugerencia') {
@@ -698,6 +703,36 @@ async function abrirModalPinterest(tipoInput) {
 /* ================================================================= */
 /* --- MÓDULO: SUGERENCIAS (FASE 3) --- */
 /* ================================================================= */
+
+// Sincroniza la foto elegida (cámara o archivo) al input principal nm-foto
+function sincronizarFoto(inputOrigen) {
+    if (!inputOrigen.files || inputOrigen.files.length === 0) return;
+    
+    const archivo = inputOrigen.files[0];
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(archivo);
+    
+    // Propagamos el archivo a ambos inputs para que guardarNuevoMaterial lo lea bien
+    const inputPrincipal = document.getElementById('nm-foto');
+    const inputCamara    = document.getElementById('nm-foto-camara');
+    if (inputPrincipal) inputPrincipal.files = dataTransfer.files;
+    if (inputCamara)    inputCamara.files    = dataTransfer.files;
+    
+    // Mostramos preview de la foto elegida
+    const previewContainer = document.getElementById('nm-foto-preview-container');
+    const previewImg       = document.getElementById('nm-foto-preview');
+    const previewNombre    = document.getElementById('nm-foto-nombre');
+    
+    if (previewContainer && previewImg) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            previewImg.src = e.target.result;
+            if (previewNombre) previewNombre.innerText = archivo.name;
+            previewContainer.style.display = 'block';
+        };
+        reader.readAsDataURL(archivo);
+    }
+}
 
 function abrirModalSugerencia() {
     document.getElementById('modal-sugerencia').style.display = 'flex';
