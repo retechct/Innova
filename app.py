@@ -232,10 +232,6 @@ def obtener_insumos():
             cursor.close(); release_db_connection(conexion)
 
 
-# ==========================================
-# 2. MÓDULO: VENTAS
-# ==========================================
-
 @app.route('/api/ventas', methods=['GET', 'POST'])
 def guardar_venta():
     if request.method == 'GET':
@@ -246,47 +242,65 @@ def guardar_venta():
         conexion.autocommit = False # Iniciamos transacción manual
         cursor   = conexion.cursor()
 
-        # 1. Insertar cabecera de venta
+        # 1. Insertar cabecera de la venta (ACTUALIZADO MAYO 2026)
+        # Extraer empresa_pago del primer pago registrado (para la columna resumen de ventas)
+        lista_pagos_raw = datos.get('pagos', [])
+        empresa_pago_resumen = lista_pagos_raw[0].get('empresa', '') if lista_pagos_raw else ''
+
         cursor.execute("""
             INSERT INTO ventas (
                 codigo_venta, nombre_cliente, dni_cliente, celular_cliente,
                 direccion_cliente, vendedor_id, fecha_emision, fecha_entrega,
-                metodo_pago, monto_adelanto, monto_total, empresa_ruc, vendedor_nombre,
-                tipo_documento, empresa_pago
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id;
+                monto_total, vendedor_nombre, moneda, tipo_cambio, tipo_comprobante,
+                empresa_ruc, empresa_pago
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
         """, (
             datos['codigo'],          datos['cliente'],
             datos.get('dni'),         datos.get('celular'),
             datos.get('direccion'),   datos.get('vendedor_id'),
             datos['fecha_emision'],   datos.get('fecha_entrega'),
-            datos.get('metodo_pago'), datos.get('monto_adelanto', 0),
             datos.get('monto_total', 0),
-            datos.get('empresa_ruc'), datos.get('vendedor_nombre'),
-            datos.get('tipo_documento', 'DNI'),
-            datos.get('empresa_pago', '')
+            datos.get('vendedor_nombre'),
+            datos.get('moneda', 'PEN'),
+            datos.get('tipo_cambio', 1.00),
+            datos.get('tipo_comprobante', 'Boleta'),
+            datos.get('empresa_ruc'),        # RUC de la empresa del vendedor (viene del login)
+            empresa_pago_resumen             # Empresa destino del primer pago (resumen)
         ))
         venta_id = cursor.fetchone()[0]
+
+        # 2. Registrar Múltiples Pagos en la tabla 'pagos' (NUEVO)
+        lista_pagos = lista_pagos_raw
+        total_adelanto = 0
+        for p in lista_pagos:
+            monto_bruto = p.get('monto', 0)
+            total_adelanto += monto_bruto
+            cursor.execute("""
+                INSERT INTO pagos (
+                    venta_id, tipo_pago, entidad, numero_operacion,
+                    monto_bruto, comision_pos, monto_neto, empresa_destino, comprobante_url
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+            """, (
+                venta_id,
+                p.get('tipo'),
+                p.get('entidad'),
+                p.get('operacion'),
+                monto_bruto,
+                p.get('comision', 0),
+                p.get('monto_neto', 0),
+                p.get('empresa'),
+                p.get('comprobante_url', 'Sin imagen')
+            ))
+
+        # Actualizar monto_adelanto en ventas con la suma real de pagos
+        if total_adelanto > 0:
+            cursor.execute("""
+                UPDATE ventas SET monto_adelanto = %s WHERE id = %s
+            """, (total_adelanto, venta_id))
 
         # ============================================================
         # MOTOR MAKE-VS-BUY — Mapa de componentes a áreas de taller
         # ============================================================
-        # REGLAS DEL FLUJO:
-        #   tela         → CORTE_Y_CONTROL_TELAS  (tela del mueble)
-        #   tela-cojin   → CORTE_Y_CONTROL_TELAS  (tela exclusiva del cojín — tarjeta separada)
-        #   tela-silla   → CORTE_Y_CONTROL_TELAS  (tapiz de sillería de comedor)
-        #   tela-butaca  → CORTE_Y_CONTROL_TELAS
-        #   cojin-entero → ARMADO_COJINES          (cantidad de cojines enteros)
-        #   cojin-diseno → ARMADO_COJINES          (diseño de cojín con tela especial)
-        #   base         → PREPARACION_PATAS_ZOCALO si Interno, Externo si no
-        #   tablero      → TABLEROS_Y_PIEDRAS       si Interno; Externo si proveedor
-        #   silla        → ESTRUCTURAS_SILLAS si material=madera; COMPRAS_EXTERNAS si metal
-        #   estructura-b → ESTRUCTURAS_SILLAS
-        #   base-mesa    → TABLEROS_Y_PIEDRAS       (generalmente externa)
-        # El ticket DESPACHO_CENTRAL siempre se crea, bloqueado hasta que todo esté Terminado.
-        # REGLA "PASE DE POSTA":
-        #   Telas y cojines SIEMPRE nacen en CORTE_Y_CONTROL_TELAS.
-        #   El operario de Telas los corta y luego los deriva a Tapicería o Cojines.
-        #   Nunca van directamente a ARMADO_COJINES ni a Tapicería al momento de la venta.
         TIPOS_TELA   = {'tela', 'tela-cojin', 'tela-silla', 'tela-butaca'}
         TIPOS_COJIN  = {'cojin-entero', 'cojin-diseno'}
         SUFIJO_TELA  = {
@@ -303,8 +317,8 @@ def guardar_venta():
             'tela-cojin':        ('maestro_telas',         'CORTE_Y_CONTROL_TELAS'),
             'tela-silla':        ('maestro_telas',         'CORTE_Y_CONTROL_TELAS'),
             'tela-butaca':       ('maestro_telas',         'CORTE_Y_CONTROL_TELAS'),
-            'cojin-entero':      ('maestro_telas',         'CORTE_Y_CONTROL_TELAS'),  # ← TELAS primero
-            'cojin-diseno':      ('maestro_disenos_cojin', 'CORTE_Y_CONTROL_TELAS'),  # ← TELAS primero
+            'cojin-entero':      ('maestro_telas',         'CORTE_Y_CONTROL_TELAS'),
+            'cojin-diseno':      ('maestro_disenos_cojin', 'CORTE_Y_CONTROL_TELAS'),
             'base':              ('maestro_bases',          'PREPARACION_PATAS_ZOCALO'),
             'tablero':           ('maestro_tableros',       'TABLEROS_Y_PIEDRAS'),
             'tablero-centro':    ('maestro_tableros',       'TABLEROS_Y_PIEDRAS'),
@@ -314,43 +328,23 @@ def guardar_venta():
             'base-centro':       ('maestro_bases_comedor',  'TABLEROS_Y_PIEDRAS'),
         }
 
-        # Áreas que siempre crean ticket de ESTRUCTURA al inicio (antes de telas)
-        # El ticket de estructura del sofá/silla se genera automáticamente según el tipo de mueble
-        AREAS_ESTRUCTURA = {
-            'sofa':    'ESTRUCTURAS_MUEBLES',
-            'seccional': 'ESTRUCTURAS_MUEBLES',
-            'comedor': 'ESTRUCTURAS_SILLAS',
-            'silla':   'ESTRUCTURAS_SILLAS',
-            'butaca':  'ESTRUCTURAS_SILLAS',
-            'centro':  'ESTRUCTURAS_MUEBLES',
-        }
-
         for m in datos['muebles']:
-            # 2. Insertar ítem de venta
+            # Insertar ítem de venta
             cursor.execute("""
                 INSERT INTO items_venta (venta_id, producto, color_tela, foto_url)
                 VALUES (%s, %s, %s, %s) RETURNING id;
             """, (venta_id, m['tipo'], m['tela'], m['foto']))
             item_id = cursor.fetchone()[0]
 
-            # 3. Motor Make-vs-Buy
             componentes = m.get('componentes', {})
             areas_internas_creadas = set()
 
-            # 3a. Ticket de ESTRUCTURA DEL MUEBLE (siempre Interno — lo fabrica el taller)
-            #     Detectamos el tipo de mueble por el nombre del producto
             nombre_lower = m['tipo'].lower()
             area_estructura = None
             if any(p in nombre_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'multi', 'curvado', 'plantilla']):
                 area_estructura = 'ESTRUCTURAS_MUEBLES'
             elif any(p in nombre_lower for p in ['silla', 'butaca', 'sitial', 'puff']):
                 area_estructura = 'ESTRUCTURAS_SILLAS'
-            elif any(p in nombre_lower for p in ['comedor',]):
-                # Comedor: estructura silla va por componente 'silla' (puede ser madera o metal)
-                pass
-            elif any(p in nombre_lower for p in ['mesa', 'consola', 'lateral']):
-                # Mesas de centro: no tienen estructura de tapicería, solo tablero+base
-                pass
 
             if area_estructura:
                 cursor.execute("""
@@ -359,9 +353,6 @@ def guardar_venta():
                 """, (item_id, area_estructura))
                 areas_internas_creadas.add(area_estructura)
 
-                # CREAR TICKET DE TAPICERÍA BLOQUEADO AUTOMÁTICAMENTE
-                # Para sofás/seccionales → TAPICERIA_SOFAS
-                # Para sillas/butacas → TAPICERIA_SILLAS
                 if area_estructura == 'ESTRUCTURAS_MUEBLES':
                     area_tap = 'TAPICERIA_SOFAS'
                 elif area_estructura == 'ESTRUCTURAS_SILLAS':
@@ -376,28 +367,23 @@ def guardar_venta():
                     """, (item_id, area_tap))
                     areas_internas_creadas.add(area_tap)
 
-            # 3b. Tickets por cada componente (telas, bases, cojines, sillas, tableros)
             for key, sku in componentes.items():
                 if not sku or key not in mapeo_erp:
                     continue
 
                 tabla, area_destino = mapeo_erp[key]
 
-                # Para sillas: si el material es metal/acero → va a Compras Externas
-                # Detectamos consultando el maestro_sillas
                 if key == 'silla':
                     cursor.execute("SELECT material, origen_produccion FROM maestro_sillas WHERE sku = %s", (sku,))
                     res_silla = cursor.fetchone()
                     if res_silla:
                         material_silla = (res_silla[0] or '').lower()
                         if any(m_word in material_silla for m_word in ['metal', 'acero', 'fierro', 'aluminio']):
-                            # Silla de metal → Compras Externas
                             cursor.execute("""
                                 INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado)
                                 VALUES (%s, %s, %s, 'POR_PEDIR')
                             """, (venta_id, key, sku))
                             continue
-                        # Silla de madera → sigue el flujo normal (ESTRUCTURAS_SILLAS)
                         if res_silla[1] == 'Externo':
                             cursor.execute("""
                                 INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado)
@@ -405,7 +391,6 @@ def guardar_venta():
                             """, (venta_id, key, sku))
                             continue
 
-                # Consultar origen del componente en su tabla maestra
                 try:
                     cursor.execute(f"SELECT origen_produccion FROM {tabla} WHERE sku = %s", (sku,))
                     res = cursor.fetchone()
@@ -413,53 +398,36 @@ def guardar_venta():
                     res = None
 
                 if res and res[0] == 'Interno':
-                    # Evitar duplicar área (ej: dos telas del mismo mueble)
                     if area_destino not in areas_internas_creadas:
-                        # ── PASE DE POSTA: sufijo descriptivo para operario de Telas ──
-                        # Si es tela o cojín, el área ya está forzada a CORTE_Y_CONTROL_TELAS.
-                        # Añadimos el sufijo al nombre del producto para que el operario sepa
-                        # si está cortando para Sofá/Silla o para Cojines.
                         nombre_ticket = m['tipo']
                         if key in SUFIJO_TELA:
                             nombre_ticket = m['tipo'] + SUFIJO_TELA[key]
 
                         cursor.execute("""
-                            INSERT INTO tickets_produccion
-                                (item_id, area_trabajo, estado_ticket, etapa)
+                            INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa)
                             VALUES (%s, %s, 'Pendiente', 1)
                         """, (item_id, area_destino))
-
                         areas_internas_creadas.add(area_destino)
-                    # Para tela-cojin: siempre crear tarjeta separada en CORTE aunque tela ya exista
-                    elif key == 'tela-cojin':
-                        cursor.execute("""
-                            INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa)
-                            VALUES (%s, 'CORTE_Y_CONTROL_TELAS', 'Pendiente', 1)
-                        """, (item_id,))
-
                 elif res and res[0] == 'Externo':
                     cursor.execute("""
                         INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado)
                         VALUES (%s, %s, %s, 'POR_PEDIR')
                     """, (venta_id, key, sku))
-
                 elif not res:
-                    # SKU no encontrado en maestro → va a Compras Externas como precaución
                     cursor.execute("""
                         INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado)
                         VALUES (%s, %s, %s, 'POR_PEDIR')
                     """, (venta_id, key, sku))
 
-            # 4. Ticket de Despacho siempre se genera — bloqueado si hay trabajo interno
+            # Ticket de Despacho
             ha_generado_tickets = len(areas_internas_creadas) > 0
             estado_despacho = 'Bloqueado' if ha_generado_tickets else 'Pendiente'
-            etapa_despacho  = 99  # Etapa más alta → siempre al final
             cursor.execute("""
                 INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa)
-                VALUES (%s, 'DESPACHO_CENTRAL', %s, %s)
-            """, (item_id, estado_despacho, etapa_despacho))
+                VALUES (%s, 'DESPACHO_CENTRAL', %s, 99)
+            """, (item_id, estado_despacho))
 
-            # 5. Descuento de stock (Solo si el producto existe en el catálogo y tiene receta)
+            # Descuento de stock
             cursor.execute("""
                 SELECT cp.id FROM catalogo_productos cp
                 WHERE cp.nombre_modelo = %s LIMIT 1;
@@ -477,7 +445,6 @@ def guardar_venta():
 
         conexion.commit()
 
-        # 6. Notificación por correo al vendedor
         cursor.execute("SELECT email FROM usuarios WHERE id = %s", (datos['vendedor_id'],))
         v_correo = cursor.fetchone()
         if v_correo:
@@ -490,16 +457,12 @@ def guardar_venta():
         print(f"ERROR SQL EXACTO: {str(ex)}")
         error_msg = str(ex)
         if "llave duplicada" in error_msg or "UniqueViolation" in error_msg:
-            return jsonify({
-                "error": "El N° de Contrato ya fue registrado. Por favor, ingresa un número nuevo."
-            }), 400
-        print("Error al guardar venta:", error_msg)
+            return jsonify({"error": "El N° de Contrato ya fue registrado."}), 400
         return jsonify({"error": error_msg}), 500
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
-
-
+        
 # ==========================================
 # 3. MÓDULO: SEGUIMIENTO Y PRODUCCIÓN
 # ==========================================
@@ -2128,10 +2091,9 @@ def obtener_choferes():
 # ==========================================
 # 14. MÓDULO: EXPORTAR VENTAS A EXCEL
 # ==========================================
-
 @app.route('/api/ventas/exportar', methods=['GET'])
 def exportar_ventas_excel():
-    """Exporta todas las ventas a un archivo Excel con el formato solicitado."""
+    """Exporta todas las ventas a un archivo Excel sumando pagos múltiples."""
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -2139,36 +2101,42 @@ def exportar_ventas_excel():
             SELECT
                 v.codigo_venta,
                 v.nombre_cliente,
-                COALESCE(v.tipo_documento, 'DNI')   AS tipo_doc,
+                v.tipo_comprobante,
                 v.dni_cliente,
                 v.fecha_emision,
                 v.fecha_entrega,
                 v.monto_total,
-                STRING_AGG(DISTINCT i.producto, ' / ')  AS productos,
+                COALESCE(itm.productos, '') AS productos,
                 v.direccion_cliente,
-                v.metodo_pago,
-                v.monto_adelanto,
-                COALESCE(v.empresa_pago, '')         AS empresa_pago,
-                v.fecha_creacion,
+                COALESCE(pg.metodos, 'Sin pago') AS metodo_pago,
+                COALESCE(pg.total_pagado, 0) AS monto_adelanto,
+                COALESCE(pg.empresas, '---') AS empresa_pago,
+                v.fecha_emision AS fecha_registro,
                 v.celular_cliente,
-                v.empresa_ruc,
+                v.moneda,
                 v.vendedor_nombre
             FROM ventas v
-            LEFT JOIN items_venta i ON i.venta_id = v.id
-            GROUP BY v.id, v.codigo_venta, v.nombre_cliente, v.tipo_documento,
-                     v.dni_cliente, v.fecha_emision, v.fecha_entrega, v.monto_total,
-                     v.direccion_cliente, v.metodo_pago, v.monto_adelanto, v.empresa_pago,
-                     v.fecha_creacion, v.celular_cliente, v.empresa_ruc, v.vendedor_nombre
+            LEFT JOIN (
+                SELECT venta_id,
+                       SUM(monto_bruto) AS total_pagado,
+                       STRING_AGG(tipo_pago || ' (' || COALESCE(entidad, '') || ')', ' | ') AS metodos,
+                       STRING_AGG(DISTINCT empresa_destino, ' / ') AS empresas
+                FROM pagos
+                GROUP BY venta_id
+            ) pg ON pg.venta_id = v.id
+            LEFT JOIN (
+                SELECT venta_id, STRING_AGG(producto, ' / ') AS productos
+                FROM items_venta
+                GROUP BY venta_id
+            ) itm ON itm.venta_id = v.id
             ORDER BY v.id DESC;
         """)
         filas = cursor.fetchall()
 
-        # ── Crear workbook ──
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Ventas"
 
-        # Estilos
         header_font    = Font(bold=True, color="FFFFFF", size=10)
         header_fill    = PatternFill("solid", fgColor="0F172A")
         center         = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -2176,78 +2144,58 @@ def exportar_ventas_excel():
         border         = Border(left=thin, right=thin, top=thin, bottom=thin)
 
         headers = [
-            "Cód. Venta", "Cliente", "Tipo Doc.", "RUC/DNI/CE",
+            "Cód. Venta", "Cliente", "Comprobante", "RUC/DNI/CE",
             "F. Emisión", "F. Entrega", "Monto Total",
-            "Producto(s)", "Dirección", "Método Pago",
-            "Adelanto", "Empresa que recibió pago",
-            "Fecha Registro", "Teléfono", "RUC Empresa", "Vendedor"
+            "Producto(s)", "Dirección", "Métodos Pago (Múltiples)",
+            "Adelanto Cobrado", "Empresa Receptora",
+            "Fecha Registro", "Teléfono", "Moneda", "Vendedor"
         ]
 
-        # Cabecera
         for col, h in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=h)
-            cell.font      = header_font
-            cell.fill      = header_fill
+            cell.font = header_font
+            cell.fill = header_fill
             cell.alignment = center
-            cell.border    = border
+            cell.border = border
 
-        # Anchos de columna
-        anchos = [12, 25, 10, 14, 14, 14, 12, 40, 30, 20, 12, 30, 14, 14, 16, 20]
+        anchos = [12, 25, 12, 14, 14, 14, 12, 40, 30, 30, 15, 30, 14, 14, 10, 20]
         for col, ancho in enumerate(anchos, 1):
             ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = ancho
 
-        # Datos
         fill_par  = PatternFill("solid", fgColor="F8FAFC")
         fill_impar = PatternFill("solid", fgColor="FFFFFF")
 
         for row_num, f in enumerate(filas, 2):
             fill = fill_par if row_num % 2 == 0 else fill_impar
             valores = [
-                f[0],   # codigo_venta
-                f[1],   # nombre_cliente
-                f[2],   # tipo_documento
-                f[3],   # dni_cliente
+                f[0], f[1], f[2], f[3], 
                 f[4].strftime('%d/%m/%Y') if f[4] else '',
                 f[5].strftime('%d/%m/%Y') if f[5] else '',
                 float(f[6]) if f[6] else 0,
-                f[7],   # productos
-                f[8],   # direccion
-                f[9],   # metodo_pago
+                f[7], f[8], f[9], 
                 float(f[10]) if f[10] else 0,
-                f[11],  # empresa_pago
+                f[11], 
                 f[12].strftime('%d/%m/%Y') if f[12] else '',
-                f[13],  # celular
-                f[14],  # empresa_ruc
-                f[15],  # vendedor_nombre
+                f[13], f[14], f[15]
             ]
             for col, val in enumerate(valores, 1):
                 cell = ws.cell(row=row_num, column=col, value=val)
-                cell.fill      = fill
-                cell.border    = border
+                cell.fill = fill
+                cell.border = border
                 cell.alignment = Alignment(vertical="center", wrap_text=True)
 
-        # Congelar primera fila
         ws.freeze_panes = "A2"
-
-        # Guardar en memoria
         buffer = io.BytesIO()
         wb.save(buffer)
         buffer.seek(0)
 
         fecha_hoy = datetime.now().strftime('%Y%m%d_%H%M')
-        return send_file(
-            buffer,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=f'ventas_innova_{fecha_hoy}.xlsx'
-        )
-
+        return send_file(buffer, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=f'ventas_innova_{fecha_hoy}.xlsx')
     except Exception as e:
-        print("Error al exportar ventas:", e)
         return jsonify({'error': str(e)}), 500
     finally:
-        if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
+
 # ==========================================
 # EXPORTACIÓN DE VENTAS (FORMATO COMPATIBLE CON EXCEL)
 # ==========================================
@@ -2293,7 +2241,7 @@ def exportar_ventas():
     )
 
 def listar_ventas():
-    """Devuelve todas las ventas para la tabla de Reportes y Ventas."""
+    """Devuelve todas las ventas sumando los pagos múltiples."""
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -2302,16 +2250,23 @@ def listar_ventas():
                 v.codigo_venta,
                 v.nombre_cliente,
                 v.monto_total,
-                v.monto_adelanto,
-                COALESCE(v.monto_total, 0) - COALESCE(v.monto_adelanto, 0) AS saldo,
+                COALESCE(pg.total_pagado, 0) AS monto_adelanto,
+                COALESCE(v.monto_total, 0) - COALESCE(pg.total_pagado, 0) AS saldo,
                 COALESCE(v.estado_general, 'En Producción') AS estado,
                 v.fecha_entrega,
                 v.vendedor_nombre,
-                STRING_AGG(DISTINCT i.producto, ' / ') AS productos
+                COALESCE(itm.productos, '') AS productos
             FROM ventas v
-            LEFT JOIN items_venta i ON i.venta_id = v.id
-            GROUP BY v.id, v.codigo_venta, v.nombre_cliente, v.monto_total,
-                     v.monto_adelanto, v.estado_general, v.fecha_entrega, v.vendedor_nombre
+            LEFT JOIN (
+                SELECT venta_id, SUM(monto_bruto) AS total_pagado
+                FROM pagos
+                GROUP BY venta_id
+            ) pg ON pg.venta_id = v.id
+            LEFT JOIN (
+                SELECT venta_id, STRING_AGG(producto, ' / ') AS productos
+                FROM items_venta
+                GROUP BY venta_id
+            ) itm ON itm.venta_id = v.id
             ORDER BY v.id DESC;
         """)
         filas = cursor.fetchall()
@@ -2326,12 +2281,11 @@ def listar_ventas():
             'vendedor':      f[7],
             'productos':     f[8],
         } for f in filas]
+        
         return jsonify(resultado), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
-
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

@@ -122,32 +122,40 @@
     </div>
 
     <div id="view-plantillas" style="display: none;">
-        <div class="grid"> 
-            <div class="card card-template"> 
-                <img src="imagenes/sin_foto.jpg">
+        <div class="grid">
+
+            <div class="card card-template" style="position:relative;">
+                <div style="width:100%;height:170px;background:linear-gradient(135deg,#0f172a,#1e3a5f);display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-couch" style="font-size:4rem;color:#558fc5;opacity:0.9;"></i>
+                </div>
                 <div class="card-info">
                     <span class="status-badge status-template">DISEÑO A MEDIDA</span>
-                    <h4>Plantilla de Sofá</h4>
+                    <h4>Sofás y Juegos de Sala</h4>
                     <span class="price-tag">A Cotizar</span>
-                    <button class="btn-action btn-primary" onclick="openConfig('Plantilla de Sofá', 'imagenes/plantilla_sofa.jpg')">
+                    <button class="btn-action btn-primary" onclick="openConfig('Plantilla de Sofá', '')">
                         <i class="fa-solid fa-gears"></i> CONFIGURAR
                     </button>
                 </div>
             </div>
 
-            <div class="card card-template">
-                <img src="imagenes/sin_foto.jpg">
+            <div class="card card-template" style="position:relative;">
+                <div style="width:100%;height:170px;background:linear-gradient(135deg,#0f172a,#1a3a2a);display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-utensils" style="font-size:4rem;color:#6fcc86;opacity:0.9;"></i>
+                </div>
                 <div class="card-info">
                     <span class="status-badge status-template">DISEÑO A MEDIDA</span>
-                    <h4>Plantilla de Comedor</h4>
+                    <h4>Comedor y Sillas</h4>
                     <span class="price-tag">A Cotizar</span>
                     <button class="btn-action btn-primary" onclick="openConfigComedor()">
                         <i class="fa-solid fa-gears"></i> CONFIGURAR
                     </button>
                 </div>
             </div>
-            <div class="card card-template">
-                <img src="imagenes/sin_foto.jpg">
+
+            <div class="card card-template" style="position:relative;">
+                <div style="width:100%;height:170px;background:linear-gradient(135deg,#0f172a,#2d1a0f);display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-table" style="font-size:4rem;color:#f59e0b;opacity:0.9;"></i>
+                </div>
                 <div class="card-info">
                     <span class="status-badge status-template">DISEÑO A MEDIDA</span>
                     <h4>Mesas de Centro y Consolas</h4>
@@ -157,8 +165,11 @@
                     </button>
                 </div>
             </div>
-            <div class="card card-template">
-                <img src="imagenes/sin_foto.jpg">
+
+            <div class="card card-template" style="position:relative;">
+                <div style="width:100%;height:170px;background:linear-gradient(135deg,#0f172a,#2d0f2d);display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-chair" style="font-size:4rem;color:#a78bfa;opacity:0.9;"></i>
+                </div>
                 <div class="card-info">
                     <span class="status-badge status-template">DISEÑO A MEDIDA</span>
                     <h4>Butacas y Sillería Suelta</h4>
@@ -168,7 +179,8 @@
                     </button>
                 </div>
             </div>
-        </div> 
+
+        </div>
     </div> 
 
     <div id="view-pedidos" style="display: none;">
@@ -900,41 +912,54 @@
             <button class="btn-ghost" onclick="goToStep(2)"><i class="fa-solid fa-arrow-left"></i> Volver a Cliente</button>
             
             <div class="form-group" style="margin-top:15px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                <label style="font-size: 12px; font-weight: 800; color: var(--accent); margin-bottom: 10px; display: block;"><i class="fa-solid fa-cash-register"></i> REGISTRAR NUEVO PAGO</label>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <select id="pago-tipo" class="form-input-sm" onchange="actualizarCamposPago()">
-                        <option value="Efectivo">Efectivo</option>
-                        <option value="Transferencia">Transferencia / App</option>
-                        <option value="POS">Tarjeta (POS)</option>
-                    </select>
-                    
-                    <select id="pago-entidad" class="form-input-sm" style="display: none; background-color: #fff;">
-                        </select>
-                </div>
+    <label style="font-size: 12px; font-weight: 800; color: var(--accent); margin-bottom: 10px; display: block;"><i class="fa-solid fa-cash-register"></i> REGISTRAR NUEVO PAGO</label>
+    
+    <div style="display: flex; gap: 8px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #cbd5e1;">
+        <select id="v-moneda" class="form-input-sm" onchange="toggleTipoCambio()" style="flex: 1; font-weight: bold;">
+            <option value="PEN">Moneda: Soles (S/)</option>
+            <option value="USD">Moneda: Dólares ($)</option>
+        </select>
+        <input type="number" id="v-tipo-cambio" class="form-input-sm" placeholder="T. Cambio (Ej: 3.75)" style="display: none; flex: 1;" step="0.01">
+    </div>
 
-                <div style="margin-bottom: 8px;">
-                    <select id="pago-empresa" class="form-input-sm" style="width:100%; background:#fffdf0; border-color:#d4af37; font-weight:bold;">
-                        <option value="">⚠️ ¿A qué empresa entró el dinero?</option>
-                        <option value="INNOVA MOBILI S.A.C.">🏢 INNOVA MOBILI S.A.C. (RUC: 20600768175)</option>
-                        <option value="INNOVA MOBILI LIMA E.I.R.L.">🏢 INNOVA MOBILI LIMA E.I.R.L. (RUC: 20614763044)</option>
-                    </select>
-                </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+        <select id="pago-tipo" class="form-input-sm" onchange="actualizarCamposPago()">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Transferencia">Transferencia / App</option>
+            <option value="POS">Tarjeta (POS)</option>
+        </select>
+        
+        <select id="pago-entidad" class="form-input-sm" style="display: none; background-color: #fff;"></select>
+    </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <input type="number" id="pago-monto" class="form-input-sm" placeholder="Monto S/" style="font-weight: bold; color: var(--success);">
-                    <input type="text" id="pago-operacion" class="form-input-sm" placeholder="N° Operación" style="display: none;">
-                </div>
+    <div style="margin-bottom: 8px;">
+        <select id="pago-empresa" class="form-input-sm" style="width:100%; background:#fffdf0; border-color:#d4af37; font-weight:bold;">
+            <option value="">⚠️ ¿A qué empresa entró el dinero?</option>
+            <option value="INNOVA MOBILI S.A.C.">🏢 INNOVA MOBILI S.A.C. (RUC: 20600768175)</option>
+            <option value="INNOVA MOBILI LIMA E.I.R.L.">🏢 INNOVA MOBILI LIMA E.I.R.L. (RUC: 20614763044)</option>
+        </select>
+    </div>
 
-               <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                    <div style="background: #fff; border: 1px dashed #cbd5e1; padding: 5px; border-radius: 5px;">
-                        <input type="file" id="pago-comprobante" class="form-input-sm" accept="image/*" capture="environment" style="width: 100%; font-size: 11px; border: none; background: transparent;">
-                    </div>
-                    <button type="button" class="btn-action btn-primary" onclick="agregarMetodoPago()" style="width: 100%; height: 42px; border-radius: 6px; font-weight: bold;">
-                        <i class="fa-solid fa-plus"></i> AGREGAR PAGO
-                    </button>
-                </div>
-            </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+        <input type="number" id="pago-monto" class="form-input-sm" placeholder="Monto Bruto" style="font-weight: bold; color: var(--success);">
+        <input type="text" id="pago-operacion" class="form-input-sm" placeholder="N° Operación" style="display: none;">
+    </div>
+    
+    <div id="div-comision-pos" style="display: none; margin-bottom: 8px; background: #fee2e2; padding: 8px; border-radius: 6px;">
+        <label style="font-size: 10px; color: #b91c1c; font-weight: bold;">COMISIÓN DEL BANCO (POS)</label>
+        <input type="number" id="pago-comision" class="form-input-sm" placeholder="Ej: 15.50" style="border-color: #fca5a5;">
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+        <div style="background: #fff; border: 1px dashed #cbd5e1; padding: 5px; border-radius: 5px;">
+            <label style="font-size: 10px; color: gray; font-weight: bold;">FOTO DEL VOUCHER (OBLIGATORIO) <span style="color:red">*</span></label>
+            <input type="file" id="pago-comprobante" class="form-input-sm" accept="image/*" capture="environment" style="width: 100%; font-size: 11px; border: none; background: transparent;">
+        </div>
+        <button type="button" class="btn-action btn-primary" onclick="agregarMetodoPago()" style="width: 100%; height: 42px; border-radius: 6px; font-weight: bold;">
+            <i class="fa-solid fa-plus"></i> AGREGAR PAGO
+        </button>
+    </div>
+</div>
             
             <div id="lista-pagos-agregados" style="margin-bottom: 15px;"></div>
 

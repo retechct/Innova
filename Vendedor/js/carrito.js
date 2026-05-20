@@ -93,19 +93,27 @@ function handleNextStep() {
     }
 }
 // NOTA: listaPagos se declara en config.js — no redeclarar aquí
+// NUEVA FUNCIÓN: Mostrar input de tipo de cambio si es USD
+function toggleTipoCambio() {
+    const moneda = document.getElementById('v-moneda').value;
+    document.getElementById('v-tipo-cambio').style.display = moneda === 'USD' ? 'block' : 'none';
+}
 
 function actualizarCamposPago() {
     const tipo = document.getElementById('pago-tipo').value;
     const entidad = document.getElementById('pago-entidad');
     const operacion = document.getElementById('pago-operacion');
+    const divComision = document.getElementById('div-comision-pos'); // NUEVO
 
     // Limpiamos los valores previos
     entidad.innerHTML = '';
     operacion.value = '';
+    if(document.getElementById('pago-comision')) document.getElementById('pago-comision').value = ''; 
 
     if (tipo === 'Transferencia') {
         entidad.style.display = 'block';
         operacion.style.display = 'block';
+        if(divComision) divComision.style.display = 'none'; 
         entidad.innerHTML = `
             <option value="BCP">BCP</option>
             <option value="BBVA">BBVA</option>
@@ -114,7 +122,8 @@ function actualizarCamposPago() {
         `;
     } else if (tipo === 'POS') {
         entidad.style.display = 'block';
-        operacion.style.display = 'block'; // POS también genera un voucher con número de operación/lote
+        operacion.style.display = 'block'; 
+        if(divComision) divComision.style.display = 'block'; // Mostrar comisión
         entidad.innerHTML = `
             <option value="Izipay">Izipay</option>
             <option value="Niubis">Niubis</option>
@@ -125,6 +134,7 @@ function actualizarCamposPago() {
         // Efectivo
         entidad.style.display = 'none';
         operacion.style.display = 'none';
+        if(divComision) divComision.style.display = 'none'; 
     }
 }
 
@@ -137,7 +147,16 @@ function limpiarFormularioVenta() {
     document.getElementById('pago-operacion').value = '';
     document.getElementById('pago-comprobante').value = '';
     document.getElementById('pago-tipo').value = 'Efectivo';
-    actualizarCamposPago(); // Resetear selectores visuales
+    
+    // NUEVO: Limpiar comisión y resetear moneda a Soles
+    if(document.getElementById('pago-comision')) document.getElementById('pago-comision').value = '';
+    if(document.getElementById('v-moneda')) document.getElementById('v-moneda').value = 'PEN';
+    if(document.getElementById('v-tipo-cambio')) {
+        document.getElementById('v-tipo-cambio').value = '';
+        document.getElementById('v-tipo-cambio').style.display = 'none';
+    }
+
+    actualizarCamposPago(); 
     actualizarPagosUI();
     
     goToStep(1);
@@ -151,27 +170,45 @@ function agregarMetodoPago() {
     const empresa = document.getElementById('pago-empresa').value;
     const comprobanteInput = document.getElementById('pago-comprobante');
 
+    // NUEVO: Captura de comisión si es POS
+    let comision = 0;
+    if (tipo === 'POS') {
+        comision = parseFloat(document.getElementById('pago-comision').value) || 0;
+    }
+
     if (isNaN(monto) || monto <= 0) return Swal.fire('Error', 'Ingrese un monto mayor a 0', 'warning');
     if (!empresa) return Swal.fire('Falta empresa', '¿A qué empresa entró el dinero? Selecciona una.', 'warning');
     if (tipo !== 'Efectivo' && operacion.trim() === '') return Swal.fire('Error', 'El Número de Operación es obligatorio para transferencias o POS', 'warning');
 
-    let comprobanteNombre = "Sin comprobante";
-    if (comprobanteInput.files.length > 0) {
-        comprobanteNombre = comprobanteInput.files[0].name;
+    // NUEVO: Validación obligatoria de foto (Regla Mayo 2026)
+    if (comprobanteInput.files.length === 0) {
+        return Swal.fire('Comprobante Requerido', 'Debes subir la foto del voucher o recibo firmado para registrar el pago.', 'warning');
     }
 
+    // NUEVO: Cálculo del neto
+    const montoNeto = monto - comision;
+
     listaPagos.push({ 
-        tipo, entidad, operacion, monto,
+        tipo, 
+        entidad, 
+        operacion, 
+        monto,
+        comision: comision,
+        monto_neto: montoNeto,
         empresa,
-        comprobante_nombre: comprobanteNombre
+        comprobante_url: comprobanteInput.files[0].name  // nombre del archivo (la URL real se sube por Cloudinary aparte)
     });
 
+    // Resetear inputs después de agregar
     document.getElementById('pago-monto').value = '';
     document.getElementById('pago-operacion').value = '';
     document.getElementById('pago-empresa').value = '';
+    if(document.getElementById('pago-comision')) document.getElementById('pago-comision').value = '';
     comprobanteInput.value = '';
+    
     actualizarPagosUI();
 }
+
 
 // Validación dinámica del documento según tipo
 function actualizarValidacionDoc() {
@@ -250,37 +287,43 @@ function actualizarPagosUI() {
     document.getElementById('res-saldo').innerText = `S/ ${(totalVenta - totalAdelanto).toFixed(2)}`;
 }
 /* ================================================================= */
-/* ================================================================= */
-/* --- LÓGICA DEL CONFIGURADOR DE COMEDORES --- */
+/* --- LÓGICA DEL CONFIGURADOR DE COMEDORES (Y VENTAS) --- */
 /* ================================================================= */
 
 async function guardarVenta() {
-    const total = cart.reduce((s, i) => s + i.price, 0);
-    const adelantoTotal = listaPagos.reduce((s, i) => s + i.monto, 0);
-    
-    const metodosTexto = listaPagos.map(p => 
-        p.tipo === 'Efectivo' ? `Efectivo: S/${p.monto}` : `${p.tipo} ${p.entidad} (Op:${p.operacion}): S/${p.monto}`
-    ).join(' | ');
+    // Validaciones de seguridad antes de procesar
+    if (cart.length === 0) return Swal.fire('Carrito Vacío', 'No hay muebles en la cotización.', 'warning');
+    if (listaPagos.length === 0) return Swal.fire('Falta Pago', 'Debes registrar al menos un adelanto o método de pago.', 'warning');
 
-   const payload = {
+    const total = cart.reduce((s, i) => s + i.price, 0);
+    
+    // Captura de los nuevos campos financieros (Reglas Mayo 2026)
+    const monedaActiva = document.getElementById('v-moneda') ? document.getElementById('v-moneda').value : 'PEN';
+    const tipoCambioActivo = document.getElementById('v-tipo-cambio') ? (parseFloat(document.getElementById('v-tipo-cambio').value) || 1.00) : 1.00;
+    const tipoComprobanteActivo = document.getElementById('c-comprobante-tipo') ? document.getElementById('c-comprobante-tipo').value : 'Boleta';
+
+    const payload = {
         codigo: document.getElementById('c-codigo').value,
         cliente: document.getElementById('c-nombre').value,
-        tipo_documento: document.getElementById('c-tipo-doc').value,
+        tipo_documento: document.getElementById('c-tipo-doc') ? document.getElementById('c-tipo-doc').value : 'DNI',
         dni: document.getElementById('c-dni').value,
         celular: document.getElementById('c-celular').value,
         direccion: document.getElementById('c-direccion').value,
         fecha_emision: document.getElementById('c-emision').value,
         fecha_entrega: document.getElementById('c-entrega').value || null,
-        metodo_pago: metodosTexto,
-        monto_adelanto: adelantoTotal,
-        monto_total: total,
-        empresa_pago: listaPagos.length > 0 ? listaPagos[0].empresa : '',
         
-        // --- AQUÍ ESTÁ LA CONEXIÓN CON EL LOGIN ---
+        // --- NUEVA ESTRUCTURA FINANCIERA ---
+        monto_total: total,
+        moneda: monedaActiva,
+        tipo_cambio: tipoCambioActivo,
+        tipo_comprobante: tipoComprobanteActivo,
+        pagos: listaPagos, // Enviamos el arreglo completo con comisiones y nombres de voucher
+        // -----------------------------------
+
+        // --- CONEXIÓN CON EL LOGIN ---
         vendedor_id: usuarioActivo.id,
         vendedor_nombre: usuarioActivo.nombre,
         empresa_ruc: usuarioActivo.ruc,
-        // ------------------------------------------
 
         muebles: cart.map(c => ({ 
             tipo: c.name, 
@@ -290,6 +333,7 @@ async function guardarVenta() {
             componentes: c.componentes
         }))
     };
+    
     Swal.fire({ title: 'Guardando en Base de Datos...', didOpen: () => Swal.showLoading() });
 
     try {
@@ -310,20 +354,24 @@ async function guardarVenta() {
                 confirmButtonColor: '#d4af37' 
             }).then((result) => {
                 if (result.isConfirmed) {
-                    imprimirContratoElegante(); // Llamamos a tu función de diseño dorado
+                    imprimirContratoElegante(); // Mantiene tu diseño de contrato actual
                 }
-                cart = [];
-                document.getElementById('cart-count').innerText = "0";
+                // Usamos la nueva función de limpieza que implementamos antes
+                if (typeof limpiarFormularioVenta === 'function') {
+                    limpiarFormularioVenta();
+                } else {
+                    cart = [];
+                    listaPagos = [];
+                    document.getElementById('cart-count').innerText = "0";
+                }
                 toggleCart();
                 changeView('pedidos'); 
             });
         } else {
             const err = await res.json();
-            // El backend ya traduce el error de duplicado a un mensaje humano
             Swal.fire('No se pudo guardar', err.error || 'Error desconocido del servidor', 'error');
         }
     } catch(e) {
-        // Error de red (sin internet, servidor caído, timeout)
         Swal.fire({
             title: 'Sin conexión',
             html: 'No se pudo contactar al servidor.<br><b>La venta NO fue guardada.</b><br><small>Verifica tu conexión y vuelve a intentarlo.</small>',

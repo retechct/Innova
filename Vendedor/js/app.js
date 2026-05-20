@@ -160,7 +160,7 @@ function changeView(view) {
     }
 
     // 2. ACTUALIZADO: Se agregó 'vista-contratos' a la lista para que se oculte correctamente
-    const secciones = ['view-productos', 'view-plantillas', 'view-pedidos', 'view-taller', 'view-inventario', 'view-gestor-aprobacion', 'view-logistica', 'view-usuarios-admin', 'view-proveedores', 'vista-contratos']; // <-- NUEVO AL FINAL
+    const secciones = ['view-productos', 'view-plantillas', 'view-pedidos', 'view-taller', 'view-inventario', 'view-gestor-aprobacion', 'view-logistica', 'view-usuarios-admin', 'view-proveedores', 'vista-contratos'];
     
     secciones.forEach(id => {
         const el = document.getElementById(id);
@@ -171,11 +171,14 @@ function changeView(view) {
     if (view === 'stock' || view === 'catalogo') {
         document.getElementById('view-productos').style.display = 'block';
         renderGrid(); 
-    } 
+    }
+    else if (view === 'contrato') {
+        document.getElementById('view-plantillas').style.display = 'block';
+    }
     else if (view === 'contratos') {
-    document.getElementById('vista-contratos').style.display = 'block';
-    loadContratos();   // <-- esta línea es la que faltaba
-}
+        document.getElementById('vista-contratos').style.display = 'block';
+        loadContratos();
+    }
     else if (view === 'pedidos') {
         document.getElementById('view-pedidos').style.display = 'block';
         loadMisPedidos();
@@ -418,10 +421,8 @@ async function loadContratos() {
 
     try {
         const res = await fetch(`${API_URL}/api/ventas`);
-        const data = await res.json();
-        // Blindaje: nos aseguramos de que siempre sea un array (nunca un objeto de error)
-        _contratosData = Array.isArray(data) ? data : [];
-        if (!Array.isArray(data) && data.error) throw new Error(data.error);
+        _contratosData = await res.json();
+        if (_contratosData.error) throw new Error(_contratosData.error);
         filtrarContratos();
     } catch (e) {
         tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:#ef4444;">
@@ -430,9 +431,6 @@ async function loadContratos() {
 }
 
 function filtrarContratos() {
-    // Guardia: si por algún motivo _contratosData no es un array, salimos sin explotar
-    if (!Array.isArray(_contratosData)) return;
-
     const q      = (document.getElementById('contratos-search')?.value || '').toLowerCase();
     const estado = document.getElementById('contratos-filtro-estado')?.value || '';
     const desde  = document.getElementById('contratos-desde')?.value || '';
