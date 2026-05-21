@@ -486,73 +486,85 @@ function renderContratos(lista) {
         return;
     }
 
-    // === Tabla (desktop) ===
-    document.getElementById('contratos-table-wrapper').style.display = isMobile ? 'none' : 'block';
-    cards.style.display = isMobile ? 'block' : 'none';
+    // === Tabla (desktop) === CORREGIDO PARA INCLUIR SEDE Y BALANCEAR COLUMNAS
+document.getElementById('contratos-table-wrapper').style.display = isMobile ? 'none' : 'block';
+cards.style.display = isMobile ? 'block' : 'none';
 
-    const ec = (v) => {
-        const e = ESTADO_COLORS[v.estado] || { bg:'#f1f5f9', color:'#475569' };
-        return `<span style="background:${e.bg}; color:${e.color}; font-size:10px; font-weight:800;
-                        padding:3px 8px; border-radius:20px; white-space:nowrap;">${v.estado || '—'}</span>`;
-    };
+const ec = (v) => {
+    const e = ESTADO_COLORS[v.estado] || { bg:'#f1f5f9', color:'#475569' };
+    return `<span style="background:${e.bg}; color:${e.color}; font-size:10px; font-weight:800;
+                    padding:3px 8px; border-radius:20px; white-space:nowrap;">${v.estado || '—'}</span>`;
+};
 
-    tbody.innerHTML = lista.map((v, i) => `
-        <tr style="border-bottom:1px solid #f1f5f9; background:${i%2===0?'white':'#fafafa'};"
-            onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='${i%2===0?'white':'#fafafa'}'">
-            <td style="padding:11px 14px; font-weight:800; color:#d4af37;">#${v.codigo}</td>
-            <td style="padding:11px 14px;">
-                <div style="font-weight:700; font-size:13px;">${v.cliente}</div>
-                <div style="font-size:11px; color:#94a3b8;">${v.vendedor || ''}</div>
-            </td>
-            <td style="padding:11px 14px; font-size:12px; color:#475569; max-width:180px; display:none;" class="col-extra">${(v.productos||'').substring(0,60)}${(v.productos||'').length>60?'...':''}</td>
-            <td style="padding:11px 14px; font-weight:800; color:#10b981;">S/ ${parseFloat(v.total||0).toFixed(2)}</td>
-            <td style="padding:11px 14px; color:#0f172a;">S/ ${parseFloat(v.adelanto||0).toFixed(2)}</td>
-            <td style="padding:11px 14px; color:#ef4444; font-weight:700; display:none;" class="col-extra">S/ ${parseFloat(v.saldo||0).toFixed(2)}</td>
-            <td style="padding:11px 14px;">${ec(v)}</td>
-            <td style="padding:11px 14px; font-size:12px; color:#64748b;">${v.fecha_entrega || '—'}</td>
-            <td style="padding:11px 14px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
-                <button onclick="verDetalleContrato('${v.codigo}')"
-                        style="background:#0f172a; color:white; border:none; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
-                    <i class="fa-solid fa-eye"></i> Ver
-                </button>
-                ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
-                <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
-                        title="Proponer cambio de precio"
-                        style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
-                    <i class="fa-solid fa-tag"></i>
-                </button>` : ''}
-            </td>
-        </tr>`).join('');
-
-    // === Cards (mobile) ===
-    cards.innerHTML = lista.map(v => `
-        <div style="background:white; border-radius:12px; border:1px solid #e2e8f0; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-                <span style="font-weight:900; font-size:15px; color:#d4af37;">#${v.codigo}</span>
-                ${ec(v)}
-            </div>
-            <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${v.cliente}</div>
-            <div style="font-size:12px; color:#64748b; margin-bottom:10px;">${v.vendedor || ''} · Entrega: ${v.fecha_entrega || '—'}</div>
-            <div style="display:flex; gap:10px; font-size:13px; margin-bottom:12px;">
-                <div style="flex:1; background:#f0fdf4; border-radius:8px; padding:8px; text-align:center;">
-                    <div style="font-size:10px; color:#166534; font-weight:700;">TOTAL</div>
-                    <div style="font-weight:900; color:#166534;">S/ ${parseFloat(v.total||0).toFixed(2)}</div>
-                </div>
-                <div style="flex:1; background:#fff7ed; border-radius:8px; padding:8px; text-align:center;">
-                    <div style="font-size:10px; color:#9a3412; font-weight:700;">SALDO</div>
-                    <div style="font-weight:900; color:#9a3412;">S/ ${parseFloat(v.saldo||0).toFixed(2)}</div>
-                </div>
-            </div>
+tbody.innerHTML = lista.map((v, i) => `
+    <tr style="border-bottom:1px solid #f1f5f9; background:${i%2===0?'white':'#fafafa'};"
+        onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='${i%2===0?'white':'#fafafa'}'">
+        <td style="padding:11px 14px; font-weight:800; color:#d4af37;">#${v.codigo}</td>
+        <td style="padding:11px 14px;">
+            <div style="font-weight:700; font-size:13px;">${v.cliente}</div>
+            <div style="font-size:11px; color:#94a3b8;">${v.vendedor || 'Sin asignar'}</div>
+        </td>
+        
+        <td style="padding:11px 14px;">
+            <span style="font-size:11px; background:#f1f5f9; color:#334155; padding:3px 8px; border-radius:6px; font-weight:600;">
+                <i class="fa-solid fa-shop" style="font-size:10px; margin-right:4px; color:#64748b;"></i>${v.sede || 'Sede Central'}
+            </span>
+        </td>
+        
+        <td style="padding:11px 14px; font-weight:800; color:#10b981;">S/ ${parseFloat(v.total||0).toFixed(2)}</td>
+        <td style="padding:11px 14px; color:#0f172a;">S/ ${parseFloat(v.adelanto||0).toFixed(2)}</td>
+        <td style="padding:11px 14px; color:#ef4444; font-weight:700;">S/ ${parseFloat(v.saldo||0).toFixed(2)}</td>
+        <td style="padding:11px 14px;">${ec(v)}</td>
+        <td style="padding:11px 14px; font-size:12px; color:#64748b;">${v.fecha_entrega || '—'}</td>
+        <td style="padding:11px 14px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
             <button onclick="verDetalleContrato('${v.codigo}')"
-                    style="width:100%; background:#0f172a; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; margin-bottom:${(usuarioActivo?.rol==='Vendedor'&&v.estado!=='Entregado'&&v.estado!=='Cancelado')?'8px':'0'};">
-                <i class="fa-solid fa-eye"></i> Ver contrato
+                    style="background:#0f172a; color:white; border:none; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
+                <i class="fa-solid fa-eye"></i> Ver
             </button>
             ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
             <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
-                    style="width:100%; background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">
-                <i class="fa-solid fa-tag"></i> Proponer cambio de precio
+                    title="Proponer cambio de precio"
+                    style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
+                <i class="fa-solid fa-tag"></i>
             </button>` : ''}
-        </div>`).join('');
+        </td>
+    </tr>`).join('');
+
+// === Cards (mobile) === CORREGIDO PARA MOSTRAR LA SEDE EN CELULARES
+cards.innerHTML = lista.map(v => `
+    <div style="background:white; border-radius:12px; border:1px solid #e2e8f0; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+            <span style="font-weight:900; font-size:15px; color:#d4af37;">#${v.codigo}</span>
+            ${ec(v)}
+        </div>
+        <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${v.cliente}</div>
+        
+        <div style="font-size:12px; color:#64748b; margin-bottom:10px; display:flex; align-items:center; gap:5px;">
+            <span>${v.vendedor || 'Vendedor'}</span> · 
+            <span style="background:#f1f5f9; color:#475569; padding:1px 5px; border-radius:4px; font-size:11px; font-weight:600;">${v.sede || 'Sede Central'}</span>
+            · Entrega: ${v.fecha_entrega || '—'}
+        </div>
+        
+        <div style="display:flex; gap:10px; font-size:13px; margin-bottom:12px;">
+            <div style="flex:1; background:#f0fdf4; border-radius:8px; padding:8px; text-align:center;">
+                <div style="font-size:10px; color:#166534; font-weight:700;">TOTAL</div>
+                <div style="font-weight:900; color:#166534;">S/ ${parseFloat(v.total||0).toFixed(2)}</div>
+            </div>
+            <div style="flex:1; background:#fff7ed; border-radius:8px; padding:8px; text-align:center;">
+                <div style="font-size:10px; color:#9a3412; font-weight:700;">SALDO</div>
+                <div style="font-weight:900; color:#9a3412;">S/ ${parseFloat(v.saldo||0).toFixed(2)}</div>
+            </div>
+        </div>
+        <button onclick="verDetalleContrato('${v.codigo}')"
+                style="width:100%; background:#0f172a; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; margin-bottom:${(usuarioActivo?.rol==='Vendedor'&&v.estado!=='Entregado'&&v.estado!=='Cancelado')?'8px':'0'};">
+            <i class="fa-solid fa-eye"></i> Ver contrato
+        </button>
+        ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
+        <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
+                style="width:100%; background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">
+            <i class="fa-solid fa-tag"></i> Proponer cambio de precio
+        </button>` : ''}
+    </div>`).join('');
 }
 
 function verDetalleContrato(codigo) {

@@ -393,26 +393,23 @@
     <input type="hidden" id="excel-fecha-fin">
 
     <!-- Tabla desktop / Cards mobile -->
-    <div id="contratos-table-wrapper" style="background:white; border-radius:12px; border:1px solid #e2e8f0; overflow-x:auto;">
-        <table id="tabla-contratos" style="width:100%; border-collapse:collapse; font-size:13px;">
-            <thead>
-                <tr style="background:#0f172a; color:white; text-align:left;">
-                    <th style="padding:12px 14px;">Código</th>
-                    <th style="padding:12px 14px;">Cliente</th>
-                    <th style="padding:12px 14px; display:none;" class="col-extra">Producto(s)</th>
-                    <th style="padding:12px 14px;">Total</th>
-                    <th style="padding:12px 14px;">Adelanto</th>
-                    <th style="padding:12px 14px; display:none;" class="col-extra">Saldo</th>
-                    <th style="padding:12px 14px;">Estado</th>
-                    <th style="padding:12px 14px;">Entrega</th>
-                    <th style="padding:12px 14px;">Acciones</th>
-                </tr>
-            </thead>
-            <tbody id="contratos-tbody">
-                <tr><td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">Cargando contratos...</td></tr>
+ <div id="contratos-table-wrapper" style="overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+        <thead>
+            <tr style="background: #0f172a; color: white; border-bottom: 2px solid #e2e8f0;">
+                <th style="padding: 14px;">Contrato</th>
+                <th style="padding: 14px;">Cliente / Vendedor</th>
+                <th style="padding: 14px;">Sede</th> <th style="padding: 14px;">Total Venta</th>
+                <th style="padding: 14px;">Adelanto</th>
+                <th style="padding: 14px;">Saldo Pend.</th> <th style="padding: 14px;">Estado Taller</th>
+                <th style="padding: 14px;">F. Entrega</th>
+                <th style="padding: 14px; text-align: center;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="contratos-tbody">
             </tbody>
-        </table>
-    </div>
+    </table>
+</div>
 
     <!-- Cards mobile (se muestra solo en pantallas pequeñas) -->
     <div id="contratos-cards" style="display:none;"></div>

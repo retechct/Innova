@@ -287,6 +287,21 @@ def guardar_venta():
             empresa_pago_resumen             # Empresa destino del primer pago (resumen)
         ))
         venta_id = cursor.fetchone()[0]
+        
+        _crear_tabla_historial_precios(cursor)
+        cursor.execute("""
+                        INSERT INTO historial_precios (
+                            venta_id, codigo_venta, precio_original, precio_nuevo, 
+                            motivo, vendedor_id, vendedor_nombre, estado, fecha_solicitud, fecha_resolucion
+                        ) VALUES (%s, %s, %s, %s, 'Precio base de creación del contrato', %s, %s, 'Aprobado', NOW(), NOW());
+                    """, (
+                        venta_id, 
+                        datos['codigo'], 
+                        float(datos.get('monto_total', 0)), 
+                        float(datos.get('monto_total', 0)),
+                        datos.get('vendedor_id'),
+                        datos.get('vendedor_nombre')
+                    ))
 
         # 2. Registrar Múltiples Pagos en la tabla 'pagos' (NUEVO)
         lista_pagos = lista_pagos_raw

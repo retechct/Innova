@@ -138,6 +138,7 @@ function actualizarCamposPago() {
     }
 }
 
+// En carrito.js
 function limpiarFormularioVenta() {
     const camposCliente = ['c-codigo', 'c-nombre', 'c-dni', 'c-celular', 'c-direccion', 'c-entrega'];
     camposCliente.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
@@ -145,20 +146,20 @@ function limpiarFormularioVenta() {
     listaPagos = [];
     document.getElementById('pago-monto').value = '';
     document.getElementById('pago-operacion').value = '';
-    document.getElementById('pago-comprobante').value = '';
+    document.getElementById('pago-empresa').value = '';
     document.getElementById('pago-tipo').value = 'Efectivo';
     
-    // NUEVO: Limpiar comisión y resetear moneda a Soles
+    // --- ADICIÓN DE LIMPIEZA FINANCIERA ---
     if(document.getElementById('pago-comision')) document.getElementById('pago-comision').value = '';
     if(document.getElementById('v-moneda')) document.getElementById('v-moneda').value = 'PEN';
     if(document.getElementById('v-tipo-cambio')) {
         document.getElementById('v-tipo-cambio').value = '';
         document.getElementById('v-tipo-cambio').style.display = 'none';
     }
+    // --------------------------------------
 
     actualizarCamposPago(); 
     actualizarPagosUI();
-    
     goToStep(1);
 }
 
@@ -310,45 +311,59 @@ function actualizarPagosUI() {
 /* ================================================================= */
 
 async function guardarVenta() {
-    // Validaciones de seguridad antes de procesar
     if (cart.length === 0) return Swal.fire('Carrito Vacío', 'No hay muebles en la cotización.', 'warning');
     if (listaPagos.length === 0) return Swal.fire('Falta Pago', 'Debes registrar al menos un adelanto o método de pago.', 'warning');
-
-    const total = cart.reduce((s, i) => s + i.price, 0);
     
+    // Validar existencia de sesión activa para evitar cargas vacías en el historial
+    if (!usuarioActivo || !usuarioActivo.id) {
+        return Swal.fire('Error de Sesión', 'No se reconoce al vendedor activo. Por favor, reincia sesión.', 'error');
+    }
+    
+    const total = cart.reduce((s, i) => s + i.price, 0);
     // Captura de los campos financieros
     const monedaActiva = document.getElementById('v-moneda') ? document.getElementById('v-moneda').value : 'PEN';
     const tipoCambioActivo = document.getElementById('v-tipo-cambio') ? (parseFloat(document.getElementById('v-tipo-cambio').value) || 1.00) : 1.00;
     const tipoComprobanteActivo = document.getElementById('c-comprobante-tipo') ? document.getElementById('c-comprobante-tipo').value : 'Boleta';
 
-    const payload = {
-        codigo: document.getElementById('c-codigo').value,
-        cliente: document.getElementById('c-nombre').value,
-        tipo_documento: document.getElementById('c-tipo-doc') ? document.getElementById('c-tipo-doc').value : 'DNI',
-        dni: document.getElementById('c-dni').value,
-        celular: document.getElementById('c-celular').value,
-        direccion: document.getElementById('c-direccion').value,
-        fecha_emision: document.getElementById('c-emision').value,
-        fecha_entrega: document.getElementById('c-entrega').value || null,
-        
-        monto_total: total,
-        moneda: monedaActiva,
-        tipo_cambio: tipoCambioActivo,
-        tipo_comprobante: tipoComprobanteActivo,
-        pagos: listaPagos, // Ya tienen comprobante_url real de Cloudinary
+    // CORRECCIÓN en carrito.js -> dentro de guardarVenta()
+const total = cart.reduce((s, i) => s + i.price, 0);
 
-        vendedor_id: usuarioActivo.id,
-        vendedor_nombre: usuarioActivo.nombre,
-        empresa_ruc: usuarioActivo.ruc,
+// Captura de los campos financieros
+const monedaActiva = document.getElementById('v-moneda') ? document.getElementById('v-moneda').value : 'PEN';
+const tipoCambioActivo = document.getElementById('v-tipo-cambio') ? (parseFloat(document.getElementById('v-tipo-cambio').value) || 1.00) : 1.00;
+const tipoComprobanteActivo = document.getElementById('c-comprobante-tipo') ? document.getElementById('c-comprobante-tipo').value : 'Boleta';
 
-        muebles: cart.map(c => ({ 
-            tipo: c.name, 
-            precio: c.price, 
-            tela: typeof c.details === 'object' ? JSON.stringify(c.details) : (c.details || "Venta Estándar"), 
-            foto: c.img,
-            componentes: c.componentes
-        }))
-    };
+const payload = {
+    codigo: document.getElementById('c-codigo').value,
+    cliente: document.getElementById('c-nombre').value,
+    tipo_documento: document.getElementById('c-tipo-doc') ? document.getElementById('c-tipo-doc').value : 'DNI',
+    dni: document.getElementById('c-dni').value,
+    celular: document.getElementById('c-celular').value,
+    direccion: document.getElementById('c-direccion').value,
+    fecha_emision: document.getElementById('c-emision').value,
+    fecha_entrega: document.getElementById('c-entrega').value || null,
+    sede: usuarioActivo.tienda || 'Sede Central',
+    
+    // --- NUEVOS CAMPOS AGREGADOS ---
+    monto_total: total,
+    moneda: monedaActiva,
+    tipo_cambio: tipoCambioActivo,
+    tipo_comprobante: tipoComprobanteActivo,
+    // -------------------------------
+
+    pagos: listaPagos,
+    vendedor_id: usuarioActivo.id,
+    vendedor_nombre: usuarioActivo.nombre,
+    empresa_ruc: usuarioActivo.ruc,
+
+    muebles: cart.map(c => ({ 
+        tipo: c.name, 
+        precio: c.price, 
+        tela: typeof c.details === 'object' ? JSON.stringify(c.details) : (c.details || "Venta Estándar"), 
+        foto: c.img,
+        componentes: c.componentes
+    }))
+};
     
     Swal.fire({ title: 'Guardando en Base de Datos...', didOpen: () => Swal.showLoading() });
 
