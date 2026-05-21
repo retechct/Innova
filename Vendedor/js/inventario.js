@@ -25,19 +25,22 @@ const CATEGORIAS_PIEZA = [
 
 /* ─── Punto de entrada ─────────────────────────────────────── */
 async function cargarVistaInventario() {
-    // Busca el <main> por ID o por clase como fallback
     const main = document.getElementById('main-content') || document.querySelector('main.main-content');
     if (!main) { console.error('inventario.js: no se encontró el contenedor principal'); return; }
 
-    // Eliminar wrapper previo si existe (para re-entradas)
     const prev = document.getElementById('inv-dinamico-wrapper');
     if (prev) prev.remove();
 
-    // Crear un wrapper limpio dentro del main
     const wrapper = document.createElement('div');
     wrapper.id = 'inv-dinamico-wrapper';
     wrapper.innerHTML = _htmlEsqueleto();
     main.appendChild(wrapper);
+
+    // Mostrar botón Registrar DESPUÉS de insertar el DOM, con el usuario ya disponible
+    const btnReg = document.getElementById('btn-inv-registrar');
+    if (btnReg && _puedeEditarInv()) {
+        btnReg.style.display = 'flex';
+    }
 
     await _cargarMaestrosInv();
     await _cargarDatosTab();
@@ -51,13 +54,12 @@ function _htmlEsqueleto() {
         <i class="fas fa-boxes"></i>
         <h2>Inventario por Tienda</h2>
         <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
-            ${_puedeEditarInv() ? `
-            <button onclick="abrirModalNuevoItem()"
-                    style="background:var(--accent);color:white;border:none;padding:10px 16px;
+            <button id="btn-inv-registrar" onclick="abrirModalNuevoItem()"
+                    style="display:none;background:var(--accent);color:white;border:none;padding:10px 16px;
                            border-radius:10px;font-weight:800;cursor:pointer;font-size:12px;
-                           display:flex;align-items:center;gap:6px;">
+                           align-items:center;gap:6px;">
                 <i class="fas fa-plus"></i> Registrar
-            </button>` : ''}
+            </button>
             <button onclick="_invExportarCSV()"
                     style="background:white;color:var(--text-muted);border:1px solid #e2e8f0;
                            padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;
@@ -235,7 +237,12 @@ function _renderTablaProductos() {
     const sedes     = _invDataProd.sedes  || [];
     const modelos   = _invDataProd.modelos || [];
 
-    if (!modelos.length) { contenido.innerHTML = _htmlVacio('productos'); return; }
+    if (!modelos.length) {
+        contenido.innerHTML = _htmlVacio('productos');
+        const b = document.getElementById('btn-vacio-registrar');
+        if (b && _puedeEditarInv()) b.style.display = 'inline-block';
+        return;
+    }
 
     let html = `
     <div style="overflow-x:auto;border-radius:16px;border:1px solid #e2e8f0;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
@@ -295,7 +302,12 @@ function _renderTablaPiezas() {
     const sedes     = _invDataPiezas.sedes  || [];
     const piezas    = _invDataPiezas.piezas || [];
 
-    if (!piezas.length) { contenido.innerHTML = _htmlVacio('piezas'); return; }
+    if (!piezas.length) {
+        contenido.innerHTML = _htmlVacio('piezas');
+        const b = document.getElementById('btn-vacio-registrar');
+        if (b && _puedeEditarInv()) b.style.display = 'inline-block';
+        return;
+    }
 
     let prevSKU = null;
     let html = `
@@ -823,10 +835,10 @@ function _htmlVacio(tipo) {
     return `<div style="padding:50px;text-align:center;color:var(--text-muted);">
         <i class="fas fa-box-open" style="font-size:3rem;opacity:0.3;margin-bottom:15px;"></i>
         <p style="font-weight:700;">Sin ${tipo} registrados aún.</p>
-        ${_puedeEditarInv() ? `<button onclick="abrirModalNuevoItem()"
-            style="margin-top:10px;background:var(--accent);color:white;border:none;
+        <button id="btn-vacio-registrar" onclick="abrirModalNuevoItem()"
+            style="display:none;margin-top:10px;background:var(--accent);color:white;border:none;
                    padding:10px 20px;border-radius:10px;font-weight:800;cursor:pointer;">
-            + Registrar el primero</button>` : ''}
+            + Registrar el primero</button>
     </div>`;
 }
 

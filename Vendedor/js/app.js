@@ -166,6 +166,170 @@ function descargarExcelContratos() {
     window.open(urlDescarga, '_blank');
     Swal.close();
 }
+/* ================================================================= */
+/* --- LOGÍSTICA EXTERNA (PROCURA) --- */
+/* ================================================================= */
+async function cargarLogisticaExterna() {
+    const tabla = document.getElementById('tabla-logistica-externa');
+    if (!tabla) return;
+    tabla.innerHTML = `<div style="text-align:center;padding:30px;color:#64748b;">
+        <i class="fa-solid fa-circle-notch fa-spin" style="font-size:1.5rem;"></i>
+        <p style="margin-top:10px;font-weight:600;">Cargando requerimientos...</p>
+    </div>`;
+
+    try {
+        const [resLog, resProv] = await Promise.all([
+            fetch(`${API_URL}/api/logistica`),
+            fetch(`${API_URL}/api/proveedores`)
+        ]);
+        const items     = await resLog.json();
+        const proveedores = await resProv.json();
+
+        if (!items.length) {
+            tabla.innerHTML = `<div style="text-align:center;padding:40px;color:#94a3b8;">
+                <i class="fa-solid fa-box-open" style="font-size:2.5rem;opacity:0.4;"></i>
+                <p style="margin-top:12px;font-weight:700;">Sin requerimientos externos activos.</p>
+                <p style="font-size:12px;">Los insumos de proveedores que se necesiten para pedidos aparecerán aquí.</p>
+            </div>`;
+            return;
+        }
+
+        const coloresEstado = {
+            'Pendiente':   { bg: '#fef9c3', color: '#854d0e' },
+            'Cotizado':    { bg: '#dbeafe', color: '#1e40af' },
+            'Confirmado':  { bg: '#dcfce7', color: '#166534' },
+            'En Tránsito': { bg: '#ede9fe', color: '#5b21b6' },
+            'Recibido':    { bg: '#f0fdf4', color: '#15803d' },
+            'Cancelado':   { bg: '#fee2e2', color: '#991b1b' },
+        };
+
+        const esAdmin = usuarioActivo && usuarioActivo.rol === 'Admin';
+
+        const opcionesProveedor = proveedores.map(p =>
+            `<option value="${p.id}">${p.nombre} (${p.especialidad})</option>`
+        ).join('');
+
+        const opcionesEstado = ['Pendiente','Cotizado','Confirmado','En Tránsito','Recibido','Cancelado']
+            .map(e => `<option value="${e}">${e}</option>`).join('');
+
+        let html = `
+        <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px;">
+            <thead>
+                <tr style="background:#0f172a;color:white;font-size:11px;font-weight:900;text-transform:uppercase;">
+                    <th style="padding:12px 14px;text-align:left;">Pedido</th>
+                    <th style="padding:12px 14px;text-align:left;">Insumo / SKU</th>
+                    <th style="padding:12px 14px;text-align:left;">Proveedor</th>
+                    <th style="padding:12px 10px;text-align:center;">Precio</th>
+                    <th style="padding:12px 10px;text-align:center;">F. Entrega</th>
+                    <th style="padding:12px 10px;text-align:center;">Estado</th>
+                    ${esAdmin ? '<th style="padding:12px 10px;text-align:center;">Acciones</th>' : ''}
+                </tr>
+            </thead>
+            <tbody>`;
+
+        items.forEach((item, idx) => {
+            const c   = coloresEstado[item.estado] || { bg:'#f1f5f9', color:'#475569' };
+            const bg  = idx % 2 === 0 ? 'white' : '#fafbfc';
+            html += `
+            <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
+                onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
+                <td style="padding:12px 14px;">
+                    <span style="font-weight:900;color:#d97706;">#${item.codigo_venta}</span>
+                </td>
+                <td style="padding:12px 14px;">
+                    <div style="font-weight:700;">${item.insumo}</div>
+                    <div style="font-size:11px;color:#94a3b8;">${item.sku || '—'}</div>
+                </td>
+                <td style="padding:12px 14px;color:#475569;">${item.proveedor}</td>
+                <td style="padding:12px 10px;text-align:center;font-weight:800;color:#0f172a;">
+                    ${item.precio_cotizado ? `S/ ${item.precio_cotizado.toFixed(2)}` : '<span style="color:#cbd5e1;">—</span>'}
+                </td>
+                <td style="padding:12px 10px;text-align:center;font-size:12px;color:#64748b;">
+                    ${item.fecha_entrega_proveedor || '<span style="color:#cbd5e1;">Sin fecha</span>'}
+                </td>
+                <td style="padding:12px 10px;text-align:center;">
+                    <span style="background:${c.bg};color:${c.color};padding:4px 10px;border-radius:20px;font-weight:800;font-size:11px;">
+                        ${item.estado}
+                    </span>
+                </td>
+                ${esAdmin ? `
+                <td style="padding:12px 10px;text-align:center;">
+                    <button onclick="_abrirEditarLogistica(${JSON.stringify(item).replace(/"/g,'&quot;')}, ${JSON.stringify(proveedores).replace(/"/g,'&quot;')})"
+                            style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;color:#475569;">
+                        <i class="fa-solid fa-pen"></i> Editar
+                    </button>
+                </td>` : ''}
+            </tr>`;
+        });
+
+        html += `</tbody></table></div>
+        <div style="margin-top:10px;font-size:11px;color:#94a3b8;text-align:right;">
+            ${items.length} requerimiento${items.length !== 1 ? 's' : ''} activos
+        </div>`;
+        tabla.innerHTML = html;
+
+    } catch(e) {
+        tabla.innerHTML = `<div style="text-align:center;padding:30px;color:#ef4444;">
+            <i class="fa-solid fa-triangle-exclamation"></i> Error al cargar: ${e.message}
+        </div>`;
+    }
+}
+
+async function _abrirEditarLogistica(item, proveedores) {
+    const opsProv = `<option value="">— Sin asignar —</option>` + proveedores.map(p =>
+        `<option value="${p.id}">${p.nombre} (${p.especialidad})</option>`
+    ).join('');
+    const opsEstado = ['Pendiente','Cotizado','Confirmado','En Tránsito','Recibido','Cancelado']
+        .map(e => `<option value="${e}" ${e === item.estado ? 'selected' : ''}>${e}</option>`).join('');
+
+    const { value: datos, isConfirmed } = await Swal.fire({
+        title: `Editar: ${item.insumo}`,
+        html: `
+            <div style="text-align:left;font-size:13px;">
+                <label style="font-weight:700;display:block;margin-bottom:4px;">Proveedor</label>
+                <select id="sl-prov" class="swal2-input" style="margin:0 0 12px;width:100%;">${opsProv}</select>
+                <label style="font-weight:700;display:block;margin-bottom:4px;">Precio cotizado (S/)</label>
+                <input id="sl-precio" class="swal2-input" type="number" step="0.01"
+                    placeholder="0.00" value="${item.precio_cotizado || ''}"
+                    style="margin:0 0 12px;width:100%;">
+                <label style="font-weight:700;display:block;margin-bottom:4px;">Fecha entrega proveedor</label>
+                <input id="sl-fecha" class="swal2-input" type="date"
+                    value="${item.fecha_entrega_proveedor
+                        ? item.fecha_entrega_proveedor.split('/').reverse().join('-')
+                        : ''}"
+                    style="margin:0 0 12px;width:100%;">
+                <label style="font-weight:700;display:block;margin-bottom:4px;">Estado</label>
+                <select id="sl-estado" class="swal2-input" style="margin:0;width:100%;">${opsEstado}</select>
+            </div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Guardar cambios',
+        cancelButtonText:  'Cancelar',
+        confirmButtonColor: '#0f172a',
+        preConfirm: () => ({
+            id:                      item.id,
+            proveedor_id:            document.getElementById('sl-prov').value    || null,
+            precio_cotizado:         document.getElementById('sl-precio').value  || null,
+            fecha_entrega_proveedor: document.getElementById('sl-fecha').value   || null,
+            estado:                  document.getElementById('sl-estado').value,
+        })
+    });
+    if (!isConfirmed || !datos) return;
+
+    try {
+        const res = await fetch(`${API_URL}/api/logistica/actualizar`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos)
+        });
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+        Swal.fire({ icon:'success', title:'¡Actualizado!', timer:1500, showConfirmButton:false });
+        cargarLogisticaExterna();
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
 /* --- FUNCIÓN BLINDADA CONTRA ERRORES "NULL" --- */
 function changeView(view) {
     currentMode = view;
@@ -183,14 +347,6 @@ function changeView(view) {
         'inv-tienda': 'INVENTARIO POR TIENDA'// <-- NUEVO
     };
     
-    // Restaurar el header estático si veníamos de inv-tienda
-    const mainTitleContainer = document.querySelector('main .view-title-container');
-    if (mainTitleContainer) mainTitleContainer.style.display = '';
-
-    // Limpiar el contenedor dinámico del inventario si existía
-    const invDinamico = document.getElementById('inv-dinamico-wrapper');
-    if (invDinamico) invDinamico.remove();
-
     if (titles[view]) {
         document.getElementById('view-title').innerText = titles[view];
     }
@@ -239,10 +395,8 @@ function changeView(view) {
         cargarInventarioTaller(); 
     }
     else if (view === 'inv-tienda') {
-        // Ocultar el header estático y secciones fijas que interfieren
-        const mainTitleContainer = document.querySelector('main .view-title-container');
-        if (mainTitleContainer) mainTitleContainer.style.display = 'none';
-        cargarVistaInventario();
+    const main = document.getElementById('main-content');
+    cargarVistaInventario();
     }
     else if (view === 'logistica') {
         document.getElementById('view-logistica').style.display = 'block';
