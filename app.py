@@ -50,6 +50,11 @@ jwt = JWTManager(app)
 # --- IMPORTAR Y REGISTRAR LAS RUTAS DEL KARDEX ---
 from routes_kardex import kardex_bp
 app.register_blueprint(kardex_bp, url_prefix='/api/kardex')
+
+# --- IMPORTAR Y REGISTRAR LAS RUTAS DEL TALLER (MÓDULO 4) ---
+from routes_taller import taller_bp, init_taller_pool
+app.register_blueprint(taller_bp)
+init_taller_pool()
 # ------------------------------------------------------------------
 # Rate limiter — protege el login contra ataques de fuerza bruta
 limiter = Limiter(
@@ -1158,11 +1163,41 @@ def finalizar_ticket(id):
                     """, (tb_id,))
                     desbloqueados += cursor.rowcount
 
+        # ── Auto-actualizar estado_general de la venta si toda la producción terminó ──
+        venta_actualizada = False
+        if row:
+            cursor.execute("SELECT venta_id FROM items_venta WHERE id = %s", (item_id,))
+            venta_row = cursor.fetchone()
+            if venta_row:
+                venta_id_check = venta_row[0]
+                # Contar tickets de producción (sin despacho) que NO están Terminados
+                cursor.execute("""
+                    SELECT COUNT(*) FROM tickets_produccion t
+                    JOIN items_venta i ON t.item_id = i.id
+                    WHERE i.venta_id = %s
+                      AND t.area_trabajo != 'DESPACHO_CENTRAL'
+                      AND t.estado_ticket != 'Terminado'
+                """, (venta_id_check,))
+                pendientes_prod = cursor.fetchone()[0]
+                if pendientes_prod == 0:
+                    cursor.execute("""
+                        UPDATE ventas SET estado_general = 'Listo'
+                        WHERE id = %s AND COALESCE(estado_general,'') NOT IN ('Entregado','Cancelado')
+                    """, (venta_id_check,))
+                    venta_actualizada = cursor.rowcount > 0
+
         conexion.commit()
         msg = 'Ticket finalizado correctamente'
         if desbloqueados > 0:
             msg += f'. {desbloqueados} ticket(s) de tapicería desbloqueado(s) automáticamente.'
-        return jsonify({'exito': True, 'mensaje': msg, 'desbloqueados': desbloqueados}), 200
+        if venta_actualizada:
+            msg += '. ✅ ¡Producción completa! La venta pasó a estado Listo.'
+        return jsonify({
+            'exito': True,
+            'mensaje': msg,
+            'desbloqueados': desbloqueados,
+            'venta_lista': venta_actualizada
+        }), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500

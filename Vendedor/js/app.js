@@ -260,15 +260,30 @@ function renderGrid() {
     `).join('');
 }
 
-async function cargarUsuariosLogin() {
+/**
+ * NUEVO: Carga las sedes y usuarios directamente desde Neon SQL
+ */
+async function cargarDatosInicialesLogin() {
     try {
-        const response = await fetch(`${API_URL}/api/usuarios`);
-        const usuarios = await response.json();
-        const select = document.getElementById('login-usuario');
-        select.innerHTML = '<option value="">-- Elige tu nombre --</option>';
+        // 1. Cargar Sedes
+        const resSedes = await fetch(`${API_URL}/api/sedes`);
+        const sedes = await resSedes.json();
+        const selectSede = document.getElementById('login-tienda');
         
+        if (selectSede) {
+            selectSede.innerHTML = '<option value="">-- Selecciona Sede --</option>';
+            sedes.forEach(s => {
+                selectSede.innerHTML += `<option value="${s.id}">${s.nombre} ${s.tipo === 'Taller' ? '🛠️' : '🏪'}</option>`;
+            });
+        }
+
+        // 2. Cargar Usuarios
+        const resUser = await fetch(`${API_URL}/api/usuarios`);
+        const usuarios = await resUser.json();
+        const selectUser = document.getElementById('login-usuario');
+        selectUser.innerHTML = '<option value="">-- Elige tu nombre --</option>';
         usuarios.forEach(u => {
-            select.innerHTML += `<option value="${u.id}">${u.nombre} (${u.rol})</option>`;
+            selectUser.innerHTML += `<option value="${u.id}">${u.nombre} (${u.rol})</option>`;
         });
     } catch (error) {
         console.error("No hay conexión con el servidor para cargar usuarios", error);
@@ -292,7 +307,7 @@ async function entrarAlSistema() {
     
     // Capturamos la tienda que seleccionó en el dropdown
     const tiendaSelect = document.getElementById('login-tienda');
-    const tiendaSeleccionada = tiendaSelect ? tiendaSelect.value : 'No especificada';
+    const nombreTienda = tiendaSelect ? tiendaSelect.options[tiendaSelect.selectedIndex].text : 'No especificada';
 
     if (!usuarioId || !pin) {
         return Swal.fire('Error', 'Selecciona tu nombre y pon tu PIN.', 'warning');
@@ -302,7 +317,11 @@ async function entrarAlSistema() {
         const response = await fetch(`${API_URL}/api/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ usuario_id: usuarioId, pin: pin })
+            body: JSON.stringify({ 
+                usuario_id: usuarioId, 
+                pin: pin,
+                sede_id: tiendaSelect.value 
+            })
         });
 
         const result = await response.json();
@@ -311,7 +330,8 @@ async function entrarAlSistema() {
             usuarioActivo = result.usuario;
             
             // Agregamos la tienda y la hora al perfil del usuario
-            usuarioActivo.tienda = tiendaSeleccionada;
+            usuarioActivo.sede_id = tiendaSelect.value;
+            usuarioActivo.tienda = nombreTienda;
             usuarioActivo.horaLogin = new Date().toLocaleTimeString();
             
             // Guardamos todo junto en la memoria del navegador
@@ -836,7 +856,7 @@ function descargarExcelContratos() {
 // FIX: un solo DOMContentLoaded que llama init() + cargarUsuariosLogin()
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    cargarUsuariosLogin();   // llena el dropdown de usuarios en el login
+    cargarDatosInicialesLogin(); // Carga Sedes y Usuarios
     verificarSesionExistente(); // oculta el login si ya hay sesión guardada
     init();                  // carga catálogo + materiales y rutea según sesión
 });

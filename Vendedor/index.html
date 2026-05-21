@@ -23,17 +23,15 @@
             <div class="form-group">
                 <label style="color: #475569;">1. Ubicación / Sede</label>
                 <select id="login-tienda" class="form-input" style="border-color: #cbd5e1; font-weight: bold; color: var(--primary);">
-                    <option value="Tienda del medio">🏪 Tienda del medio</option>
-                    <option value="Tienda del sol">☀️ Tienda del sol</option>
-                    <option value="Tienda de plaza vea">🛒 Tienda de plaza vea</option>
-                    <option value="Tienda grande">🏢 Tienda grande</option>
-                    <option value="Taller">🛠️ Taller (Venta/Producción)</option>
+                    <option value="">Cargando sedes...</option>
+                    <!-- Se poblará dinámicamente desde la tabla 'sedes' -->
                 </select>
             </div>
 
             <div class="form-group" style="margin-top: 15px;">
                 <label style="color: #475569;">2. Selecciona tu perfil</label>
                 <select id="login-usuario" class="form-input" style="border-color: #cbd5e1;"></select>
+                <!-- Se poblará dinámicamente filtrando por la sede seleccionada -->
             </div>
 
             <div class="form-group" style="margin-top: 15px;">
@@ -189,12 +187,13 @@
 
     <div id="view-taller" class="view-section" style="display:none; padding: 20px;">
         
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; flex-wrap:wrap; gap:10px;">
             <h2 style="font-family: 'Inter', sans-serif; font-weight: 800; color: #0f172a; margin:0; letter-spacing: -1px;">
                 <i class="fa-solid fa-industry" style="color: #d4af37; margin-right: 10px;"></i> CONTROL DE PRODUCCIÓN
             </h2>
-            <div id="stats-taller" style="font-size: 11px; font-weight: 900; color: #64748b; background: #f1f5f9; padding: 8px 16px; border-radius: 50px; text-transform: uppercase;">
-                Sincronizando con taller...
+            <!-- Badge de stats: se puebla vía cargarStatsTaller() -->
+            <div id="stats-taller" style="font-size: 11px; font-weight: 900; color: #64748b; background: #f1f5f9; padding: 8px 16px; border-radius: 50px; text-transform: uppercase; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <i class="fa-solid fa-circle-notch fa-spin" style="color:#94a3b8;"></i> Sincronizando...
             </div>
         </div>
 
@@ -375,7 +374,7 @@
             <option value="">Todos los estados</option>
             <option value="Pendiente">⏳ Pendiente</option>
             <option value="En producción">🏭 En producción</option>
-            <option value="Listo"> Listo</option>
+            <option value="Listo">ecu Listo</option>
             <option value="Entregado">🚚 Entregado</option>
         </select>
 

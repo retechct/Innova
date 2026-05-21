@@ -645,6 +645,9 @@ async function cargarTicketsTaller() {
     const contenedor = document.getElementById('contenedor-tickets-taller');
     if (!contenedor || !usuarioActivo) return;
 
+    // ── Actualizar badge de stats siempre que se cargue el taller ──
+    cargarStatsTaller();
+
     const esAdmin      = ['Admin', 'Jefe_Taller', 'JEFE_TALLER'].includes(usuarioActivo.rol);
     const esOperario   = usuarioActivo.rol === 'Operario';
 
@@ -666,6 +669,13 @@ async function cargarTicketsTaller() {
                     color:${(typeof filtroAdminTaller==='undefined'||filtroAdminTaller==='pendientes') ? 'white' : '#475569'};">
                     <i class="fa-solid fa-user-plus"></i> PENDIENTES DE ASIGNAR
                 </button>
+                <button onclick="filtroAdminTaller='ordenes'; cargarTicketsTaller()"
+                    style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
+                    background:${filtroAdminTaller==='ordenes' ? '#558fc5' : '#eff6ff'};
+                    color:${filtroAdminTaller==='ordenes' ? 'white' : '#1e40af'};
+                    border:2px solid #93c5fd;">
+                    <i class="fa-solid fa-list-check"></i> ÓRDENES POR PEDIDO
+                </button>
                 <button onclick="filtroAdminTaller='recojo'; cargarTicketsTaller()"
                     style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
                     background:${filtroAdminTaller==='recojo' ? '#c2410c' : '#fff7ed'};
@@ -683,6 +693,13 @@ async function cargarTicketsTaller() {
         if (filtroAdminTaller === 'recojo') {
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando cola de recojo...</p>';
             await cargarVistaColaRecojo(contenedor);
+            return;
+        }
+
+        // Si está en vista ÓRDENES POR PEDIDO, mostrar esa sección y salir
+        if (filtroAdminTaller === 'ordenes') {
+            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando órdenes de producción...</p>';
+            await cargarOrdenesProduccion(contenedor);
             return;
         }
     } else {
@@ -1565,3 +1582,217 @@ async function ejecutarAprobacion(id, origen, precio_base) {
 /* ================================================================= */
 /* --- MÓDULO: ENTRADA DIRECTA DE PRODUCTOS (CUADROS/ESPEJOS) --- */
 /* ================================================================= */
+/* ================================================================= */
+/* --- MÓDULO 4 COMPLETO: NUEVAS FUNCIONES                       --- */
+/* ================================================================= */
+
+/* --- 1. STATS DEL TALLER (puebla el badge del header) --- */
+async function cargarStatsTaller() {
+    const badge = document.getElementById('stats-taller');
+    if (!badge) return;
+    try {
+        const res  = await fetch(`${API_URL}/api/taller/stats`);
+        const data = await res.json();
+        if (data.error) { badge.innerText = 'Error de stats'; return; }
+
+        const activos   = data.activos   || 0;
+        const enProceso = data.en_proceso || 0;
+        const pendientes = data.pendientes || 0;
+        const listas    = data.ventas_listas || 0;
+
+        badge.innerHTML = `
+            <span style="color:#f59e0b; margin-right:8px;">
+                <i class="fa-solid fa-clock"></i> ${pendientes} pendientes
+            </span>
+            <span style="color:#3b82f6; margin-right:8px;">
+                <i class="fa-solid fa-gear fa-spin"></i> ${enProceso} en proceso
+            </span>
+            ${listas > 0 ? `<span style="color:#22c55e;">
+                <i class="fa-solid fa-circle-check"></i> ${listas} listas
+            </span>` : ''}
+        `;
+    } catch (e) {
+        if (badge) badge.innerText = 'Sin conexión';
+    }
+}
+
+/* --- 2. VISTA DE ÓRDENES POR PEDIDO (Admin) --- */
+async function cargarOrdenesProduccion(contenedor) {
+    try {
+        const res    = await fetch(`${API_URL}/api/taller/ordenes?estado=activas`);
+        const ordenes = await res.json();
+
+        if (!Array.isArray(ordenes) || ordenes.length === 0) {
+            contenedor.innerHTML = `
+                <div style="text-align:center; padding:60px 20px; color:#94a3b8;">
+                    <i class="fa-solid fa-circle-check" style="font-size:3rem; color:#22c55e; display:block; margin-bottom:15px;"></i>
+                    <p style="font-weight:800; font-size:16px; color:#475569;">Sin órdenes de producción activas</p>
+                    <p style="font-size:13px;">Todas las ventas están entregadas o no requieren producción.</p>
+                </div>`;
+            return;
+        }
+
+        const AREA_NOMBRES = {
+            'ESTRUCTURAS_MUEBLES':     'Carpintería (Sofás)',
+            'ESTRUCTURAS_SILLAS':      'Carpintería (Sillas)',
+            'CORTE_Y_CONTROL_TELAS':   'Corte y Telas',
+            'TELAS':                   'Corte y Telas',
+            'PREPARACION_PATAS_ZOCALO':'Patas y Zócalos',
+            'TABLEROS_Y_PIEDRAS':      'Tableros',
+            'TAPICERIA_SOFAS':         'Tapicería Sofás',
+            'TAPICERIA_SILLAS':        'Tapicería Sillas',
+            'ARMADO_COJINES':          'Armado de Cojines',
+            'DESPACHO_CENTRAL':        'Despacho',
+        };
+
+        const ESTADO_BADGE = {
+            'Pendiente':  { bg:'#fef3c7', color:'#b45309', icon:'🟡' },
+            'Bloqueado':  { bg:'#e2e8f0', color:'#64748b', icon:'🔒' },
+            'En Proceso': { bg:'#dbeafe', color:'#1e40af', icon:'🔵' },
+            'Terminado':  { bg:'#dcfce7', color:'#166534', icon:'✅' },
+        };
+
+        let html = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <h3 style="margin:0; font-size:15px; font-weight:900; color:#0f172a;">
+                        <i class="fa-solid fa-list-check" style="color:#558fc5;"></i> ${ordenes.length} orden${ordenes.length>1?'es':''} activa${ordenes.length>1?'s':''}
+                    </h3>
+                    <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">Vista agrupada por pedido — progreso de cada área de producción</p>
+                </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px;">`;
+
+        ordenes.forEach(orden => {
+            const progresoColor = orden.progreso >= 100 ? '#22c55e' : (orden.progreso >= 50 ? '#3b82f6' : '#f59e0b');
+            const estadoBadge   = {
+                'Listo':         { bg:'#dcfce7', color:'#166534' },
+                'En Producción': { bg:'#dbeafe', color:'#1e40af' },
+                'Pendiente':     { bg:'#fef3c7', color:'#b45309' },
+            }[orden.estado] || { bg:'#f1f5f9', color:'#475569' };
+
+            // Construir filas de items con sus tickets
+            let itemsHTML = '';
+            (orden.items || []).forEach(item => {
+                const ticketsHTML = (item.tickets || [])
+                    .filter(t => t.area !== 'DESPACHO_CENTRAL')
+                    .map(t => {
+                        const b = ESTADO_BADGE[t.estado] || { bg:'#f1f5f9', color:'#64748b', icon:'?' };
+                        const nombre = AREA_NOMBRES[t.area] || t.area.replace(/_/g,' ');
+                        return `<span style="font-size:10px; background:${b.bg}; color:${b.color}; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap;">
+                                    ${b.icon} ${nombre}
+                                    ${t.trabajador !== 'Sin asignar' ? `<span style="opacity:0.7">· ${t.trabajador}</span>` : ''}
+                                </span>`;
+                    }).join('');
+
+                const hayTickets = item.tickets && item.tickets.filter(t => t.area !== 'DESPACHO_CENTRAL').length > 0;
+                itemsHTML += `
+                    <div style="border-bottom:1px solid #f1f5f9; padding:8px 0; display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                        <img src="${item.foto}" alt="" style="width:40px; height:40px; border-radius:6px; object-fit:cover; border:1px solid #e2e8f0; flex-shrink:0;" onerror="this.src='imagenes/sin_foto.jpg'">
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:12px; font-weight:800; color:#0f172a; margin-bottom:5px;">${item.producto}</div>
+                            ${hayTickets ? `<div style="display:flex; gap:5px; flex-wrap:wrap;">${ticketsHTML}</div>` : `<span style="font-size:11px; color:#94a3b8;">Sin tickets de producción</span>`}
+                        </div>
+                        <button onclick="abrirNotaOrden(${item.tickets && item.tickets[0] ? item.tickets[0].id : 0})"
+                            style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0;"
+                            title="Agregar nota/incidencia">
+                            <i class="fa-solid fa-note-sticky"></i>
+                        </button>
+                    </div>`;
+            });
+
+            html += `
+            <div style="background:white; border-radius:14px; border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,0.05); overflow:hidden;">
+                <!-- Cabecera de la orden -->
+                <div style="background:#f8fafc; padding:14px 18px; border-bottom:1px solid #e2e8f0; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:0;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+                            <span style="font-size:13px; font-weight:900; color:#0f172a;">${orden.codigo}</span>
+                            <span style="font-size:11px; background:${estadoBadge.bg}; color:${estadoBadge.color}; padding:2px 8px; border-radius:20px; font-weight:800;">${orden.estado}</span>
+                        </div>
+                        <div style="font-size:12px; color:#475569;">
+                            <b>${orden.cliente}</b> &nbsp;·&nbsp;
+                            <i class="fa-solid fa-calendar-days" style="color:#94a3b8;"></i> Entrega: <b>${orden.fecha_entrega}</b>
+                            ${orden.vendedor ? `&nbsp;·&nbsp; <i class="fa-solid fa-user" style="color:#94a3b8;"></i> ${orden.vendedor}` : ''}
+                            ${orden.sede ? `&nbsp;·&nbsp; ${orden.sede}` : ''}
+                        </div>
+                    </div>
+                    <!-- Barra de progreso -->
+                    <div style="min-width:160px; flex-shrink:0;">
+                        <div style="font-size:10px; font-weight:900; color:${progresoColor}; margin-bottom:4px; text-align:right;">
+                            ${orden.progreso}% completado
+                            (${orden.tickets_term}/${orden.tickets_total} áreas)
+                        </div>
+                        <div style="background:#e2e8f0; border-radius:6px; height:8px; overflow:hidden;">
+                            <div style="width:${orden.progreso}%; height:100%; background:${progresoColor}; border-radius:6px; transition:0.5s;"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Ítems de la orden -->
+                <div style="padding:12px 18px;">
+                    ${itemsHTML || '<p style="color:#94a3b8; font-size:12px; text-align:center; padding:10px;">Sin ítems de producción</p>'}
+                </div>
+            </div>`;
+        });
+
+        html += '</div>';
+        contenedor.innerHTML = html;
+        contenedor.style.gridTemplateColumns = '1fr';
+
+    } catch (e) {
+        console.error('Error cargando órdenes:', e);
+        contenedor.innerHTML = '<p style="color:red; text-align:center; padding:20px;">❌ Error al cargar las órdenes de producción.</p>';
+    }
+}
+
+/* --- 3. AGREGAR NOTA / INCIDENCIA A UN TICKET --- */
+async function abrirNotaOrden(ticketId) {
+    if (!ticketId) {
+        return Swal.fire('Sin ticket', 'Este ítem no tiene ticket de producción activo.', 'info');
+    }
+
+    const { value: nota } = await Swal.fire({
+        title: '📝 Agregar nota / incidencia',
+        html: `
+            <div style="text-align:left;">
+                <div style="background:#fef3c7; border-left:4px solid #f59e0b; padding:10px; border-radius:6px; margin-bottom:15px; font-size:12px; color:#78350f;">
+                    La nota quedará registrada con fecha, hora y tu nombre en el historial del ticket.
+                </div>
+                <textarea id="swal-nota-input" class="swal2-input" 
+                    style="width:100%; height:90px; resize:vertical; font-size:13px; margin:0; padding:10px; box-sizing:border-box;"
+                    placeholder="Ej: Material llegó con defecto, se coordinó cambio. / El maestro tuvo que ausentarse..."></textarea>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonColor: '#0f172a',
+        cancelButtonText: 'Cancelar',
+        confirmButtonText: '<i class="fa-solid fa-save"></i> Guardar nota',
+        preConfirm: () => {
+            const val = document.getElementById('swal-nota-input').value.trim();
+            if (!val) { Swal.showValidationMessage('Escribe algo antes de guardar.'); return false; }
+            return val;
+        }
+    });
+
+    if (!nota) return;
+
+    try {
+        Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res = await fetch(`${API_URL}/api/taller/ticket/${ticketId}/nota`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nota,
+                usuario_nombre: usuarioActivo ? usuarioActivo.nombre : 'Usuario'
+            })
+        });
+        const data = await res.json();
+        if (data.exito) {
+            Swal.fire('¡Nota guardada!', 'La incidencia quedó registrada en el ticket.', 'success');
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo guardar la nota.', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
+    }
+}
