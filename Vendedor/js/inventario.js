@@ -141,7 +141,7 @@ function _htmlEsqueleto() {
 
 /* ─── Permisos ──────────────────────────────────────────────── */
 function _puedeEditarInv() {
-    const rol = window.usuarioActivo?.rol || '';
+    const rol = usuarioActivo?.rol || '';
     return ['Admin', 'Jefe_Taller', 'JEFE_TALLER'].includes(rol);
 }
 
@@ -535,9 +535,9 @@ async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
                 estado_nuevo:    estadoNuevo,
                 sede_destino_id: datos.sede_destino_id || null,
                 tipo_evento:     tipoEvento,
-                usuario_id:      window.usuarioActivo?.id,
-                usuario_rol:     window.usuarioActivo?.rol,
-                usuario_nombre:  window.usuarioActivo?.nombre,
+                usuario_id:      usuarioActivo?.id,
+                usuario_rol:     usuarioActivo?.rol,
+                usuario_nombre:  usuarioActivo?.nombre,
                 notas:           datos.notas,
             })
         });
@@ -729,9 +729,9 @@ async function _invGuardarProducto() {
                 observaciones: document.getElementById('nf-obs')?.value,
                 sede_id:    parseInt(sedeId),
                 costo_ingreso: parseFloat(document.getElementById('nf-costo')?.value) || null,
-                usuario_id: window.usuarioActivo?.id,
-                usuario_rol: window.usuarioActivo?.rol,
-                usuario_nombre: window.usuarioActivo?.nombre,
+                usuario_id: usuarioActivo?.id,
+                usuario_rol: usuarioActivo?.rol,
+                usuario_nombre: usuarioActivo?.nombre,
             })
         });
         const d = await res.json();
@@ -769,9 +769,9 @@ async function _invGuardarPieza() {
                 cantidad: parseInt(document.getElementById('npf-cantidad')?.value) || 1,
                 costo_ingreso: parseFloat(document.getElementById('npf-costo')?.value) || null,
                 proveedor: document.getElementById('npf-proveedor')?.value,
-                usuario_id: window.usuarioActivo?.id,
-                usuario_rol: window.usuarioActivo?.rol,
-                usuario_nombre: window.usuarioActivo?.nombre,
+                usuario_id: usuarioActivo?.id,
+                usuario_rol: usuarioActivo?.rol,
+                usuario_nombre: usuarioActivo?.nombre,
             })
         });
         const d = await res.json();
