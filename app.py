@@ -137,6 +137,53 @@ def enviar_notificacion_venta(correo_destino, codigo_venta, cliente):
 # 0. SERVIDOR DE IMÁGENES Y BIENVENIDA
 # ==========================================
 
+# ──────────────────────────────────────────
+# RUTAS PÚBLICAS DE SEDES (antes en kardex_bp con prefijo /api/kardex — incorrecto)
+# El frontend llama /api/sedes y /api/inicializar-sedes
+# ──────────────────────────────────────────
+
+@app.route('/api/sedes', methods=['GET'])
+def obtener_sedes():
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("SELECT id, nombre, tipo FROM sedes ORDER BY id;")
+        sedes = [{'id': s[0], 'nombre': s[1], 'tipo': s[2]} for s in cursor.fetchall()]
+        return jsonify(sedes), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@app.route('/api/inicializar-sedes', methods=['POST'])
+def inicializar_sedes():
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("SELECT COUNT(*) FROM sedes;")
+        if cursor.fetchone()[0] > 0:
+            return jsonify({'mensaje': 'Las sedes ya fueron inicializadas previamente.'}), 200
+
+        sedes_base = [
+            ('Tienda del Medio',    'Tienda'),
+            ('Tienda Grande',       'Tienda'),
+            ('Tienda de Plaza Vea', 'Tienda'),
+            ('Tienda del Sol',      'Tienda'),
+            ('Taller',              'Taller + Tienda'),
+        ]
+        for nombre, tipo in sedes_base:
+            cursor.execute("INSERT INTO sedes (nombre, tipo) VALUES (%s, %s);", (nombre, tipo))
+        conexion.commit()
+        return jsonify({'mensaje': 'Las 5 sedes operativas han sido creadas con éxito.'}), 201
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
 @app.route('/uploads/<filename>')
 def mostrar_foto(filename):
     """Ruta de compatibilidad para fotos antiguas guardadas localmente."""
