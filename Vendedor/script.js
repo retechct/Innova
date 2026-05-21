@@ -632,12 +632,14 @@ function handleNextStep() {
         const nombre = document.getElementById('c-nombre').value;
         const dni = document.getElementById('c-dni').value;
         const celular = document.getElementById('c-celular').value;
+        const empresaCli = document.getElementById('c-empresa')?.value || 'Particular';
+        const direccion = document.getElementById('c-direccion').value;
 
         // 2. VALIDACIÓN: Obligamos a que DNI y Celular estén llenos
-        if (!codigo || !nombre || !dni || !celular) {
+        if (!codigo || !nombre || !dni || !celular || !direccion) {
             return Swal.fire({
                 title: 'Faltan Datos',
-                text: 'El N° de Contrato, Nombre, DNI y Celular son obligatorios para poder generar el contrato.',
+                text: 'Contrato, Nombre, DNI, Celular y Dirección son obligatorios.',
                 icon: 'warning',
                 confirmButtonColor: '#d4af37'
             });
@@ -1178,6 +1180,11 @@ async function guardarVenta() {
         metodo_pago: metodosTexto,
         monto_adelanto: adelantoTotal,
         monto_total: total,
+        moneda: document.getElementById('v-moneda').value,
+        tipo_cambio: parseFloat(document.getElementById('v-tipo-cambio').value) || 1.0,
+        tipo_comprobante: document.getElementById('c-comprobante-tipo').value,
+        sede: usuarioActivo.tienda, // Captura la sede desde el login
+        empresa_cliente: document.getElementById('c-empresa')?.value || 'Particular',
         
         // --- AQUÍ ESTÁ LA CONEXIÓN CON EL LOGIN ---
         vendedor_id: usuarioActivo.id,

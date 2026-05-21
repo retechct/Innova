@@ -70,7 +70,9 @@ function configurarInterfazPorRol() {
         if (btnLogistica) btnLogistica.style.display = 'flex'; // LOGÍSTICA EXTERNA
         if (btnUsuarios) btnUsuarios.style.display = 'flex';   // GESTIÓN DE PERSONAL
         if (btnProv) btnProv.style.display = 'flex';         // PROVEEDORES
-        if (btnContratos) btnContratos.style.display = 'block'; // NUEVO ACCESO: REPORTES Y VENTAS
+    }
+    if (usuarioActivo.rol === 'Admin') {
+        if (btnContratos) btnContratos.style.display = 'block'; // Solo Admin ve reportes globales
     }
 }
 
@@ -104,12 +106,28 @@ async function loadMisPedidos() {
             <div class="pedido-card" onclick="abrirDetallePedido('${v.codigo}')" style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border:1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; transition: 0.2s;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <span style="font-weight:800; color:#1a1a1a;">#${v.codigo}</span>
-                    <small style="color:#d4af37; font-weight:800;">Entrega: ${v.entrega}</small>
+                    <small style="color:#d4af37; font-weight:800;">${v.estado.toUpperCase()}</small>
                 </div>
                 <p style="font-weight:700; margin:0 0 10px 0; font-size:14px; color:#1e293b;">${v.cliente.toUpperCase()}</p>
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <span style="font-weight:900; color:#10b981; font-size:13px;">S/ ${v.monto_total.toFixed(2)}</span>
+                    <span style="font-size:10px; color:#64748b;">Entrega: <b>${v.entrega}</b></span>
+                </div>
+
                 <div style="font-size:10px; font-weight:bold; color:gray; margin-bottom:5px;">PROGRESO: ${v.progreso}%</div>
                 <div style="width:100%; height:8px; background:#f1f5f9; border-radius:4px; overflow:hidden;">
                     <div style="width:${v.progreso}%; height:100%; background:linear-gradient(90deg, #d4af37, #b8860b);"></div>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:15px;">
+                    <button onclick="abrirDetallePedido('${v.codigo}')" style="flex:1; background:#0f172a; color:white; border:none; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
+                        <i class="fa-solid fa-eye"></i> Ver Ficha
+                    </button>
+                    ${(v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
+                    <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.monto_total})" style="flex:1; background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
+                        <i class="fa-solid fa-tag"></i> Cambiar Precio
+                    </button>` : ''}
                 </div>
             </div>
         `).join('');
@@ -528,7 +546,7 @@ tbody.innerHTML = lista.map((v, i) => `
                 <i class="fa-solid fa-clock-rotate-left"></i>
             </button>
             ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
-            <button onclick="solicitarCambioPrecio('${v.codigo}', ${v.total})"
+            <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
                     title="Proponer cambio de precio"
                     style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
                 <i class="fa-solid fa-tag"></i>

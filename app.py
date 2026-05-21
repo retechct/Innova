@@ -271,8 +271,8 @@ def guardar_venta():
                 codigo_venta, nombre_cliente, dni_cliente, celular_cliente,
                 direccion_cliente, vendedor_id, fecha_emision, fecha_entrega,
                 monto_total, vendedor_nombre, moneda, tipo_cambio, tipo_comprobante,
-                empresa_ruc, empresa_pago
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
+                empresa_ruc, empresa_pago, sede, nombre_empresa_cliente
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
         """, (
             datos['codigo'],          datos['cliente'],
             datos.get('dni'),         datos.get('celular'),
@@ -284,7 +284,9 @@ def guardar_venta():
             datos.get('tipo_cambio', 1.00),
             datos.get('tipo_comprobante', 'Boleta'),
             datos.get('empresa_ruc'),        # RUC de la empresa del vendedor (viene del login)
-            empresa_pago_resumen             # Empresa destino del primer pago (resumen)
+            empresa_pago_resumen,             # Empresa destino del primer pago (resumen)
+            datos.get('sede', 'Sede Central'),
+            datos.get('empresa_cliente', 'Particular')
         ))
         venta_id = cursor.fetchone()[0]
         
@@ -512,12 +514,14 @@ def obtener_mis_ventas(vendedor_id):
                 v.nombre_cliente,
                 v.fecha_entrega,
                 COALESCE(COUNT(t.id), 0)                                              AS total,
-                COALESCE(SUM(CASE WHEN t.estado_ticket = 'Terminado' THEN 1 ELSE 0 END), 0) AS terminados
+                COALESCE(SUM(CASE WHEN t.estado_ticket = 'Terminado' THEN 1 ELSE 0 END), 0) AS terminados,
+                v.monto_total,
+                COALESCE(v.estado_general, 'Pendiente') AS estado
             FROM ventas v
             LEFT JOIN items_venta i        ON v.id    = i.venta_id
             LEFT JOIN tickets_produccion t ON i.id    = t.item_id
             WHERE v.vendedor_id = %s
-            GROUP BY v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega
+            GROUP BY v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega, v.monto_total, v.estado_general
             ORDER BY v.id DESC;
         """, (vendedor_id,))
 
@@ -530,7 +534,9 @@ def obtener_mis_ventas(vendedor_id):
                 "codigo":   v[0],
                 "cliente":  v[1],
                 "entrega":  v[2].strftime('%d/%m/%Y') if v[2] else "S/F",
-                "progreso": porcentaje
+                "progreso": porcentaje,
+                "monto_total": float(v[5]),
+                "estado":   v[6]
             })
         return jsonify(res)
     except Exception as ex:
@@ -2286,10 +2292,11 @@ def listar_ventas():
                 v.monto_total,
                 COALESCE(pg.total_pagado, 0) AS monto_adelanto,
                 COALESCE(v.monto_total, 0) - COALESCE(pg.total_pagado, 0) AS saldo,
-                COALESCE(v.estado_general, 'En Producción') AS estado,
+                COALESCE(v.estado_general, 'Pendiente') AS estado,
                 v.fecha_entrega,
                 v.vendedor_nombre,
-                COALESCE(itm.productos, '') AS productos
+                COALESCE(itm.productos, '') AS productos,
+                v.sede
             FROM ventas v
             LEFT JOIN (
                 SELECT venta_id, SUM(monto_bruto) AS total_pagado
@@ -2310,10 +2317,11 @@ def listar_ventas():
             'total':         float(f[2]) if f[2] else 0,
             'adelanto':      float(f[3]) if f[3] else 0,
             'saldo':         float(f[4]) if f[4] else 0,
-            'estado':        f[5] or 'Pendiente',
+            'estado':        f[5],
             'fecha_entrega': f[6].strftime('%Y-%m-%d') if f[6] else None,
             'vendedor':      f[7],
             'productos':     f[8],
+            'sede':          f[9]
         } for f in filas]
         
         return jsonify(resultado), 200

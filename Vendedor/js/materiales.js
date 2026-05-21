@@ -230,7 +230,7 @@ async function guardarNuevoMaterial() {
     }
 
     // Detectamos si el guardado actual es una sugerencia de vendedor
-    const esSugerencia = (destinoActual === 'sugerencia' || (usuarioActivo && usuarioActivo.role === 'Vendedor'));
+    const esSugerencia = (destinoActual === 'sugerencia' || (usuarioActivo && usuarioActivo.rol === 'Vendedor'));
 
     const formData = new FormData();
     formData.append('foto', fotoInput.files[0]);
