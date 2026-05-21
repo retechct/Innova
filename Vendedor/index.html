@@ -254,7 +254,47 @@
         </div>
 
         <div id="lista-aprobacion-pendientes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+        </div>
+
+        <!-- SECCIÓN: CAMBIOS DE PRECIO PENDIENTES -->
+        <div style="margin-top: 35px; border-top: 2px solid #fef3c7; padding-top: 20px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+                <i class="fa-solid fa-tags" style="color:#d97706; font-size:18px;"></i>
+                <h3 style="margin:0; font-weight:800; color:#0f172a; font-size:16px;">SOLICITUDES DE CAMBIO DE PRECIO</h3>
+                <span id="badge-cambios-precio" style="background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 10px; border-radius:20px; display:none;"></span>
             </div>
+            <div id="lista-cambios-precio" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:14px;">
+                <p style="color:#94a3b8; font-size:13px;">Sin solicitudes pendientes.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Proponer cambio de precio -->
+    <div id="modal-cambio-precio" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9000; align-items:center; justify-content:center;">
+        <div style="background:white; border-radius:16px; padding:28px; width:90%; max-width:420px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="margin:0; font-weight:800; color:#0f172a;"><i class="fa-solid fa-tag" style="color:#d97706;"></i> Proponer cambio de precio</h3>
+                <button onclick="cerrarModalCambioPrecio()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#94a3b8;">✕</button>
+            </div>
+            <div style="background:#fef3c7; border-radius:8px; padding:12px; margin-bottom:16px; font-size:13px; color:#78350f;">
+                <strong id="cambio-precio-codigo-label"></strong>
+                <div style="margin-top:4px;">Precio actual: <strong id="cambio-precio-actual-label" style="color:#d97706;"></strong></div>
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:6px;">NUEVO PRECIO (S/)</label>
+                <input type="number" id="input-precio-nuevo" class="form-input" min="1" step="0.01" placeholder="0.00" style="font-size:18px; font-weight:800; color:#065f46;">
+            </div>
+            <div style="margin-bottom:20px;">
+                <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:6px;">MOTIVO DEL CAMBIO <span style="color:#ef4444;">*</span></label>
+                <textarea id="input-motivo-precio" class="form-input" rows="3" placeholder="Ej: Cambio de tela solicitado por el cliente, incremento en precio de materiales..."></textarea>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button onclick="cerrarModalCambioPrecio()" style="flex:1; padding:12px; border:1px solid #e2e8f0; border-radius:8px; background:white; cursor:pointer; font-weight:700; color:#64748b;">Cancelar</button>
+                <button onclick="enviarCambioPrecio()" style="flex:2; padding:12px; background:#d97706; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:800; font-size:14px;">
+                    <i class="fa-solid fa-paper-plane"></i> Enviar solicitud
+                </button>
+            </div>
+        </div>
     </div>
 
     <div id="view-logistica" class="view-section" style="display:none; padding: 20px;">

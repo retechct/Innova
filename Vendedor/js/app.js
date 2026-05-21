@@ -89,7 +89,9 @@ async function loadMisPedidos() {
     container.innerHTML = `<p style="text-align:center; padding:20px; color:gray;">Cargando seguimiento...</p>`;
 
     try {
-        const idVendedor = typeof usuarioActivo !== 'undefined' && usuarioActivo ? usuarioActivo.id : 1; 
+       // ✅ CORRECCIÓN:
+        if (!usuarioActivo) return; // salir sin hacer el fetch
+        const idVendedor = usuarioActivo.id;
         const res = await fetch(`${API_URL}/api/mis-ventas/${idVendedor}`);
         const data = await res.json();
         
@@ -508,11 +510,17 @@ function renderContratos(lista) {
             <td style="padding:11px 14px; color:#ef4444; font-weight:700; display:none;" class="col-extra">S/ ${parseFloat(v.saldo||0).toFixed(2)}</td>
             <td style="padding:11px 14px;">${ec(v)}</td>
             <td style="padding:11px 14px; font-size:12px; color:#64748b;">${v.fecha_entrega || '—'}</td>
-            <td style="padding:11px 14px;">
+            <td style="padding:11px 14px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
                 <button onclick="verDetalleContrato('${v.codigo}')"
                         style="background:#0f172a; color:white; border:none; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
                     <i class="fa-solid fa-eye"></i> Ver
                 </button>
+                ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
+                <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
+                        title="Proponer cambio de precio"
+                        style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
+                    <i class="fa-solid fa-tag"></i>
+                </button>` : ''}
             </td>
         </tr>`).join('');
 
@@ -536,15 +544,195 @@ function renderContratos(lista) {
                 </div>
             </div>
             <button onclick="verDetalleContrato('${v.codigo}')"
-                    style="width:100%; background:#0f172a; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">
+                    style="width:100%; background:#0f172a; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; margin-bottom:${(usuarioActivo?.rol==='Vendedor'&&v.estado!=='Entregado'&&v.estado!=='Cancelado')?'8px':'0'};">
                 <i class="fa-solid fa-eye"></i> Ver contrato
             </button>
+            ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
+            <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
+                    style="width:100%; background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">
+                <i class="fa-solid fa-tag"></i> Proponer cambio de precio
+            </button>` : ''}
         </div>`).join('');
 }
 
 function verDetalleContrato(codigo) {
     // Abre el modal de detalle de pedido que ya existe en el sistema
     abrirDetallePedido(codigo);
+}
+
+// ==========================================
+// MÓDULO: CAMBIO DE PRECIO
+// ==========================================
+let _cambioPrecioActual = null; // { codigo, precioActual }
+
+function abrirModalCambioPrecio(codigo, precioActual) {
+    _cambioPrecioActual = { codigo, precioActual };
+    document.getElementById('cambio-precio-codigo-label').textContent = `Contrato #${codigo}`;
+    document.getElementById('cambio-precio-actual-label').textContent = `S/ ${parseFloat(precioActual).toFixed(2)}`;
+    document.getElementById('input-precio-nuevo').value = '';
+    document.getElementById('input-motivo-precio').value = '';
+    document.getElementById('modal-cambio-precio').style.display = 'flex';
+}
+
+function cerrarModalCambioPrecio() {
+    document.getElementById('modal-cambio-precio').style.display = 'none';
+    _cambioPrecioActual = null;
+}
+
+async function enviarCambioPrecio() {
+    if (!_cambioPrecioActual) return;
+    const precioNuevo = parseFloat(document.getElementById('input-precio-nuevo').value);
+    const motivo      = document.getElementById('input-motivo-precio').value.trim();
+
+    if (!precioNuevo || precioNuevo <= 0) {
+        return Swal.fire('Campo requerido', 'Ingresa el nuevo precio.', 'warning');
+    }
+    if (!motivo) {
+        return Swal.fire('Campo requerido', 'Debes ingresar el motivo del cambio.', 'warning');
+    }
+    if (precioNuevo === _cambioPrecioActual.precioActual) {
+        return Swal.fire('Sin cambio', 'El precio nuevo es igual al actual.', 'info');
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/api/ventas/${_cambioPrecioActual.codigo}/proponer-cambio-precio`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                precio_nuevo:    precioNuevo,
+                motivo:          motivo,
+                vendedor_id:     usuarioActivo?.id,
+                vendedor_nombre: usuarioActivo?.nombre
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error desconocido');
+
+        cerrarModalCambioPrecio();
+        Swal.fire('✅ Enviado', 'Tu solicitud fue enviada al administrador para aprobación.', 'success');
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function cargarCambiosPrecioPendientes() {
+    const contenedor = document.getElementById('lista-cambios-precio');
+    const badge      = document.getElementById('badge-cambios-precio');
+    if (!contenedor) return;
+
+    try {
+        const res  = await fetch(`${API_URL}/api/cambios-precio/pendientes`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        if (data.length === 0) {
+            contenedor.innerHTML = '<p style="color:#94a3b8; font-size:13px;">Sin solicitudes pendientes.</p>';
+            badge.style.display = 'none';
+            return;
+        }
+
+        badge.textContent     = `${data.length} pendiente${data.length > 1 ? 's' : ''}`;
+        badge.style.display   = 'inline-block';
+
+        contenedor.innerHTML = data.map(c => {
+            const diff      = c.precio_nuevo - c.precio_original;
+            const esSube    = diff > 0;
+            const diffLabel = `${esSube ? '▲' : '▼'} S/ ${Math.abs(diff).toFixed(2)}`;
+            const diffColor = esSube ? '#ef4444' : '#10b981';
+            return `
+            <div style="background:white; border:1px solid #fde68a; border-radius:12px; padding:16px; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                    <div>
+                        <span style="font-weight:900; color:#d97706; font-size:14px;">#${c.codigo_venta}</span>
+                        <span style="font-size:12px; color:#64748b; margin-left:8px;">${c.cliente}</span>
+                    </div>
+                    <span style="font-size:11px; font-weight:700; color:${diffColor}; background:${esSube?'#fef2f2':'#f0fdf4'}; padding:2px 8px; border-radius:20px;">${diffLabel}</span>
+                </div>
+                <div style="display:flex; gap:10px; margin-bottom:10px; font-size:13px;">
+                    <div style="flex:1; text-align:center; background:#f8fafc; border-radius:8px; padding:8px;">
+                        <div style="font-size:10px; color:#64748b; font-weight:700;">ACTUAL</div>
+                        <div style="font-weight:900; color:#0f172a;">S/ ${c.precio_original.toFixed(2)}</div>
+                    </div>
+                    <div style="flex:1; text-align:center; background:#fffbeb; border-radius:8px; padding:8px;">
+                        <div style="font-size:10px; color:#92400e; font-weight:700;">PROPUESTO</div>
+                        <div style="font-weight:900; color:#d97706;">S/ ${c.precio_nuevo.toFixed(2)}</div>
+                    </div>
+                </div>
+                <div style="background:#f8fafc; border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px; color:#475569;">
+                    <strong>Motivo:</strong> ${c.motivo}
+                </div>
+                <div style="font-size:11px; color:#94a3b8; margin-bottom:12px;">
+                    Solicitado por <strong>${c.vendedor}</strong> · ${c.fecha_solicitud}
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="resolverCambioPrecio(${c.id}, 'aprobar')"
+                            style="flex:1; padding:9px; background:#065f46; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:800; font-size:12px;">
+                        <i class="fa-solid fa-check"></i> Aprobar
+                    </button>
+                    <button onclick="resolverCambioPrecio(${c.id}, 'rechazar')"
+                            style="flex:1; padding:9px; background:#7f1d1d; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:800; font-size:12px;">
+                        <i class="fa-solid fa-xmark"></i> Rechazar
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+
+    } catch (e) {
+        contenedor.innerHTML = `<p style="color:#ef4444; font-size:13px;">Error: ${e.message}</p>`;
+    }
+}
+
+async function resolverCambioPrecio(cambioId, accion) {
+    const esAprobar = accion === 'aprobar';
+    let notasAdmin  = '';
+
+    if (!esAprobar) {
+        const { value, isConfirmed } = await Swal.fire({
+            title: 'Rechazar solicitud',
+            input: 'textarea',
+            inputLabel: 'Motivo del rechazo (opcional)',
+            inputPlaceholder: 'Ej: El precio ya fue acordado con el cliente...',
+            showCancelButton: true,
+            confirmButtonText: 'Rechazar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#991b1b',
+        });
+        if (!isConfirmed) return;
+        notasAdmin = value || '';
+    } else {
+        const confirm = await Swal.fire({
+            title: '¿Aprobar cambio de precio?',
+            text: 'El monto total de la venta se actualizará inmediatamente.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, aprobar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#065f46',
+        });
+        if (!confirm.isConfirmed) return;
+    }
+
+    try {
+        const url = `${API_URL}/api/cambios-precio/${cambioId}/${esAprobar ? 'aprobar' : 'rechazar'}`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                admin_id:     usuarioActivo?.id,
+                admin_nombre: usuarioActivo?.nombre,
+                notas_admin:  notasAdmin
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error desconocido');
+
+        Swal.fire('✅ Listo', data.mensaje, 'success');
+        cargarCambiosPrecioPendientes();
+        if (typeof loadContratos === 'function') loadContratos();
+
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
 }
 
 function descargarExcelContratos() {

@@ -1361,6 +1361,9 @@ async function cargarGestorAprobacion() {
     if (!contenedor) return;
     contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; grid-column: 1/-1;">Sincronizando modelos e insumos pendientes...</p>';
 
+    // Cargar cambios de precio pendientes en paralelo
+    cargarCambiosPrecioPendientes();
+
     try {
         // Ejecutamos ambas consultas simultáneamente
         const [resMuebles, resInsumos] = await Promise.all([

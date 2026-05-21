@@ -285,7 +285,8 @@ async function guardarNuevoMaterial() {
         endpointUrl = `${API_URL}/api/sugerencias`;
         formData.append('nombre', nombreInsumoCalculado);
         formData.append('tipo', tipoActual);
-        formData.append('usuario_id', usuarioActivo ? usuarioActivo.id : 1);
+        if (!usuarioActivo) return Swal.fire('Sesión', 'Debes iniciar sesión.', 'warning');
+        formData.append('usuario_id', usuarioActivo.id)
         formData.append('datos_json', JSON.stringify(datosObj));
     } else {
         // Flujo tradicional Admin Directo

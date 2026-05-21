@@ -2287,5 +2287,264 @@ def listar_ventas():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
+# ==========================================
+# MÓDULO: CAMBIO DE PRECIO CON HISTORIAL
+# ==========================================
+
+def _crear_tabla_historial_precios(cursor):
+    """Crea la tabla si todavía no existe (auto-migración segura)."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS historial_precios (
+            id               SERIAL PRIMARY KEY,
+            venta_id         INTEGER       NOT NULL,
+            codigo_venta     VARCHAR(50),
+            precio_original  NUMERIC(10,2) NOT NULL,
+            precio_nuevo     NUMERIC(10,2) NOT NULL,
+            motivo           TEXT          NOT NULL,
+            vendedor_id      INTEGER,
+            vendedor_nombre  VARCHAR(100),
+            admin_id         INTEGER,
+            admin_nombre     VARCHAR(100),
+            estado           VARCHAR(20)   DEFAULT 'Pendiente',
+            notas_admin      TEXT,
+            fecha_solicitud  TIMESTAMP     DEFAULT NOW(),
+            fecha_resolucion TIMESTAMP
+        );
+    """)
+
+
+@app.route('/api/ventas/<codigo>/proponer-cambio-precio', methods=['POST'])
+def proponer_cambio_precio(codigo):
+    """
+    Vendedor propone un cambio de precio en una venta activa.
+    Body: { precio_nuevo, motivo, vendedor_id, vendedor_nombre }
+    """
+    data = request.json
+    precio_nuevo     = data.get('precio_nuevo')
+    motivo           = data.get('motivo', '').strip()
+    vendedor_id      = data.get('vendedor_id')
+    vendedor_nombre  = data.get('vendedor_nombre', '')
+
+    if not precio_nuevo or not motivo:
+        return jsonify({'error': 'precio_nuevo y motivo son obligatorios'}), 400
+    if float(precio_nuevo) <= 0:
+        return jsonify({'error': 'El precio nuevo debe ser mayor a 0'}), 400
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _crear_tabla_historial_precios(cursor)
+
+        # Verificar que la venta existe y obtener precio actual
+        cursor.execute("SELECT id, monto_total, estado_general FROM ventas WHERE codigo_venta = %s;", (codigo,))
+        venta = cursor.fetchone()
+        if not venta:
+            return jsonify({'error': 'Venta no encontrada'}), 404
+
+        venta_id, precio_original, estado = venta
+        if estado in ('Entregado', 'Cancelado'):
+            return jsonify({'error': f'No se puede modificar una venta en estado {estado}'}), 400
+
+        # Verificar que no haya ya una solicitud pendiente para esta venta
+        cursor.execute("""
+            SELECT id FROM historial_precios
+            WHERE venta_id = %s AND estado = 'Pendiente';
+        """, (venta_id,))
+        if cursor.fetchone():
+            return jsonify({'error': 'Ya existe una solicitud de cambio de precio pendiente para esta venta'}), 400
+
+        cursor.execute("""
+            INSERT INTO historial_precios
+                (venta_id, codigo_venta, precio_original, precio_nuevo,
+                 motivo, vendedor_id, vendedor_nombre, estado)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pendiente')
+            RETURNING id;
+        """, (venta_id, codigo, float(precio_original), float(precio_nuevo),
+              motivo, vendedor_id, vendedor_nombre))
+
+        nuevo_id = cursor.fetchone()[0]
+        conexion.commit()
+        return jsonify({'exito': True, 'id': nuevo_id,
+                        'mensaje': 'Solicitud enviada al administrador'}), 201
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@app.route('/api/cambios-precio/pendientes', methods=['GET'])
+def listar_cambios_precio_pendientes():
+    """Admin ve todas las solicitudes de cambio de precio pendientes."""
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _crear_tabla_historial_precios(cursor)
+
+        cursor.execute("""
+            SELECT
+                hp.id,
+                hp.codigo_venta,
+                hp.precio_original,
+                hp.precio_nuevo,
+                hp.motivo,
+                hp.vendedor_nombre,
+                hp.fecha_solicitud,
+                v.nombre_cliente,
+                COALESCE(v.estado_general, 'En Producción') AS estado_venta
+            FROM historial_precios hp
+            JOIN ventas v ON hp.venta_id = v.id
+            WHERE hp.estado = 'Pendiente'
+            ORDER BY hp.fecha_solicitud DESC;
+        """)
+        filas = cursor.fetchall()
+        resultado = [{
+            'id':               f[0],
+            'codigo_venta':     f[1],
+            'precio_original':  float(f[2]),
+            'precio_nuevo':     float(f[3]),
+            'motivo':           f[4],
+            'vendedor':         f[5],
+            'fecha_solicitud':  f[6].strftime('%d/%m/%Y %H:%M') if f[6] else '',
+            'cliente':          f[7],
+            'estado_venta':     f[8],
+        } for f in filas]
+        return jsonify(resultado), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@app.route('/api/cambios-precio/<int:cambio_id>/aprobar', methods=['POST'])
+def aprobar_cambio_precio(cambio_id):
+    """
+    Admin aprueba el cambio: actualiza monto_total en ventas y cierra la solicitud.
+    Body: { admin_id, admin_nombre }
+    """
+    data         = request.json
+    admin_id     = data.get('admin_id')
+    admin_nombre = data.get('admin_nombre', 'Admin')
+
+    try:
+        conexion = get_db_connection()
+        conexion.autocommit = False
+        cursor   = conexion.cursor()
+
+        cursor.execute("""
+            SELECT venta_id, precio_nuevo FROM historial_precios
+            WHERE id = %s AND estado = 'Pendiente';
+        """, (cambio_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Solicitud no encontrada o ya resuelta'}), 404
+
+        venta_id, precio_nuevo = row
+
+        # 1. Actualizar el total de la venta
+        cursor.execute("""
+            UPDATE ventas SET monto_total = %s WHERE id = %s;
+        """, (precio_nuevo, venta_id))
+
+        # 2. Cerrar la solicitud
+        cursor.execute("""
+            UPDATE historial_precios
+            SET estado = 'Aprobado',
+                admin_id = %s,
+                admin_nombre = %s,
+                fecha_resolucion = NOW()
+            WHERE id = %s;
+        """, (admin_id, admin_nombre, cambio_id))
+
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': 'Precio actualizado con éxito'}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@app.route('/api/cambios-precio/<int:cambio_id>/rechazar', methods=['POST'])
+def rechazar_cambio_precio(cambio_id):
+    """
+    Admin rechaza el cambio. El precio original queda intacto.
+    Body: { admin_id, admin_nombre, notas_admin }
+    """
+    data         = request.json
+    admin_id     = data.get('admin_id')
+    admin_nombre = data.get('admin_nombre', 'Admin')
+    notas        = data.get('notas_admin', '').strip()
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        cursor.execute("""
+            UPDATE historial_precios
+            SET estado = 'Rechazado',
+                admin_id = %s,
+                admin_nombre = %s,
+                notas_admin = %s,
+                fecha_resolucion = NOW()
+            WHERE id = %s AND estado = 'Pendiente';
+        """, (admin_id, admin_nombre, notas, cambio_id))
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Solicitud no encontrada o ya resuelta'}), 404
+
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': 'Solicitud rechazada'}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@app.route('/api/ventas/<codigo>/historial-precios', methods=['GET'])
+def historial_precios_venta(codigo):
+    """Devuelve el historial completo de cambios de precio de una venta."""
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _crear_tabla_historial_precios(cursor)
+
+        cursor.execute("""
+            SELECT precio_original, precio_nuevo, motivo, vendedor_nombre,
+                   admin_nombre, estado, notas_admin, fecha_solicitud, fecha_resolucion
+            FROM historial_precios
+            WHERE codigo_venta = %s
+            ORDER BY fecha_solicitud DESC;
+        """, (codigo,))
+        filas = cursor.fetchall()
+        resultado = [{
+            'precio_original':  float(f[0]),
+            'precio_nuevo':     float(f[1]),
+            'motivo':           f[2],
+            'vendedor':         f[3],
+            'admin':            f[4],
+            'estado':           f[5],
+            'notas_admin':      f[6],
+            'fecha_solicitud':  f[7].strftime('%d/%m/%Y %H:%M') if f[7] else '',
+            'fecha_resolucion': f[8].strftime('%d/%m/%Y %H:%M') if f[8] else '',
+        } for f in filas]
+        return jsonify(resultado), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
