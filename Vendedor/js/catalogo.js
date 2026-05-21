@@ -1,9 +1,16 @@
 // === MÓDULO: Catálogo y configuradores de muebles ===
+
+// ─────────────────────────────────────────────────────────────────────────────
+// renderGrid — VERSIÓN CON STOCK REAL
+//   · Muestra la cantidad disponible en el badge de la tarjeta de stock
+//   · Deshabilita "AÑADIR" cuando stock_cantidad llega a 0
+//   · Marca la tarjeta como AGOTADO con estilo visual diferente
+//   · En catálogo normal (a medida) el comportamiento es idéntico al anterior
+// ─────────────────────────────────────────────────────────────────────────────
 function renderGrid() {
     const grid = document.getElementById('product-grid');
     let filtered = [];
 
-    // Filtramos los productos según la vista seleccionada (ignorando plantillas)
     if (currentMode === 'stock') {
         filtered = allProducts.filter(p => p.en_stock === true && p.es_plantilla === false);
     } else if (currentMode === 'catalogo') {
@@ -15,19 +22,95 @@ function renderGrid() {
         return;
     }
 
-    grid.innerHTML = filtered.map(p => `
-        <div class="card">
-            <img src="${p.foto}" onerror="this.src='imagenes/sin_foto.jpg'">
+    grid.innerHTML = filtered.map(p => {
+        const qty          = typeof p.stock_cantidad === 'number' ? p.stock_cantidad : 1;
+        const agotado      = p.en_stock && qty <= 0;
+        const pocasUnidades = p.en_stock && qty > 0 && qty <= 3;
+
+        // ── Badge superior ─────────────────────────────────────────────────
+        let badge = '';
+        if (p.en_stock) {
+            if (agotado) {
+                badge = `<span class="status-badge" style="background:#fee2e2; color:#b91c1c;">
+                            <i class="fa-solid fa-ban" style="font-size:9px;"></i> AGOTADO
+                         </span>`;
+            } else {
+                const colorQty = pocasUnidades ? '#f59e0b' : 'var(--success)';
+                const bgQty    = pocasUnidades ? '#fffbeb' : '#f0fdf4';
+                badge = `<span class="status-badge" style="background:${bgQty}; color:${colorQty};">
+                            <i class="fa-solid fa-box" style="font-size:9px;"></i>
+                            ${pocasUnidades ? 'ÚLTIMAS' : 'DISPONIBLE'} · ${qty} ${qty === 1 ? 'und.' : 'unds.'}
+                         </span>`;
+            }
+        } else {
+            badge = `<span class="status-badge" style="background:#f1f5f9; color:var(--text-muted);">
+                        <i class="fa-solid fa-ruler-combined" style="font-size:9px;"></i> A MEDIDA
+                     </span>`;
+        }
+
+        // ── Botón de acción ────────────────────────────────────────────────
+        let btnHtml = '';
+        if (p.en_stock) {
+            if (agotado) {
+                btnHtml = `<button class="btn-action" disabled
+                               style="background:#f1f5f9; color:#94a3b8; cursor:not-allowed; width:100%; padding:12px; border:none; border-radius:12px; font-weight:800;">
+                               <i class="fa-solid fa-ban"></i> AGOTADO
+                           </button>`;
+            } else {
+                // Pasamos el id del producto de catálogo para que el backend
+                // pueda hacer el descuento correcto en stock_cantidad
+                btnHtml = `<button class="btn-action btn-primary"
+                               onclick="addStockItemToCart(${p.id}, '${p.nombre.replace(/'/g,"\\'")}', ${p.precio}, '${p.foto}')">
+                               <i class="fa-solid fa-bolt"></i> COMPRAR AHORA
+                           </button>`;
+            }
+        } else {
+            btnHtml = `<button class="btn-action btn-primary"
+                           onclick="addToCart('${p.nombre.replace(/'/g,"\\'")}', ${p.precio}, '${p.foto}', 'Venta Estándar')">
+                           <i class="fa-solid fa-plus"></i> AÑADIR AL CARRO
+                       </button>`;
+        }
+
+        // ── Overlay agotado ────────────────────────────────────────────────
+        const agotadoOverlay = agotado
+            ? `<div style="position:absolute; top:0; left:0; width:100%; height:100%;
+                           background:rgba(255,255,255,0.5); border-radius:18px; z-index:1;"></div>`
+            : '';
+
+        return `
+        <div class="card" style="position:relative; ${agotado ? 'opacity:0.75;' : ''}">
+            ${agotadoOverlay}
+            <img src="${p.foto}" onerror="this.src='imagenes/sin_foto.jpg'"
+                 style="${agotado ? 'filter:grayscale(60%);' : ''}">
             <div class="card-info">
-                ${p.en_stock ? '<span class="status-badge" style="background:#f0fdf4; color:var(--success)">ENTREGA INMEDIATA</span>' : '<span class="status-badge" style="background:#f1f5f9; color:var(--text-muted)">ESTÁNDAR</span>'}
+                ${badge}
                 <h4>${p.nombre}</h4>
                 <span class="price-tag">${p.precio > 0 ? 'S/ ' + p.precio.toFixed(2) : 'A Cotizar'}</span>
-                <button class="btn-action btn-primary" onclick="addToCart('${p.nombre}', ${p.precio}, '${p.foto}', 'Venta Estándar')">
-                    <i class="fa-solid fa-plus"></i> AÑADIR AL CARRO
-                </button>
+                ${btnHtml}
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
+}
+
+/**
+ * addStockItemToCart — wrapper para ítems de Stock en Tienda.
+ * Guarda el catalogo_id para que el backend descuente stock_cantidad.
+ */
+function addStockItemToCart(catalogoId, nombre, precio, foto) {
+    cart.push({
+        name:        nombre,
+        price:       precio,
+        img:         foto,
+        details:     'Venta Estándar',
+        componentes: {},
+        es_stock:    true,          // ← flag que llega al backend
+        catalogo_id: catalogoId     // ← id real en catalogo_productos
+    });
+    document.getElementById('cart-count').innerText = cart.length;
+    updateCartUI();
+
+    const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+    Toast.fire({ icon: 'success', title: `"${nombre}" añadido al carrito` });
 }
 
 /* --- LÓGICA DEL NUEVO MODAL DE SOFÁS --- */
@@ -124,7 +207,6 @@ function addCuerpoSofa(cuerpos) {
     
     div.onclick = function() { seleccionarPieza(this, cuerpos); };
 
-    // 4 inputs: L (Largo), A (Ancho), F (Fondo), H (Alto)
     div.innerHTML = `
         <span style="font-size:11px; font-weight:bold; width:35px; text-align:center;">${cuerpos} C.</span>
         <input type="number" class="form-input-sm c-largo" title="Largo" placeholder="L">
@@ -139,20 +221,13 @@ function addCuerpoSofa(cuerpos) {
 }
 
 function seleccionarPieza(elementoFila, tipoCuerpo) {
-    // 1. Quitar la clase activa (azul) de todas las filas
     document.querySelectorAll('.cuerpos-medida').forEach(el => el.classList.remove('activa'));
-    
-    // 2. Pintar de azul la fila que acabamos de tocar
     elementoFila.classList.add('activa');
     
-    // 3. Cambiar la imagen
     const imgPreview = document.getElementById('preview-sofa');
     
     if (imagenesSofa[tipoCuerpo]) {
         imgPreview.src = imagenesSofa[tipoCuerpo];
-        
-        // NUEVO: Si escribiste mal el nombre de la foto o es .png en vez de .jpg, 
-        // muestra una imagen de aviso en lugar del ícono roto.
         imgPreview.onerror = function() { 
             this.src = 'imagenes/sin_foto.jpg';
         };
@@ -236,7 +311,6 @@ function confirmarPersonalizadoSofa() {
         ${banquetaText}
     `;
 
-    // USAMOS TUS FUNCIONES EXACTAS PARA AGREGAR AL CARRO
     const componentes = {
         tela: document.getElementById('sku-tela').value,
         'cojin-entero': document.getElementById('sku-cojin-entero').value,
@@ -247,7 +321,6 @@ function confirmarPersonalizadoSofa() {
     addToCart(tempItem.name, precio, tempItem.img, specs, componentes);
     closeModal();
 
-    // NUEVO: PREGUNTAR SI QUIERE IR A PAGAR/IMPRIMIR
     Swal.fire({
         title: '¡Mueble Añadido al Carrito!',
         text: '¿Deseas ir al área de pago e imprimir el contrato ahora?',
@@ -259,7 +332,7 @@ function confirmarPersonalizadoSofa() {
         cancelButtonText: 'Seguir configurando'
     }).then((result) => {
         if (result.isConfirmed) {
-            toggleCart(); // Esto abre tu slider del carrito automáticamente
+            toggleCart();
         }
     });
 }
@@ -268,7 +341,6 @@ function confirmarPersonalizadoSofa() {
 /* ================================================================= */
 
 function confirmarComedor() {
-    // 1. Validaciones básicas
     const precio = parseFloat(document.getElementById('conf-precio-comedor').value);
     const skuTablero = document.getElementById('sku-tablero').value;
     const skuBaseMesa = document.getElementById('sku-base-mesa').value;
@@ -281,13 +353,11 @@ function confirmarComedor() {
         return Swal.fire('Faltan Datos', 'Debes buscar y seleccionar un Tablero, una Base de Mesa y un modelo de Silla.', 'warning');
     }
 
-    // 2. Extraer el formato y calcular la cantidad de sillas
     const formatoVal = document.getElementById('comedor-formato').value; 
     const esRectangular = formatoVal.startsWith('rect');
     const cantidadSillas = formatoVal.split('-')[1]; 
     const formatoTexto = esRectangular ? 'Rectangular' : 'Circular';
 
-    // 3. Extraer las medidas dinámicas
     let medidasTexto = "";
     if (esRectangular) {
         const largo = document.getElementById('med-tablero-largo')?.value || "0";
@@ -298,7 +368,6 @@ function confirmarComedor() {
         medidasTexto = `Diámetro ${diametro}cm`;
     }
 
-    // 4. Extraer nombres y características
     const nombreTablero = document.getElementById('search-tablero').value;
     const corte = document.getElementById('tablero-corte').value;
     const canto = document.getElementById('tablero-canto').value;
@@ -311,7 +380,6 @@ function confirmarComedor() {
     const nombreTelaSilla = document.getElementById('search-tela-silla').value;
     const skuTelaSilla = document.getElementById('sku-tela-silla').value;
 
-    // 5. ARMAR EL DESGLOSE FINAL (Igual que en el sofá)
     const specs = `
         <b>FORMATO:</b> ${formatoTexto} para ${cantidadSillas} personas<br>
         <b>MEDIDAS:</b> ${medidasTexto}<br>
@@ -321,7 +389,6 @@ function confirmarComedor() {
         <b>TAPIZ SILLAS:</b> ${skuTelaSilla ? `[SKU: ${skuTelaSilla}] ${nombreTelaSilla}` : "Sin tapiz específico"}
     `;
 
-    // 6. ENVIAR AL CARRITO USANDO TU FUNCIÓN UNIVERSAL
     const nombreProducto = `Comedor Pro ${formatoTexto} (${cantidadSillas} Sillas)`;
     const imagenUrl = document.getElementById('preview-comedor').src;
     
@@ -334,7 +401,6 @@ function confirmarComedor() {
 
     addToCart(nombreProducto, precio, imagenUrl, specs, componentes);
 
-    // 7. Cerrar modal y preguntar si quiere ir a pagar
     document.getElementById('modal-config-comedor').style.display = 'none';
     
     Swal.fire({
@@ -348,7 +414,7 @@ function confirmarComedor() {
         cancelButtonText: 'Seguir configurando'
     }).then((result) => {
         if (result.isConfirmed) {
-            toggleCart(); // Abre tu slider del carrito automáticamente
+            toggleCart();
         }
     });
 }
@@ -357,7 +423,6 @@ function confirmarComedor() {
 
 /* --- 6. CARRITO Y STEPPER --- */
 function openConfigComedor() {
-    // 1. Limpieza de fantasmas
     document.querySelectorAll('#modal-config-comedor input[type="text"], #modal-config-comedor input[type="number"], #modal-config-comedor input[type="hidden"]').forEach(inp => inp.value = '');
     document.querySelectorAll('#modal-config-comedor select').forEach(sel => sel.selectedIndex = 0);
     
@@ -368,9 +433,8 @@ function openConfigComedor() {
         if(searchEl) searchEl.value = '';
     });
 
-    // 2. Abrir Modal
     document.getElementById('modal-config-comedor').style.display = 'flex';
-    document.getElementById('comedor-formato').value = 'rect-6'; // Por defecto 6 sillas rect.
+    document.getElementById('comedor-formato').value = 'rect-6';
     actualizarVistaComedor();
 }
 
@@ -379,9 +443,8 @@ function actualizarVistaComedor() {
     const imgPreview = document.getElementById('preview-comedor');
     const medContainer = document.getElementById('medidas-comedor-container');
 
-    // Mapeo dinámico de inputs según la forma de la mesa
     if (formato.startsWith('rect')) {
-        imgPreview.src = `imagenes/comedor_${formato}.jpg`; // Ej: imagenes/comedor_rect-6.jpg
+        imgPreview.src = `imagenes/comedor_${formato}.jpg`;
         
         medContainer.innerHTML = `
             <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS DEL TABLERO RECTANGULAR (cm)</label>
@@ -391,7 +454,7 @@ function actualizarVistaComedor() {
             </div>
         `;
     } else if (formato.startsWith('circ')) {
-        imgPreview.src = `imagenes/comedor_${formato}.jpg`; // Ej: imagenes/comedor_circ-4.jpg
+        imgPreview.src = `imagenes/comedor_${formato}.jpg`;
         
         medContainer.innerHTML = `
             <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDA DEL TABLERO CIRCULAR (cm)</label>
@@ -401,7 +464,6 @@ function actualizarVistaComedor() {
         `;
     }
 
-    // Por si aún no has guardado las fotos en tu carpeta
     imgPreview.onerror = function() {
         this.src = 'imagenes/sin_foto.jpg';
     };
@@ -411,7 +473,6 @@ function actualizarVistaComedor() {
 /* --- 7. PYTHON GUARDAR --- */
 
 function openConfigCentro() {
-    // Limpieza de inputs
     document.querySelectorAll('#modal-config-centro input').forEach(inp => inp.value = '');
     document.getElementById('centro-notas').value = '';
     
@@ -429,23 +490,18 @@ function actualizarVistaCentro() {
     const tipo = document.getElementById('centro-tipo').value;
     const imgPreview = document.getElementById('preview-centro');
     
-    // Puedes agregar imágenes en tu carpeta como: mesa_centro.jpg, consola.jpg
     const imgMap = {
         'Mesa de Centro': 'imagenes/mesa_centro.jpg',
         'Consola': 'imagenes/consola.jpg',
         'Mesa Lateral': 'imagenes/mesa_lateral.jpg'
     };
     
-    // 1. Limpiamos cualquier error previo
     imgPreview.onerror = null; 
-    
-    // 2. Intentamos cargar la foto original
     imgPreview.src = imgMap[tipo];
     
-    // 3. Sistema a prueba de bucles infinitos
     imgPreview.onerror = function() {
-        this.onerror = null; // ¡Este es el freno de emergencia! Evita el bucle.
-        this.src = 'imagenes/sin_foto.jpg'; // Usamos tu imagen local en lugar de la web bloqueada
+        this.onerror = null;
+        this.src = 'imagenes/sin_foto.jpg';
     };
 }
 
@@ -458,11 +514,9 @@ function confirmarCentro() {
     if (!skuTablero || !skuBase) return Swal.fire('Faltan Datos', 'Debes seleccionar un Tablero y una Base.', 'warning');
 
     const tipo = document.getElementById('centro-tipo').value;
-    // Medidas Tablero
     const l = document.getElementById('centro-largo').value || '0';
     const a = document.getElementById('centro-ancho').value || '0';
     const e = document.getElementById('centro-espesor').value || '0';
-    // Medidas Base
     const hBase = document.getElementById('base-centro-altura').value || '0';
     const aBase = document.getElementById('base-centro-ancho').value || '0';
     
@@ -533,7 +587,7 @@ function actualizarVistaButaca() {
     
     imgPreview.onerror = function() {
         this.onerror = null; 
-        this.src = 'imagenes/sin_foto.jpg'; // Aseguramos el fallback local
+        this.src = 'imagenes/sin_foto.jpg';
     };
 }
 

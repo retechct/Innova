@@ -347,13 +347,16 @@ async function guardarVenta() {
     vendedor_nombre: usuarioActivo.nombre,
     empresa_ruc: usuarioActivo.ruc,
 
-    muebles: cart.map(c => ({ 
-        tipo: c.name, 
-        precio: c.price, 
-        tela: typeof c.details === 'object' ? JSON.stringify(c.details) : (c.details || "Venta Estándar"), 
-        foto: c.img,
-        componentes: c.componentes
+     muebles: cart.map(c => ({ 
+        tipo:          c.name, 
+        precio:        c.price, 
+        tela:          typeof c.details === 'object' ? JSON.stringify(c.details) : (c.details || "Venta Estándar"), 
+        foto:          c.img,
+        componentes:   c.componentes,
+        es_stock:      c.es_stock    || false,   // ← NUEVO: indica si es producto de stock
+        catalogo_id:   c.catalogo_id || null      // ← NUEVO: id en catalogo_productos
     }))
+ 
 };
     
     Swal.fire({ title: 'Guardando en Base de Datos...', didOpen: () => Swal.showLoading() });

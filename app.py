@@ -55,6 +55,11 @@ app.register_blueprint(kardex_bp, url_prefix='/api/kardex')
 from routes_taller import taller_bp, init_taller_pool
 app.register_blueprint(taller_bp)
 init_taller_pool()
+
+# --- IMPORTAR Y REGISTRAR LAS RUTAS DE INVENTARIO (MÓDULO 5) ---
+from routes_inventario import inventario_bp, init_inventario_pool
+app.register_blueprint(inventario_bp)
+init_inventario_pool()
 # ------------------------------------------------------------------
 # Rate limiter — protege el login contra ataques de fuerza bruta
 limiter = Limiter(
@@ -198,27 +203,29 @@ def bienvenida():
 # ==========================================
 # 1. MÓDULO: CATÁLOGO E INSUMOS
 # ==========================================
-
 @app.route('/api/catalogo', methods=['GET'])
 def obtener_catalogo():
     try:
         conexion = get_db_connection()
         cursor = conexion.cursor()
         cursor.execute("""
-            SELECT id, nombre_modelo, precio_base, foto_url, es_plantilla, en_stock
+            SELECT id, nombre_modelo, precio_base, foto_url,
+                   es_plantilla, en_stock,
+                   COALESCE(stock_cantidad, 0) AS stock_cantidad
             FROM catalogo_productos
         """)
         productos = cursor.fetchall()
-
+ 
         lista_productos = []
         for p in productos:
             lista_productos.append({
-                "id":          p[0],
-                "nombre":      p[1],
-                "precio":      float(p[2]),
-                "foto":        limpiar_foto(p[3]),
-                "es_plantilla": bool(p[4]),
-                "en_stock":    bool(p[5])
+                "id":             p[0],
+                "nombre":         p[1],
+                "precio":         float(p[2]),
+                "foto":           limpiar_foto(p[3]),
+                "es_plantilla":   bool(p[4]),
+                "en_stock":       bool(p[5]),
+                "stock_cantidad": int(p[6]),   # ← NUEVO
             })
         return jsonify(lista_productos)
     except Exception as ex:
@@ -515,14 +522,30 @@ def guardar_venta():
                 VALUES (%s, 'DESPACHO_CENTRAL', %s, 99)
             """, (item_id, estado_despacho))
 
-            # Descuento de stock
+# ── Descuento de stock_cantidad (productos de tienda en stock) ──────
+            # Si el ítem fue marcado como es_stock desde el frontend,
+            # descontamos 1 unidad y apagamos en_stock si llega a 0.
+            if m.get('es_stock') and m.get('catalogo_id'):
+                cursor.execute("""
+                    UPDATE catalogo_productos
+                    SET
+                        stock_cantidad = GREATEST(0, stock_cantidad - 1),
+                        en_stock       = CASE
+                                            WHEN stock_cantidad - 1 <= 0 THEN false
+                                            ELSE en_stock
+                                         END
+                    WHERE id = %s AND en_stock = true
+                """, (m['catalogo_id'],))
+ 
+            # ── Descuento de insumos por receta (productos a medida) ─────────
+            # (Solo aplica si el producto existe en catálogo con receta de insumos)
             cursor.execute("""
                 SELECT cp.id FROM catalogo_productos cp
                 WHERE cp.nombre_modelo = %s LIMIT 1;
             """, (m['tipo'],))
             prod_row = cursor.fetchone()
-            
-            if prod_row:
+ 
+            if prod_row and not m.get('es_stock'):
                 producto_id = prod_row[0]
                 cursor.execute("""
                     UPDATE inventario_insumos i

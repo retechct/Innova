@@ -40,6 +40,7 @@ function configurarInterfazPorRol() {
     
     const btnTaller = document.getElementById('btn-menu-taller');
     const btnInventario = document.getElementById('btn-menu-inventario');
+    const btnInvTienda = document.getElementById('btn-menu-inv-tienda');
     const btnGestor = document.getElementById('btn-menu-gestor');
     const btnAddProd = document.getElementById('btn-add-producto');
     const btnLogistica = document.getElementById('btn-menu-logistica');
@@ -50,6 +51,7 @@ function configurarInterfazPorRol() {
     // Ocultar todos los botones por defecto
     if (btnTaller) btnTaller.style.display = 'none';
     if (btnInventario) btnInventario.style.display = 'none';
+    if (btnInvTienda) btnInvTienda.style.display = 'none';
     if (btnGestor) btnGestor.style.display = 'none';
     if (btnAddProd) btnAddProd.style.display = 'none';
     if (btnLogistica) btnLogistica.style.display = 'none';
@@ -58,6 +60,11 @@ function configurarInterfazPorRol() {
     if (btnContratos) btnContratos.style.display = 'none'; // NUEVO ACCESO
 
     // Mostrar botones según el rol
+
+
+    if (['Admin','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol)) {
+    if (btnInvTienda) btnInvTienda.style.display = 'flex';
+    }
     if (['Admin', 'Jefe_Taller', 'JEFE_TALLER', 'Operario'].includes(usuarioActivo.rol)) {
         if (btnTaller) btnTaller.style.display = 'flex'; // GESTIÓN DE TALLER
     }
@@ -65,11 +72,11 @@ function configurarInterfazPorRol() {
         if (btnInventario) btnInventario.style.display = 'flex'; // CONTROL DE INSUMOS
     }
     if (usuarioActivo.rol === 'Admin') {
-        if (btnGestor) btnGestor.style.display = 'flex';     // GESTOR DE MODELOS
-        if (btnAddProd) btnAddProd.style.display = 'block'; // Añadir Producto (en catálogo)
-        if (btnLogistica) btnLogistica.style.display = 'flex'; // LOGÍSTICA EXTERNA
-        if (btnUsuarios) btnUsuarios.style.display = 'flex';   // GESTIÓN DE PERSONAL
-        if (btnProv) btnProv.style.display = 'flex';         // PROVEEDORES
+        if (btnGestor)    btnGestor.style.display    = 'flex';
+        // ↓ btnAddProd NO se muestra aquí; changeView lo controla según la vista activa
+        if (btnLogistica) btnLogistica.style.display = 'flex';
+        if (btnUsuarios)  btnUsuarios.style.display  = 'flex';
+        if (btnProv)      btnProv.style.display      = 'flex';
     }
     if (usuarioActivo.rol === 'Admin') {
         if (btnContratos) btnContratos.style.display = 'block'; // Solo Admin ve reportes globales
@@ -172,7 +179,8 @@ function changeView(view) {
         'pedidos': 'SEGUIMIENTO', 
         'taller': 'GESTIÓN DE TALLER' ,
         'inventario': 'CONTROL DE INSUMOS',
-        'contratos': 'REPORTES Y VENTAS' // <-- NUEVO
+        'contratos': 'REPORTES Y VENTAS' ,
+        'inv-tienda': 'INVENTARIO POR TIENDA'// <-- NUEVO
     };
     
     if (titles[view]) {
@@ -188,10 +196,21 @@ function changeView(view) {
     });
 
     // Mostrar la vista seleccionada
+    // ── Controlar visibilidad del botón "Añadir Producto" ──────────────
+    // Solo aparece en las vistas de catálogo/stock y solo para el Admin
+    const btnAddProdNav = document.getElementById('btn-add-producto');
+    if (btnAddProdNav) {
+        const esVistaProductos = (view === 'stock' || view === 'catalogo');
+        const esAdmin = usuarioActivo && usuarioActivo.rol === 'Admin';
+        btnAddProdNav.style.display = (esVistaProductos && esAdmin) ? 'block' : 'none';
+    }
+ 
+    // Mostrar la vista seleccionada
     if (view === 'stock' || view === 'catalogo') {
         document.getElementById('view-productos').style.display = 'block';
         renderGrid(); 
     }
+ 
     else if (view === 'contrato') {
         document.getElementById('view-plantillas').style.display = 'block';
     }
@@ -210,6 +229,10 @@ function changeView(view) {
     else if (view === 'inventario') {
         document.getElementById('view-inventario').style.display = 'block';
         cargarInventarioTaller(); 
+    }
+    else if (view === 'inv-tienda') {
+    const main = document.getElementById('main-content');
+    cargarVistaInventario();
     }
     else if (view === 'logistica') {
         document.getElementById('view-logistica').style.display = 'block';
