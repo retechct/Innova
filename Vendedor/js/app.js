@@ -143,29 +143,7 @@ async function loadMisPedidos() {
     }
 }
 
-// Función encargada de recopilar el rango de fechas y descargar el reporte Excel
-function descargarExcelContratos() {
-    const inicio = document.getElementById('excel-fecha-inicio').value;
-    const fin = document.getElementById('excel-fecha-fin').value;
-    
-    if (!inicio || !fin) {
-        Swal.fire('Atención', 'Por favor selecciona un rango de fechas.', 'warning');
-        return;
-    }
 
-    Swal.fire({
-        title: 'Generando Reporte...',
-        text: 'Por favor espera un momento.',
-        allowOutsideClick: false,
-        didOpen: () => {
-            Swal.showLoading();
-        }
-    });
-
-    const urlDescarga = `${API_URL}/api/ventas/exportar?inicio=${inicio}&fin=${fin}`;
-    window.open(urlDescarga, '_blank');
-    Swal.close();
-}
 /* ================================================================= */
 /* --- LOGÍSTICA EXTERNA (PROCURA) --- */
 /* ================================================================= */
@@ -347,6 +325,14 @@ function changeView(view) {
         'inv-tienda': 'INVENTARIO POR TIENDA'// <-- NUEVO
     };
     
+    // Restaurar el header estático si veníamos de inv-tienda
+    const mainTitleContainer = document.querySelector('main .view-title-container');
+    if (mainTitleContainer) mainTitleContainer.style.display = '';
+
+    // Limpiar el contenedor dinámico del inventario si existía
+    const invDinamico = document.getElementById('inv-dinamico-wrapper');
+    if (invDinamico) invDinamico.remove();
+
     if (titles[view]) {
         document.getElementById('view-title').innerText = titles[view];
     }
@@ -395,8 +381,9 @@ function changeView(view) {
         cargarInventarioTaller(); 
     }
     else if (view === 'inv-tienda') {
-    const main = document.getElementById('main-content');
-    cargarVistaInventario();
+        const mainTitleContainer = document.querySelector('main .view-title-container');
+        if (mainTitleContainer) mainTitleContainer.style.display = 'none';
+        cargarVistaInventario();
     }
     else if (view === 'logistica') {
         document.getElementById('view-logistica').style.display = 'block';
@@ -415,36 +402,6 @@ function changeView(view) {
         document.getElementById('view-title').innerText = 'GESTOR DE MODELOS (Make vs Buy)';
         cargarGestorAprobacion();
     }
-}
-function renderGrid() {
-    const grid = document.getElementById('product-grid');
-    let filtered = [];
-
-    // Filtramos los productos según la vista seleccionada (ignorando plantillas)
-    if (currentMode === 'stock') {
-        filtered = allProducts.filter(p => p.en_stock === true && p.es_plantilla === false);
-    } else if (currentMode === 'catalogo') {
-        filtered = allProducts.filter(p => p.en_stock === false && p.es_plantilla === false);
-    }
-
-    if (filtered.length === 0) {
-        grid.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: gray; padding: 40px;">No hay productos disponibles en esta categoría.</p>`;
-        return;
-    }
-
-    grid.innerHTML = filtered.map(p => `
-        <div class="card">
-            <img src="${p.foto}" onerror="this.src='imagenes/sin_foto.jpg'">
-            <div class="card-info">
-                ${p.en_stock ? '<span class="status-badge" style="background:#f0fdf4; color:var(--success)">ENTREGA INMEDIATA</span>' : '<span class="status-badge" style="background:#f1f5f9; color:var(--text-muted)">ESTÁNDAR</span>'}
-                <h4>${p.nombre}</h4>
-                <span class="price-tag">${p.precio > 0 ? 'S/ ' + p.precio.toFixed(2) : 'A Cotizar'}</span>
-                <button class="btn-action btn-primary" onclick="addToCart('${p.nombre}', ${p.precio}, '${p.foto}', 'Venta Estándar')">
-                    <i class="fa-solid fa-plus"></i> AÑADIR AL CARRO
-                </button>
-            </div>
-        </div>
-    `).join('');
 }
 
 /**
@@ -550,69 +507,6 @@ async function entrarAlSistema() {
         }
     } catch (error) {
         Swal.fire('Error', 'No hay conexión con el servidor Python.', 'error');
-    }
-}
-
-// ==========================================
-// FUNCIÓN PARA EDITAR PLANTILLAS GUARDADAS
-// ==========================================
-async function editarPlantilla(id) {
-    try {
-        Swal.fire({ title: 'Cargando diseño en el taller...', didOpen: () => Swal.showLoading() });
-        
-        const response = await fetch(`${API_URL}/api/creaciones`);
-        const creaciones = await response.json();
-        const plantilla = creaciones.find(c => c.id === id);
-
-        if (!plantilla || !plantilla.config_json) {
-            Swal.close();
-            return Swal.fire('Aviso', 'Esta plantilla se guardó antes de la actualización y no se puede editar automáticamente. Solo las creadas a partir de hoy tienen esta función.', 'info');
-        }
-
-        const adn = typeof plantilla.config_json === 'string' ? JSON.parse(plantilla.config_json) : plantilla.config_json;
-
-        // 1. Cerramos la vista de catálogo
-        document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
-
-        // 2. Abrimos el modal y disparamos la vista base
-        if (plantilla.categoria.toLowerCase() === 'comedor') {
-            openConfigComedor();
-            if (adn['comedor-formato']) {
-                document.getElementById('comedor-formato').value = adn['comedor-formato'];
-                actualizarVistaComedor();
-            }
-        } else {
-            const fotoResucitada = `${API_URL}/uploads/${plantilla.foto_url}`;
-            openConfig(plantilla.nombre, fotoResucitada);
-            if (adn['sofa-modelo']) {
-                document.getElementById('sofa-modelo').value = adn['sofa-modelo'];
-                actualizarVistaSofa();
-            }
-        }
-
-        // 3. Esperamos un instante a que el HTML reaccione, y rellenamos todo
-        setTimeout(() => {
-            for (const [idElemento, valor] of Object.entries(adn)) {
-                const el = document.getElementById(idElemento);
-                if (el) {
-                    if (el.type === 'checkbox') {
-                        el.checked = valor;
-                        if (el.onchange) el.onchange();
-                    } else {
-                        el.value = valor;
-                    }
-                }
-            }
-            
-            Swal.close();
-            const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
-            Toast.fire({ icon: 'success', title: 'Diseño cargado y listo para modificar.' });
-            
-        }, 300);
-
-    } catch (error) {
-        console.error("Error al editar plantilla:", error);
-        Swal.fire('Error', 'No se pudo conectar con el servidor para cargar el diseño.', 'error');
     }
 }
 
