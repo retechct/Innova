@@ -162,7 +162,7 @@ function limpiarFormularioVenta() {
     goToStep(1);
 }
 
-function agregarMetodoPago() {
+async function agregarMetodoPago() {
     const tipo = document.getElementById('pago-tipo').value;
     const entidad = document.getElementById('pago-entidad').style.display !== 'none' ? document.getElementById('pago-entidad').value : '';
     const operacion = document.getElementById('pago-operacion').value;
@@ -170,7 +170,7 @@ function agregarMetodoPago() {
     const empresa = document.getElementById('pago-empresa').value;
     const comprobanteInput = document.getElementById('pago-comprobante');
 
-    // NUEVO: Captura de comisión si es POS
+    // Captura de comisión si es POS
     let comision = 0;
     if (tipo === 'POS') {
         comision = parseFloat(document.getElementById('pago-comision').value) || 0;
@@ -180,12 +180,31 @@ function agregarMetodoPago() {
     if (!empresa) return Swal.fire('Falta empresa', '¿A qué empresa entró el dinero? Selecciona una.', 'warning');
     if (tipo !== 'Efectivo' && operacion.trim() === '') return Swal.fire('Error', 'El Número de Operación es obligatorio para transferencias o POS', 'warning');
 
-    // NUEVO: Validación obligatoria de foto (Regla Mayo 2026)
+    // Validación obligatoria de foto
     if (comprobanteInput.files.length === 0) {
         return Swal.fire('Comprobante Requerido', 'Debes subir la foto del voucher o recibo firmado para registrar el pago.', 'warning');
     }
 
-    // NUEVO: Cálculo del neto
+    // *** SUBIR FOTO A CLOUDINARY AHORA (antes de agregar a listaPagos) ***
+    Swal.fire({ title: 'Subiendo voucher...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+    let comprobante_url = 'Sin imagen';
+    try {
+        const formDataFoto = new FormData();
+        formDataFoto.append('archivo', comprobanteInput.files[0]);
+        const res = await fetch(`${API_URL}/api/upload-voucher`, {
+            method: 'POST',
+            body: formDataFoto
+        });
+        if (!res.ok) throw new Error('Error al subir la imagen');
+        const data = await res.json();
+        comprobante_url = data.url;
+        Swal.close();
+    } catch (e) {
+        Swal.close();
+        return Swal.fire('Error', 'No se pudo subir la foto del voucher. Verifica tu conexión.', 'error');
+    }
+
     const montoNeto = monto - comision;
 
     listaPagos.push({ 
@@ -196,7 +215,7 @@ function agregarMetodoPago() {
         comision: comision,
         monto_neto: montoNeto,
         empresa,
-        comprobante_url: comprobanteInput.files[0].name  // nombre del archivo (la URL real se sube por Cloudinary aparte)
+        comprobante_url  // URL real de Cloudinary
     });
 
     // Resetear inputs después de agregar
@@ -297,7 +316,7 @@ async function guardarVenta() {
 
     const total = cart.reduce((s, i) => s + i.price, 0);
     
-    // Captura de los nuevos campos financieros (Reglas Mayo 2026)
+    // Captura de los campos financieros
     const monedaActiva = document.getElementById('v-moneda') ? document.getElementById('v-moneda').value : 'PEN';
     const tipoCambioActivo = document.getElementById('v-tipo-cambio') ? (parseFloat(document.getElementById('v-tipo-cambio').value) || 1.00) : 1.00;
     const tipoComprobanteActivo = document.getElementById('c-comprobante-tipo') ? document.getElementById('c-comprobante-tipo').value : 'Boleta';
@@ -312,15 +331,12 @@ async function guardarVenta() {
         fecha_emision: document.getElementById('c-emision').value,
         fecha_entrega: document.getElementById('c-entrega').value || null,
         
-        // --- NUEVA ESTRUCTURA FINANCIERA ---
         monto_total: total,
         moneda: monedaActiva,
         tipo_cambio: tipoCambioActivo,
         tipo_comprobante: tipoComprobanteActivo,
-        pagos: listaPagos, // Enviamos el arreglo completo con comisiones y nombres de voucher
-        // -----------------------------------
+        pagos: listaPagos, // Ya tienen comprobante_url real de Cloudinary
 
-        // --- CONEXIÓN CON EL LOGIN ---
         vendedor_id: usuarioActivo.id,
         vendedor_nombre: usuarioActivo.nombre,
         empresa_ruc: usuarioActivo.ruc,
@@ -354,9 +370,8 @@ async function guardarVenta() {
                 confirmButtonColor: '#d4af37' 
             }).then((result) => {
                 if (result.isConfirmed) {
-                    imprimirContratoElegante(); // Mantiene tu diseño de contrato actual
+                    imprimirContratoElegante();
                 }
-                // Usamos la nueva función de limpieza que implementamos antes
                 if (typeof limpiarFormularioVenta === 'function') {
                     limpiarFormularioVenta();
                 } else {
@@ -378,6 +393,54 @@ async function guardarVenta() {
             icon: 'warning',
             confirmButtonText: 'Entendido'
         });
+    }
+}
+
+// ==========================================
+// SOLICITUD DE CAMBIO DE PRECIO (Vendedor → Admin)
+// ==========================================
+async function solicitarCambioPrecio(codigoVenta, precioActual) {
+    const { value: formValues } = await Swal.fire({
+        title: 'Solicitar Cambio de Precio',
+        html: `
+            <p style="font-size:12px; color:gray; margin-bottom:10px;">Precio actual: <strong>S/ ${parseFloat(precioActual).toFixed(2)}</strong></p>
+            <input id="swal-precio-nuevo" type="number" class="swal2-input" placeholder="Nuevo precio total (S/)" min="1" step="0.01">
+            <textarea id="swal-motivo" class="swal2-textarea" placeholder="Motivo del cambio (obligatorio)" style="height:80px;"></textarea>
+        `,
+        confirmButtonText: 'Enviar al Admin',
+        confirmButtonColor: '#d4af37',
+        showCancelButton: true,
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const precio = parseFloat(document.getElementById('swal-precio-nuevo').value);
+            const motivo = document.getElementById('swal-motivo').value.trim();
+            if (!precio || precio <= 0) { Swal.showValidationMessage('Ingresa un precio válido'); return false; }
+            if (!motivo) { Swal.showValidationMessage('El motivo es obligatorio'); return false; }
+            return { precio, motivo };
+        }
+    });
+
+    if (!formValues) return;
+
+    try {
+        const res = await fetch(`${API_URL}/api/ventas/${codigoVenta}/proponer-cambio-precio`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                precio_nuevo: formValues.precio,
+                motivo: formValues.motivo,
+                vendedor_id: usuarioActivo.id,
+                vendedor_nombre: usuarioActivo.nombre
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            Swal.fire('Solicitud Enviada', 'El administrador revisará el cambio de precio y te notificará.', 'success');
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo enviar la solicitud', 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', 'Sin conexión al servidor', 'error');
     }
 }
 // ==========================================

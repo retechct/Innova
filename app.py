@@ -232,6 +232,25 @@ def obtener_insumos():
             cursor.close(); release_db_connection(conexion)
 
 
+@app.route('/api/upload-voucher', methods=['POST'])
+def upload_voucher():
+    """
+    Endpoint dedicado para subir fotos de vouchers/recibos a Cloudinary.
+    El frontend llama esto ANTES de agregar el pago a la lista,
+    y recibe la URL real de Cloudinary para guardarla en la venta.
+    """
+    if 'archivo' not in request.files or request.files['archivo'].filename == '':
+        return jsonify({'error': 'No se recibió ningún archivo'}), 400
+    try:
+        archivo = request.files['archivo']
+        respuesta_nube = cloudinary.uploader.upload(archivo, folder="vouchers_pagos")
+        url = respuesta_nube.get('secure_url')
+        return jsonify({'url': url}), 200
+    except Exception as e:
+        print(f"Error al subir voucher: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/ventas', methods=['GET', 'POST'])
 def guardar_venta():
     if request.method == 'GET':
