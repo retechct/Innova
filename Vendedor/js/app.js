@@ -455,6 +455,8 @@ const ESTADO_COLORS = {
     'En producción':  { bg:'#dbeafe', color:'#1e40af' },
     'Listo':          { bg:'#d1fae5', color:'#065f46' },
     'Entregado':      { bg:'#f1f5f9', color:'#475569' },
+    'Despachado':     { bg:'#e0f2fe', color:'#0369a1' },
+    'Cancelado':      { bg:'#fee2e2', color:'#b91c1c' },
 };
 
 function renderContratos(lista) {
@@ -517,12 +519,16 @@ tbody.innerHTML = lista.map((v, i) => `
         <td style="padding:11px 14px;">${ec(v)}</td>
         <td style="padding:11px 14px; font-size:12px; color:#64748b;">${v.fecha_entrega || '—'}</td>
         <td style="padding:11px 14px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
-            <button onclick="verDetalleContrato('${v.codigo}')"
-                    style="background:#0f172a; color:white; border:none; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
-                <i class="fa-solid fa-eye"></i> Ver
+            <button onclick="verDetalleContrato('${v.codigo}')" title="Ver pedido"
+                    style="background:#0f172a; color:white; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
+                <i class="fa-solid fa-eye"></i>
+            </button>
+            <button onclick="verHistorialPrecios('${v.codigo}')" title="Historial de precios"
+                    style="background:#f1f5f9; color:#475569; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
+                <i class="fa-solid fa-clock-rotate-left"></i>
             </button>
             ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
-            <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
+            <button onclick="solicitarCambioPrecio('${v.codigo}', ${v.total})"
                     title="Proponer cambio de precio"
                     style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
                 <i class="fa-solid fa-tag"></i>
@@ -570,6 +576,53 @@ cards.innerHTML = lista.map(v => `
 function verDetalleContrato(codigo) {
     // Abre el modal de detalle de pedido que ya existe en el sistema
     abrirDetallePedido(codigo);
+}
+
+async function verHistorialPrecios(codigo) {
+    try {
+        Swal.fire({ title: 'Cargando historial...', didOpen: () => Swal.showLoading() });
+        const res = await fetch(`${API_URL}/api/ventas/${codigo}/historial-precios`);
+        const data = await res.json();
+        Swal.close();
+
+        if (!data.length) return Swal.fire('Sin cambios', 'Este contrato mantiene su precio original.', 'info');
+
+        let html = `
+            <div style="text-align:left; max-height:400px; overflow-y:auto; padding:5px;">
+                ${data.map(h => {
+                    const colorEstado = h.estado === 'Aprobado' ? '#10b981' : (h.estado === 'Rechazado' ? '#ef4444' : '#f59e0b');
+                    return `
+                    <div style="border-bottom:1px solid #eee; padding:10px 0; font-size:12px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                            <span style="font-weight:900; color:${colorEstado}">${h.estado.toUpperCase()}</span>
+                            <span style="color:gray;">${h.fecha_solicitud}</span>
+                        </div>
+                        <div style="margin-bottom:5px;">
+                            De <b>S/ ${h.price_original?.toFixed(2) || h.precio_original?.toFixed(2)}</b> 
+                            a <b style="color:#d4af37">S/ ${h.price_nuevo?.toFixed(2) || h.precio_nuevo?.toFixed(2)}</b>
+                        </div>
+                        <div style="background:#f8fafc; padding:8px; border-radius:6px; margin-bottom:5px; color:#475569;">
+                            <b>Motivo:</b> ${h.motivo}
+                        </div>
+                        <div style="font-size:11px;">
+                            Solicitó: <b>${h.vendedor}</b><br>
+                            ${h.admin ? `Resuelto por: <b>${h.admin}</b>` : ''}
+                            ${h.notas_admin ? `<br><i style="color:gray;">"${h.notas_admin}"</i>` : ''}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>`;
+
+        Swal.fire({
+            title: `Historial de Precios #${codigo}`,
+            html: html,
+            confirmButtonText: 'Cerrar',
+            confirmButtonColor: '#0f172a',
+            width: '450px'
+        });
+    } catch (e) {
+        Swal.fire('Error', 'No se pudo cargar el historial.', 'error');
+    }
 }
 
 // ==========================================

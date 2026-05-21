@@ -320,21 +320,17 @@ async function guardarVenta() {
     }
     
     const total = cart.reduce((s, i) => s + i.price, 0);
-    // Captura de los campos financieros
-    const monedaActiva = document.getElementById('v-moneda') ? document.getElementById('v-moneda').value : 'PEN';
-    const tipoCambioActivo = document.getElementById('v-tipo-cambio') ? (parseFloat(document.getElementById('v-tipo-cambio').value) || 1.00) : 1.00;
-    const tipoComprobanteActivo = document.getElementById('c-comprobante-tipo') ? document.getElementById('c-comprobante-tipo').value : 'Boleta';
+    const monedaActiva = document.getElementById('v-moneda')?.value || 'PEN';
+    const tipoCambioActivo = parseFloat(document.getElementById('v-tipo-cambio')?.value) || 1.00;
+    const tipoComprobanteActivo = document.getElementById('c-comprobante-tipo')?.value || 'Boleta';
 
-    // Removed duplicate declaration of 'total' and related financial fields.
-    // The original declarations at the beginning of the function are sufficient.
-
-const payload = {
-    codigo: document.getElementById('c-codigo').value,
-    cliente: document.getElementById('c-nombre').value,
-    tipo_documento: document.getElementById('c-tipo-doc') ? document.getElementById('c-tipo-doc').value : 'DNI',
-    dni: document.getElementById('c-dni').value,
-    celular: document.getElementById('c-celular').value,
-    direccion: document.getElementById('c-direccion').value,
+    const payload = {
+        codigo: document.getElementById('c-codigo').value,
+        cliente: document.getElementById('c-nombre').value,
+        tipo_documento: document.getElementById('c-tipo-doc')?.value || 'DNI',
+        dni: document.getElementById('c-dni').value,
+        celular: document.getElementById('c-celular').value,
+        direccion: document.getElementById('c-direccion').value,
     fecha_emision: document.getElementById('c-emision').value,
     fecha_entrega: document.getElementById('c-entrega').value || null,
     sede: usuarioActivo.tienda || 'Sede Central',
