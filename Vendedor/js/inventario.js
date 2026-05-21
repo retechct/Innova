@@ -25,8 +25,20 @@ const CATEGORIAS_PIEZA = [
 
 /* ─── Punto de entrada ─────────────────────────────────────── */
 async function cargarVistaInventario() {
-    const main = document.getElementById('main-content');
-    main.innerHTML = _htmlEsqueleto();
+    // Busca el <main> por ID o por clase como fallback
+    const main = document.getElementById('main-content') || document.querySelector('main.main-content');
+    if (!main) { console.error('inventario.js: no se encontró el contenedor principal'); return; }
+
+    // Eliminar wrapper previo si existe (para re-entradas)
+    const prev = document.getElementById('inv-dinamico-wrapper');
+    if (prev) prev.remove();
+
+    // Crear un wrapper limpio dentro del main
+    const wrapper = document.createElement('div');
+    wrapper.id = 'inv-dinamico-wrapper';
+    wrapper.innerHTML = _htmlEsqueleto();
+    main.appendChild(wrapper);
+
     await _cargarMaestrosInv();
     await _cargarDatosTab();
     _bindInvEventos();

@@ -183,6 +183,14 @@ function changeView(view) {
         'inv-tienda': 'INVENTARIO POR TIENDA'// <-- NUEVO
     };
     
+    // Restaurar el header estático si veníamos de inv-tienda
+    const mainTitleContainer = document.querySelector('main .view-title-container');
+    if (mainTitleContainer) mainTitleContainer.style.display = '';
+
+    // Limpiar el contenedor dinámico del inventario si existía
+    const invDinamico = document.getElementById('inv-dinamico-wrapper');
+    if (invDinamico) invDinamico.remove();
+
     if (titles[view]) {
         document.getElementById('view-title').innerText = titles[view];
     }
@@ -231,8 +239,10 @@ function changeView(view) {
         cargarInventarioTaller(); 
     }
     else if (view === 'inv-tienda') {
-    const main = document.getElementById('main-content');
-    cargarVistaInventario();
+        // Ocultar el header estático y secciones fijas que interfieren
+        const mainTitleContainer = document.querySelector('main .view-title-container');
+        if (mainTitleContainer) mainTitleContainer.style.display = 'none';
+        cargarVistaInventario();
     }
     else if (view === 'logistica') {
         document.getElementById('view-logistica').style.display = 'block';
