@@ -1,0 +1,71 @@
+"""
+database.py — Pool de conexiones y funciones compartidas de utilidad.
+Importar en cualquier módulo con:
+    from database import get_db_connection, release_db_connection, limpiar_foto
+"""
+
+import os
+import smtplib
+from email.mime.text import MIMEText
+from psycopg2 import pool as pg_pool
+
+BACKEND_URL = os.getenv("BACKEND_URL", "https://innova-4cnn.onrender.com")
+
+# ─── Pool de conexiones ───────────────────────────────────────────────────────
+_db_pool = pg_pool.ThreadedConnectionPool(
+    minconn=2,
+    maxconn=10,
+    host     = os.getenv("DB_HOST"),
+    database = os.getenv("DB_NAME"),
+    user     = os.getenv("DB_USER"),
+    password = os.getenv("DB_PASSWORD"),
+)
+
+
+def get_db_connection():
+    """Obtiene una conexión del pool (no abre una TCP nueva cada vez)."""
+    return _db_pool.getconn()
+
+
+def release_db_connection(conn):
+    """Devuelve la conexión al pool para que otro request la reutilice."""
+    if conn:
+        _db_pool.putconn(conn)
+
+
+# ─── Utilidades compartidas ───────────────────────────────────────────────────
+
+def limpiar_foto(url):
+    """Evita placeholders o URLs vacías en campos de foto."""
+    if not url or 'via.placeholder.com' in url:
+        return "imagenes/sin_foto.jpg"
+    if url.startswith('http'):
+        return url
+    return f"{BACKEND_URL}/uploads/{url}"
+
+
+def enviar_notificacion_venta(correo_destino, codigo_venta, cliente):
+    """Envía un correo automático al vendedor tras registrar una venta."""
+    try:
+        remitente   = os.getenv("EMAIL_USER")
+        password    = os.getenv("EMAIL_PASS")
+        smtp_server = os.getenv("EMAIL_SMTP", "smtp.gmail.com")
+        smtp_port   = int(os.getenv("EMAIL_PORT", 587))
+
+        if not remitente or not password:
+            print("⚠️ Advertencia: Credenciales de correo no configuradas.")
+            return
+
+        mensaje = MIMEText(
+            f"Se ha registrado una nueva venta.\n\nCódigo: {codigo_venta}\nCliente: {cliente}"
+        )
+        mensaje['Subject'] = f"Nueva Venta Registrada - {codigo_venta}"
+        mensaje['From']    = remitente
+        mensaje['To']      = correo_destino
+
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(remitente, password)
+            server.send_message(mensaje)
+    except Exception as e:
+        print(f"Error al enviar correo de notificación: {e}")

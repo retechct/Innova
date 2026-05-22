@@ -269,8 +269,9 @@ async function guardarNuevoMaterial() {
         } 
         else if (tipoActual === 'silla' || tipoActual === 'butaca') {
             datosObj.modelo = document.getElementById('nm-modelo').value;
+            datosObj.material = document.getElementById('nm-material').value;
             datosObj.color_estructura = document.getElementById('nm-color-estructura').value;
-            nombreInsumoCalculado = `${tipoActual.capitalize()} ${datosObj.modelo}`;
+            nombreInsumoCalculado = `${tipoActual.charAt(0).toUpperCase() + tipoActual.slice(1)} ${datosObj.modelo}`;
         }
     } catch (error) {
         return Swal.fire('Formulario Incompleto', 'Por favor llena los campos requeridos', 'warning');
