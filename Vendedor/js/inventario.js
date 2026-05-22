@@ -5,7 +5,7 @@
 // =============================================================
 
 /* ─── Estado ────────────────────────────────────────────────── */
-let _invTab        = 'productos';
+let _invTab        = 'productos';   // 'productos' | 'piezas' | 'historial'
 let _invDataProd   = { sedes: [], modelos: [] };
 let _invDataPiezas = { sedes: [], piezas:  [] };
 let _invFiltroCat  = '';
@@ -25,23 +25,8 @@ const CATEGORIAS_PIEZA = [
 
 /* ─── Punto de entrada ─────────────────────────────────────── */
 async function cargarVistaInventario() {
-    const main = document.getElementById('main-content') || document.querySelector('main.main-content');
-    if (!main) { console.error('inventario.js: no se encontró el contenedor principal'); return; }
-
-    const prev = document.getElementById('inv-dinamico-wrapper');
-    if (prev) prev.remove();
-
-    const wrapper = document.createElement('div');
-    wrapper.id = 'inv-dinamico-wrapper';
-    wrapper.innerHTML = _htmlEsqueleto();
-    main.appendChild(wrapper);
-
-    // Mostrar botón Registrar DESPUÉS de insertar el DOM, con el usuario ya disponible
-    const btnReg = document.getElementById('btn-inv-registrar');
-    if (btnReg && _puedeEditarInv()) {
-        btnReg.style.display = 'flex';
-    }
-
+    const main = document.getElementById('main-content');
+    main.innerHTML = _htmlEsqueleto();
     await _cargarMaestrosInv();
     await _cargarDatosTab();
     _bindInvEventos();
@@ -54,12 +39,13 @@ function _htmlEsqueleto() {
         <i class="fas fa-boxes"></i>
         <h2>Inventario por Tienda</h2>
         <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
-            <button id="btn-inv-registrar" onclick="abrirModalNuevoItem()"
-                    style="display:none;background:var(--accent);color:white;border:none;padding:10px 16px;
+            ${_puedeEditarInv() ? `
+            <button onclick="abrirModalNuevoItem()" 
+                    style="background:var(--accent);color:white;border:none;padding:10px 16px;
                            border-radius:10px;font-weight:800;cursor:pointer;font-size:12px;
-                           align-items:center;gap:6px;">
+                           display:flex;align-items:center;gap:6px;">
                 <i class="fas fa-plus"></i> Registrar
-            </button>
+            </button>` : ''}
             <button onclick="_invExportarCSV()"
                     style="background:white;color:var(--text-muted);border:1px solid #e2e8f0;
                            padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;
@@ -71,18 +57,22 @@ function _htmlEsqueleto() {
 
     <!-- TABS -->
     <div style="display:flex;gap:8px;margin-bottom:1.2rem;flex-wrap:wrap;">
-        <button id="tab-productos" onclick="_invCambiarTab('productos')" class="btn-filter-taller active">
+        <button id="tab-productos" onclick="_invCambiarTab('productos')"
+                class="btn-filter-taller active">
             <i class="fas fa-couch"></i> Productos
         </button>
-        <button id="tab-piezas" onclick="_invCambiarTab('piezas')" class="btn-filter-taller">
+        <button id="tab-piezas" onclick="_invCambiarTab('piezas')"
+                class="btn-filter-taller">
             <i class="fas fa-puzzle-piece"></i> Piezas a Medida
         </button>
-        <button id="tab-historial" onclick="_invCambiarTab('historial')" class="btn-filter-taller">
+        <button id="tab-historial" onclick="_invCambiarTab('historial')"
+                class="btn-filter-taller">
             <i class="fas fa-history"></i> Historial
         </button>
+        <!-- Buscador por código de barras -->
         <div style="margin-left:auto;display:flex;gap:6px;">
             <input id="inv-barcode-input" type="text" class="form-input"
-                   placeholder="📷 Escanear código..."
+                   placeholder="📷 Escanear código..." 
                    style="max-width:200px;padding:8px 12px;font-size:13px;"
                    onkeydown="if(event.key==='Enter') _invBuscarBarcode(this.value)" />
             <button onclick="_invBuscarBarcode(document.getElementById('inv-barcode-input').value)"
@@ -95,14 +85,16 @@ function _htmlEsqueleto() {
 
     <!-- FILTROS -->
     <div id="inv-filtros" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1rem;">
-        <select id="inv-filtro-cat" class="form-input" style="max-width:200px;padding:10px 12px;font-size:13px;">
+        <select id="inv-filtro-cat" class="form-input" 
+                style="max-width:200px;padding:10px 12px;font-size:13px;">
             <option value="">Todas las categorías</option>
         </select>
-        <select id="inv-filtro-sede" class="form-input" style="max-width:190px;padding:10px 12px;font-size:13px;">
+        <select id="inv-filtro-sede" class="form-input"
+                style="max-width:190px;padding:10px 12px;font-size:13px;">
             <option value="">Todas las tiendas</option>
         </select>
         <input id="inv-filtro-q" type="text" class="form-input"
-               placeholder="🔍 Buscar modelo..."
+               placeholder="🔍 Buscar modelo..." 
                style="max-width:240px;padding:10px 12px;font-size:13px;" />
     </div>
 
@@ -125,7 +117,7 @@ function _htmlEsqueleto() {
         </div>
     </div>
 
-    <!-- MODAL DETALLE -->
+    <!-- MODAL DETALLE / ACCIONES -->
     <div id="modal-inv-detalle" class="modal-overlay" style="display:none;align-items:center;justify-content:center;">
         <div class="modal-content" style="width:92%;max-width:620px;border-radius:20px;">
             <div class="modal-header">
@@ -141,7 +133,7 @@ function _htmlEsqueleto() {
 
 /* ─── Permisos ──────────────────────────────────────────────── */
 function _puedeEditarInv() {
-    const rol = usuarioActivo?.rol || '';
+    const rol = window.usuarioActivo?.rol || '';
     return ['Admin', 'Jefe_Taller', 'JEFE_TALLER'].includes(rol);
 }
 
@@ -161,6 +153,7 @@ async function _cargarMaestrosInv() {
         _maestroInv.bases_comedor = mat.bases_comedor || [];
         _maestroInv.catalogo      = cat || [];
 
+        // Poblar selector de sedes en filtros
         const selSede = document.getElementById('inv-filtro-sede');
         if (selSede) sedes.forEach(s => {
             const o = document.createElement('option');
@@ -178,6 +171,7 @@ async function _invCambiarTab(tab) {
         if (btn) btn.classList.toggle('active', t === tab);
     });
 
+    // Actualizar categorías del filtro según tab
     const selCat = document.getElementById('inv-filtro-cat');
     if (selCat) {
         selCat.innerHTML = '<option value="">Todas las categorías</option>';
@@ -197,7 +191,7 @@ async function _invCambiarTab(tab) {
     await _cargarDatosTab();
 }
 
-/* ─── Cargar datos ──────────────────────────────────────────── */
+/* ─── Cargar datos según tab activo ─────────────────────────── */
 async function _cargarDatosTab() {
     const contenido = document.getElementById('inv-contenido');
     if (!contenido) return;
@@ -239,17 +233,18 @@ function _renderTablaProductos() {
 
     if (!modelos.length) {
         contenido.innerHTML = _htmlVacio('productos');
-        const b = document.getElementById('btn-vacio-registrar');
-        if (b && _puedeEditarInv()) b.style.display = 'inline-block';
         return;
     }
 
     let html = `
-    <div style="overflow-x:auto;border-radius:16px;border:1px solid #e2e8f0;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
+    <div style="overflow-x:auto;border-radius:16px;border:1px solid #e2e8f0;
+                box-shadow:0 4px 12px rgba(0,0,0,0.05);">
     <table style="width:100%;border-collapse:collapse;min-width:650px;">
         <thead>
-            <tr style="background:#f1f5f9;font-size:11px;font-weight:900;text-transform:uppercase;color:var(--text-muted);">
-                <th style="padding:12px 16px;text-align:left;position:sticky;left:0;background:#f1f5f9;z-index:2;min-width:200px;">Modelo</th>
+            <tr style="background:#f1f5f9;font-size:11px;font-weight:900;
+                       text-transform:uppercase;color:var(--text-muted);">
+                <th style="padding:12px 16px;text-align:left;position:sticky;
+                           left:0;background:#f1f5f9;z-index:2;min-width:200px;">Modelo</th>
                 <th style="padding:12px 10px;text-align:center;color:var(--success);">Total Disp.</th>
                 ${sedes.map(s=>`<th style="padding:12px 8px;text-align:center;">${s}</th>`).join('')}
                 <th style="padding:12px 10px;text-align:center;">Acciones</th>
@@ -259,30 +254,39 @@ function _renderTablaProductos() {
 
     modelos.forEach((m, idx) => {
         const bg = idx % 2 === 0 ? 'white' : '#fafbfc';
-        const catBadge = `<span style="background:#eff6ff;color:var(--accent);font-size:9px;font-weight:900;padding:2px 7px;border-radius:8px;">${m.categoria.toUpperCase()}</span>`;
+        const catBadge = `<span style="background:#eff6ff;color:var(--accent);font-size:9px;
+            font-weight:900;padding:2px 7px;border-radius:8px;">${m.categoria.toUpperCase()}</span>`;
 
         html += `
         <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
-            onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='${bg}'">
+            onmouseover="this.style.background='#eff6ff'"
+            onmouseout="this.style.background='${bg}'">
             <td style="padding:12px 16px;position:sticky;left:0;background:inherit;z-index:1;">
                 <div style="font-weight:800;font-size:13px;">${m.nombre_modelo}</div>
                 <div style="margin-top:3px;">${catBadge}</div>
             </td>
             <td style="padding:12px 10px;text-align:center;">
-                <span style="background:${m.disponibles>0?'#dcfce7':'#fee2e2'};color:${m.disponibles>0?'#16a34a':'#dc2626'};font-weight:900;padding:4px 12px;border-radius:8px;font-size:13px;">
+                <span style="background:${m.disponibles>0?'#dcfce7':'#fee2e2'};
+                    color:${m.disponibles>0?'#16a34a':'#dc2626'};
+                    font-weight:900;padding:4px 12px;border-radius:8px;font-size:13px;">
                     ${m.disponibles}
                 </span>
             </td>
             ${sedes.map(s => {
                 const st = (m.sede_stock || {})[s] || {disponibles:0,total:0};
                 return `<td style="padding:12px 8px;text-align:center;">
-                    <div style="font-weight:700;font-size:13px;color:${st.disponibles>0?'var(--primary)':'#cbd5e1'};">${st.disponibles}</div>
-                    ${st.total > st.disponibles ? `<div style="font-size:10px;color:var(--text-muted);">${st.total} total</div>` : ''}
+                    <div style="font-weight:700;font-size:13px;
+                         color:${st.disponibles>0?'var(--primary)':'#cbd5e1'};">
+                        ${st.disponibles}
+                    </div>
+                    ${st.total > st.disponibles ? `<div style="font-size:10px;color:var(--text-muted);">
+                        ${st.total} total</div>` : ''}
                 </td>`;
             }).join('')}
             <td style="padding:12px 8px;text-align:center;">
                 <button onclick="_invVerUnidades('${m.nombre_modelo.replace(/'/g,"\\'")}','${m.categoria}',${m.catalogo_id||'null'})"
-                        style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;">
+                        style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;
+                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;">
                     <i class="fas fa-eye"></i> Ver
                 </button>
             </td>
@@ -304,18 +308,19 @@ function _renderTablaPiezas() {
 
     if (!piezas.length) {
         contenido.innerHTML = _htmlVacio('piezas');
-        const b = document.getElementById('btn-vacio-registrar');
-        if (b && _puedeEditarInv()) b.style.display = 'inline-block';
         return;
     }
 
     let prevSKU = null;
     let html = `
-    <div style="overflow-x:auto;border-radius:16px;border:1px solid #e2e8f0;box-shadow:0 4px 12px rgba(0,0,0,0.05);">
+    <div style="overflow-x:auto;border-radius:16px;border:1px solid #e2e8f0;
+                box-shadow:0 4px 12px rgba(0,0,0,0.05);">
     <table style="width:100%;border-collapse:collapse;min-width:650px;">
         <thead>
-            <tr style="background:#f1f5f9;font-size:11px;font-weight:900;text-transform:uppercase;color:var(--text-muted);">
-                <th style="padding:12px 16px;text-align:left;position:sticky;left:0;background:#f1f5f9;z-index:2;min-width:200px;">Modelo</th>
+            <tr style="background:#f1f5f9;font-size:11px;font-weight:900;
+                       text-transform:uppercase;color:var(--text-muted);">
+                <th style="padding:12px 16px;text-align:left;position:sticky;
+                           left:0;background:#f1f5f9;z-index:2;min-width:200px;">Modelo</th>
                 <th style="padding:12px 10px;text-align:left;">Medida</th>
                 <th style="padding:12px 10px;text-align:center;color:var(--success);">Total</th>
                 ${sedes.map(s=>`<th style="padding:12px 8px;text-align:center;">${s}</th>`).join('')}
@@ -327,27 +332,33 @@ function _renderTablaPiezas() {
         const isNew = p.sku_maestro !== prevSKU;
         prevSKU = p.sku_maestro;
         const bg = idx % 2 === 0 ? 'white' : '#fafbfc';
+        const medida = _fmtMedida(p);
 
         html += `
         <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
-            onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='${bg}'">
+            onmouseover="this.style.background='#eff6ff'"
+            onmouseout="this.style.background='${bg}'">
             <td style="padding:12px 16px;position:sticky;left:0;background:inherit;z-index:1;">
                 ${isNew ? `
                 <div style="font-weight:800;font-size:13px;">${p.nombre_modelo}</div>
                 <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
-                    <span style="background:#fff7ed;color:#c2410c;font-size:9px;font-weight:900;padding:2px 7px;border-radius:8px;">${p.categoria.toUpperCase()}</span>
+                    <span style="background:#fff7ed;color:#c2410c;font-size:9px;font-weight:900;
+                          padding:2px 7px;border-radius:8px;">${p.categoria.toUpperCase()}</span>
                     <span style="margin-left:5px;">${p.material||''} ${p.color_acabado?'· '+p.color_acabado:''}</span>
                 </div>
                 <div style="font-size:10px;color:#94a3b8;">${p.sku_maestro}</div>
                 ` : `<span style="color:#e2e8f0;font-size:11px;">↳</span>`}
             </td>
-            <td style="padding:12px 10px;font-weight:700;font-size:12px;">${_fmtMedida(p)}</td>
+            <td style="padding:12px 10px;font-weight:700;font-size:12px;">${medida}</td>
             <td style="padding:12px 10px;text-align:center;">
-                <span style="background:${p.disponibles>0?'#dcfce7':'#f1f5f9'};color:${p.disponibles>0?'#16a34a':'#94a3b8'};font-weight:900;padding:3px 10px;border-radius:8px;font-size:12px;">
+                <span style="background:${p.disponibles>0?'#dcfce7':'#f1f5f9'};
+                    color:${p.disponibles>0?'#16a34a':'#94a3b8'};
+                    font-weight:900;padding:3px 10px;border-radius:8px;font-size:12px;">
                     ${p.disponibles}
                 </span>
             </td>
-            ${sedes.map(s=>`<td style="padding:12px 8px;text-align:center;font-weight:700;font-size:13px;color:${((p.sede_stock||{})[s]||0)>0?'var(--primary)':'#cbd5e1'};">
+            ${sedes.map(s=>`<td style="padding:12px 8px;text-align:center;font-weight:700;
+                font-size:13px;color:${((p.sede_stock||{})[s]||0)>0?'var(--primary)':'#cbd5e1'};">
                 ${(p.sede_stock||{})[s]||0}
             </td>`).join('')}
         </tr>`;
@@ -357,14 +368,15 @@ function _renderTablaPiezas() {
     contenido.innerHTML = html;
 }
 
-/* ─── Render: historial selector ───────────────────────────── */
+/* ─── Render: selector de historial ────────────────────────── */
 function _renderHistorialSelector() {
     const sedes = [];
     document.querySelectorAll('#inv-filtro-sede option').forEach(o => {
         if (o.value) sedes.push({ id: o.value, nombre: o.textContent });
     });
 
-    document.getElementById('inv-contenido').innerHTML = `
+    const contenido = document.getElementById('inv-contenido');
+    contenido.innerHTML = `
     <div style="background:white;border-radius:16px;padding:25px;border:1px solid #e2e8f0;">
         <p style="font-weight:700;color:var(--text-muted);font-size:13px;margin-bottom:15px;">
             Selecciona una tienda para ver sus últimos 50 movimientos:
@@ -373,7 +385,9 @@ function _renderHistorialSelector() {
             ${sedes.map(s=>`
             <button onclick="_invCargarHistorialSede(${s.id},'${s.nombre}')"
                     style="background:#f1f5f9;border:none;padding:12px 18px;border-radius:12px;
-                           font-weight:700;cursor:pointer;color:var(--primary);font-size:13px;">
+                           font-weight:700;cursor:pointer;color:var(--primary);font-size:13px;
+                           transition:0.2s;" onmouseover="this.style.background='#eff6ff'"
+                    onmouseout="this.style.background='#f1f5f9'">
                 <i class="fas fa-store"></i> ${s.nombre}
             </button>`).join('')}
         </div>
@@ -383,43 +397,56 @@ function _renderHistorialSelector() {
 
 async function _invCargarHistorialSede(sedeId, sedeNombre) {
     const wrap = document.getElementById('inv-historial-tabla');
-    wrap.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>`;
+    wrap.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);">
+        <i class="fas fa-spinner fa-spin"></i> Cargando...</div>`;
     try {
         const res  = await fetch(`${API_URL}/api/inventario/historial/sede/${sedeId}`);
         const rows = await res.json();
 
         if (!rows.length) {
-            wrap.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:20px;">Sin movimientos para ${sedeNombre}.</p>`;
+            wrap.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:20px;">
+                Sin movimientos registrados para ${sedeNombre}.</p>`;
             return;
         }
 
         const colorEvento = {
-            'Ingreso':'#dcfce7','Traslado':'#dbeafe','Venta':'#fef3c7',
-            'Reserva':'#ede9fe','Ajuste':'#f1f5f9','Baja':'#fee2e2','Devolucion':'#fce7f3'
+            'Ingreso':    '#dcfce7', 'Traslado':  '#dbeafe', 'Venta':     '#fef3c7',
+            'Reserva':    '#ede9fe', 'Ajuste':    '#f1f5f9', 'Baja':      '#fee2e2',
+            'Devolucion': '#fce7f3'
         };
 
         let tabla = `
         <h4 style="margin:0 0 12px 0;font-weight:800;">Movimientos — ${sedeNombre}</h4>
         <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead><tr style="background:#f1f5f9;font-weight:900;color:var(--text-muted);">
-                <th style="padding:8px 10px;text-align:left;">Fecha</th>
-                <th style="padding:8px 10px;text-align:left;">Evento</th>
-                <th style="padding:8px 10px;text-align:left;">Código</th>
-                <th style="padding:8px 10px;text-align:left;">Desde → Hasta</th>
-                <th style="padding:8px 10px;text-align:left;">Usuario</th>
-                <th style="padding:8px 10px;text-align:left;">Notas</th>
-            </tr></thead><tbody>`;
+            <thead>
+                <tr style="background:#f1f5f9;font-weight:900;color:var(--text-muted);">
+                    <th style="padding:8px 10px;text-align:left;">Fecha</th>
+                    <th style="padding:8px 10px;text-align:left;">Evento</th>
+                    <th style="padding:8px 10px;text-align:left;">Código</th>
+                    <th style="padding:8px 10px;text-align:left;">Desde → Hasta</th>
+                    <th style="padding:8px 10px;text-align:left;">Usuario</th>
+                    <th style="padding:8px 10px;text-align:left;">Notas</th>
+                </tr>
+            </thead><tbody>`;
 
         rows.forEach(r => {
             const bgEvento = colorEvento[r.evento] || '#f1f5f9';
-            tabla += `<tr style="border-bottom:1px solid #f1f5f9;">
+            tabla += `
+            <tr style="border-bottom:1px solid #f1f5f9;">
                 <td style="padding:8px 10px;color:var(--text-muted);">${r.fecha}</td>
-                <td style="padding:8px 10px;"><span style="background:${bgEvento};padding:3px 8px;border-radius:6px;font-weight:800;font-size:10px;">${r.evento}</span></td>
+                <td style="padding:8px 10px;">
+                    <span style="background:${bgEvento};padding:3px 8px;border-radius:6px;
+                          font-weight:800;font-size:10px;">${r.evento}</span>
+                </td>
                 <td style="padding:8px 10px;font-weight:700;color:var(--accent);">${r.codigo_barra}</td>
-                <td style="padding:8px 10px;">${r.sede_origen||'—'} ${r.sede_destino&&r.sede_destino!==r.sede_origen?'→ '+r.sede_destino:''}</td>
+                <td style="padding:8px 10px;">
+                    ${r.sede_origen||'—'} ${r.sede_destino&&r.sede_destino!==r.sede_origen?'→ '+r.sede_destino:''}
+                </td>
                 <td style="padding:8px 10px;">${r.usuario||'—'}</td>
-                <td style="padding:8px 10px;color:var(--text-muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.notas||''}">${r.notas||'—'}</td>
+                <td style="padding:8px 10px;color:var(--text-muted);max-width:160px;
+                     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" 
+                     title="${r.notas||''}">${r.notas||'—'}</td>
             </tr>`;
         });
         tabla += `</tbody></table></div>`;
@@ -442,9 +469,11 @@ async function _invBuscarBarcode(barcode) {
 }
 
 function _invMostrarDetalleUnidad(d) {
+    const esProducto = d.tipo === 'producto';
     const estadoColor = {
-        'Disponible':'#dcfce7','Reservado':'#fef3c7',
-        'Vendido':'#fee2e2','En Traslado':'#dbeafe','Dañado':'#fee2e2','Baja':'#f1f5f9'
+        'Disponible': '#dcfce7', 'Reservado': '#fef3c7',
+        'Vendido': '#fee2e2', 'En Traslado': '#dbeafe',
+        'Dañado': '#fee2e2', 'Baja': '#f1f5f9'
     };
 
     let html = `
@@ -458,25 +487,29 @@ function _invMostrarDetalleUnidad(d) {
         <div class="specs-section">
             <h4>Ubicación y Estado</h4>
             <p style="margin:4px 0;font-size:13px;"><b>Sede:</b> ${d.sede}</p>
-            <p style="margin:4px 0;"><span style="background:${estadoColor[d.estado]||'#f1f5f9'};padding:4px 10px;border-radius:8px;font-weight:800;font-size:12px;">${d.estado}</span></p>
+            <p style="margin:4px 0;"><span style="background:${estadoColor[d.estado]||'#f1f5f9'};
+               padding:4px 10px;border-radius:8px;font-weight:800;font-size:12px;">${d.estado}</span></p>
             <p style="margin:4px 0;font-size:12px;color:var(--text-muted);">Ingreso: ${d.fecha_ingreso||'—'}</p>
         </div>
     </div>`;
 
-    if (d.tipo === 'producto') {
-        html += `<div class="specs-section"><h4>Detalles</h4>
+    if (esProducto) {
+        html += `<div class="specs-section">
+            <h4>Detalles</h4>
             <p style="margin:4px 0;font-size:13px;"><b>Color/Tela:</b> ${d.color_tela||'—'}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Acabado:</b> ${d.acabado||'—'}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Costo:</b> S/ ${d.costo_ingreso||'—'}</p>
         </div>`;
     } else {
-        html += `<div class="specs-section"><h4>Medidas</h4>
+        html += `<div class="specs-section">
+            <h4>Medidas</h4>
             <p style="margin:4px 0;font-size:13px;"><b>Material:</b> ${d.material||'—'} ${d.color_acabado?'· '+d.color_acabado:''}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Forma:</b> ${d.forma}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Medida:</b> ${_fmtMedidaObj(d)}</p>
         </div>`;
     }
 
+    // Acciones (solo si puede editar)
     if (_puedeEditarInv()) {
         const estados = ['Disponible','Reservado','En Traslado','Dañado','Baja'];
         html += `
@@ -485,24 +518,30 @@ function _invMostrarDetalleUnidad(d) {
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
                 ${estados.map(e => `
                 <button onclick="_invCambiarEstadoDesdeModal('${d.tipo}',${d.id},'${e}','${d.codigo_barra}')"
-                        style="background:${e===d.estado?'var(--primary)':'#f1f5f9'};color:${e===d.estado?'white':'var(--text-muted)'};border:none;padding:6px 12px;border-radius:8px;font-weight:700;cursor:pointer;font-size:11px;">
+                        style="background:${e===d.estado?'var(--primary)':'#f1f5f9'};
+                               color:${e===d.estado?'white':'var(--text-muted)'};
+                               border:none;padding:6px 12px;border-radius:8px;
+                               font-weight:700;cursor:pointer;font-size:11px;">
                     ${e}</button>`).join('')}
             </div>
             <button onclick="_invVerHistorialUnidad('${d.tipo}',${d.id})"
-                    style="background:none;border:1px solid #e2e8f0;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text-muted);">
+                    style="background:none;border:1px solid #e2e8f0;padding:8px 14px;
+                           border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;
+                           color:var(--text-muted);">
                 <i class="fas fa-history"></i> Ver historial completo
             </button>
         </div>`;
     }
 
-    document.getElementById('modal-inv-det-titulo').textContent = `${d.nombre_modelo} — ${d.codigo_barra}`;
+    document.getElementById('modal-inv-det-titulo').textContent =
+        `${d.nombre_modelo} — ${d.codigo_barra}`;
     document.getElementById('modal-inv-det-cuerpo').innerHTML = html;
     document.getElementById('modal-inv-detalle').style.display = 'flex';
 }
 
 async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
     const { value: datos } = await Swal.fire({
-        title: `Cambiar a: ${estadoNuevo}`,
+        title:  `Cambiar a: ${estadoNuevo}`,
         html: `
             ${estadoNuevo === 'En Traslado' ? `
             <select id="swal-sede-dest" class="swal2-input" style="margin:8px 0;">
@@ -518,26 +557,28 @@ async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
         confirmButtonText: 'Confirmar',
         confirmButtonColor: '#0f172a',
         preConfirm: () => ({
-            notas:           document.getElementById('swal-notas')?.value || '',
+            notas:          document.getElementById('swal-notas')?.value || '',
             sede_destino_id: document.getElementById('swal-sede-dest')?.value || null,
         })
     });
     if (!datos) return;
 
     const tipoEvento = {
-        'En Traslado':'Traslado','Vendido':'Venta','Baja':'Baja','Disponible':'Ajuste','Reservado':'Reserva'
+        'En Traslado': 'Traslado', 'Vendido': 'Venta',
+        'Baja': 'Baja', 'Disponible': 'Ajuste', 'Reservado': 'Reserva'
     }[estadoNuevo] || 'Ajuste';
 
     try {
         const res = await fetch(`${API_URL}/api/inventario/${tipo}/${id}/estado`, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 estado_nuevo:    estadoNuevo,
                 sede_destino_id: datos.sede_destino_id || null,
                 tipo_evento:     tipoEvento,
-                usuario_id:      usuarioActivo?.id,
-                usuario_rol:     usuarioActivo?.rol,
-                usuario_nombre:  usuarioActivo?.nombre,
+                usuario_id:      window.usuarioActivo?.id,
+                usuario_rol:     window.usuarioActivo?.rol,
+                usuario_nombre:  window.usuarioActivo?.nombre,
                 notas:           datos.notas,
             })
         });
@@ -553,11 +594,12 @@ async function _invVerHistorialUnidad(tipo, id) {
     try {
         const res  = await fetch(`${API_URL}/api/inventario/historial/${tipo}/${id}`);
         const rows = await res.json();
-        if (!rows.length) { Swal.fire('Sin historial', 'Esta unidad no tiene movimientos.', 'info'); return; }
+        if (!rows.length) { Swal.fire('Sin historial', 'Esta unidad no tiene movimientos registrados.', 'info'); return; }
         let tabla = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
             <tr style="background:#f1f5f9;font-weight:900;">
                 <th style="padding:7px;">Fecha</th><th style="padding:7px;">Evento</th>
-                <th style="padding:7px;">De → A</th><th style="padding:7px;">Usuario</th><th style="padding:7px;">Notas</th>
+                <th style="padding:7px;">De → A</th><th style="padding:7px;">Usuario</th>
+                <th style="padding:7px;">Notas</th>
             </tr>`;
         rows.forEach(r => {
             tabla += `<tr style="border-bottom:1px solid #f1f5f9;">
@@ -577,7 +619,9 @@ async function _invVerHistorialUnidad(tipo, id) {
 function abrirModalNuevoItem() {
     if (!_puedeEditarInv()) { Swal.fire('Sin permisos', 'Solo Admin o Jefe de Taller.', 'warning'); return; }
     const cuerpo = document.getElementById('modal-inv-cuerpo');
-    cuerpo.innerHTML = _invTab !== 'piezas' ? _formProducto() : _formPieza();
+    const esProds = _invTab !== 'piezas';
+
+    cuerpo.innerHTML = esProds ? _formProducto() : _formPieza();
     document.getElementById('modal-inv-nuevo').style.display = 'flex';
 }
 
@@ -587,10 +631,11 @@ function _cerrarModalInvNuevo() {
 
 function _formProducto() {
     const sedes = [...document.querySelectorAll('#inv-filtro-sede option')]
-        .filter(o=>o.value).map(o=>`<option value="${o.value}">${o.textContent}</option>`).join('');
+        .filter(o=>o.value)
+        .map(o=>`<option value="${o.value}">${o.textContent}</option>`).join('');
     const cats  = CATEGORIAS_PRODUCTO.map(c=>`<option value="${c}">${c}</option>`).join('');
     const prods = _maestroInv.catalogo.map(p=>
-        `<option value="${p.id}|${(p.nombre_modelo||p.nombre||'').replace(/"/g,'')}">${p.nombre_modelo||p.nombre}</option>`
+        `<option value="${p.id}|${(p.nombre||p.nombre_modelo||'').replace(/"/g,'')}">${p.nombre||p.nombre_modelo}</option>`
     ).join('');
 
     return `
@@ -631,7 +676,8 @@ function _invSelCatalogo() {
 
 function _formPieza() {
     const sedes = [...document.querySelectorAll('#inv-filtro-sede option')]
-        .filter(o=>o.value).map(o=>`<option value="${o.value}">${o.textContent}</option>`).join('');
+        .filter(o=>o.value)
+        .map(o=>`<option value="${o.value}">${o.textContent}</option>`).join('');
     const cats  = CATEGORIAS_PIEZA.map(c=>`<option value="${c.val}">${c.label}</option>`).join('');
     const tabs  = _maestroInv.tableros.map(t=>
         `<option value="${t.sku}|${(t.nombre||'').replace(/"/g,'')}|${t.material_base||''}|${t.color||''}">${t.sku} — ${t.nombre}</option>`
@@ -723,23 +769,25 @@ async function _invGuardarProducto() {
         const res = await fetch(`${API_URL}/api/inventario/producto/nuevo`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                catalogo_id: catId, nombre_modelo: nombre, categoria: cat,
-                color_tela: document.getElementById('nf-color')?.value,
-                acabado:    document.getElementById('nf-acabado')?.value,
-                observaciones: document.getElementById('nf-obs')?.value,
-                sede_id:    parseInt(sedeId),
-                costo_ingreso: parseFloat(document.getElementById('nf-costo')?.value) || null,
-                usuario_id: usuarioActivo?.id,
-                usuario_rol: usuarioActivo?.rol,
-                usuario_nombre: usuarioActivo?.nombre,
+                catalogo_id:    catId,
+                nombre_modelo:  nombre,
+                categoria:      cat,
+                color_tela:     document.getElementById('nf-color')?.value,
+                acabado:        document.getElementById('nf-acabado')?.value,
+                observaciones:  document.getElementById('nf-obs')?.value,
+                sede_id:        parseInt(sedeId),
+                costo_ingreso:  parseFloat(document.getElementById('nf-costo')?.value) || null,
+                usuario_id:     window.usuarioActivo?.id,
+                usuario_rol:    window.usuarioActivo?.rol,
+                usuario_nombre: window.usuarioActivo?.nombre,
             })
         });
         const d = await res.json();
         if (d.error) throw new Error(d.error);
         Swal.fire({
-            icon:'success', title:'¡Registrado!',
-            html:`Código de barras:<br><b style="font-size:1.3rem;color:var(--accent);">${d.codigo_barra}</b>`,
-            confirmButtonColor:'#0f172a'
+            icon: 'success', title: '¡Registrado!',
+            html: `Código de barras generado:<br><b style="font-size:1.3rem;color:var(--accent);">${d.codigo_barra}</b>`,
+            confirmButtonColor: '#0f172a'
         });
         _cerrarModalInvNuevo();
         await _cargarDatosTab();
@@ -749,38 +797,41 @@ async function _invGuardarProducto() {
 async function _invGuardarPieza() {
     const sku    = document.getElementById('npf-sku-val')?.value;
     const nombre = document.getElementById('npf-nombre-val')?.value;
+    const cat    = document.getElementById('npf-cat')?.value;
+    const forma  = document.getElementById('npf-forma')?.value;
     const sedeId = document.getElementById('npf-sede')?.value;
     if (!sku || !nombre || !sedeId) {
         Swal.fire('Incompleto', 'Selecciona el modelo y la sede.', 'warning'); return;
     }
     try {
         const res = await fetch(`${API_URL}/api/inventario/pieza/nueva`, {
-            method:'POST', headers:{'Content-Type':'application/json'},
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                sku_maestro: sku, nombre_modelo: nombre,
-                categoria:   document.getElementById('npf-cat')?.value,
-                material:    document.getElementById('npf-mat-val')?.value,
-                color_acabado: document.getElementById('npf-color-val')?.value,
-                forma:   document.getElementById('npf-forma')?.value,
-                largo_cm: parseFloat(document.getElementById('npf-largo')?.value) || null,
-                ancho_cm: parseFloat(document.getElementById('npf-ancho')?.value) || null,
-                alto_cm:  parseFloat(document.getElementById('npf-alto')?.value)  || null,
-                sede_id:  parseInt(sedeId),
-                cantidad: parseInt(document.getElementById('npf-cantidad')?.value) || 1,
+                sku_maestro:    sku,
+                nombre_modelo:  nombre,
+                categoria:      cat,
+                material:       document.getElementById('npf-mat-val')?.value,
+                color_acabado:  document.getElementById('npf-color-val')?.value,
+                forma,
+                largo_cm:  parseFloat(document.getElementById('npf-largo')?.value)    || null,
+                ancho_cm:  parseFloat(document.getElementById('npf-ancho')?.value)    || null,
+                alto_cm:   parseFloat(document.getElementById('npf-alto')?.value)     || null,
+                sede_id:   parseInt(sedeId),
+                cantidad:  parseInt(document.getElementById('npf-cantidad')?.value)   || 1,
                 costo_ingreso: parseFloat(document.getElementById('npf-costo')?.value) || null,
                 proveedor: document.getElementById('npf-proveedor')?.value,
-                usuario_id: usuarioActivo?.id,
-                usuario_rol: usuarioActivo?.rol,
-                usuario_nombre: usuarioActivo?.nombre,
+                usuario_id:     window.usuarioActivo?.id,
+                usuario_rol:    window.usuarioActivo?.rol,
+                usuario_nombre: window.usuarioActivo?.nombre,
             })
         });
         const d = await res.json();
         if (d.error) throw new Error(d.error);
         const codigos = (d.unidades || []).map(u=>u.codigo_barra).join('<br>');
         Swal.fire({
-            icon:'success', title:`¡${d.unidades.length} pieza(s) registradas!`,
-            html:`Códigos:<br><b style="color:var(--accent);">${codigos}</b>`,
-            confirmButtonColor:'#0f172a'
+            icon: 'success', title: `¡${d.unidades.length} pieza(s) registradas!`,
+            html: `Códigos generados:<br><b style="color:var(--accent);">${codigos}</b>`,
+            confirmButtonColor: '#0f172a'
         });
         _cerrarModalInvNuevo();
         await _cargarDatosTab();
@@ -807,7 +858,13 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
             </div>`;
         });
         html += `</div>`;
-        Swal.fire({ title: nombre, html, width: 680, confirmButtonColor:'#0f172a', confirmButtonText:'Cerrar' });
+
+        Swal.fire({
+            title: nombre,
+            html, width: 680,
+            confirmButtonColor: '#0f172a',
+            confirmButtonText: 'Cerrar'
+        });
     } catch(e) { Swal.fire('Error', e.message, 'error'); }
 }
 
@@ -835,10 +892,10 @@ function _htmlVacio(tipo) {
     return `<div style="padding:50px;text-align:center;color:var(--text-muted);">
         <i class="fas fa-box-open" style="font-size:3rem;opacity:0.3;margin-bottom:15px;"></i>
         <p style="font-weight:700;">Sin ${tipo} registrados aún.</p>
-        <button id="btn-vacio-registrar" onclick="abrirModalNuevoItem()"
-            style="display:none;margin-top:10px;background:var(--accent);color:white;border:none;
+        ${_puedeEditarInv() ? `<button onclick="abrirModalNuevoItem()"
+            style="margin-top:10px;background:var(--accent);color:white;border:none;
                    padding:10px 20px;border-radius:10px;font-weight:800;cursor:pointer;">
-            + Registrar el primero</button>
+            + Registrar el primero</button>` : ''}
     </div>`;
 }
 
@@ -846,8 +903,9 @@ function _invExportarCSV() {
     window.open(`${API_URL}/api/inventario/exportar`, '_blank');
 }
 
-/* ─── Bind eventos ───────────────────────────────────────────── */
+/* ─── Bind eventos (filtros con debounce) ───────────────────── */
 function _bindInvEventos() {
+    // Poblar categorías iniciales (tab Productos)
     const selCat = document.getElementById('inv-filtro-cat');
     if (selCat) CATEGORIAS_PRODUCTO.forEach(c => {
         const o = document.createElement('option');
@@ -855,17 +913,21 @@ function _bindInvEventos() {
     });
 
     document.getElementById('inv-filtro-cat')?.addEventListener('change', async e => {
-        _invFiltroCat = e.target.value; await _cargarDatosTab();
+        _invFiltroCat = e.target.value;
+        await _cargarDatosTab();
     });
+
     document.getElementById('inv-filtro-sede')?.addEventListener('change', async e => {
-        _invFiltroSede = e.target.value; await _cargarDatosTab();
+        _invFiltroSede = e.target.value;
+        await _cargarDatosTab();
     });
 
     let debounce;
     document.getElementById('inv-filtro-q')?.addEventListener('input', e => {
         clearTimeout(debounce);
         debounce = setTimeout(async () => {
-            _invFiltroQ = e.target.value.trim(); await _cargarDatosTab();
+            _invFiltroQ = e.target.value.trim();
+            await _cargarDatosTab();
         }, 350);
     });
 }

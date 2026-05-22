@@ -1,33 +1,50 @@
 """
-routes_inventario.py — Módulo Inventario Completo
+routes_inventario.py — Sistema de Inventario Completo
 Innova Mobili ERP
 
 Rutas:
-  GET  /api/inventario/resumen              → tabla pivot productos por sede
-  GET  /api/inventario/piezas/resumen       → tabla pivot piezas por sede
-  GET  /api/inventario/buscar/<codigo>      → buscar unidad por código de barras
-  GET  /api/inventario/historial/sede/<id>  → últimos 50 movimientos de una sede
-  GET  /api/inventario/historial/<tipo>/<id>→ historial de una unidad específica
-  POST /api/inventario/producto/nuevo       → registrar producto entero + generar código
-  POST /api/inventario/pieza/nueva          → registrar pieza(s) + generar código(s)
-  PUT  /api/inventario/producto/<id>/estado → cambiar estado de un producto
-  PUT  /api/inventario/pieza/<id>/estado    → cambiar estado de una pieza
-  GET  /api/inventario/exportar             → CSV completo del inventario
+  GET  /api/inventario/resumen           → stock agrupado por categoría/modelo/sede
+  GET  /api/inventario/piezas/resumen    → piezas agrupadas por sku/medida/sede
+  GET  /api/inventario/buscar/<barcode>  → buscar unidad por código de barras
+  POST /api/inventario/producto/nuevo    → registrar producto entero
+  POST /api/inventario/pieza/nueva       → registrar pieza a medida
+  PUT  /api/inventario/<tipo>/<id>/estado → cambiar estado (traslado, venta, baja, etc.)
+  GET  /api/inventario/historial/<tipo>/<id> → historial de una unidad
+  GET  /api/inventario/historial/sede/<sede_id> → movimientos de una sede
+  GET  /api/inventario/exportar          → CSV completo
 """
 
-import os, csv, random, string
-from io import StringIO
+import os
+import csv
+import io
 from datetime import datetime
-
-import psycopg2
-from psycopg2 import pool as pg_pool
 import pytz
 from flask import Blueprint, request, jsonify, Response
+import psycopg2
+from psycopg2 import pool as pg_pool
 
 inventario_bp = Blueprint('inventario', __name__)
-
 _pool = None
-_tz   = pytz.timezone('America/Lima')
+tz_peru = pytz.timezone('America/Lima')
+
+# Roles autorizados para modificar stock
+ROLES_INVENTARIO = ('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+
+# Prefijos por categoría para el código de barras
+PREFIJOS = {
+    'Sofa':           'SOF',
+    'Butaca':         'BUT',
+    'Silla':          'SIL',
+    'Espejo':         'ESP',
+    'Cuadro':         'CUA',
+    'Cojin':          'COJ',
+    'Mesa Centro':    'MEC',
+    'Consola':        'CON',
+    'tablero':        'TAB',
+    'base-comedor':   'BAC',
+    'base-consola':   'BCS',
+    'base-mesa-centro': 'BMC',
+}
 
 
 def init_inventario_pool():
@@ -35,11 +52,11 @@ def init_inventario_pool():
     global _pool
     if _pool is None:
         _pool = pg_pool.ThreadedConnectionPool(
-            minconn=1, maxconn=6,
-            host     = os.getenv("DB_HOST"),
-            database = os.getenv("DB_NAME"),
-            user     = os.getenv("DB_USER"),
-            password = os.getenv("DB_PASSWORD"),
+            minconn=1, maxconn=5,
+            host=os.getenv("DB_HOST"),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
         )
 
 
@@ -47,629 +64,594 @@ def _conn():
     return _pool.getconn()
 
 
-def _release(c):
-    if c: _pool.putconn(c)
+def _rel(c):
+    if c:
+        _pool.putconn(c)
 
 
-# ──────────────────────────────────────────────────────────────
-# UTILIDAD: generar código de barras único
-# Formato: IM-CAT3-XXXX  (IM = Innova Mobili, CAT3 = 3 letras categoría, XXXX = 4 aleatorio)
-# ──────────────────────────────────────────────────────────────
-def _generar_codigo(categoria, tabla, cursor):
-    prefijo = 'IM-' + ''.join(c for c in categoria.upper() if c.isalpha())[:4]
-    for _ in range(50):
-        sufijo  = ''.join(random.choices(string.digits + string.ascii_uppercase, k=5))
-        codigo  = f"{prefijo}-{sufijo}"
-        cursor.execute(f"SELECT 1 FROM {tabla} WHERE codigo_barra = %s", (codigo,))
-        if not cursor.fetchone():
-            return codigo
-    raise RuntimeError("No se pudo generar un código único. Inténtalo de nuevo.")
+def _verificar_rol(rol):
+    return rol in ROLES_INVENTARIO
 
 
-def _registrar_movimiento(cur, tipo_item, item_id, codigo_barra, evento,
-                           estado_ant, estado_nuevo,
-                           sede_origen_id, sede_destino_id,
-                           usuario_id, usuario_nombre, usuario_rol, notas):
+def _generar_codigo(cur, prefijo, tabla_col):
+    """Genera el siguiente código de barras único: IM-{PREFIX}-{N:05d}"""
+    cur.execute(f"SELECT COUNT(*) FROM {tabla_col};")
+    n = cur.fetchone()[0] + 1
+    codigo = f"IM-{prefijo}-{str(n).zfill(5)}"
+    # Verificar unicidad (si ya existe, incrementar)
+    cur.execute(f"SELECT 1 FROM {tabla_col} WHERE codigo_barra = %s", (codigo,))
+    while cur.fetchone():
+        n += 1
+        codigo = f"IM-{prefijo}-{str(n).zfill(5)}"
+        cur.execute(f"SELECT 1 FROM {tabla_col} WHERE codigo_barra = %s", (codigo,))
+    return codigo
+
+
+def _registrar_historial(cur, tipo, reg_id, barcode, evento,
+                          sede_orig, sede_dest, est_ant, est_nuevo,
+                          usuario_id, usuario_nombre, venta_id=None,
+                          codigo_venta=None, notas=None):
     cur.execute("""
-        INSERT INTO stock_movimientos
-            (tipo_item, item_id, codigo_barra, evento,
-             estado_anterior, estado_nuevo,
-             sede_origen_id, sede_destino_id,
-             usuario_id, usuario_nombre, usuario_rol, notas)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """, (tipo_item, item_id, codigo_barra, evento,
-          estado_ant, estado_nuevo,
-          sede_origen_id, sede_destino_id,
-          usuario_id, usuario_nombre, usuario_rol, notas))
+        INSERT INTO historial_inventario
+            (tipo_registro, registro_id, codigo_barra, tipo_evento,
+             sede_origen_id, sede_destino_id, estado_anterior, estado_nuevo,
+             usuario_id, usuario_nombre, venta_id, codigo_venta, notas)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);
+    """, (tipo, reg_id, barcode, evento,
+          sede_orig, sede_dest, est_ant, est_nuevo,
+          usuario_id, usuario_nombre, venta_id, codigo_venta, notas))
 
 
-# ══════════════════════════════════════════════════════════════
-# 1. RESUMEN PRODUCTOS (pivot sede)
-# ══════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. RESUMEN DE PRODUCTOS ENTEROS (pivot por sede)
+# ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/resumen', methods=['GET'])
 def resumen_productos():
     categoria = request.args.get('categoria', '')
-    q         = request.args.get('q', '').strip()
+    q         = request.args.get('q', '').strip().lower()
     sede_id   = request.args.get('sede_id', '')
+
+    where, params = [], []
+    if categoria:
+        where.append("sp.categoria = %s"); params.append(categoria)
+    if q:
+        where.append("LOWER(sp.nombre_modelo) LIKE %s"); params.append(f"%{q}%")
+    if sede_id:
+        where.append("sp.sede_id = %s"); params.append(sede_id)
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     conn = None
     try:
-        conn = _conn()
-        cur  = conn.cursor()
+        conn = _conn(); cur = conn.cursor()
 
-        # Sedes disponibles
-        cur.execute("SELECT id, nombre FROM sedes ORDER BY id")
+        cur.execute("SELECT id, nombre FROM sedes ORDER BY id;")
         sedes = cur.fetchall()
-        nombres_sedes = [s[1] for s in sedes]
-
-        where = ["1=1"]
-        params = []
-        if categoria:
-            where.append("u.categoria = %s"); params.append(categoria)
-        if q:
-            where.append("u.nombre_modelo ILIKE %s"); params.append(f'%{q}%')
-        if sede_id:
-            where.append("u.sede_id = %s"); params.append(int(sede_id))
 
         cur.execute(f"""
             SELECT
-                u.nombre_modelo,
-                u.categoria,
-                u.catalogo_id,
-                u.sede_id,
-                s.nombre                                           AS sede_nombre,
-                COUNT(*) FILTER (WHERE u.estado = 'Disponible')   AS disponibles,
-                COUNT(*)                                           AS total
-            FROM stock_unidades u
-            JOIN sedes s ON u.sede_id = s.id
-            WHERE {' AND '.join(where)}
-            GROUP BY u.nombre_modelo, u.categoria, u.catalogo_id, u.sede_id, s.nombre
-            ORDER BY u.categoria, u.nombre_modelo
+                sp.categoria,
+                sp.nombre_modelo,
+                sp.catalogo_id,
+                sp.sede_id,
+                se.nombre AS sede_nombre,
+                COUNT(*)                                                    AS total,
+                COUNT(*) FILTER (WHERE sp.estado = 'Disponible')           AS disponibles,
+                COUNT(*) FILTER (WHERE sp.estado = 'Reservado')            AS reservados,
+                COUNT(*) FILTER (WHERE sp.estado = 'Vendido')              AS vendidos,
+                MAX(sp.foto_url)                                            AS foto_url
+            FROM stock_productos sp
+            JOIN sedes se ON sp.sede_id = se.id
+            {where_sql}
+            GROUP BY sp.categoria, sp.nombre_modelo, sp.catalogo_id, sp.sede_id, se.nombre
+            ORDER BY sp.categoria, sp.nombre_modelo, se.nombre;
         """, params)
         rows = cur.fetchall()
 
         # Agrupar por modelo
-        modelos_dict = {}
+        modelos = {}
         for r in rows:
-            nombre, cat, cat_id, sid, snombre, disp, tot = r
-            key = (nombre, cat)
-            if key not in modelos_dict:
-                modelos_dict[key] = {
-                    'nombre_modelo': nombre,
-                    'categoria':     cat,
-                    'catalogo_id':   cat_id,
-                    'disponibles':   0,
-                    'total':         0,
-                    'sede_stock':    {}
+            key = (r[0], r[1])  # (categoria, nombre_modelo)
+            if key not in modelos:
+                modelos[key] = {
+                    "categoria":     r[0],
+                    "nombre_modelo": r[1],
+                    "catalogo_id":   r[2],
+                    "foto_url":      r[9] or "",
+                    "total":         0,
+                    "disponibles":   0,
+                    "sede_stock":    {s[1]: {"total":0,"disponibles":0} for s in sedes},
                 }
-            modelos_dict[key]['disponibles'] += disp
-            modelos_dict[key]['total']       += tot
-            modelos_dict[key]['sede_stock'][snombre] = {'disponibles': disp, 'total': tot}
+            modelos[key]["total"]       += r[5]
+            modelos[key]["disponibles"] += r[6]
+            modelos[key]["sede_stock"][r[4]] = {
+                "total":      r[5],
+                "disponibles": r[6],
+                "reservados":  r[7],
+                "vendidos":    r[8],
+            }
 
         return jsonify({
-            'sedes':   nombres_sedes,
-            'modelos': list(modelos_dict.values())
+            "sedes":   [s[1] for s in sedes],
+            "modelos": list(modelos.values())
         }), 200
 
     except Exception as e:
+        import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
-        _release(conn)
+        _rel(conn)
 
 
-# ══════════════════════════════════════════════════════════════
-# 2. RESUMEN PIEZAS (pivot sede)
-# ══════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. RESUMEN DE PIEZAS A MEDIDA (pivot por sede)
+# ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/piezas/resumen', methods=['GET'])
 def resumen_piezas():
     categoria = request.args.get('categoria', '')
-    q         = request.args.get('q', '').strip()
+    q         = request.args.get('q', '').strip().lower()
+
+    where, params = [], []
+    if categoria:
+        where.append("sp.categoria = %s"); params.append(categoria)
+    if q:
+        where.append("(LOWER(sp.nombre_modelo) LIKE %s OR LOWER(sp.material) LIKE %s)")
+        params.extend([f"%{q}%", f"%{q}%"])
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     conn = None
     try:
-        conn = _conn()
-        cur  = conn.cursor()
+        conn = _conn(); cur = conn.cursor()
 
-        cur.execute("SELECT id, nombre FROM sedes ORDER BY id")
+        cur.execute("SELECT id, nombre FROM sedes ORDER BY id;")
         sedes = cur.fetchall()
-        nombres_sedes = [s[1] for s in sedes]
-
-        where = ["1=1"]
-        params = []
-        if categoria:
-            where.append("p.categoria = %s"); params.append(categoria)
-        if q:
-            where.append("p.nombre_modelo ILIKE %s"); params.append(f'%{q}%')
 
         cur.execute(f"""
             SELECT
-                p.sku_maestro, p.nombre_modelo, p.categoria,
-                p.material, p.color_acabado, p.forma,
-                p.largo_cm, p.ancho_cm, p.alto_cm,
-                p.sede_id, s.nombre AS sede_nombre,
-                COUNT(*) FILTER (WHERE p.estado = 'Disponible') AS disponibles,
+                sp.categoria, sp.sku_maestro, sp.nombre_modelo,
+                sp.material, sp.color_acabado, sp.forma,
+                sp.largo_cm, sp.ancho_cm, sp.alto_cm,
+                sp.sede_id, se.nombre AS sede_nombre,
+                COUNT(*) FILTER (WHERE sp.estado = 'Disponible') AS disponibles,
                 COUNT(*) AS total
-            FROM stock_piezas p
-            JOIN sedes s ON p.sede_id = s.id
-            WHERE {' AND '.join(where)}
-            GROUP BY p.sku_maestro, p.nombre_modelo, p.categoria,
-                     p.material, p.color_acabado, p.forma,
-                     p.largo_cm, p.ancho_cm, p.alto_cm,
-                     p.sede_id, s.nombre
-            ORDER BY p.categoria, p.nombre_modelo, p.largo_cm
+            FROM stock_piezas sp
+            JOIN sedes se ON sp.sede_id = se.id
+            {where_sql}
+            GROUP BY sp.categoria, sp.sku_maestro, sp.nombre_modelo,
+                     sp.material, sp.color_acabado, sp.forma,
+                     sp.largo_cm, sp.ancho_cm, sp.alto_cm,
+                     sp.sede_id, se.nombre
+            ORDER BY sp.categoria, sp.sku_maestro, sp.forma, se.nombre;
         """, params)
         rows = cur.fetchall()
 
-        piezas_dict = {}
+        grupos = {}
         for r in rows:
-            (sku, nombre, cat, mat, color, forma,
-             largo, ancho, alto, sid, snombre, disp, tot) = r
-
-            key = (sku, forma, largo, ancho, alto)
-            if key not in piezas_dict:
-                piezas_dict[key] = {
-                    'sku_maestro':  sku,
-                    'nombre_modelo': nombre,
-                    'categoria':    cat,
-                    'material':     mat,
-                    'color_acabado': color,
-                    'forma':        forma,
-                    'largo_cm':     float(largo) if largo else None,
-                    'ancho_cm':     float(ancho) if ancho else None,
-                    'alto_cm':      float(alto)  if alto  else None,
-                    'disponibles':  0,
-                    'total':        0,
-                    'sede_stock':   {}
+            key = (r[1], r[5], r[6], r[7], r[8])  # sku+forma+medidas
+            if key not in grupos:
+                grupos[key] = {
+                    "categoria":     r[0],
+                    "sku_maestro":   r[1],
+                    "nombre_modelo": r[2],
+                    "material":      r[3],
+                    "color_acabado": r[4],
+                    "forma":         r[5],
+                    "largo_cm":      float(r[6]) if r[6] else None,
+                    "ancho_cm":      float(r[7]) if r[7] else None,
+                    "alto_cm":       float(r[8]) if r[8] else None,
+                    "total":         0,
+                    "disponibles":   0,
+                    "sede_stock":    {s[1]: 0 for s in sedes},
                 }
-            piezas_dict[key]['disponibles'] += disp
-            piezas_dict[key]['total']       += tot
-            piezas_dict[key]['sede_stock'][snombre] = disp
+            grupos[key]["disponibles"] += r[11]
+            grupos[key]["total"]       += r[12]
+            grupos[key]["sede_stock"][r[10]] = r[11]  # disponibles por sede
 
         return jsonify({
-            'sedes':  nombres_sedes,
-            'piezas': list(piezas_dict.values())
+            "sedes":  [s[1] for s in sedes],
+            "piezas": list(grupos.values())
         }), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        _release(conn)
+        _rel(conn)
 
 
-# ══════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 # 3. BUSCAR POR CÓDIGO DE BARRAS
-# ══════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/buscar/<barcode>', methods=['GET'])
-def buscar_barcode(barcode):
+def buscar_por_barcode(barcode):
     conn = None
     try:
-        conn = _conn()
-        cur  = conn.cursor()
+        conn = _conn(); cur = conn.cursor()
 
-        # Buscar primero en productos
+        # Buscar en productos
         cur.execute("""
-            SELECT u.id, u.codigo_barra, u.nombre_modelo, u.categoria,
-                   u.color_tela, u.acabado, u.estado, u.costo_ingreso,
-                   u.fecha_ingreso, u.catalogo_id, s.nombre AS sede
-            FROM stock_unidades u
-            JOIN sedes s ON u.sede_id = s.id
-            WHERE u.codigo_barra = %s
+            SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
+                   sp.color_tela, sp.acabado, sp.estado, se.nombre AS sede,
+                   sp.foto_url, sp.costo_ingreso, sp.precio_venta, sp.fecha_ingreso,
+                   'producto' AS tipo
+            FROM stock_productos sp
+            JOIN sedes se ON sp.sede_id = se.id
+            WHERE sp.codigo_barra = %s;
         """, (barcode,))
-        r = cur.fetchone()
-        if r:
+        row = cur.fetchone()
+
+        if not row:
+            # Buscar en piezas
+            cur.execute("""
+                SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
+                       sp.material, sp.color_acabado, sp.estado, se.nombre AS sede,
+                       sp.forma, sp.largo_cm, sp.ancho_cm, sp.alto_cm,
+                       sp.costo_ingreso, sp.fecha_ingreso, 'pieza' AS tipo
+                FROM stock_piezas sp
+                JOIN sedes se ON sp.sede_id = se.id
+                WHERE sp.codigo_barra = %s;
+            """, (barcode,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({'error': 'Código no encontrado'}), 404
+
             return jsonify({
-                'tipo': 'producto', 'id': r[0], 'codigo_barra': r[1],
-                'nombre_modelo': r[2], 'categoria': r[3],
-                'color_tela': r[4], 'acabado': r[5], 'estado': r[6],
-                'costo_ingreso': float(r[7]) if r[7] else None,
-                'fecha_ingreso': r[8].strftime('%d/%m/%Y') if r[8] else None,
-                'catalogo_id': r[9], 'sede': r[10]
+                "tipo":          "pieza",
+                "id":            row[0],
+                "codigo_barra":  row[1],
+                "nombre_modelo": row[2],
+                "categoria":     row[3],
+                "material":      row[4],
+                "color_acabado": row[5],
+                "estado":        row[6],
+                "sede":          row[7],
+                "forma":         row[8],
+                "largo_cm":      float(row[9])  if row[9]  else None,
+                "ancho_cm":      float(row[10]) if row[10] else None,
+                "alto_cm":       float(row[11]) if row[11] else None,
+                "costo_ingreso": float(row[12]) if row[12] else None,
+                "fecha_ingreso": row[13].strftime('%d/%m/%Y') if row[13] else None,
             }), 200
 
-        # Buscar en piezas
-        cur.execute("""
-            SELECT p.id, p.codigo_barra, p.nombre_modelo, p.categoria,
-                   p.material, p.color_acabado, p.forma,
-                   p.largo_cm, p.ancho_cm, p.alto_cm,
-                   p.estado, p.costo_ingreso, p.fecha_ingreso, s.nombre AS sede
-            FROM stock_piezas p
-            JOIN sedes s ON p.sede_id = s.id
-            WHERE p.codigo_barra = %s
-        """, (barcode,))
-        r = cur.fetchone()
-        if r:
-            return jsonify({
-                'tipo': 'pieza', 'id': r[0], 'codigo_barra': r[1],
-                'nombre_modelo': r[2], 'categoria': r[3],
-                'material': r[4], 'color_acabado': r[5], 'forma': r[6],
-                'largo_cm': float(r[7]) if r[7] else None,
-                'ancho_cm': float(r[8]) if r[8] else None,
-                'alto_cm':  float(r[9]) if r[9] else None,
-                'estado': r[10],
-                'costo_ingreso': float(r[11]) if r[11] else None,
-                'fecha_ingreso': r[12].strftime('%d/%m/%Y') if r[12] else None,
-                'sede': r[13]
-            }), 200
-
-        return jsonify({'error': f'Código "{barcode}" no encontrado en inventario'}), 404
+        return jsonify({
+            "tipo":          "producto",
+            "id":            row[0],
+            "codigo_barra":  row[1],
+            "nombre_modelo": row[2],
+            "categoria":     row[3],
+            "color_tela":    row[4],
+            "acabado":       row[5],
+            "estado":        row[6],
+            "sede":          row[7],
+            "foto_url":      row[8] or "",
+            "costo_ingreso": float(row[9])  if row[9]  else None,
+            "precio_venta":  float(row[10]) if row[10] else None,
+            "fecha_ingreso": row[11].strftime('%d/%m/%Y') if row[11] else None,
+        }), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        _release(conn)
+        _rel(conn)
 
 
-# ══════════════════════════════════════════════════════════════
-# 4. HISTORIAL POR SEDE (últimos 50)
-# ══════════════════════════════════════════════════════════════
-@inventario_bp.route('/api/inventario/historial/sede/<int:sede_id>', methods=['GET'])
-def historial_sede(sede_id):
-    conn = None
-    try:
-        conn = _conn()
-        cur  = conn.cursor()
-        cur.execute("""
-            SELECT
-                m.fecha, m.evento, m.codigo_barra,
-                so.nombre AS sede_origen,
-                sd.nombre AS sede_destino,
-                m.usuario_nombre, m.notas
-            FROM stock_movimientos m
-            LEFT JOIN sedes so ON m.sede_origen_id  = so.id
-            LEFT JOIN sedes sd ON m.sede_destino_id = sd.id
-            WHERE m.sede_origen_id = %s OR m.sede_destino_id = %s
-            ORDER BY m.fecha DESC
-            LIMIT 50
-        """, (sede_id, sede_id))
-        rows = cur.fetchall()
-        resultado = [{
-            'fecha':         r[0].strftime('%d/%m/%Y %H:%M') if r[0] else '',
-            'evento':        r[1],
-            'codigo_barra':  r[2],
-            'sede_origen':   r[3],
-            'sede_destino':  r[4],
-            'usuario':       r[5],
-            'notas':         r[6],
-        } for r in rows]
-        return jsonify(resultado), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        _release(conn)
-
-
-# ══════════════════════════════════════════════════════════════
-# 5. HISTORIAL DE UNA UNIDAD ESPECÍFICA
-# ══════════════════════════════════════════════════════════════
-@inventario_bp.route('/api/inventario/historial/<tipo>/<int:item_id>', methods=['GET'])
-def historial_unidad(tipo, item_id):
-    if tipo not in ('producto', 'pieza'):
-        return jsonify({'error': 'tipo inválido'}), 400
-    conn = None
-    try:
-        conn = _conn()
-        cur  = conn.cursor()
-        cur.execute("""
-            SELECT m.fecha, m.evento,
-                   so.nombre AS sede_origen,
-                   sd.nombre AS sede_destino,
-                   m.usuario_nombre, m.notas,
-                   m.estado_anterior, m.estado_nuevo
-            FROM stock_movimientos m
-            LEFT JOIN sedes so ON m.sede_origen_id  = so.id
-            LEFT JOIN sedes sd ON m.sede_destino_id = sd.id
-            WHERE m.tipo_item = %s AND m.item_id = %s
-            ORDER BY m.fecha DESC
-        """, (tipo, item_id))
-        rows = cur.fetchall()
-        resultado = [{
-            'fecha':          r[0].strftime('%d/%m/%Y %H:%M') if r[0] else '',
-            'evento':         r[1],
-            'sede_origen':    r[2],
-            'sede_destino':   r[3],
-            'usuario':        r[4],
-            'notas':          r[5],
-            'estado_anterior': r[6],
-            'estado_nuevo':   r[7],
-        } for r in rows]
-        return jsonify(resultado), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    finally:
-        _release(conn)
-
-
-# ══════════════════════════════════════════════════════════════
-# 6. REGISTRAR PRODUCTO ENTERO
-# ══════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. REGISTRAR PRODUCTO ENTERO
+# ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/producto/nuevo', methods=['POST'])
-def nuevo_producto():
-    d = request.json or {}
-    nombre    = (d.get('nombre_modelo') or '').strip()
-    categoria = (d.get('categoria')     or '').strip()
-    sede_id   = d.get('sede_id')
+def registrar_producto():
+    data = request.json or {}
 
-    if not nombre or not categoria or not sede_id:
-        return jsonify({'error': 'nombre_modelo, categoria y sede_id son obligatorios'}), 400
+    if not _verificar_rol(data.get('usuario_rol', '')):
+        return jsonify({'error': 'Sin permisos. Solo Admin o Jefe de Taller.'}), 403
+
+    required = ['nombre_modelo', 'categoria', 'sede_id', 'usuario_id']
+    missing  = [f for f in required if not data.get(f)]
+    if missing:
+        return jsonify({'error': f'Campos faltantes: {", ".join(missing)}'}), 400
 
     conn = None
     try:
-        conn = _conn()
-        conn.autocommit = False
-        cur = conn.cursor()
+        conn = _conn(); cur = conn.cursor()
 
-        codigo = _generar_codigo(categoria, 'stock_unidades', cur)
+        prefijo = PREFIJOS.get(data['categoria'], 'PRD')
+        barcode = _generar_codigo(cur, prefijo, 'stock_productos')
 
         cur.execute("""
-            INSERT INTO stock_unidades
-                (codigo_barra, catalogo_id, nombre_modelo, categoria,
-                 color_tela, acabado, observaciones,
-                 sede_id, estado, costo_ingreso, usuario_ingreso_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s)
-            RETURNING id
+            INSERT INTO stock_productos
+                (catalogo_id, nombre_modelo, categoria, codigo_barra,
+                 color_tela, acabado, observaciones, foto_url,
+                 sede_id, estado, costo_ingreso, precio_venta, creado_por)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
+            RETURNING id;
         """, (
-            codigo,
-            d.get('catalogo_id'),
-            nombre, categoria,
-            d.get('color_tela'), d.get('acabado'), d.get('observaciones'),
-            int(sede_id),
-            d.get('costo_ingreso'),
-            d.get('usuario_id'),
+            data.get('catalogo_id'),
+            data['nombre_modelo'],
+            data['categoria'],
+            barcode,
+            data.get('color_tela'),
+            data.get('acabado'),
+            data.get('observaciones'),
+            data.get('foto_url'),
+            data['sede_id'],
+            data.get('costo_ingreso'),
+            data.get('precio_venta'),
+            data['usuario_id'],
         ))
         nuevo_id = cur.fetchone()[0]
 
-        _registrar_movimiento(
-            cur, 'producto', nuevo_id, codigo, 'Ingreso',
+        _registrar_historial(
+            cur, 'producto', nuevo_id, barcode,
+            'Ingreso', None, data['sede_id'],
             None, 'Disponible',
-            int(sede_id), int(sede_id),
-            d.get('usuario_id'), d.get('usuario_nombre'),
-            d.get('usuario_rol'), 'Ingreso inicial al inventario'
+            data['usuario_id'], data.get('usuario_nombre', ''),
+            notas=f"Ingreso inicial. {data.get('observaciones', '')}"
         )
 
         conn.commit()
-        return jsonify({'exito': True, 'id': nuevo_id, 'codigo_barra': codigo}), 201
+        return jsonify({'exito': True, 'id': nuevo_id, 'codigo_barra': barcode}), 201
 
     except Exception as e:
-        if conn:
-            try: conn.rollback()
-            except: pass
+        if conn: conn.rollback()
+        import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
-        if conn: conn.autocommit = True
-        _release(conn)
+        _rel(conn)
 
 
-# ══════════════════════════════════════════════════════════════
-# 7. REGISTRAR PIEZA(S) A MEDIDA
-# ══════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. REGISTRAR PIEZA A MEDIDA
+# ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/pieza/nueva', methods=['POST'])
-def nueva_pieza():
-    d = request.json or {}
-    sku     = (d.get('sku_maestro')  or '').strip()
-    nombre  = (d.get('nombre_modelo') or '').strip()
-    cat     = (d.get('categoria')    or '').strip()
-    sede_id = d.get('sede_id')
-    cant    = int(d.get('cantidad') or 1)
+def registrar_pieza():
+    data = request.json or {}
 
-    if not sku or not nombre or not sede_id:
-        return jsonify({'error': 'sku_maestro, nombre_modelo y sede_id son obligatorios'}), 400
+    if not _verificar_rol(data.get('usuario_rol', '')):
+        return jsonify({'error': 'Sin permisos. Solo Admin o Jefe de Taller.'}), 403
+
+    required = ['sku_maestro', 'nombre_modelo', 'categoria', 'forma', 'sede_id', 'usuario_id']
+    missing  = [f for f in required if not data.get(f)]
+    if missing:
+        return jsonify({'error': f'Campos faltantes: {", ".join(missing)}'}), 400
+
+    # Puede registrarse más de 1 unidad a la vez (cantidad)
+    cantidad = max(1, int(data.get('cantidad', 1)))
 
     conn = None
     try:
-        conn = _conn()
-        conn.autocommit = False
-        cur = conn.cursor()
+        conn = _conn(); cur = conn.cursor()
+        prefijo  = PREFIJOS.get(data['categoria'], 'PIE')
+        generados = []
 
-        unidades = []
-        for _ in range(cant):
-            codigo = _generar_codigo(cat or 'PIEZA', 'stock_piezas', cur)
+        for _ in range(cantidad):
+            barcode = _generar_codigo(cur, prefijo, 'stock_piezas')
             cur.execute("""
                 INSERT INTO stock_piezas
-                    (codigo_barra, sku_maestro, nombre_modelo, categoria,
-                     material, color_acabado, forma,
-                     largo_cm, ancho_cm, alto_cm,
-                     sede_id, estado, costo_ingreso, proveedor, usuario_ingreso_id)
+                    (categoria, sku_maestro, nombre_modelo, material, color_acabado,
+                     codigo_barra, forma, largo_cm, ancho_cm, alto_cm,
+                     sede_id, estado, costo_ingreso, proveedor, creado_por)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
-                RETURNING id
+                RETURNING id;
             """, (
-                codigo, sku, nombre, cat,
-                d.get('material'), d.get('color_acabado'),
-                d.get('forma', 'Rectangular'),
-                d.get('largo_cm'), d.get('ancho_cm'), d.get('alto_cm'),
-                int(sede_id),
-                d.get('costo_ingreso'), d.get('proveedor'),
-                d.get('usuario_id'),
+                data['categoria'],
+                data['sku_maestro'],
+                data['nombre_modelo'],
+                data.get('material'),
+                data.get('color_acabado'),
+                barcode,
+                data['forma'],
+                data.get('largo_cm'),
+                data.get('ancho_cm'),
+                data.get('alto_cm'),
+                data['sede_id'],
+                data.get('costo_ingreso'),
+                data.get('proveedor'),
+                data['usuario_id'],
             ))
             nuevo_id = cur.fetchone()[0]
-
-            _registrar_movimiento(
-                cur, 'pieza', nuevo_id, codigo, 'Ingreso',
+            _registrar_historial(
+                cur, 'pieza', nuevo_id, barcode,
+                'Ingreso', None, data['sede_id'],
                 None, 'Disponible',
-                int(sede_id), int(sede_id),
-                d.get('usuario_id'), d.get('usuario_nombre'),
-                d.get('usuario_rol'), 'Ingreso inicial al inventario'
+                data['usuario_id'], data.get('usuario_nombre', ''),
+                notas=data.get('notas', 'Ingreso inicial')
             )
-            unidades.append({'id': nuevo_id, 'codigo_barra': codigo})
+            generados.append({'id': nuevo_id, 'codigo_barra': barcode})
 
         conn.commit()
-        return jsonify({'exito': True, 'unidades': unidades}), 201
+        return jsonify({'exito': True, 'unidades': generados}), 201
 
     except Exception as e:
-        if conn:
-            try: conn.rollback()
-            except: pass
+        if conn: conn.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        if conn: conn.autocommit = True
-        _release(conn)
+        _rel(conn)
 
 
-# ══════════════════════════════════════════════════════════════
-# 8. CAMBIAR ESTADO — PRODUCTO
-# ══════════════════════════════════════════════════════════════
-@inventario_bp.route('/api/inventario/producto/<int:item_id>/estado', methods=['PUT'])
-def cambiar_estado_producto(item_id):
-    d = request.json or {}
-    estado_nuevo    = d.get('estado_nuevo')
-    sede_destino_id = d.get('sede_destino_id')
-    tipo_evento     = d.get('tipo_evento', 'Ajuste')
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. CAMBIAR ESTADO (Traslado, Venta, Baja, Reserva, etc.)
+# ─────────────────────────────────────────────────────────────────────────────
+@inventario_bp.route('/api/inventario/<tipo>/<int:reg_id>/estado', methods=['PUT'])
+def cambiar_estado(tipo, reg_id):
+    """
+    tipo: 'producto' o 'pieza'
+    Body JSON:
+    {
+      "estado_nuevo":   "En Traslado",
+      "sede_destino_id": 3,          (requerido si es traslado)
+      "tipo_evento":    "Traslado",
+      "usuario_id":     5,
+      "usuario_rol":    "Admin",
+      "usuario_nombre": "Carlos",
+      "notas":          "Traslado para exhibición",
+      "venta_id":       null,
+      "codigo_venta":   null
+    }
+    """
+    if tipo not in ('producto', 'pieza'):
+        return jsonify({'error': 'tipo debe ser producto o pieza'}), 400
 
-    if not estado_nuevo:
-        return jsonify({'error': 'estado_nuevo es obligatorio'}), 400
+    data = request.json or {}
+    if not _verificar_rol(data.get('usuario_rol', '')):
+        return jsonify({'error': 'Sin permisos. Solo Admin o Jefe de Taller.'}), 403
 
-    conn = None
+    tabla = 'stock_productos' if tipo == 'producto' else 'stock_piezas'
+    conn  = None
     try:
-        conn = _conn()
-        conn.autocommit = False
-        cur = conn.cursor()
+        conn = _conn(); cur = conn.cursor()
 
-        cur.execute("""
-            SELECT codigo_barra, estado, sede_id FROM stock_unidades WHERE id = %s
-        """, (item_id,))
+        cur.execute(
+            f"SELECT estado, sede_id, codigo_barra FROM {tabla} WHERE id = %s",
+            (reg_id,)
+        )
         row = cur.fetchone()
         if not row:
-            return jsonify({'error': 'Producto no encontrado'}), 404
-        codigo, estado_ant, sede_id = row
+            return jsonify({'error': 'Registro no encontrado'}), 404
 
-        # Si es traslado, actualizar sede también
-        if tipo_evento == 'Traslado' and sede_destino_id:
-            cur.execute("""
-                UPDATE stock_unidades SET estado = %s, sede_id = %s WHERE id = %s
-            """, (estado_nuevo, int(sede_destino_id), item_id))
-        else:
-            cur.execute("""
-                UPDATE stock_unidades SET estado = %s WHERE id = %s
-            """, (estado_nuevo, item_id))
+        estado_ant, sede_orig, barcode = row
+        estado_nuevo   = data.get('estado_nuevo', estado_ant)
+        sede_destino   = data.get('sede_destino_id')
+        nueva_sede_id  = sede_destino if sede_destino else sede_orig
 
-        _registrar_movimiento(
-            cur, 'producto', item_id, codigo, tipo_evento,
+        # Actualizar estado y sede si hay traslado
+        cur.execute(f"""
+            UPDATE {tabla}
+               SET estado = %s, sede_id = %s, actualizado_en = NOW()
+             WHERE id = %s;
+        """, (estado_nuevo, nueva_sede_id, reg_id))
+
+        _registrar_historial(
+            cur, tipo, reg_id, barcode,
+            data.get('tipo_evento', 'Ajuste'),
+            sede_orig, sede_destino,
             estado_ant, estado_nuevo,
-            sede_id, int(sede_destino_id) if sede_destino_id else sede_id,
-            d.get('usuario_id'), d.get('usuario_nombre'),
-            d.get('usuario_rol'), d.get('notas')
+            data['usuario_id'], data.get('usuario_nombre', ''),
+            data.get('venta_id'), data.get('codigo_venta'),
+            data.get('notas')
         )
 
         conn.commit()
-        return jsonify({'exito': True}), 200
+        return jsonify({'exito': True, 'estado_nuevo': estado_nuevo}), 200
 
     except Exception as e:
-        if conn:
-            try: conn.rollback()
-            except: pass
+        if conn: conn.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        if conn: conn.autocommit = True
-        _release(conn)
+        _rel(conn)
 
 
-# ══════════════════════════════════════════════════════════════
-# 9. CAMBIAR ESTADO — PIEZA
-# ══════════════════════════════════════════════════════════════
-@inventario_bp.route('/api/inventario/pieza/<int:item_id>/estado', methods=['PUT'])
-def cambiar_estado_pieza(item_id):
-    d = request.json or {}
-    estado_nuevo    = d.get('estado_nuevo')
-    sede_destino_id = d.get('sede_destino_id')
-    tipo_evento     = d.get('tipo_evento', 'Ajuste')
-
-    if not estado_nuevo:
-        return jsonify({'error': 'estado_nuevo es obligatorio'}), 400
-
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. HISTORIAL DE UNA UNIDAD
+# ─────────────────────────────────────────────────────────────────────────────
+@inventario_bp.route('/api/inventario/historial/<tipo>/<int:reg_id>', methods=['GET'])
+def historial_unidad(tipo, reg_id):
     conn = None
     try:
-        conn = _conn()
-        conn.autocommit = False
-        cur = conn.cursor()
-
+        conn = _conn(); cur = conn.cursor()
         cur.execute("""
-            SELECT codigo_barra, estado, sede_id FROM stock_piezas WHERE id = %s
-        """, (item_id,))
-        row = cur.fetchone()
-        if not row:
-            return jsonify({'error': 'Pieza no encontrada'}), 404
-        codigo, estado_ant, sede_id = row
-
-        if tipo_evento == 'Traslado' and sede_destino_id:
-            cur.execute("""
-                UPDATE stock_piezas SET estado = %s, sede_id = %s WHERE id = %s
-            """, (estado_nuevo, int(sede_destino_id), item_id))
-        else:
-            cur.execute("""
-                UPDATE stock_piezas SET estado = %s WHERE id = %s
-            """, (estado_nuevo, item_id))
-
-        _registrar_movimiento(
-            cur, 'pieza', item_id, codigo, tipo_evento,
-            estado_ant, estado_nuevo,
-            sede_id, int(sede_destino_id) if sede_destino_id else sede_id,
-            d.get('usuario_id'), d.get('usuario_nombre'),
-            d.get('usuario_rol'), d.get('notas')
-        )
-
-        conn.commit()
-        return jsonify({'exito': True}), 200
-
+            SELECT h.tipo_evento, h.estado_anterior, h.estado_nuevo,
+                   so.nombre AS sede_origen, sd.nombre AS sede_destino,
+                   h.usuario_nombre, h.codigo_venta, h.notas,
+                   TO_CHAR(h.fecha AT TIME ZONE 'America/Lima', 'DD/MM/YYYY HH24:MI') AS fecha
+            FROM historial_inventario h
+            LEFT JOIN sedes so ON h.sede_origen_id  = so.id
+            LEFT JOIN sedes sd ON h.sede_destino_id = sd.id
+            WHERE h.tipo_registro = %s AND h.registro_id = %s
+            ORDER BY h.fecha DESC;
+        """, (tipo, reg_id))
+        rows = cur.fetchall()
+        return jsonify([{
+            "evento":        r[0], "estado_ant": r[1], "estado_nuevo": r[2],
+            "sede_origen":   r[3], "sede_destino": r[4],
+            "usuario":       r[5], "venta":       r[6],
+            "notas":         r[7], "fecha":        r[8],
+        } for r in rows]), 200
     except Exception as e:
-        if conn:
-            try: conn.rollback()
-            except: pass
         return jsonify({'error': str(e)}), 500
     finally:
-        if conn: conn.autocommit = True
-        _release(conn)
+        _rel(conn)
 
 
-# ══════════════════════════════════════════════════════════════
-# 10. EXPORTAR CSV
-# ══════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. MOVIMIENTOS DE UNA SEDE
+# ─────────────────────────────────────────────────────────────────────────────
+@inventario_bp.route('/api/inventario/historial/sede/<int:sede_id>', methods=['GET'])
+def historial_sede(sede_id):
+    limite = int(request.args.get('limite', 50))
+    conn   = None
+    try:
+        conn = _conn(); cur = conn.cursor()
+        cur.execute("""
+            SELECT h.tipo_registro, h.codigo_barra, h.tipo_evento,
+                   h.estado_anterior, h.estado_nuevo,
+                   so.nombre AS sede_origen, sd.nombre AS sede_destino,
+                   h.usuario_nombre, h.codigo_venta, h.notas,
+                   TO_CHAR(h.fecha AT TIME ZONE 'America/Lima', 'DD/MM/YYYY HH24:MI') AS fecha
+            FROM historial_inventario h
+            LEFT JOIN sedes so ON h.sede_origen_id  = so.id
+            LEFT JOIN sedes sd ON h.sede_destino_id = sd.id
+            WHERE h.sede_origen_id = %s OR h.sede_destino_id = %s
+            ORDER BY h.fecha DESC
+            LIMIT %s;
+        """, (sede_id, sede_id, limite))
+        rows = cur.fetchall()
+        return jsonify([{
+            "tipo": r[0], "codigo_barra": r[1], "evento": r[2],
+            "estado_ant": r[3], "estado_nuevo": r[4],
+            "sede_origen": r[5], "sede_destino": r[6],
+            "usuario": r[7], "venta": r[8], "notas": r[9], "fecha": r[10],
+        } for r in rows]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        _rel(conn)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. EXPORTAR CSV COMPLETO
+# ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/exportar', methods=['GET'])
-def exportar_csv():
+def exportar_inventario():
     conn = None
     try:
-        conn = _conn()
-        cur  = conn.cursor()
+        conn = _conn(); cur = conn.cursor()
 
-        output = StringIO()
+        # Productos enteros
+        cur.execute("""
+            SELECT 'Producto', sp.categoria, sp.nombre_modelo, sp.codigo_barra,
+                   sp.color_tela, sp.acabado, sp.estado, se.nombre,
+                   sp.costo_ingreso, sp.precio_venta,
+                   TO_CHAR(sp.fecha_ingreso,'DD/MM/YYYY'), sp.observaciones,
+                   NULL, NULL, NULL, NULL, NULL
+            FROM stock_productos sp JOIN sedes se ON sp.sede_id = se.id
+            UNION ALL
+            SELECT 'Pieza', sp.categoria, sp.nombre_modelo, sp.codigo_barra,
+                   sp.material, sp.color_acabado, sp.estado, se.nombre,
+                   sp.costo_ingreso, NULL,
+                   TO_CHAR(sp.fecha_ingreso,'DD/MM/YYYY'), NULL,
+                   sp.forma, sp.largo_cm::text, sp.ancho_cm::text, sp.alto_cm::text,
+                   sp.proveedor
+            FROM stock_piezas sp JOIN sedes se ON sp.sede_id = se.id
+            ORDER BY 1, 2, 3;
+        """)
+        rows = cur.fetchall()
+
+        output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(['Tipo','Código','Modelo','Categoría','Material/Color',
-                         'Medida','Sede','Estado','Costo','Fecha Ingreso'])
-
-        # Productos
-        cur.execute("""
-            SELECT 'Producto', u.codigo_barra, u.nombre_modelo, u.categoria,
-                   COALESCE(u.color_tela,'') || ' ' || COALESCE(u.acabado,''),
-                   '—', s.nombre, u.estado,
-                   COALESCE(u.costo_ingreso::text,'—'),
-                   TO_CHAR(u.fecha_ingreso,'DD/MM/YYYY')
-            FROM stock_unidades u JOIN sedes s ON u.sede_id = s.id
-            ORDER BY u.categoria, u.nombre_modelo
-        """)
-        writer.writerows(cur.fetchall())
-
-        # Piezas
-        cur.execute("""
-            SELECT 'Pieza', p.codigo_barra, p.nombre_modelo, p.categoria,
-                   COALESCE(p.material,'') || ' ' || COALESCE(p.color_acabado,''),
-                   COALESCE(p.largo_cm::text,'') || 'x' || COALESCE(p.ancho_cm::text,'') || ' cm',
-                   s.nombre, p.estado,
-                   COALESCE(p.costo_ingreso::text,'—'),
-                   TO_CHAR(p.fecha_ingreso,'DD/MM/YYYY')
-            FROM stock_piezas p JOIN sedes s ON p.sede_id = s.id
-            ORDER BY p.categoria, p.nombre_modelo
-        """)
-        writer.writerows(cur.fetchall())
-
+        writer.writerow([
+            'Tipo', 'Categoría', 'Modelo', 'Código Barras',
+            'Color/Material', 'Acabado/Color', 'Estado', 'Sede',
+            'Costo Ingreso', 'Precio Venta', 'Fecha Ingreso', 'Observaciones',
+            'Forma', 'Largo/Diám (cm)', 'Ancho (cm)', 'Alto (cm)', 'Proveedor'
+        ])
+        writer.writerows(rows)
         output.seek(0)
-        fecha = datetime.now(_tz).strftime('%Y%m%d_%H%M')
+
+        fecha = datetime.now(tz_peru).strftime('%Y%m%d_%H%M')
         return Response(
             output.getvalue(),
             mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment;filename=inventario_{fecha}.csv'}
+            headers={'Content-Disposition': f'attachment; filename=inventario_{fecha}.csv'}
         )
-
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        _release(conn)
+        _rel(conn)
