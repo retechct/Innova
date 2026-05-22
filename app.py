@@ -79,7 +79,7 @@ app.register_blueprint(usuarios_bp)
 app.register_blueprint(produccion_bp)
 
 # Aplicar rate limit al endpoint de login
-limiter.limit("10 per minute")(usuarios_bp.view_functions['usuarios.verificar_pin'])
+limiter.limit("10 per minute")(app.view_functions['usuarios.verificar_pin'])
 
 # ─── Blueprints externos (ya existían antes de la refactorización) ────────────
 from routes_kardex    import kardex_bp
