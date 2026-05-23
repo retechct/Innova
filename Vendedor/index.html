@@ -2549,7 +2549,21 @@ async function buscarPedidos() {
     }
  
     if (!data.pedidos || data.pedidos.length === 0) {
-      _psShowError('No encontramos pedidos asociados a este correo.<br><small>Si tienes una compra, escríbenos al WhatsApp.</small>');
+      // Mostrar saludo pero sin pedidos
+      const saludo = document.getElementById('ps-saludo');
+      saludo.style.display = 'block';
+      document.getElementById('ps-saludo-nombre').innerHTML =
+        `Hola, <em>${(data.nombre_cliente || email).split(' ')[0]}</em>`;
+      const lista = document.getElementById('ps-lista');
+      lista.style.display = 'block';
+      document.getElementById('ps-lista-titulo').textContent = 'Aún no tienes pedidos registrados';
+      document.getElementById('ps-cards-container').innerHTML = `
+        <div style="text-align:center;padding:40px 20px;color:#6b7280;font-size:14px;">
+          <div style="font-size:40px;margin-bottom:12px;">🛋️</div>
+          <p style="margin:0 0 8px;font-weight:600;color:#374151;">Sin pedidos por ahora</p>
+          <p style="margin:0;">Cuando realices una compra aparecerá aquí.<br>
+          ¿Tienes dudas? Escríbenos al WhatsApp.</p>
+        </div>`;
       return;
     }
  

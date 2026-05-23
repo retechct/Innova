@@ -899,11 +899,11 @@ function imprimirContratoElegante() {
         const dropdown = document.createElement('div');
         dropdown.id = 'cliente-sugerencias';
         dropdown.style.cssText = `
-            position:absolute; z-index:9999; background:#fff;
+            position:fixed; z-index:99999; background:#fff;
             border:1px solid #d1d5db; border-radius:8px;
-            box-shadow:0 4px 16px rgba(0,0,0,.12);
-            width:100%; max-height:260px; overflow-y:auto;
-            display:none; top:calc(100% + 2px); left:0;
+            box-shadow:0 8px 24px rgba(0,0,0,.18);
+            max-height:240px; overflow-y:auto;
+            display:none;
         `;
         wrapper.appendChild(dropdown);
 
@@ -912,7 +912,7 @@ function imprimirContratoElegante() {
         inputNombre.addEventListener('input', () => {
             clearTimeout(debounceTimer);
             const q = inputNombre.value.trim();
-            if (q.length < 2) { dropdown.style.display = 'none'; return; }
+            if (q.length < 1) { dropdown.style.display = 'none'; return; }
 
             debounceTimer = setTimeout(async () => {
                 try {
@@ -927,6 +927,10 @@ function imprimirContratoElegante() {
                                 <br><span style="color:#1d4ed8; cursor:pointer; font-weight:600;"
                                           id="dd-link-registrar">➕ Registrar a "${q}" ahora</span>
                             </div>`;
+                        const rect2 = inputNombre.getBoundingClientRect();
+                        dropdown.style.top   = (rect2.bottom + window.scrollY + 2) + 'px';
+                        dropdown.style.left  = rect2.left + 'px';
+                        dropdown.style.width = rect2.width + 'px';
                         dropdown.style.display = 'block';
                         document.getElementById('dd-link-registrar')
                             ?.addEventListener('click', () => {
@@ -964,11 +968,16 @@ function imprimirContratoElegante() {
                         });
                     });
 
+                    // Posicionar justo debajo del input, sobre todo lo demás
+                    const rect = inputNombre.getBoundingClientRect();
+                    dropdown.style.top    = (rect.bottom + window.scrollY + 2) + 'px';
+                    dropdown.style.left   = rect.left + 'px';
+                    dropdown.style.width  = rect.width + 'px';
                     dropdown.style.display = 'block';
                 } catch (err) {
                     console.warn('Autocomplete clientes:', err);
                 }
-            }, 280);
+            }, 180);
         });
 
         // Cerrar dropdown al hacer click fuera
