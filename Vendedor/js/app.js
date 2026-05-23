@@ -451,10 +451,12 @@ async function cargarDatosInicialesLogin() {
         const resUser = await fetch(`${API_URL}/api/usuarios`);
         const usuarios = await resUser.json();
         const selectUser = document.getElementById('login-usuario');
-        selectUser.innerHTML = '<option value="">-- Elige tu nombre --</option>';
-        usuarios.forEach(u => {
-            selectUser.innerHTML += `<option value="${u.id}">${u.nombre} (${u.rol})</option>`;
-        });
+        if (selectUser) {
+            selectUser.innerHTML = '<option value="">-- Elige tu nombre --</option>';
+            usuarios.forEach(u => {
+                selectUser.innerHTML += `<option value="${u.id}">${u.nombre} (${u.rol})</option>`;
+            });
+        }
     } catch (error) {
         console.error("No hay conexión con el servidor para cargar usuarios", error);
     }
