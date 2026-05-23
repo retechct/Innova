@@ -196,48 +196,62 @@
 
 <nav class="sidebar" id="sidebar">
     <div class="sidebar-header">MENÚ ERP</div>
-    
-    <div class="sidebar-item" onclick="changeView('stock')"><i class="fa-solid fa-boxes-stacked"></i> Stock (Tienda)</div>
-    <div class="sidebar-item" onclick="changeView('catalogo')"><i class="fa-solid fa-book-open"></i> Carta de Modelos</div>
-    <div class="sidebar-item" onclick="changeView('contrato')"><i class="fa-solid fa-pen-ruler"></i> Plantillas (A Medida)</div>
-    
-    <div class="sidebar-item" onclick="changeView('pedidos')" style="margin-top:20px; color:var(--success)"><i class="fa-solid fa-clock-rotate-left"></i> Mis Pedidos</div>
-    
-    <div class="sidebar-item" onclick="verMisCreaciones()" style="color: var(--caramel); border-top: 1px solid rgba(255,255,255,0.06); margin-top: 5px;">
+
+    <!-- ── SECCIÓN VENDEDOR ── -->
+    <div class="sidebar-item" onclick="changeView('stock')">
+        <i class="fa-solid fa-boxes-stacked"></i> Stock en Tienda
+    </div>
+    <div class="sidebar-item" onclick="changeView('catalogo')">
+        <i class="fa-solid fa-book-open"></i> Carta de Modelos
+    </div>
+    <div class="sidebar-item" onclick="changeView('contrato')">
+        <i class="fa-solid fa-pen-ruler"></i> Plantillas a Medida
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-item" onclick="changeView('pedidos')" style="color: var(--success);">
+        <i class="fa-solid fa-clock-rotate-left"></i> Mis Pedidos
+    </div>
+    <div class="sidebar-item" onclick="verMisCreaciones()" style="color: var(--caramel);">
         <i class="fa-solid fa-wand-magic-sparkles"></i> Mis Creaciones
     </div>
 
-    <div class="sidebar-item" onclick="abrirModalSugerencia(); toggleSidebar();" style="background: rgba(201,168,76,0.12); color: var(--accent); font-weight: bold; border: 1px solid var(--accent); margin: 5px 10px; border-radius: 8px; font-size: 13px;">
-    <i class="fa-solid fa-lightbulb"></i> SUGERIR NUEVO INSUMO
-</div>
-    
-    <div id="btn-menu-taller" class="sidebar-item" style="display: none; background: var(--sidebar-bg); color: var(--accent); font-weight: bold;" onclick="changeView('taller')">
+    <div class="sidebar-item sidebar-item--highlight" onclick="abrirModalSugerencia(); toggleSidebar();">
+        <i class="fa-solid fa-lightbulb"></i> Sugerir Nuevo Insumo
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- ── SECCIÓN ADMIN / TALLER ── -->
+    <div id="btn-menu-taller" class="sidebar-item sidebar-item--admin" style="display: none;" onclick="changeView('taller')">
         <i class="fa-solid fa-industry"></i> GESTIÓN DE TALLER
     </div>
-    <div id="btn-menu-inv-tienda" class="sidebar-item" style="display:none;background:var(--primary);color:var(--success);font-weight:bold;" onclick="changeView('inv-tienda')">
-        <i class="fa-solid fa-boxes"></i> INVENTARIO POR TIENDA
+    <div id="btn-menu-inv-tienda" class="sidebar-item sidebar-item--admin" style="display: none;" onclick="changeView('inv-tienda')">
+        <i class="fa-solid fa-warehouse"></i> INVENTARIO POR TIENDA
     </div>
-    <div id="btn-menu-inventario" class="sidebar-item" style="display: none; background: var(--primary); color: var(--success); font-weight: bold;" onclick="changeView('inventario')">
+    <div id="btn-menu-inventario" class="sidebar-item sidebar-item--admin" style="display: none;" onclick="changeView('inventario')">
         <i class="fa-solid fa-layer-group"></i> CONTROL DE INSUMOS
     </div>
-    <div id="btn-menu-gestor" class="sidebar-item" style="display: none; background: var(--primary); color: var(--accent); font-weight: bold;" onclick="changeView('gestor-aprobacion')">
+    <div id="btn-menu-gestor" class="sidebar-item sidebar-item--admin" style="display: none;" onclick="changeView('gestor-aprobacion')">
         <i class="fa-solid fa-clipboard-check"></i> GESTOR DE MODELOS
     </div>
-    <div id="btn-menu-logistica" class="sidebar-item" style="display: none; background: var(--primary); color: var(--accent); font-weight: bold;" onclick="changeView('logistica')">
+    <div id="btn-menu-logistica" class="sidebar-item sidebar-item--admin" style="display: none;" onclick="changeView('logistica')">
         <i class="fa-solid fa-truck-ramp-box"></i> LOGÍSTICA EXTERNA
     </div>
-    <div id="btn-menu-usuarios" class="sidebar-item" style="display: none; background: var(--primary); color: var(--accent-lt); font-weight: bold;" onclick="changeView('usuarios-admin')">
+    <div id="btn-menu-usuarios" class="sidebar-item sidebar-item--admin" style="display: none;" onclick="changeView('usuarios-admin')">
         <i class="fa-solid fa-users-gear"></i> GESTIÓN DE PERSONAL
     </div>
-    <div id="btn-menu-proveedores" class="sidebar-item" style="display: none; background: var(--primary); color: var(--success); font-weight: bold;" onclick="changeView('proveedores')">
+    <div id="btn-menu-proveedores" class="sidebar-item sidebar-item--admin" style="display: none;" onclick="changeView('proveedores')">
         <i class="fa-solid fa-address-book"></i> PROVEEDORES
     </div>
-
-    <div id="btn-menu-contratos" class="sidebar-item" style="display: none; background: var(--primary); color: var(--success); font-weight: bold;" onclick="changeView('contratos')">
-        <i class="fa-solid fa-file-excel"></i> REPORTES Y VENTAS
+    <div id="btn-menu-contratos" class="sidebar-item sidebar-item--admin" style="display: none;" onclick="changeView('contratos')">
+        <i class="fa-solid fa-chart-line"></i> REPORTES Y VENTAS
     </div>
 
-    <div class="sidebar-item" onclick="cerrarSesion()" style="color: var(--danger); border-top: 1px solid rgba(255,255,255,0.08); margin-top: 20px;">
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-item sidebar-item--danger" onclick="cerrarSesion()">
         <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
     </div>
 </nav>
@@ -253,7 +267,7 @@
         </button>
     </div>
     
-    <div id="view-productos">
+    <div id="view-productos" style="display:none;">
         <div id="product-grid" class="grid"></div>
     </div>
 
@@ -1242,28 +1256,60 @@
             </div>
         </div>
     </div>
-            <div id="modal-sugerencia" class="modal-overlay" style="z-index: 5500; display: none;">
+<div id="modal-sugerencia" class="modal-overlay" style="z-index: 5500; display: none;">
     <div class="modal-content" style="max-width: 420px; width: 90%;">
         <div class="modal-header">
-            <h3 style="color: #b45309;"><i class="fa-solid fa-lightbulb"></i> Sugerir Nuevo Insumo</h3>
+            <h3 style="color: var(--accent);">
+                <i class="fa-solid fa-lightbulb"></i> Sugerir Nuevo Insumo
+            </h3>
             <button type="button" class="close-btn" onclick="document.getElementById('modal-sugerencia').style.display='none'">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
-        
-        <div style="padding: 15px; text-align: center;">
-            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
+
+        <div style="padding: 20px;">
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px; text-align: center; line-height: 1.6;">
                 Selecciona la categoría exacta de la pieza solicitada por el cliente para abrir su ficha técnica descriptiva:
             </p>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('tela', 'sugerencia')" style="background: #7c3aed; border:none; padding:12px; font-size:12px;">🧵 Nueva Tela</button>
-                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('tablero', 'sugerencia')" style="background: #059669; border:none; padding:12px; font-size:12px;">💎 Nuevo Tablero</button>
-                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('base', 'sugerencia')" style="background: #0284c7; border:none; padding:12px; font-size:12px;"> Couch Pata/Zócalo</button>
-                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('base-comedor', 'sugerencia')" style="background: #0369a1; border:none; padding:12px; font-size:12px;">🍽️ Base de Mesa</button>
-                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('silla', 'sugerencia')" style="background: #b45309; border:none; padding:12px; font-size:12px;">🪑 Estructura Silla</button>
-                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('butaca', 'sugerencia')" style="background: #92400e; border:none; padding:12px; font-size:12px;">🪑 Estructura Butaca</button>
-                <button class="btn-primary" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('cojin', 'sugerencia')" style="background: #ec4899; border:none; padding:12px; font-size:12px;">🎨 Nuevo Cojín</button>
+
+                <button class="btn-sugerencia" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('tela', 'sugerencia')">
+                    <i class="fa-solid fa-scroll"></i>
+                    <span>Nueva Tela</span>
+                </button>
+
+                <button class="btn-sugerencia" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('tablero', 'sugerencia')">
+                    <i class="fa-solid fa-table-cells-large"></i>
+                    <span>Nuevo Tablero</span>
+                </button>
+
+                <button class="btn-sugerencia" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('base', 'sugerencia')">
+                    <i class="fa-solid fa-ruler-combined"></i>
+                    <span>Pata / Zócalo Sofá</span>
+                </button>
+
+                <button class="btn-sugerencia" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('base-comedor', 'sugerencia')">
+                    <i class="fa-solid fa-border-none"></i>
+                    <span>Base de Mesa</span>
+                </button>
+
+                <button class="btn-sugerencia" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('silla', 'sugerencia')">
+                    <i class="fa-solid fa-chair"></i>
+                    <span>Estructura Silla</span>
+                </button>
+
+                <button class="btn-sugerencia" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('butaca', 'sugerencia')">
+                    <i class="fa-solid fa-couch"></i>
+                    <span>Estructura Butaca</span>
+                </button>
+
+                <button class="btn-sugerencia" onclick="document.getElementById('modal-sugerencia').style.display='none'; abrirModalNuevo('cojin', 'sugerencia')"
+                        style="grid-column: 1 / -1;">
+                    <i class="fa-solid fa-wind"></i>
+                    <span>Nuevo Cojín</span>
+                </button>
+
             </div>
         </div>
     </div>
@@ -1320,7 +1366,7 @@
     <script src="js/carrito.js"></script>
     <script src="js/materiales.js"></script>
     <script src="js/taller.js"></script>
+    <script src="js/inventario.js"></script>  <!-- ← antes de app.js -->
     <script src="js/app.js"></script>
-    <script src="js/inventario.js"></script>
 </body>
 </html>

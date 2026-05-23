@@ -308,23 +308,36 @@ async function _abrirEditarLogistica(item, proveedores) {
     }
 }
 
-/* --- FUNCIÓN BLINDADA CONTRA ERRORES "NULL" --- */
 function changeView(view) {
     currentMode = view;
     if (document.getElementById('sidebar').classList.contains('active')) toggleSidebar();
-    
-    // 1. ACTUALIZADO: Se agregó el título 'contratos'
-    const titles = { 
-        'stock': 'STOCK EN TIENDA', 
-        'catalogo': 'NUESTRA CARTA', 
-        'contrato': 'DISEÑOS A MEDIDA', 
-        'pedidos': 'SEGUIMIENTO', 
-        'taller': 'GESTIÓN DE TALLER' ,
-        'inventario': 'CONTROL DE INSUMOS',
-        'contratos': 'REPORTES Y VENTAS' ,
-        'inv-tienda': 'INVENTARIO POR TIENDA'// <-- NUEVO
+
+    // ── Guard: proteger llamadas antes de que los scripts estén listos ──
+    const guardas = {
+        'inv-tienda':      () => typeof cargarVistaInventario === 'function',
+        'inventario':      () => typeof cargarInventarioTaller === 'function',
+        'taller':          () => typeof cargarTicketsTaller === 'function',
     };
-    
+    if (guardas[view] && !guardas[view]()) {
+        console.warn(`changeView('${view}'): función de carga aún no disponible, reintentando...`);
+        setTimeout(() => changeView(view), 150);
+        return;
+    }
+
+    const titles = {
+        'stock':        'STOCK EN TIENDA',
+        'catalogo':     'NUESTRA CARTA',
+        'contrato':     'DISEÑOS A MEDIDA',
+        'pedidos':      'SEGUIMIENTO',
+        'taller':       'GESTIÓN DE TALLER',
+        'inventario':   'CONTROL DE INSUMOS',
+        'contratos':    'REPORTES Y VENTAS',
+        'inv-tienda':   'INVENTARIO POR TIENDA',
+        'logistica':    'LOGÍSTICA EXTERNA',
+        'usuarios-admin': 'GESTIÓN DE PERSONAL',
+        'proveedores':  'PROVEEDORES',
+    };
+
     // Restaurar el header estático si veníamos de inv-tienda
     const mainTitleContainer = document.querySelector('main .view-title-container');
     if (mainTitleContainer) mainTitleContainer.style.display = '';
@@ -337,70 +350,83 @@ function changeView(view) {
         document.getElementById('view-title').innerText = titles[view];
     }
 
-    // 2. ACTUALIZADO: Se agregó 'vista-contratos' a la lista para que se oculte correctamente
-    const secciones = ['view-productos', 'view-plantillas', 'view-pedidos', 'view-taller', 'view-inventario', 'view-gestor-aprobacion', 'view-logistica', 'view-usuarios-admin', 'view-proveedores', 'vista-contratos'];
-    
+    // ── Ocultar TODAS las secciones antes de mostrar la nueva ──
+    const secciones = [
+        'view-productos', 'view-plantillas', 'view-pedidos',
+        'view-taller', 'view-inventario', 'view-gestor-aprobacion',
+        'view-logistica', 'view-usuarios-admin', 'view-proveedores',
+        'vista-contratos'
+    ];
     secciones.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
 
-    // Mostrar la vista seleccionada
-    // ── Controlar visibilidad del botón "Añadir Producto" ──────────────
-    // Solo aparece en las vistas de catálogo/stock y solo para el Admin
+    // ── Controlar visibilidad del botón "Añadir Producto" ──
     const btnAddProdNav = document.getElementById('btn-add-producto');
     if (btnAddProdNav) {
         const esVistaProductos = (view === 'stock' || view === 'catalogo');
         const esAdmin = usuarioActivo && usuarioActivo.rol === 'Admin';
         btnAddProdNav.style.display = (esVistaProductos && esAdmin) ? 'block' : 'none';
     }
- 
-    // Mostrar la vista seleccionada
-    if (view === 'stock' || view === 'catalogo') {
-        document.getElementById('view-productos').style.display = 'block';
-        renderGrid(); 
+
+    // ── Función helper para mostrar una sección de forma segura ──
+    function mostrar(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.style.display = 'block';
+        } else {
+            console.error(`changeView: no se encontró el elemento #${id}`);
+        }
     }
- 
+
+    // ── Mostrar la vista seleccionada ──
+    if (view === 'stock' || view === 'catalogo') {
+        mostrar('view-productos');
+        renderGrid();
+    }
     else if (view === 'contrato') {
-        document.getElementById('view-plantillas').style.display = 'block';
+        mostrar('view-plantillas');
     }
     else if (view === 'contratos') {
-        document.getElementById('vista-contratos').style.display = 'block';
+        mostrar('vista-contratos');
         loadContratos();
     }
     else if (view === 'pedidos') {
-        document.getElementById('view-pedidos').style.display = 'block';
+        mostrar('view-pedidos');
         loadMisPedidos();
     }
     else if (view === 'taller') {
-        document.getElementById('view-taller').style.display = 'block';
-        cargarTicketsTaller(); 
+        mostrar('view-taller');
+        cargarTicketsTaller();
     }
     else if (view === 'inventario') {
-        document.getElementById('view-inventario').style.display = 'block';
-        cargarInventarioTaller(); 
+        mostrar('view-inventario');
+        cargarInventarioTaller();
     }
     else if (view === 'inv-tienda') {
-        const mainTitleContainer = document.querySelector('main .view-title-container');
         if (mainTitleContainer) mainTitleContainer.style.display = 'none';
         cargarVistaInventario();
     }
     else if (view === 'logistica') {
-        document.getElementById('view-logistica').style.display = 'block';
+        mostrar('view-logistica');
         cargarLogisticaExterna();
     }
     else if (view === 'usuarios-admin') {
-        document.getElementById('view-usuarios-admin').style.display = 'block';
+        mostrar('view-usuarios-admin');
         listarUsuarios();
     }
     else if (view === 'proveedores') {
-        document.getElementById('view-proveedores').style.display = 'block';
+        mostrar('view-proveedores');
         listarProveedores();
     }
     else if (view === 'gestor-aprobacion') {
-        document.getElementById('view-gestor-aprobacion').style.display = 'block';
+        mostrar('view-gestor-aprobacion');
         document.getElementById('view-title').innerText = 'GESTOR DE MODELOS (Make vs Buy)';
         cargarGestorAprobacion();
+    }
+    else {
+        console.warn(`changeView: vista desconocida → '${view}'`);
     }
 }
 
