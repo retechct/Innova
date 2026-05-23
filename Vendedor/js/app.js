@@ -417,7 +417,7 @@ async function cargarDatosInicialesLogin() {
         if (selectSede) {
             selectSede.innerHTML = '<option value="">-- Selecciona Sede --</option>';
             sedes.forEach(s => {
-                selectSede.innerHTML += `<option value="${s.id}">${s.nombre} ${s.tipo === 'Taller' ? '🛠️' : '🏪'}</option>`;
+                selectSede.innerHTML += `<option value="${s.id}">${s.nombre}</option>`;
             });
         }
 
