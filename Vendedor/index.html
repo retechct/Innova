@@ -10,44 +10,180 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="pantalla-login" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--primary); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white;">
-        
-        <div style="text-align: center; margin-bottom: 30px;">
-            <div style="font-weight: 900; font-size: 2.5rem; color: var(--accent); letter-spacing: -1px;">INNOVA <span style="color: white;">MOBILI</span></div>
-            <p style="color: var(--text-muted); font-size: 14px; margin-top: 5px;">Sistema ERP y Punto de Venta</p>
-        </div>
+    <div id="pantalla-login" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; display: flex; overflow: hidden;">
 
-        <div style="background: white; padding: 30px; border-radius: 15px; width: 90%; max-width: 350px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
-            <h3 style="color: var(--primary); text-align: center; margin-top: 0; margin-bottom: 20px;">Iniciar Sesión</h3>
-            
-            <div class="form-group">
-                <label style="color: var(--text-muted);">1. Ubicación / Sede</label>
-                <select id="login-tienda" class="form-input" style="border-color: var(--border); font-weight: bold; color: var(--primary);">
-                    <option value="">Cargando sedes...</option>
-                    <!-- Se poblará dinámicamente desde la tabla 'sedes' -->
-                </select>
-            </div>
+  <!-- ESTILOS DEL LOGIN -->
+  <style>
+    #pantalla-login { background: #0d0b08; font-family: 'Jost', sans-serif; }
+    #pantalla-login .bg-wood {
+      position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse 60% 80% at 30% 50%, rgba(10,6,2,0.75) 0%, transparent 70%),
+            linear-gradient(135deg, rgba(13,11,8,0.6) 0%, rgba(28,18,8,0.5) 40%, rgba(13,11,8,0.6) 100%),
+            url('https://res.cloudinary.com/deqrqsqlv/image/upload/v1779552033/fondologin_optimized_pmscps.png') center center / cover no-repeat;
+    }
+    #pantalla-login .wood-grain {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0.05;
+      background-image:
+        repeating-linear-gradient(8deg, transparent, transparent 12px, rgba(180,120,50,0.4) 12px, rgba(180,120,50,0.4) 13px),
+        repeating-linear-gradient(-3deg, transparent, transparent 30px, rgba(150,90,30,0.2) 30px, rgba(150,90,30,0.2) 31px);
+    }
+    #pantalla-login .gold-top {
+      position: absolute; top: 0; left: 0; right: 0; height: 2px; pointer-events: none;
+      background: linear-gradient(90deg, transparent, #c9a84c 30%, #e8c97a 50%, #c9a84c 70%, transparent);
+    }
+    #pantalla-login .login-left {
+      position: absolute; left: 8%; top: 50%; transform: translateY(-50%);
+      color: white; max-width: 460px; z-index: 1;
+    }
+    #pantalla-login .login-brand {
+      font-family: 'Cormorant Garamond', serif; font-size: 14px; font-weight: 300;
+      letter-spacing: 0.35em; color: #c9a84c; text-transform: uppercase;
+      margin-bottom: 50px; display: flex; align-items: center; gap: 12px;
+    }
+    #pantalla-login .login-brand::before {
+      content: ''; display: block; width: 36px; height: 1px; background: #c9a84c;
+    }
+    #pantalla-login .login-hero {
+      font-family: 'Cormorant Garamond', serif; font-size: clamp(48px, 6vw, 84px);
+      font-weight: 300; line-height: 1.0; color: #f5f0e8; margin-bottom: 16px;
+    }
+    #pantalla-login .login-hero em { font-style: italic; color: #c9a84c; }
+    #pantalla-login .login-sub {
+      font-size: 14px; font-weight: 300; color: rgba(245,240,232,0.45);
+      letter-spacing: 0.04em; line-height: 1.7; margin-bottom: 44px; max-width: 320px;
+    }
+    #pantalla-login .login-deco {
+      display: flex; align-items: center; gap: 14px;
+    }
+    #pantalla-login .login-deco::before, #pantalla-login .login-deco::after {
+      content: ''; height: 1px; flex: 1;
+      background: linear-gradient(90deg, #c9a84c, transparent);
+    }
+    #pantalla-login .login-deco::after { background: linear-gradient(90deg, transparent, #c9a84c); max-width: 60px; }
+    #pantalla-login .login-deco-diamond { width: 6px; height: 6px; background: #c9a84c; transform: rotate(45deg); flex-shrink: 0; }
+    #pantalla-login .login-panel-wrapper {
+      position: absolute; right: 8%; top: 50%; transform: translateY(-50%);
+      width: 370px; z-index: 2;
+    }
+    #pantalla-login .login-glass {
+      background: rgba(245,240,232,0.04); border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 2px; padding: 44px 38px; backdrop-filter: blur(20px); position: relative; overflow: hidden;
+    }
+    #pantalla-login .login-glass::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent);
+    }
+    #pantalla-login .corner { position: absolute; width: 18px; height: 18px; border-color: rgba(201,168,76,0.4); border-style: solid; }
+    #pantalla-login .corner.tl { top: 10px; left: 10px; border-width: 1px 0 0 1px; }
+    #pantalla-login .corner.tr { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
+    #pantalla-login .corner.bl { bottom: 10px; left: 10px; border-width: 0 0 1px 1px; }
+    #pantalla-login .corner.br { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
+    #pantalla-login .login-title {
+      font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 400;
+      color: #f5f0e8; margin-bottom: 4px;
+    }
+    #pantalla-login .login-subtitle {
+      font-size: 11px; font-weight: 300; color: rgba(245,240,232,0.35);
+      letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 32px;
+    }
+    #pantalla-login .lf-label {
+      font-size: 10px; font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase;
+      color: rgba(201,168,76,0.7); margin-bottom: 7px; display: block;
+    }
+    #pantalla-login .lf-input {
+      width: 100%; background: transparent; border: 0;
+      border-bottom: 1px solid rgba(201,168,76,0.25); padding: 10px 0;
+      font-family: 'Jost', sans-serif; font-size: 14px; font-weight: 300;
+      color: #f5f0e8; letter-spacing: 0.05em; outline: none; margin-bottom: 20px;
+      transition: border-color 0.3s;
+    }
+    #pantalla-login .lf-input:focus { border-bottom-color: #c9a84c; }
+    #pantalla-login .lf-input option { background: #1c1208; color: #f5f0e8; }
+    #pantalla-login .lf-input::placeholder { color: rgba(245,240,232,0.2); }
+    #pantalla-login .lf-input:-webkit-autofill {
+      -webkit-box-shadow: 0 0 0 100px #14100a inset; -webkit-text-fill-color: #f5f0e8;
+    }
+    #pantalla-login .login-btn {
+      width: 100%; margin-top: 28px; padding: 15px; background: transparent;
+      border: 1px solid rgba(201,168,76,0.5); color: #c9a84c;
+      font-family: 'Jost', sans-serif; font-size: 11px; font-weight: 400;
+      letter-spacing: 0.3em; text-transform: uppercase; cursor: pointer;
+      position: relative; overflow: hidden; transition: color 0.4s; border-radius: 0;
+    }
+    #pantalla-login .login-btn::before {
+      content: ''; position: absolute; inset: 0; background: #c9a84c;
+      transform: translateX(-101%); transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
+    }
+    #pantalla-login .login-btn:hover::before { transform: translateX(0); }
+    #pantalla-login .login-btn:hover { color: #0d0b08; }
+    #pantalla-login .login-btn span { position: relative; z-index: 1; }
+    #pantalla-login .login-footer {
+      margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(201,168,76,0.1);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    #pantalla-login .login-footer-brand { font-family: 'Cormorant Garamond', serif; font-size: 11px; font-weight: 300; color: rgba(201,168,76,0.4); letter-spacing: 0.12em; }
+    #pantalla-login .login-footer-year { font-size: 10px; color: rgba(245,240,232,0.2); }
+    @media (max-width: 860px) {
+      #pantalla-login { flex-direction: column; align-items: center; justify-content: flex-start; overflow-y: auto; }
+      #pantalla-login .login-left { position: static; transform: none; padding: 50px 24px 20px; text-align: center; max-width: 100%; }
+      #pantalla-login .login-sub { max-width: 100%; }
+      #pantalla-login .login-deco { display: none; }
+      #pantalla-login .login-panel-wrapper { position: static; transform: none; width: 100%; max-width: 400px; padding: 0 20px 40px; }
+      #pantalla-login .login-hero { font-size: 44px; }
+    }
+  </style>
 
-            <div class="form-group" style="margin-top: 15px;">
-                <label style="color: var(--text-muted);">2. Selecciona tu perfil</label>
-                <select id="login-usuario" class="form-input" style="border-color: var(--border);"></select>
-                <!-- Se poblará dinámicamente filtrando por la sede seleccionada -->
-            </div>
+  <!-- FUENTES (solo si no las tienes ya en el <head>) -->
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
 
-            <div class="form-group" style="margin-top: 15px;">
-                <label style="color: var(--text-muted);">3. PIN de Acceso (4 dígitos)</label>
-                <input type="password" id="login-pin" class="form-input" placeholder="****" maxlength="4" style="text-align: center; font-size: 24px; letter-spacing: 10px; border-color: var(--border);">
-            </div>
+  <div class="bg-wood"></div>
+  <div class="wood-grain"></div>
+  <div class="gold-top"></div>
 
-           <button class="btn-primary" style="width: 100%; margin-top: 20px; font-size: 16px; padding: 12px; background-color: var(--accent);" onclick="entrarAlSistema()">
-               <i class="fa-solid fa-unlock-keyhole"></i> INGRESAR
-           </button>
-       </div>
-       
-       <div style="margin-top: 30px; font-size: 12px; color: var(--text-muted);">
-           Protegido bajo arquitectura Multi-Empresa
-       </div>
+  <!-- IZQUIERDA: texto hero -->
+  <div class="login-left">
+    <div class="login-brand">Innova Möbili</div>
+    <h1 class="login-hero">Donde el<br><em>diseño</em><br>vive.</h1>
+    <p class="login-sub">Sistema ERP y Punto de Venta.<br>Acceso exclusivo para personal autorizado.</p>
+    <div class="login-deco"><div class="login-deco-diamond"></div></div>
+  </div>
+
+  <!-- DERECHA: panel de login -->
+  <div class="login-panel-wrapper">
+    <div class="login-glass">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+
+      <p class="login-title">Panel Interno</p>
+      <p class="login-subtitle">Solo personal autorizado</p>
+
+      <label class="lf-label" for="login-tienda">1. Sede / Ubicación</label>
+      <select id="login-tienda" class="lf-input">
+        <option value="">Cargando sedes...</option>
+      </select>
+
+      <label class="lf-label" for="login-usuario">2. Tu perfil</label>
+      <select id="login-usuario" class="lf-input"></select>
+
+      <label class="lf-label" for="login-pin">3. PIN de acceso</label>
+      <input type="password" id="login-pin" class="lf-input" placeholder="••••" maxlength="4"
+             style="text-align: center; font-size: 22px; letter-spacing: 10px;"
+             onkeydown="if(event.key==='Enter') entrarAlSistema()">
+
+      <button class="login-btn" onclick="entrarAlSistema()">
+        <span>Ingresar al sistema</span>
+      </button>
+
+      <div class="login-footer">
+        <span class="login-footer-brand">Innova Möbili</span>
+        <span class="login-footer-year">ERP © 2026</span>
+      </div>
     </div>
+  </div>
+
+</div>
 
     <div class="overlay" id="overlay-sidebar" onclick="toggleSidebar()"></div>
     <div class="overlay" id="overlay-cart" onclick="toggleCart()"></div>
