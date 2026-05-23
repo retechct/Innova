@@ -834,9 +834,13 @@ function imMostrarBotonTrabajador() {
   btn.onmouseenter = () => { btn.style.background = '#c9a84c'; btn.style.color = '#0d0b08'; };
   btn.onmouseleave = () => { btn.style.background = 'transparent'; btn.style.color = '#c9a84c'; };
   btn.onclick = () => {
+    if (!usuarioActivo) return;
+    const _R = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
+    if (!_R.includes(usuarioActivo.rol)) return;
     document.getElementById('pantalla-login') &&
       (document.getElementById('pantalla-login').style.display = 'none');
     configurarInterfazPorRol();
+    mostrarUsuarioEnHeader();
     const esOp = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
     changeView(esOp ? 'taller' : 'catalogo');
   };
@@ -847,15 +851,21 @@ function imMostrarBotonTrabajador() {
   else header.appendChild(btn);
 }
 
-// ── Al cargar: si hay sesión guardada, mostrar botón ─────────────
+// ── Al cargar: restaurar estado según rol ───────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const sesion = localStorage.getItem('usuarioInnova');
-  if (sesion) {
-    try {
-      usuarioActivo = JSON.parse(sesion);
-      setTimeout(imMostrarBotonTrabajador, 300);
-    } catch(e) {}
-  }
+  if (!sesion) return;
+  try {
+    const u = JSON.parse(sesion);
+    const _ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
+    if (_ROLES_ERP.includes(u.rol)) {
+      // Trabajador: init() en app.js lo maneja, nada que hacer aquí
+    } else {
+      // Cliente: restaurar navbar con saludo y botón cerrar sesión
+      usuarioActivo = u;
+      setTimeout(imActualizarNavbarCliente, 100);
+    }
+  } catch(e) {}
 });
 </script>
 

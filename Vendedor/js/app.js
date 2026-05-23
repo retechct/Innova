@@ -469,15 +469,23 @@ async function cargarDatosInicialesLogin() {
     }
 }
 
+const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN'];
+
 function verificarSesionExistente() {
     const sesionGuardada = localStorage.getItem('usuarioInnova');
-    
-    if (sesionGuardada) {
-        usuarioActivo = JSON.parse(sesionGuardada);
-        document.getElementById('pantalla-login').style.display = 'none';
-        configurarInterfazPorRol();
-        // El ruteo real lo hará init() una vez cargue los productos
+    if (!sesionGuardada) return;
+
+    usuarioActivo = JSON.parse(sesionGuardada);
+
+    // Clientes y roles no autorizados NO entran al panel ERP
+    if (!ROLES_ERP.includes(usuarioActivo.rol)) {
+        usuarioActivo = null;
+        return;
     }
+
+    document.getElementById('pantalla-login').style.display = 'none';
+    configurarInterfazPorRol();
+    // El ruteo real lo hará init() una vez cargue los productos
 }
 
 async function entrarAlSistema() {
