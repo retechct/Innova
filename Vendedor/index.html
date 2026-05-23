@@ -7,183 +7,640 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="pantalla-login" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; display: flex; overflow: hidden;">
 
-  <!-- ESTILOS DEL LOGIN -->
-  <style>
-    #pantalla-login { background: #0d0b08; font-family: 'Jost', sans-serif; }
-    #pantalla-login .bg-wood {
-      position: absolute; inset: 0; pointer-events: none;
-      background: radial-gradient(ellipse 60% 80% at 30% 50%, rgba(10,6,2,0.75) 0%, transparent 70%),
-            linear-gradient(135deg, rgba(13,11,8,0.6) 0%, rgba(28,18,8,0.5) 40%, rgba(13,11,8,0.6) 100%),
-            url('https://res.cloudinary.com/deqrqsqlv/image/upload/v1779552033/fondologin_optimized_pmscps.png') center center / cover no-repeat;
-    }
-    #pantalla-login .wood-grain {
-      position: absolute; inset: 0; pointer-events: none; opacity: 0.05;
-      background-image:
-        repeating-linear-gradient(8deg, transparent, transparent 12px, rgba(180,120,50,0.4) 12px, rgba(180,120,50,0.4) 13px),
-        repeating-linear-gradient(-3deg, transparent, transparent 30px, rgba(150,90,30,0.2) 30px, rgba(150,90,30,0.2) 31px);
-    }
-    #pantalla-login .gold-top {
-      position: absolute; top: 0; left: 0; right: 0; height: 2px; pointer-events: none;
-      background: linear-gradient(90deg, transparent, #c9a84c 30%, #e8c97a 50%, #c9a84c 70%, transparent);
-    }
-    #pantalla-login .login-left {
-      position: absolute; left: 8%; top: 50%; transform: translateY(-50%);
-      color: white; max-width: 460px; z-index: 1;
-    }
-    #pantalla-login .login-brand {
-      font-family: 'Cormorant Garamond', serif; font-size: 14px; font-weight: 300;
-      letter-spacing: 0.35em; color: #c9a84c; text-transform: uppercase;
-      margin-bottom: 50px; display: flex; align-items: center; gap: 12px;
-    }
-    #pantalla-login .login-brand::before {
-      content: ''; display: block; width: 36px; height: 1px; background: #c9a84c;
-    }
-    #pantalla-login .login-hero {
-      font-family: 'Cormorant Garamond', serif; font-size: clamp(48px, 6vw, 84px);
-      font-weight: 300; line-height: 1.0; color: #f5f0e8; margin-bottom: 16px;
-    }
-    #pantalla-login .login-hero em { font-style: italic; color: #c9a84c; }
-    #pantalla-login .login-sub {
-      font-size: 14px; font-weight: 300; color: rgba(245,240,232,0.45);
-      letter-spacing: 0.04em; line-height: 1.7; margin-bottom: 44px; max-width: 320px;
-    }
-    #pantalla-login .login-deco {
-      display: flex; align-items: center; gap: 14px;
-    }
-    #pantalla-login .login-deco::before, #pantalla-login .login-deco::after {
-      content: ''; height: 1px; flex: 1;
-      background: linear-gradient(90deg, #c9a84c, transparent);
-    }
-    #pantalla-login .login-deco::after { background: linear-gradient(90deg, transparent, #c9a84c); max-width: 60px; }
-    #pantalla-login .login-deco-diamond { width: 6px; height: 6px; background: #c9a84c; transform: rotate(45deg); flex-shrink: 0; }
-    #pantalla-login .login-panel-wrapper {
-      position: absolute; right: 8%; top: 50%; transform: translateY(-50%);
-      width: 370px; z-index: 2;
-    }
-    #pantalla-login .login-glass {
-      background: rgba(245,240,232,0.04); border: 1px solid rgba(201,168,76,0.2);
-      border-radius: 2px; padding: 44px 38px; backdrop-filter: blur(20px); position: relative; overflow: hidden;
-    }
-    #pantalla-login .login-glass::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent);
-    }
-    #pantalla-login .corner { position: absolute; width: 18px; height: 18px; border-color: rgba(201,168,76,0.4); border-style: solid; }
-    #pantalla-login .corner.tl { top: 10px; left: 10px; border-width: 1px 0 0 1px; }
-    #pantalla-login .corner.tr { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
-    #pantalla-login .corner.bl { bottom: 10px; left: 10px; border-width: 0 0 1px 1px; }
-    #pantalla-login .corner.br { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
-    #pantalla-login .login-title {
-      font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 400;
-      color: #f5f0e8; margin-bottom: 4px;
-    }
-    #pantalla-login .login-subtitle {
-      font-size: 11px; font-weight: 300; color: rgba(245,240,232,0.35);
-      letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 32px;
-    }
-    #pantalla-login .lf-label {
-      font-size: 10px; font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase;
-      color: rgba(201,168,76,0.7); margin-bottom: 7px; display: block;
-    }
-    #pantalla-login .lf-input {
-      width: 100%; background: transparent; border: 0;
-      border-bottom: 1px solid rgba(201,168,76,0.25); padding: 10px 0;
-      font-family: 'Jost', sans-serif; font-size: 14px; font-weight: 300;
-      color: #f5f0e8; letter-spacing: 0.05em; outline: none; margin-bottom: 20px;
-      transition: border-color 0.3s;
-    }
-    #pantalla-login .lf-input:focus { border-bottom-color: #c9a84c; }
-    #pantalla-login .lf-input option { background: #1c1208; color: #f5f0e8; }
-    #pantalla-login .lf-input::placeholder { color: rgba(245,240,232,0.2); }
-    #pantalla-login .lf-input:-webkit-autofill {
-      -webkit-box-shadow: 0 0 0 100px #14100a inset; -webkit-text-fill-color: #f5f0e8;
-    }
-    #pantalla-login .login-btn {
-      width: 100%; margin-top: 28px; padding: 15px; background: transparent;
-      border: 1px solid rgba(201,168,76,0.5); color: #c9a84c;
-      font-family: 'Jost', sans-serif; font-size: 11px; font-weight: 400;
-      letter-spacing: 0.3em; text-transform: uppercase; cursor: pointer;
-      position: relative; overflow: hidden; transition: color 0.4s; border-radius: 0;
-    }
-    #pantalla-login .login-btn::before {
-      content: ''; position: absolute; inset: 0; background: #c9a84c;
-      transform: translateX(-101%); transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
-    }
-    #pantalla-login .login-btn:hover::before { transform: translateX(0); }
-    #pantalla-login .login-btn:hover { color: #0d0b08; }
-    #pantalla-login .login-btn span { position: relative; z-index: 1; }
-    #pantalla-login .login-footer {
-      margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(201,168,76,0.1);
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    #pantalla-login .login-footer-brand { font-family: 'Cormorant Garamond', serif; font-size: 11px; font-weight: 300; color: rgba(201,168,76,0.4); letter-spacing: 0.12em; }
-    #pantalla-login .login-footer-year { font-size: 10px; color: rgba(245,240,232,0.2); }
-    @media (max-width: 860px) {
-      #pantalla-login { flex-direction: column; align-items: center; justify-content: flex-start; overflow-y: auto; }
-      #pantalla-login .login-left { position: static; transform: none; padding: 50px 24px 20px; text-align: center; max-width: 100%; }
-      #pantalla-login .login-sub { max-width: 100%; }
-      #pantalla-login .login-deco { display: none; }
-      #pantalla-login .login-panel-wrapper { position: static; transform: none; width: 100%; max-width: 400px; padding: 0 20px 40px; }
-      #pantalla-login .login-hero { font-size: 44px; }
-    }
-  </style>
+<!-- ═══════════════════════════════════════════════════════════════
+     PANTALLA DE INICIO — LANDING + LOGIN
+═══════════════════════════════════════════════════════════════ -->
+<div id="pantalla-login" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;overflow-y:auto;overflow-x:hidden;">
 
-  <!-- FUENTES (solo si no las tienes ya en el <head>) -->
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ── */
+#pantalla-login * { box-sizing: border-box; }
+#pantalla-login {
+  font-family: 'Jost', sans-serif;
+  background: #0d0b08;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+#pantalla-login::-webkit-scrollbar { display: none; }
 
-  <div class="bg-wood"></div>
-  <div class="wood-grain"></div>
-  <div class="gold-top"></div>
+/* ── NAVBAR ── */
+#im-navbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 5%;
+  height: 70px;
+  background: transparent;
+  transition: background 0.5s, backdrop-filter 0.5s;
+}
+#im-navbar.scrolled {
+  background: rgba(13,11,8,0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(201,168,76,0.12);
+}
+.im-nav-brand {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px; font-weight: 300; letter-spacing: 0.2em;
+  color: #f5f0e8; text-transform: uppercase;
+}
+.im-nav-brand span { color: #c9a84c; font-style: italic; }
+.im-nav-links {
+  display: flex; align-items: center; gap: 8px;
+}
+.im-nav-link {
+  background: transparent; border: 1px solid transparent;
+  color: rgba(245,240,232,0.6); font-family: 'Jost', sans-serif;
+  font-size: 11px; font-weight: 400; letter-spacing: 0.2em;
+  text-transform: uppercase; padding: 9px 20px; cursor: pointer;
+  transition: color 0.3s, border-color 0.3s;
+  border-radius: 0;
+}
+.im-nav-link:hover { color: #c9a84c; border-color: rgba(201,168,76,0.3); }
+.im-nav-link.active { color: #c9a84c; border-color: rgba(201,168,76,0.45); }
+.im-nav-btn-login {
+  background: transparent; border: 1px solid rgba(201,168,76,0.5);
+  color: #c9a84c; font-family: 'Jost', sans-serif;
+  font-size: 11px; font-weight: 400; letter-spacing: 0.25em;
+  text-transform: uppercase; padding: 9px 22px; cursor: pointer;
+  position: relative; overflow: hidden; transition: color 0.35s;
+}
+.im-nav-btn-login::before {
+  content: ''; position: absolute; inset: 0; background: #c9a84c;
+  transform: translateX(-101%); transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+}
+.im-nav-btn-login:hover::before { transform: translateX(0); }
+.im-nav-btn-login:hover { color: #0d0b08; }
+.im-nav-btn-login span { position: relative; z-index: 1; }
+.im-nav-btn-register {
+  background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2);
+  color: rgba(201,168,76,0.65); font-family: 'Jost', sans-serif;
+  font-size: 11px; font-weight: 400; letter-spacing: 0.25em;
+  text-transform: uppercase; padding: 9px 22px; cursor: pointer;
+  transition: all 0.3s;
+}
+.im-nav-btn-register:hover {
+  background: rgba(201,168,76,0.15); color: #c9a84c;
+  border-color: rgba(201,168,76,0.4);
+}
+.im-nav-btn-login.active-panel { color: #0d0b08; background: #c9a84c; border-color: #c9a84c; }
+.im-nav-btn-login.active-panel::before { display: none; }
 
-  <!-- IZQUIERDA: texto hero -->
-  <div class="login-left">
-    <div class="login-brand">Innova Möbili</div>
-    <h1 class="login-hero">Donde el<br><em>diseño</em><br>vive.</h1>
-    <p class="login-sub">Sistema ERP y Punto de Venta.<br>Acceso exclusivo para personal autorizado.</p>
-    <div class="login-deco"><div class="login-deco-diamond"></div></div>
+/* ── SECCIÓN HERO (full-height) ── */
+#im-hero {
+  position: relative; width: 100%; height: 100vh;
+  display: flex; align-items: center;
+  overflow: hidden;
+}
+.im-hero-bg {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 80% at 25% 50%, rgba(10,6,2,0.78) 0%, transparent 65%),
+    linear-gradient(135deg, rgba(13,11,8,0.55) 0%, rgba(28,18,8,0.45) 40%, rgba(13,11,8,0.55) 100%),
+    url('https://res.cloudinary.com/deqrqsqlv/image/upload/v1779552033/fondologin_optimized_pmscps.png') center center / cover no-repeat;
+}
+.im-hero-grain {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.035;
+  background-image:
+    repeating-linear-gradient(8deg, transparent, transparent 12px, rgba(180,120,50,0.4) 12px, rgba(180,120,50,0.4) 13px),
+    repeating-linear-gradient(-3deg, transparent, transparent 30px, rgba(150,90,30,0.2) 30px, rgba(150,90,30,0.2) 31px);
+}
+.im-gold-top {
+  position: absolute; top: 0; left: 0; right: 0; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, #c9a84c 30%, #e8c97a 50%, #c9a84c 70%, transparent);
+}
+.im-hero-text {
+  position: relative; z-index: 2;
+  margin-left: 8%; max-width: 480px;
+}
+.im-hero-eyebrow {
+  font-family: 'Cormorant Garamond', serif; font-size: 13px; font-weight: 300;
+  letter-spacing: 0.38em; color: #c9a84c; text-transform: uppercase;
+  margin-bottom: 48px; display: flex; align-items: center; gap: 14px;
+}
+.im-hero-eyebrow::before { content: ''; display: block; width: 36px; height: 1px; background: #c9a84c; }
+.im-hero-h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(50px, 6.5vw, 88px);
+  font-weight: 300; line-height: 1.0; color: #f5f0e8; margin: 0 0 18px;
+}
+.im-hero-h1 em { font-style: italic; color: #c9a84c; }
+.im-hero-sub {
+  font-size: 14px; font-weight: 300; color: rgba(245,240,232,0.42);
+  letter-spacing: 0.04em; line-height: 1.75; margin-bottom: 48px; max-width: 300px;
+}
+.im-hero-deco {
+  display: flex; align-items: center; gap: 14px; max-width: 220px;
+}
+.im-hero-deco::before {
+  content: ''; height: 1px; flex: 1;
+  background: linear-gradient(90deg, #c9a84c, transparent);
+}
+.im-hero-deco-diamond { width: 6px; height: 6px; background: #c9a84c; transform: rotate(45deg); flex-shrink: 0; }
+
+/* ── PANEL FLOTANTE (login / register) ── */
+#im-panel-wrapper {
+  position: absolute; right: 8%; top: 50%; transform: translateY(-50%);
+  width: 370px; z-index: 10;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.4s, transform 0.4s;
+}
+#im-panel-wrapper.visible {
+  opacity: 1; pointer-events: all;
+}
+.im-glass {
+  background: rgba(245,240,232,0.04); border: 1px solid rgba(201,168,76,0.2);
+  border-radius: 2px; padding: 44px 38px; backdrop-filter: blur(22px);
+  position: relative; overflow: hidden;
+}
+.im-glass::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent);
+}
+.im-corner { position: absolute; width: 18px; height: 18px; border-color: rgba(201,168,76,0.4); border-style: solid; }
+.im-corner.tl { top: 10px; left: 10px; border-width: 1px 0 0 1px; }
+.im-corner.tr { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
+.im-corner.bl { bottom: 10px; left: 10px; border-width: 0 0 1px 1px; }
+.im-corner.br { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
+.im-panel-title {
+  font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 400;
+  color: #f5f0e8; margin-bottom: 4px;
+}
+.im-panel-sub {
+  font-size: 11px; font-weight: 300; color: rgba(245,240,232,0.35);
+  letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 32px;
+}
+.im-lf-label {
+  font-size: 10px; font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase;
+  color: rgba(201,168,76,0.7); margin-bottom: 7px; display: block;
+}
+.im-lf-input {
+  width: 100%; background: transparent; border: 0;
+  border-bottom: 1px solid rgba(201,168,76,0.25); padding: 10px 0;
+  font-family: 'Jost', sans-serif; font-size: 14px; font-weight: 300;
+  color: #f5f0e8; letter-spacing: 0.05em; outline: none; margin-bottom: 20px;
+  transition: border-color 0.3s;
+}
+.im-lf-input:focus { border-bottom-color: #c9a84c; }
+.im-lf-input option { background: #1c1208; color: #f5f0e8; }
+.im-lf-input::placeholder { color: rgba(245,240,232,0.2); }
+.im-lf-input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 100px #14100a inset; -webkit-text-fill-color: #f5f0e8;
+}
+.im-submit-btn {
+  width: 100%; margin-top: 28px; padding: 15px; background: transparent;
+  border: 1px solid rgba(201,168,76,0.5); color: #c9a84c;
+  font-family: 'Jost', sans-serif; font-size: 11px; font-weight: 400;
+  letter-spacing: 0.3em; text-transform: uppercase; cursor: pointer;
+  position: relative; overflow: hidden; transition: color 0.4s; border-radius: 0;
+}
+.im-submit-btn::before {
+  content: ''; position: absolute; inset: 0; background: #c9a84c;
+  transform: translateX(-101%); transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+.im-submit-btn:hover::before { transform: translateX(0); }
+.im-submit-btn:hover { color: #0d0b08; }
+.im-submit-btn span { position: relative; z-index: 1; }
+.im-panel-footer {
+  margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(201,168,76,0.1);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.im-footer-brand { font-family: 'Cormorant Garamond', serif; font-size: 11px; font-weight: 300; color: rgba(201,168,76,0.4); letter-spacing: 0.12em; }
+.im-footer-year { font-size: 10px; color: rgba(245,240,232,0.2); }
+
+/* inner panels: login vs register */
+#im-form-login, #im-form-register { display: none; }
+#im-form-login.active, #im-form-register.active { display: block; }
+
+/* ── FLECHA BOUNCE ── */
+#im-scroll-arrow {
+  position: absolute; bottom: 36px; left: 50%; transform: translateX(-50%);
+  z-index: 5; cursor: pointer; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; opacity: 0.7;
+  transition: opacity 0.3s;
+  animation: im-bounce 2.2s ease-in-out infinite;
+}
+#im-scroll-arrow:hover { opacity: 1; }
+#im-scroll-arrow svg { fill: none; stroke: #c9a84c; stroke-width: 1.5; }
+@keyframes im-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50%       { transform: translateX(-50%) translateY(10px); }
+}
+
+/* ── SECCIÓN GALERÍA ── */
+#im-galeria {
+  position: relative; width: 100%; min-height: 100vh;
+  background: #0a0805;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 100px 5% 80px;
+}
+#im-galeria::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent);
+}
+.im-gal-header { text-align: center; margin-bottom: 60px; }
+.im-gal-title {
+  font-family: 'Cormorant Garamond', serif; font-size: clamp(36px, 5vw, 58px);
+  font-weight: 300; color: #f5f0e8; margin: 0 0 12px;
+}
+.im-gal-title em { font-style: italic; color: #c9a84c; }
+.im-gal-sub {
+  font-size: 11px; font-weight: 300; letter-spacing: 0.3em;
+  text-transform: uppercase; color: rgba(245,240,232,0.3);
+}
+.im-gal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px; width: 100%; max-width: 1100px;
+}
+.im-gal-item {
+  border-radius: 4px; overflow: hidden; cursor: pointer;
+  position: relative;
+  aspect-ratio: 4/3;
+  background: #1a1510;
+  border: 1px solid rgba(201,168,76,0.08);
+  transition: border-color 0.4s, transform 0.4s;
+}
+.im-gal-item:first-child {
+  grid-column: 1 / 3; aspect-ratio: 16/9;
+}
+.im-gal-item img {
+  width: 100%; height: 100%; object-fit: cover;
+  filter: grayscale(100%) brightness(0.7);
+  transition: filter 0.6s ease, transform 0.6s ease;
+  display: block;
+}
+.im-gal-item.colored img, .im-gal-item:hover img {
+  filter: grayscale(0%) brightness(0.95);
+  transform: scale(1.04);
+}
+.im-gal-item.colored { border-color: rgba(201,168,76,0.25); }
+.im-gal-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(10,6,2,0.6) 0%, transparent 50%);
+  opacity: 0; transition: opacity 0.4s;
+}
+.im-gal-item:hover .im-gal-overlay, .im-gal-item.colored .im-gal-overlay { opacity: 1; }
+.im-gal-label {
+  position: absolute; bottom: 16px; left: 20px;
+  font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 300;
+  color: #f5f0e8; letter-spacing: 0.06em; opacity: 0; transform: translateY(8px);
+  transition: opacity 0.4s, transform 0.4s;
+}
+.im-gal-item:hover .im-gal-label, .im-gal-item.colored .im-gal-label {
+  opacity: 1; transform: translateY(0);
+}
+.im-gal-footer-line {
+  margin-top: 56px; font-size: 11px; font-weight: 300; letter-spacing: 0.3em;
+  text-transform: uppercase; color: rgba(201,168,76,0.3); text-align: center;
+}
+
+/* ── MODAL TÉRMINOS ── */
+#im-modal-terminos {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(10,6,2,0.88); backdrop-filter: blur(8px);
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+#im-modal-terminos.visible { display: flex; }
+.im-modal-box {
+  background: #14100a; border: 1px solid rgba(201,168,76,0.2);
+  border-radius: 2px; max-width: 560px; width: 100%;
+  max-height: 80vh; overflow-y: auto; padding: 40px 36px;
+  position: relative;
+}
+.im-modal-box::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent);
+}
+.im-modal-title {
+  font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 400;
+  color: #f5f0e8; margin-bottom: 6px;
+}
+.im-modal-sub { font-size: 11px; color: rgba(201,168,76,0.5); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 24px; }
+.im-modal-body { font-size: 13px; font-weight: 300; color: rgba(245,240,232,0.55); line-height: 1.8; }
+.im-modal-body strong { color: rgba(201,168,76,0.8); font-weight: 400; }
+.im-modal-actions { display: flex; gap: 12px; margin-top: 28px; }
+.im-modal-accept {
+  flex: 1; padding: 13px; background: transparent;
+  border: 1px solid rgba(201,168,76,0.5); color: #c9a84c;
+  font-family: 'Jost', sans-serif; font-size: 11px; letter-spacing: 0.25em;
+  text-transform: uppercase; cursor: pointer; transition: all 0.35s;
+  position: relative; overflow: hidden;
+}
+.im-modal-accept::before {
+  content: ''; position: absolute; inset: 0; background: #c9a84c;
+  transform: translateX(-101%); transition: transform 0.35s;
+}
+.im-modal-accept:hover::before { transform: translateX(0); }
+.im-modal-accept:hover { color: #0d0b08; }
+.im-modal-accept span { position: relative; z-index: 1; }
+.im-modal-cancel {
+  padding: 13px 20px; background: transparent;
+  border: 1px solid rgba(245,240,232,0.1); color: rgba(245,240,232,0.3);
+  font-family: 'Jost', sans-serif; font-size: 11px; letter-spacing: 0.2em;
+  text-transform: uppercase; cursor: pointer; transition: all 0.3s;
+}
+.im-modal-cancel:hover { border-color: rgba(245,240,232,0.25); color: rgba(245,240,232,0.5); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 860px) {
+  #im-panel-wrapper {
+    position: static; transform: none; opacity: 0; pointer-events: none;
+    width: 100%; padding: 0 20px 40px; order: 2;
+  }
+  #im-panel-wrapper.visible { opacity: 1; pointer-events: all; }
+  #im-hero {
+    flex-direction: column; height: auto; min-height: 100vh;
+    padding-bottom: 60px; align-items: flex-start;
+  }
+  .im-hero-text { margin: 100px 5% 32px; max-width: 100%; }
+  .im-gal-grid { grid-template-columns: 1fr; }
+  .im-gal-item:first-child { grid-column: 1; aspect-ratio: 4/3; }
+  .im-nav-links { gap: 4px; }
+  .im-nav-link { display: none; }
+}
+</style>
+
+<!-- ── NAVBAR ── -->
+<nav id="im-navbar">
+  <div class="im-nav-brand">Innova <span>Möbili</span></div>
+  <div class="im-nav-links">
+    <button class="im-nav-link" onclick="imScrollTo('im-galeria')">Colección</button>
+    <button class="im-nav-link" onclick="imScrollTo('im-galeria')">Nosotros</button>
+    <button class="im-nav-btn-register" onclick="imAbrirPanel('register')">Registro</button>
+    <button class="im-nav-btn-login" id="btn-nav-login" onclick="imAbrirPanel('login')">
+      <span>Iniciar Sesión</span>
+    </button>
+  </div>
+</nav>
+
+<!-- ── SECCIÓN HERO ── -->
+<section id="im-hero">
+  <div class="im-hero-bg"></div>
+  <div class="im-hero-grain"></div>
+  <div class="im-gold-top"></div>
+
+  <div class="im-hero-text">
+    <div class="im-hero-eyebrow">Innova Möbili</div>
+    <h1 class="im-hero-h1">Donde el<br><em>diseño</em><br>vive.</h1>
+    <p class="im-hero-sub">Sistema ERP y Punto de Venta.<br>Acceso exclusivo para personal autorizado.</p>
+    <div class="im-hero-deco"><div class="im-hero-deco-diamond"></div></div>
   </div>
 
-  <!-- DERECHA: panel de login -->
-  <div class="login-panel-wrapper">
-    <div class="login-glass">
-      <div class="corner tl"></div>
-      <div class="corner tr"></div>
-      <div class="corner bl"></div>
-      <div class="corner br"></div>
+  <!-- Panel flotante derecho (login o register) -->
+  <div id="im-panel-wrapper">
+    <div class="im-glass">
+      <div class="im-corner tl"></div>
+      <div class="im-corner tr"></div>
+      <div class="im-corner bl"></div>
+      <div class="im-corner br"></div>
 
-      <p class="login-title">Panel Interno</p>
-      <p class="login-subtitle">Solo personal autorizado</p>
+      <!-- FORMULARIO LOGIN -->
+      <div id="im-form-login">
+        <p class="im-panel-title">Panel Interno</p>
+        <p class="im-panel-sub">Solo personal autorizado</p>
 
-      <label class="lf-label" for="login-tienda">1. Sede / Ubicación</label>
-      <select id="login-tienda" class="lf-input">
-        <option value="">Cargando sedes...</option>
-      </select>
+        <label class="im-lf-label" for="login-tienda">1. Sede / Ubicación</label>
+        <select id="login-tienda" class="im-lf-input">
+          <option value="">Cargando sedes...</option>
+        </select>
 
-      <label class="lf-label" for="login-usuario">2. Tu perfil</label>
-      <select id="login-usuario" class="lf-input"></select>
+        <label class="im-lf-label" for="login-usuario">2. Tu perfil</label>
+        <select id="login-usuario" class="im-lf-input">
+          <option value="">-- Elige tu nombre --</option>
+        </select>
 
-      <label class="lf-label" for="login-pin">3. PIN de acceso</label>
-      <input type="password" id="login-pin" class="lf-input" placeholder="••••" maxlength="4"
-             style="text-align: center; font-size: 22px; letter-spacing: 10px;"
-             onkeydown="if(event.key==='Enter') entrarAlSistema()">
+        <label class="im-lf-label" for="login-pin">3. PIN de acceso</label>
+        <input type="password" id="login-pin" class="im-lf-input" placeholder="••••" maxlength="4"
+               style="text-align:center;font-size:22px;letter-spacing:10px;"
+               onkeydown="if(event.key==='Enter') entrarAlSistema()">
 
-      <button class="login-btn" onclick="entrarAlSistema()">
-        <span>Ingresar al sistema</span>
-      </button>
+        <button class="im-submit-btn" onclick="entrarAlSistema()">
+          <span>Ingresar al sistema</span>
+        </button>
+      </div>
 
-      <div class="login-footer">
-        <span class="login-footer-brand">Innova Möbili</span>
-        <span class="login-footer-year">ERP © 2026</span>
+      <!-- FORMULARIO REGISTRO -->
+      <div id="im-form-register">
+        <p class="im-panel-title">Crear Cuenta</p>
+        <p class="im-panel-sub">Registro de personal</p>
+
+        <label class="im-lf-label" for="reg-nombre">Nombre completo</label>
+        <input type="text" id="reg-nombre" class="im-lf-input" placeholder="Tu nombre">
+
+        <label class="im-lf-label" for="reg-correo">Correo electrónico</label>
+        <input type="email" id="reg-correo" class="im-lf-input" placeholder="correo@innova.com">
+
+        <label class="im-lf-label" for="reg-rol">Rol</label>
+        <select id="reg-rol" class="im-lf-input">
+          <option value="">-- Selecciona tu rol --</option>
+          <option value="Vendedor">Vendedor</option>
+          <option value="Taller">Taller</option>
+          <option value="Admin">Admin</option>
+        </select>
+
+        <label class="im-lf-label" for="reg-pin">PIN de acceso (4 dígitos)</label>
+        <input type="password" id="reg-pin" class="im-lf-input" placeholder="••••" maxlength="4"
+               style="text-align:center;font-size:22px;letter-spacing:10px;">
+
+        <button class="im-submit-btn" onclick="imSolicitarTerminos()">
+          <span>Continuar →</span>
+        </button>
+      </div>
+
+      <div class="im-panel-footer">
+        <span class="im-footer-brand">Innova Möbili</span>
+        <span class="im-footer-year">ERP © 2026</span>
       </div>
     </div>
   </div>
 
+  <!-- Flecha scroll bounce -->
+  <div id="im-scroll-arrow" onclick="imScrollTo('im-galeria')">
+    <svg width="28" height="28" viewBox="0 0 28 28">
+      <polyline points="6,10 14,18 22,10"/>
+    </svg>
+    <svg width="28" height="28" viewBox="0 0 28 28" style="opacity:0.4;margin-top:-10px;">
+      <polyline points="6,10 14,18 22,10"/>
+    </svg>
+  </div>
+</section>
+
+<!-- ── SECCIÓN GALERÍA ── -->
+<section id="im-galeria">
+  <div class="im-gal-header">
+    <h2 class="im-gal-title">Nuestra <em>Colección</em></h2>
+    <p class="im-gal-sub">Diseño que transforma espacios</p>
+  </div>
+
+  <div class="im-gal-grid">
+    <div class="im-gal-item" onclick="this.classList.toggle('colored')">
+      <img src="https://res.cloudinary.com/deqrqsqlv/image/upload/v1779552033/fondologin_optimized_pmscps.png" alt="Sala principal" loading="lazy">
+      <div class="im-gal-overlay"></div>
+      <div class="im-gal-label">Salas de diseño</div>
+    </div>
+    <div class="im-gal-item" onclick="this.classList.toggle('colored')">
+      <img src="https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&q=70" alt="Sofá moderno" loading="lazy">
+      <div class="im-gal-overlay"></div>
+      <div class="im-gal-label">Sofás & Sectionals</div>
+    </div>
+    <div class="im-gal-item" onclick="this.classList.toggle('colored')">
+      <img src="https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&q=70" alt="Comedor" loading="lazy">
+      <div class="im-gal-overlay"></div>
+      <div class="im-gal-label">Comedores</div>
+    </div>
+    <div class="im-gal-item" onclick="this.classList.toggle('colored')">
+      <img src="https://images.unsplash.com/photo-1567538096630-e0c55bd6374c?w=600&q=70" alt="Mesa de centro" loading="lazy">
+      <div class="im-gal-overlay"></div>
+      <div class="im-gal-label">Mesas & Accesorios</div>
+    </div>
+  </div>
+
+  <p class="im-gal-footer-line">Innova Möbili — Lima, Perú</p>
+</section>
+
+<!-- ── MODAL TÉRMINOS Y CONDICIONES ── -->
+<div id="im-modal-terminos">
+  <div class="im-modal-box">
+    <p class="im-modal-title">Términos y Condiciones</p>
+    <p class="im-modal-sub">Ley de Protección de Datos Personales · Ley N° 29733</p>
+    <div class="im-modal-body">
+      <strong>1. Tratamiento de Datos Personales</strong><br>
+      De conformidad con la Ley N° 29733, Ley de Protección de Datos Personales del Perú y su Reglamento (D.S. N° 003-2013-JUS), Innova Möbili informa que los datos personales proporcionados serán incorporados a un banco de datos de titularidad de la empresa.<br><br>
+      <strong>2. Finalidad del Tratamiento</strong><br>
+      Los datos recopilados (nombre, correo electrónico, cargo) serán utilizados exclusivamente para la gestión interna del sistema ERP, control de accesos y comunicaciones operativas del personal autorizado.<br><br>
+      <strong>3. Confidencialidad</strong><br>
+      Innova Möbili garantiza la confidencialidad de los datos y no los cederá a terceros sin consentimiento previo, salvo obligación legal.<br><br>
+      <strong>4. Derechos ARCO</strong><br>
+      El titular tiene derecho de Acceso, Rectificación, Cancelación y Oposición (derechos ARCO) sobre sus datos, pudiendo ejercerlos contactando a administración.<br><br>
+      <strong>5. Seguridad</strong><br>
+      Se han adoptado medidas técnicas y organizativas para garantizar la seguridad e integridad de los datos personales registrados en el sistema.
+    </div>
+    <div class="im-modal-actions">
+      <button class="im-modal-accept" onclick="imAceptarTerminosYRegistrar()">
+        <span>Acepto los Términos</span>
+      </button>
+      <button class="im-modal-cancel" onclick="imCerrarTerminos()">Cancelar</button>
+    </div>
+  </div>
 </div>
+
+<script>
+// ── Panel toggle (login / register) ──────────────────────────────
+let imPanelActivo = null;
+
+function imAbrirPanel(tipo) {
+  const wrapper = document.getElementById('im-panel-wrapper');
+  const formLogin = document.getElementById('im-form-login');
+  const formReg   = document.getElementById('im-form-register');
+  const btnLogin  = document.getElementById('btn-nav-login');
+
+  if (imPanelActivo === tipo) {
+    // cerrar
+    wrapper.classList.remove('visible');
+    formLogin.classList.remove('active');
+    formReg.classList.remove('active');
+    btnLogin.classList.remove('active-panel');
+    imPanelActivo = null;
+    return;
+  }
+
+  imPanelActivo = tipo;
+  formLogin.classList.remove('active');
+  formReg.classList.remove('active');
+  if (tipo === 'login') {
+    formLogin.classList.add('active');
+    btnLogin.classList.add('active-panel');
+    cargarDatosInicialesLogin();
+  } else {
+    formReg.classList.add('active');
+    btnLogin.classList.remove('active-panel');
+  }
+  wrapper.classList.add('visible');
+}
+
+// ── Scroll suave ─────────────────────────────────────────────────
+function imScrollTo(id) {
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Navbar on scroll ─────────────────────────────────────────────
+const imNavbar = document.getElementById('im-navbar');
+document.getElementById('pantalla-login').addEventListener('scroll', function() {
+  if (this.scrollTop > 40) imNavbar.classList.add('scrolled');
+  else imNavbar.classList.remove('scrolled');
+});
+
+// ── Registro: mostrar términos ────────────────────────────────────
+function imSolicitarTerminos() {
+  const nombre = document.getElementById('reg-nombre').value.trim();
+  const correo = document.getElementById('reg-correo').value.trim();
+  const rol    = document.getElementById('reg-rol').value;
+  const pin    = document.getElementById('reg-pin').value.trim();
+
+  if (!nombre || !correo || !rol || !pin) {
+    Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'warning',
+      title: 'Campos incompletos', text: 'Por favor completa todos los campos antes de continuar.',
+      confirmButtonColor: '#c9a84c' });
+    return;
+  }
+  if (pin.length < 4) {
+    Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'warning',
+      title: 'PIN inválido', text: 'El PIN debe tener 4 dígitos.',
+      confirmButtonColor: '#c9a84c' });
+    return;
+  }
+  document.getElementById('im-modal-terminos').classList.add('visible');
+}
+
+function imCerrarTerminos() {
+  document.getElementById('im-modal-terminos').classList.remove('visible');
+}
+
+async function imAceptarTerminosYRegistrar() {
+  imCerrarTerminos();
+  const nombre = document.getElementById('reg-nombre').value.trim();
+  const correo = document.getElementById('reg-correo').value.trim();
+  const rol    = document.getElementById('reg-rol').value;
+  const pin    = document.getElementById('reg-pin').value.trim();
+
+  try {
+    const res = await fetch(`${API_URL}/api/usuarios/nuevo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, correo, pin, rol, area: '', empresa_nombre: 'Innova Möbili', empresa_ruc: '' })
+    });
+    if (res.ok) {
+      Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'success',
+        title: '¡Cuenta creada!',
+        text: 'Tu cuenta ha sido registrada. Un administrador verificará tus datos.',
+        confirmButtonColor: '#c9a84c' });
+      // limpiar y cambiar a login
+      document.getElementById('reg-nombre').value = '';
+      document.getElementById('reg-correo').value = '';
+      document.getElementById('reg-pin').value = '';
+      document.getElementById('reg-rol').value = '';
+      imAbrirPanel('login');
+    } else {
+      const err = await res.json();
+      Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'error',
+        title: 'Error al registrar', text: err.error || 'Intenta de nuevo.',
+        confirmButtonColor: '#c9a84c' });
+    }
+  } catch(e) {
+    Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'error',
+      title: 'Sin conexión', text: 'No se pudo contactar el servidor.',
+      confirmButtonColor: '#c9a84c' });
+  }
+}
+</script>
+
+</div>
+<!-- ═══════════════════════════════════════════════════════ FIN PANTALLA-LOGIN -->
 
     <div class="overlay" id="overlay-sidebar" onclick="toggleSidebar()"></div>
     <div class="overlay" id="overlay-cart" onclick="toggleCart()"></div>
@@ -1386,4 +1843,3 @@
     <script src="js/inventario.js"></script>  <!-- ← antes de app.js -->
     <script src="js/app.js"></script>
 </body>
-</html>

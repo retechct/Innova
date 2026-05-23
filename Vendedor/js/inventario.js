@@ -94,7 +94,7 @@ function _htmlEsqueleto() {
             <option value="">Todas las tiendas</option>
         </select>
         <input id="inv-filtro-q" type="text" class="form-input"
-               placeholder="🔍 Buscar modelo..." 
+               placeholder="Buscar modelo..." 
                style="max-width:240px;padding:10px 12px;font-size:13px;" />
     </div>
 
