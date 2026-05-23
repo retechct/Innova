@@ -387,7 +387,7 @@
   <div class="im-hero-text">
     <div class="im-hero-eyebrow">Innova Möbili</div>
     <h1 class="im-hero-h1">Donde el<br><em>diseño</em><br>vive.</h1>
-    <p class="im-hero-sub">Sistema ERP y Punto de Venta.<br>Acceso exclusivo para personal autorizado.</p>
+    <p class="im-hero-sub"> Ayudandote.<br>Acceso exclusivo para personal autorizado.</p>
     <div class="im-hero-deco"><div class="im-hero-deco-diamond"></div></div>
   </div>
 
@@ -401,25 +401,25 @@
 
       <!-- FORMULARIO LOGIN -->
       <div id="im-form-login">
-        <p class="im-panel-title">Panel Interno</p>
-        <p class="im-panel-sub">Solo personal autorizado</p>
+        <p class="im-panel-title">Bienvenido</p>
+        <p class="im-panel-sub">Acceso exclusivo para trabajadores</p>
 
-        <label class="im-lf-label" for="login-tienda">1. Sede / Ubicación</label>
-        <select id="login-tienda" class="im-lf-input">
-          <option value="">Cargando sedes...</option>
-        </select>
+        <label class="im-lf-label" for="login-email">Correo electrónico</label>
+        <input type="email" id="login-email" class="im-lf-input" placeholder="tu@correo.com"
+               onkeydown="if(event.key==='Enter') document.getElementById('login-pin').focus()">
 
-        <label class="im-lf-label" for="login-usuario">2. Tu perfil</label>
-        <select id="login-usuario" class="im-lf-input">
-          <option value="">-- Elige tu nombre --</option>
-        </select>
+        <label class="im-lf-label" for="login-pin">Contraseña</label>
+        <div style="position:relative;">
+          <input type="password" id="login-pin" class="im-lf-input" placeholder="••••••••"
+                 onkeydown="if(event.key==='Enter') imEntrarAlSistema()"
+                 style="padding-right:36px;">
+          <span onclick="imTogglePass('login-pin',this)"
+                style="position:absolute;right:4px;top:10px;cursor:pointer;color:rgba(201,168,76,0.4);font-size:13px;transition:color 0.2s;">
+            <i class="fa-regular fa-eye"></i>
+          </span>
+        </div>
 
-        <label class="im-lf-label" for="login-pin">3. PIN de acceso</label>
-        <input type="password" id="login-pin" class="im-lf-input" placeholder="••••" maxlength="4"
-               style="text-align:center;font-size:22px;letter-spacing:10px;"
-               onkeydown="if(event.key==='Enter') entrarAlSistema()">
-
-        <button class="im-submit-btn" onclick="entrarAlSistema()">
+        <button class="im-submit-btn" onclick="imEntrarAlSistema()">
           <span>Ingresar al sistema</span>
         </button>
       </div>
@@ -427,25 +427,34 @@
       <!-- FORMULARIO REGISTRO -->
       <div id="im-form-register">
         <p class="im-panel-title">Crear Cuenta</p>
-        <p class="im-panel-sub">Registro de personal</p>
+        <p class="im-panel-sub">Solicitud de acceso al sistema</p>
 
         <label class="im-lf-label" for="reg-nombre">Nombre completo</label>
-        <input type="text" id="reg-nombre" class="im-lf-input" placeholder="Tu nombre">
+        <input type="text" id="reg-nombre" class="im-lf-input" placeholder="Tu nombre completo">
 
         <label class="im-lf-label" for="reg-correo">Correo electrónico</label>
-        <input type="email" id="reg-correo" class="im-lf-input" placeholder="correo@innova.com">
+        <input type="email" id="reg-correo" class="im-lf-input" placeholder="tu@correo.com">
 
-        <label class="im-lf-label" for="reg-rol">Rol</label>
-        <select id="reg-rol" class="im-lf-input">
-          <option value="">-- Selecciona tu rol --</option>
-          <option value="Vendedor">Vendedor</option>
-          <option value="Taller">Taller</option>
-          <option value="Admin">Admin</option>
-        </select>
+        <label class="im-lf-label" for="reg-clave">Contraseña</label>
+        <div style="position:relative;">
+          <input type="password" id="reg-clave" class="im-lf-input" placeholder="Mínimo 6 caracteres"
+                 style="padding-right:32px;">
+          <span onclick="imTogglePass('reg-clave',this)"
+                style="position:absolute;right:4px;top:10px;cursor:pointer;color:rgba(201,168,76,0.4);font-size:13px;">
+            <i class="fa-regular fa-eye"></i>
+          </span>
+        </div>
 
-        <label class="im-lf-label" for="reg-pin">PIN de acceso (4 dígitos)</label>
-        <input type="password" id="reg-pin" class="im-lf-input" placeholder="••••" maxlength="4"
-               style="text-align:center;font-size:22px;letter-spacing:10px;">
+        <label class="im-lf-label" for="reg-clave2">Confirmar contraseña</label>
+        <div style="position:relative;">
+          <input type="password" id="reg-clave2" class="im-lf-input" placeholder="Repite tu contraseña"
+                 style="padding-right:32px;"
+                 onkeydown="if(event.key==='Enter') imSolicitarTerminos()">
+          <span onclick="imTogglePass('reg-clave2',this)"
+                style="position:absolute;right:4px;top:10px;cursor:pointer;color:rgba(201,168,76,0.4);font-size:13px;">
+            <i class="fa-regular fa-eye"></i>
+          </span>
+        </div>
 
         <button class="im-submit-btn" onclick="imSolicitarTerminos()">
           <span>Continuar →</span>
@@ -530,17 +539,33 @@
 </div>
 
 <script>
-// ── Panel toggle (login / register) ──────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// LANDING INNOVA — Login por email+contraseña y Registro limpio
+// ═══════════════════════════════════════════════════════════════
+
 let imPanelActivo = null;
 
+// ── Toggle mostrar/ocultar contraseña ────────────────────────────
+function imTogglePass(inputId, iconEl) {
+  const inp = document.getElementById(inputId);
+  const ico = iconEl.querySelector('i');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    ico.className = 'fa-regular fa-eye-slash';
+  } else {
+    inp.type = 'password';
+    ico.className = 'fa-regular fa-eye';
+  }
+}
+
+// ── Abrir / cerrar panel ─────────────────────────────────────────
 function imAbrirPanel(tipo) {
-  const wrapper = document.getElementById('im-panel-wrapper');
+  const wrapper   = document.getElementById('im-panel-wrapper');
   const formLogin = document.getElementById('im-form-login');
   const formReg   = document.getElementById('im-form-register');
   const btnLogin  = document.getElementById('btn-nav-login');
 
   if (imPanelActivo === tipo) {
-    // cerrar
     wrapper.classList.remove('visible');
     formLogin.classList.remove('active');
     formReg.classList.remove('active');
@@ -548,14 +573,12 @@ function imAbrirPanel(tipo) {
     imPanelActivo = null;
     return;
   }
-
   imPanelActivo = tipo;
   formLogin.classList.remove('active');
   formReg.classList.remove('active');
   if (tipo === 'login') {
     formLogin.classList.add('active');
     btnLogin.classList.add('active-panel');
-    cargarDatosInicialesLogin();
   } else {
     formReg.classList.add('active');
     btnLogin.classList.remove('active-panel');
@@ -568,31 +591,94 @@ function imScrollTo(id) {
   document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
 }
 
-// ── Navbar on scroll ─────────────────────────────────────────────
+// ── Navbar blur on scroll ────────────────────────────────────────
 const imNavbar = document.getElementById('im-navbar');
 document.getElementById('pantalla-login').addEventListener('scroll', function() {
-  if (this.scrollTop > 40) imNavbar.classList.add('scrolled');
-  else imNavbar.classList.remove('scrolled');
+  imNavbar.classList.toggle('scrolled', this.scrollTop > 40);
 });
 
-// ── Registro: mostrar términos ────────────────────────────────────
+// ── LOGIN — correo + PIN ─────────────────────────────────────────
+async function imEntrarAlSistema() {
+  const email = (document.getElementById('login-email').value || '').trim();
+  const pin   = (document.getElementById('login-pin').value || '').trim();
+
+  if (!email || !pin) {
+    return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'warning',
+      title:'Campos vacíos', text:'Ingresa tu correo y contraseña.',
+      confirmButtonColor:'#c9a84c' });
+  }
+  if (pin.length < 4) {
+    return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'warning',
+      title:'Contraseña muy corta', text:'La contraseña debe tener al menos 4 caracteres.',
+      confirmButtonColor:'#c9a84c' });
+  }
+
+  try {
+    const res  = await fetch(`${API_URL}/api/login/email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, pin })
+    });
+    const data = await res.json();
+
+    if (data.exito) {
+      usuarioActivo = data.usuario;
+      usuarioActivo.horaLogin = new Date().toLocaleTimeString();
+      localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
+
+      document.getElementById('pantalla-login').style.display = 'none';
+      imMostrarBotonTrabajador();
+      configurarInterfazPorRol();
+
+      const esOperario = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
+      changeView(esOperario ? 'taller' : 'catalogo');
+
+      Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
+        title:`¡Hola, ${usuarioActivo.nombre}!`,
+        text:`Bienvenido al sistema Innova Möbili.`,
+        timer: 2200, showConfirmButton: false });
+    } else {
+      document.getElementById('login-pin').value = '';
+      Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'error',
+        title:'Acceso denegado', text: data.error || 'Correo o contraseña incorrectos.',
+        confirmButtonColor:'#c9a84c' });
+    }
+  } catch(e) {
+    Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'error',
+      title:'Sin conexión', text:'No se pudo contactar el servidor.',
+      confirmButtonColor:'#c9a84c' });
+  }
+}
+
+// ── REGISTRO: validar y mostrar términos ─────────────────────────
 function imSolicitarTerminos() {
   const nombre = document.getElementById('reg-nombre').value.trim();
   const correo = document.getElementById('reg-correo').value.trim();
-  const rol    = document.getElementById('reg-rol').value;
-  const pin    = document.getElementById('reg-pin').value.trim();
+  const clave  = document.getElementById('reg-clave').value.trim();
+  const clave2 = document.getElementById('reg-clave2').value.trim();
 
-  if (!nombre || !correo || !rol || !pin) {
-    Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'warning',
-      title: 'Campos incompletos', text: 'Por favor completa todos los campos antes de continuar.',
-      confirmButtonColor: '#c9a84c' });
-    return;
+  const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo);
+
+  if (!nombre || !correo || !clave || !clave2) {
+    return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'warning',
+      title:'Campos incompletos', text:'Completa todos los campos.',
+      confirmButtonColor:'#c9a84c' });
   }
-  if (pin.length < 4) {
-    Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'warning',
-      title: 'PIN inválido', text: 'El PIN debe tener 4 dígitos.',
-      confirmButtonColor: '#c9a84c' });
-    return;
+  if (!emailValido) {
+    return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'warning',
+      title:'Correo inválido', text:'Ingresa un correo electrónico válido.',
+      confirmButtonColor:'#c9a84c' });
+  }
+  if (clave.length < 6) {
+    return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'warning',
+      title:'Contraseña muy corta', text:'La contraseña debe tener al menos 6 caracteres.',
+      confirmButtonColor:'#c9a84c' });
+  }
+  if (clave !== clave2) {
+    document.getElementById('reg-clave2').value = '';
+    return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'error',
+      title:'Las contraseñas no coinciden', text:'Verifica que ambas contraseñas sean iguales.',
+      confirmButtonColor:'#c9a84c' });
   }
   document.getElementById('im-modal-terminos').classList.add('visible');
 }
@@ -605,38 +691,93 @@ async function imAceptarTerminosYRegistrar() {
   imCerrarTerminos();
   const nombre = document.getElementById('reg-nombre').value.trim();
   const correo = document.getElementById('reg-correo').value.trim();
-  const rol    = document.getElementById('reg-rol').value;
-  const pin    = document.getElementById('reg-pin').value.trim();
+  const clave  = document.getElementById('reg-clave').value.trim();
 
   try {
-    const res = await fetch(`${API_URL}/api/usuarios/nuevo`, {
+    const res = await fetch(`${API_URL}/api/usuarios/registrar-web`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre, correo, pin, rol, area: '', empresa_nombre: 'Innova Möbili', empresa_ruc: '' })
+      body: JSON.stringify({ nombre, email: correo, contrasena: clave })
     });
-    if (res.ok) {
-      Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'success',
-        title: '¡Cuenta creada!',
-        text: 'Tu cuenta ha sido registrada. Un administrador verificará tus datos.',
-        confirmButtonColor: '#c9a84c' });
-      // limpiar y cambiar a login
+    const data = await res.json();
+    if (res.ok && data.exito) {
+      Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
+        title:'¡Solicitud enviada!',
+        text:'Tu cuenta fue registrada. Un administrador activará tu acceso en breve.',
+        confirmButtonColor:'#c9a84c' });
       document.getElementById('reg-nombre').value = '';
       document.getElementById('reg-correo').value = '';
-      document.getElementById('reg-pin').value = '';
-      document.getElementById('reg-rol').value = '';
+      document.getElementById('reg-clave').value  = '';
+      document.getElementById('reg-clave2').value = '';
       imAbrirPanel('login');
     } else {
-      const err = await res.json();
-      Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'error',
-        title: 'Error al registrar', text: err.error || 'Intenta de nuevo.',
-        confirmButtonColor: '#c9a84c' });
+      Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'error',
+        title:'Error al registrar', text: data.error || 'Intenta de nuevo.',
+        confirmButtonColor:'#c9a84c' });
     }
   } catch(e) {
-    Swal.fire({ background: '#14100a', color: '#f5f0e8', icon: 'error',
-      title: 'Sin conexión', text: 'No se pudo contactar el servidor.',
-      confirmButtonColor: '#c9a84c' });
+    Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'error',
+      title:'Sin conexión', text:'No se pudo contactar el servidor.',
+      confirmButtonColor:'#c9a84c' });
   }
 }
+
+// ── Botón de acceso rápido al ERP en el header ───────────────────
+function imMostrarBotonTrabajador() {
+  if (!usuarioActivo) return;
+  // Solo si tiene rol de trabajador (no Pendiente)
+  const rolesPermitidos = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
+  if (!rolesPermitidos.includes(usuarioActivo.rol)) return;
+
+  const header = document.querySelector('header');
+  if (!header || document.getElementById('btn-erp-acceso')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'btn-erp-acceso';
+  btn.title = `Panel ERP — ${usuarioActivo.nombre}`;
+  btn.innerHTML = `<i class="fa-solid fa-briefcase"></i>`;
+  btn.style.cssText = `
+    background: transparent;
+    border: 1px solid rgba(201,168,76,0.45);
+    color: #c9a84c;
+    padding: 7px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 15px;
+    transition: background 0.25s, color 0.25s;
+    display: flex; align-items: center; gap: 7px;
+  `;
+  const label = document.createElement('span');
+  label.style.cssText = 'font-family:Jost,sans-serif;font-size:11px;letter-spacing:0.1em;font-weight:400;';
+  label.textContent = usuarioActivo.nombre.split(' ')[0];
+  btn.appendChild(label);
+
+  btn.onmouseenter = () => { btn.style.background = '#c9a84c'; btn.style.color = '#0d0b08'; };
+  btn.onmouseleave = () => { btn.style.background = 'transparent'; btn.style.color = '#c9a84c'; };
+  btn.onclick = () => {
+    document.getElementById('pantalla-login') &&
+      (document.getElementById('pantalla-login').style.display = 'none');
+    configurarInterfazPorRol();
+    const esOp = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
+    changeView(esOp ? 'taller' : 'catalogo');
+  };
+
+  // Insertar en el slot del header
+  const slot = document.getElementById('header-worker-slot');
+  if (slot) slot.appendChild(btn);
+  else header.appendChild(btn);
+}
+
+// ── Al cargar: si hay sesión guardada, mostrar botón ─────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const sesion = localStorage.getItem('usuarioInnova');
+  if (sesion) {
+    try {
+      usuarioActivo = JSON.parse(sesion);
+      setTimeout(imMostrarBotonTrabajador, 300);
+    } catch(e) {}
+  }
+});
 </script>
 
 </div>
@@ -648,7 +789,7 @@ async function imAceptarTerminosYRegistrar() {
     <header>
         <button class="menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars-staggered"></i></button>
         <div class="logo">INNOVA <span>MOBILI</span></div>
-        <div style="width: 40px;"></div>
+        <div id="header-worker-slot" style="display:flex;align-items:center;min-width:40px;"></div>
     </header>
 
 <nav class="sidebar" id="sidebar">

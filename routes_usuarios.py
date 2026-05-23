@@ -220,3 +220,88 @@ def crear_proveedor():
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+
+# ==========================================
+# LOGIN POR EMAIL + PIN (nuevo landing)
+# ==========================================
+
+@usuarios_bp.route('/api/login/email', methods=['POST'])
+def verificar_email_pin():
+    """Login por correo + PIN. Sin dropdowns, sin cambios en la BD."""
+    try:
+        email = (request.json.get('email') or '').strip().lower()
+        pin   = (request.json.get('pin')   or '').strip()
+
+        if not email or not pin:
+            return jsonify({"exito": False, "error": "Correo y PIN son obligatorios"}), 400
+
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email, area_asignada
+            FROM usuarios
+            WHERE LOWER(email) = %s AND pin_acceso = %s;
+        """, (email, pin))
+        usuario = cursor.fetchone()
+        cursor.close(); release_db_connection(conexion)
+
+        if usuario:
+            return jsonify({
+                "exito": True,
+                "usuario": {
+                    "id":            usuario[0],
+                    "nombre":        usuario[1],
+                    "rol":           usuario[2],
+                    "empresa":       usuario[3],
+                    "ruc":           usuario[4],
+                    "email":         usuario[5],
+                    "area_asignada": usuario[6]
+                }
+            }), 200
+
+        return jsonify({"exito": False, "error": "Correo o contraseña incorrectos"}), 401
+
+    except Exception as e:
+        print(f"❌ Error en login email+pin: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
+
+
+# ==========================================
+# REGISTRO PÚBLICO (usuarios externos)
+# ==========================================
+
+@usuarios_bp.route('/api/usuarios/registrar-web', methods=['POST'])
+def registrar_usuario_web():
+    """
+    Registro desde el landing público.
+    Rol = 'Pendiente', estado = false hasta que un Admin active la cuenta.
+    """
+    data       = request.json or {}
+    nombre     = (data.get('nombre')     or '').strip()
+    email      = (data.get('email')      or '').strip().lower()
+    contrasena = (data.get('contrasena') or '').strip()
+
+    if not nombre or not email or not contrasena:
+        return jsonify({'error': 'Nombre, correo y contraseña son obligatorios'}), 400
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        cursor.execute("SELECT id FROM usuarios WHERE LOWER(email) = %s;", (email,))
+        if cursor.fetchone():
+            cursor.close(); release_db_connection(conexion)
+            return jsonify({'error': 'Este correo ya está registrado'}), 409
+
+        cursor.execute("""
+            INSERT INTO usuarios (nombre, email, contrasena, pin_acceso, rol, estado)
+            VALUES (%s, %s, %s, '0000', 'Pendiente', false);
+        """, (nombre, email, contrasena))
+        conexion.commit()
+        cursor.close(); release_db_connection(conexion)
+        return jsonify({'exito': True,
+                        'mensaje': 'Registro exitoso. Un administrador activará tu acceso.'}), 201
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
