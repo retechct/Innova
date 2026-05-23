@@ -7,6 +7,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap');
 
 :root {
+  --font-ui:       'Jost', sans-serif;
+  --font-serif:    'Cormorant Garamond', serif;
+  --sidebar-dark:  #1e293b;
+  --border-dark:   #334155;
+  --accent-lt:     #f0dfa0;
   /* Paleta nueva — elegante y cálida */
   --primary:    #2c1f0e;        /* marrón oscuro profundo */
   --accent:     #c9a84c;        /* dorado Innova */

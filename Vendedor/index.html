@@ -10,180 +10,44 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-   <div id="pantalla-login" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; display: flex; overflow: hidden;">
+    <div id="pantalla-login" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--primary); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white;">
+        
+        <div style="text-align: center; margin-bottom: 30px;">
+            <div style="font-weight: 900; font-size: 2.5rem; color: var(--accent); letter-spacing: -1px;">INNOVA <span style="color: white;">MOBILI</span></div>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: 5px;">Sistema ERP y Punto de Venta</p>
+        </div>
 
-  <!-- ESTILOS DEL LOGIN -->
-  <style>
-    #pantalla-login { background: #0d0b08; font-family: 'Jost', sans-serif; }
-    #pantalla-login .bg-wood {
-  position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse 60% 80% at 30% 50%, rgba(10,6,2,0.72) 0%, transparent 70%),
-              linear-gradient(135deg, rgba(13,11,8,0.55) 0%, rgba(28,18,8,0.45) 40%, rgba(13,11,8,0.55) 100%),
-              url('https://res.cloudinary.com/deqrqsqlv/image/upload/v1779552033/fondologin_optimized_pmscps.png') center center / cover no-repeat;
-    }   
-    #pantalla-login .wood-grain {
-      position: absolute; inset: 0; pointer-events: none; opacity: 0.05;
-      background-image:
-        repeating-linear-gradient(8deg, transparent, transparent 12px, rgba(180,120,50,0.4) 12px, rgba(180,120,50,0.4) 13px),
-        repeating-linear-gradient(-3deg, transparent, transparent 30px, rgba(150,90,30,0.2) 30px, rgba(150,90,30,0.2) 31px);
-    }
-    #pantalla-login .gold-top {
-      position: absolute; top: 0; left: 0; right: 0; height: 2px; pointer-events: none;
-      background: linear-gradient(90deg, transparent, #c9a84c 30%, #e8c97a 50%, #c9a84c 70%, transparent);
-    }
-    #pantalla-login .login-left {
-      position: absolute; left: 8%; top: 50%; transform: translateY(-50%);
-      color: white; max-width: 460px; z-index: 1;
-    }
-    #pantalla-login .login-brand {
-      font-family: 'Cormorant Garamond', serif; font-size: 14px; font-weight: 300;
-      letter-spacing: 0.35em; color: #c9a84c; text-transform: uppercase;
-      margin-bottom: 50px; display: flex; align-items: center; gap: 12px;
-    }
-    #pantalla-login .login-brand::before {
-      content: ''; display: block; width: 36px; height: 1px; background: #c9a84c;
-    }
-    #pantalla-login .login-hero {
-      font-family: 'Cormorant Garamond', serif; font-size: clamp(48px, 6vw, 84px);
-      font-weight: 300; line-height: 1.0; color: #f5f0e8; margin-bottom: 16px;
-    }
-    #pantalla-login .login-hero em { font-style: italic; color: #c9a84c; }
-    #pantalla-login .login-sub {
-      font-size: 14px; font-weight: 300; color: rgba(245,240,232,0.45);
-      letter-spacing: 0.04em; line-height: 1.7; margin-bottom: 44px; max-width: 320px;
-    }
-    #pantalla-login .login-deco {
-      display: flex; align-items: center; gap: 14px;
-    }
-    #pantalla-login .login-deco::before, #pantalla-login .login-deco::after {
-      content: ''; height: 1px; flex: 1;
-      background: linear-gradient(90deg, #c9a84c, transparent);
-    }
-    #pantalla-login .login-deco::after { background: linear-gradient(90deg, transparent, #c9a84c); max-width: 60px; }
-    #pantalla-login .login-deco-diamond { width: 6px; height: 6px; background: #c9a84c; transform: rotate(45deg); flex-shrink: 0; }
-    #pantalla-login .login-panel-wrapper {
-      position: absolute; right: 8%; top: 50%; transform: translateY(-50%);
-      width: 370px; z-index: 2;
-    }
-    #pantalla-login .login-glass {
-      background: rgba(245,240,232,0.04); border: 1px solid rgba(201,168,76,0.2);
-      border-radius: 2px; padding: 44px 38px; backdrop-filter: blur(20px); position: relative; overflow: hidden;
-    }
-    #pantalla-login .login-glass::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent);
-    }
-    #pantalla-login .corner { position: absolute; width: 18px; height: 18px; border-color: rgba(201,168,76,0.4); border-style: solid; }
-    #pantalla-login .corner.tl { top: 10px; left: 10px; border-width: 1px 0 0 1px; }
-    #pantalla-login .corner.tr { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
-    #pantalla-login .corner.bl { bottom: 10px; left: 10px; border-width: 0 0 1px 1px; }
-    #pantalla-login .corner.br { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
-    #pantalla-login .login-title {
-      font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 400;
-      color: #f5f0e8; margin-bottom: 4px;
-    }
-    #pantalla-login .login-subtitle {
-      font-size: 11px; font-weight: 300; color: rgba(245,240,232,0.35);
-      letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 32px;
-    }
-    #pantalla-login .lf-label {
-      font-size: 10px; font-weight: 400; letter-spacing: 0.2em; text-transform: uppercase;
-      color: rgba(201,168,76,0.7); margin-bottom: 7px; display: block;
-    }
-    #pantalla-login .lf-input {
-      width: 100%; background: transparent; border: 0;
-      border-bottom: 1px solid rgba(201,168,76,0.25); padding: 10px 0;
-      font-family: 'Jost', sans-serif; font-size: 14px; font-weight: 300;
-      color: #f5f0e8; letter-spacing: 0.05em; outline: none; margin-bottom: 20px;
-      transition: border-color 0.3s;
-    }
-    #pantalla-login .lf-input:focus { border-bottom-color: #c9a84c; }
-    #pantalla-login .lf-input option { background: #1c1208; color: #f5f0e8; }
-    #pantalla-login .lf-input::placeholder { color: rgba(245,240,232,0.2); }
-    #pantalla-login .lf-input:-webkit-autofill {
-      -webkit-box-shadow: 0 0 0 100px #14100a inset; -webkit-text-fill-color: #f5f0e8;
-    }
-    #pantalla-login .login-btn {
-      width: 100%; margin-top: 28px; padding: 15px; background: transparent;
-      border: 1px solid rgba(201,168,76,0.5); color: #c9a84c;
-      font-family: 'Jost', sans-serif; font-size: 11px; font-weight: 400;
-      letter-spacing: 0.3em; text-transform: uppercase; cursor: pointer;
-      position: relative; overflow: hidden; transition: color 0.4s; border-radius: 0;
-    }
-    #pantalla-login .login-btn::before {
-      content: ''; position: absolute; inset: 0; background: #c9a84c;
-      transform: translateX(-101%); transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
-    }
-    #pantalla-login .login-btn:hover::before { transform: translateX(0); }
-    #pantalla-login .login-btn:hover { color: #0d0b08; }
-    #pantalla-login .login-btn span { position: relative; z-index: 1; }
-    #pantalla-login .login-footer {
-      margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(201,168,76,0.1);
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    #pantalla-login .login-footer-brand { font-family: 'Cormorant Garamond', serif; font-size: 11px; font-weight: 300; color: rgba(201,168,76,0.4); letter-spacing: 0.12em; }
-    #pantalla-login .login-footer-year { font-size: 10px; color: rgba(245,240,232,0.2); }
-    @media (max-width: 860px) {
-      #pantalla-login { flex-direction: column; align-items: center; justify-content: flex-start; overflow-y: auto; }
-      #pantalla-login .login-left { position: static; transform: none; padding: 50px 24px 20px; text-align: center; max-width: 100%; }
-      #pantalla-login .login-sub { max-width: 100%; }
-      #pantalla-login .login-deco { display: none; }
-      #pantalla-login .login-panel-wrapper { position: static; transform: none; width: 100%; max-width: 400px; padding: 0 20px 40px; }
-      #pantalla-login .login-hero { font-size: 44px; }
-    }
-  </style>
+        <div style="background: white; padding: 30px; border-radius: 15px; width: 90%; max-width: 350px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+            <h3 style="color: var(--primary); text-align: center; margin-top: 0; margin-bottom: 20px;">Iniciar Sesión</h3>
+            
+            <div class="form-group">
+                <label style="color: var(--text-muted);">1. Ubicación / Sede</label>
+                <select id="login-tienda" class="form-input" style="border-color: var(--border); font-weight: bold; color: var(--primary);">
+                    <option value="">Cargando sedes...</option>
+                    <!-- Se poblará dinámicamente desde la tabla 'sedes' -->
+                </select>
+            </div>
 
-  <!-- FUENTES (solo si no las tienes ya en el <head>) -->
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+            <div class="form-group" style="margin-top: 15px;">
+                <label style="color: var(--text-muted);">2. Selecciona tu perfil</label>
+                <select id="login-usuario" class="form-input" style="border-color: var(--border);"></select>
+                <!-- Se poblará dinámicamente filtrando por la sede seleccionada -->
+            </div>
 
-  <div class="bg-wood"></div>
-  <div class="wood-grain"></div>
-  <div class="gold-top"></div>
+            <div class="form-group" style="margin-top: 15px;">
+                <label style="color: var(--text-muted);">3. PIN de Acceso (4 dígitos)</label>
+                <input type="password" id="login-pin" class="form-input" placeholder="****" maxlength="4" style="text-align: center; font-size: 24px; letter-spacing: 10px; border-color: var(--border);">
+            </div>
 
-  <!-- IZQUIERDA: texto hero -->
-  <div class="login-left">
-    <div class="login-brand">Innova Möbili</div>
-    <h1 class="login-hero">Donde el<br><em>diseño</em><br>vive.</h1>
-    <p class="login-sub">Sistema ERP y Punto de Venta.<br>Acceso exclusivo para personal autorizado.</p>
-    <div class="login-deco"><div class="login-deco-diamond"></div></div>
-  </div>
-
-  <!-- DERECHA: panel de login -->
-  <div class="login-panel-wrapper">
-    <div class="login-glass">
-      <div class="corner tl"></div>
-      <div class="corner tr"></div>
-      <div class="corner bl"></div>
-      <div class="corner br"></div>
-
-      <p class="login-title">Panel Interno</p>
-      <p class="login-subtitle">Solo personal autorizado</p>
-
-      <label class="lf-label" for="login-tienda">1. Sede / Ubicación</label>
-      <select id="login-tienda" class="lf-input">
-        <option value="">Cargando sedes...</option>
-      </select>
-
-      <label class="lf-label" for="login-usuario">2. Tu perfil</label>
-      <select id="login-usuario" class="lf-input"></select>
-
-      <label class="lf-label" for="login-pin">3. PIN de acceso</label>
-      <input type="password" id="login-pin" class="lf-input" placeholder="••••" maxlength="4"
-             style="text-align: center; font-size: 22px; letter-spacing: 10px;"
-             onkeydown="if(event.key==='Enter') entrarAlSistema()">
-
-      <button class="login-btn" onclick="entrarAlSistema()">
-        <span>Ingresar al sistema</span>
-      </button>
-
-      <div class="login-footer">
-        <span class="login-footer-brand">Innova Möbili</span>
-        <span class="login-footer-year">ERP © 2026</span>
-      </div>
+           <button class="btn-primary" style="width: 100%; margin-top: 20px; font-size: 16px; padding: 12px; background-color: var(--accent);" onclick="entrarAlSistema()">
+               <i class="fa-solid fa-unlock-keyhole"></i> INGRESAR
+           </button>
+       </div>
+       
+       <div style="margin-top: 30px; font-size: 12px; color: var(--text-muted);">
+           Protegido bajo arquitectura Multi-Empresa
+       </div>
     </div>
-  </div>
-
-</div>
 
     <div class="overlay" id="overlay-sidebar" onclick="toggleSidebar()"></div>
     <div class="overlay" id="overlay-cart" onclick="toggleCart()"></div>
@@ -203,41 +67,41 @@
     
     <div class="sidebar-item" onclick="changeView('pedidos')" style="margin-top:20px; color:var(--success)"><i class="fa-solid fa-clock-rotate-left"></i> Mis Pedidos</div>
     
-    <div class="sidebar-item" onclick="verMisCreaciones()" style="color: #b8860b; border-top: 1px solid #1e293b; margin-top: 5px;">
+    <div class="sidebar-item" onclick="verMisCreaciones()" style="color: var(--caramel); border-top: 1px solid rgba(255,255,255,0.06); margin-top: 5px;">
         <i class="fa-solid fa-wand-magic-sparkles"></i> Mis Creaciones
     </div>
 
-    <div class="sidebar-item" onclick="abrirModalSugerencia(); toggleSidebar();" style="background: #451a03; color: #fbbf24; font-weight: bold; border: 1px solid #92400e; margin: 5px 10px; border-radius: 8px; font-size: 13px;">
+    <div class="sidebar-item" onclick="abrirModalSugerencia(); toggleSidebar();" style="background: rgba(201,168,76,0.12); color: var(--accent); font-weight: bold; border: 1px solid var(--accent); margin: 5px 10px; border-radius: 8px; font-size: 13px;">
     <i class="fa-solid fa-lightbulb"></i> SUGERIR NUEVO INSUMO
 </div>
     
-    <div id="btn-menu-taller" class="sidebar-item" style="display: none; background: #1e293b; color: #d4af37; font-weight: bold;" onclick="changeView('taller')">
+    <div id="btn-menu-taller" class="sidebar-item" style="display: none; background: var(--sidebar-bg); color: var(--accent); font-weight: bold;" onclick="changeView('taller')">
         <i class="fa-solid fa-industry"></i> GESTIÓN DE TALLER
     </div>
-    <div id="btn-menu-inv-tienda" class="sidebar-item" style="display:none;background:#0f172a;color:#6fcc86;font-weight:bold;" onclick="changeView('inv-tienda')">
+    <div id="btn-menu-inv-tienda" class="sidebar-item" style="display:none;background:var(--primary);color:var(--success);font-weight:bold;" onclick="changeView('inv-tienda')">
         <i class="fa-solid fa-boxes"></i> INVENTARIO POR TIENDA
     </div>
-    <div id="btn-menu-inventario" class="sidebar-item" style="display: none; background: #0f172a; color: #6fcc86; font-weight: bold;" onclick="changeView('inventario')">
+    <div id="btn-menu-inventario" class="sidebar-item" style="display: none; background: var(--primary); color: var(--success); font-weight: bold;" onclick="changeView('inventario')">
         <i class="fa-solid fa-layer-group"></i> CONTROL DE INSUMOS
     </div>
-    <div id="btn-menu-gestor" class="sidebar-item" style="display: none; background: #0f172a; color: #38bdf8; font-weight: bold;" onclick="changeView('gestor-aprobacion')">
+    <div id="btn-menu-gestor" class="sidebar-item" style="display: none; background: var(--primary); color: var(--accent); font-weight: bold;" onclick="changeView('gestor-aprobacion')">
         <i class="fa-solid fa-clipboard-check"></i> GESTOR DE MODELOS
     </div>
-    <div id="btn-menu-logistica" class="sidebar-item" style="display: none; background: #0f172a; color: #fbbf24; font-weight: bold;" onclick="changeView('logistica')">
+    <div id="btn-menu-logistica" class="sidebar-item" style="display: none; background: var(--primary); color: var(--accent); font-weight: bold;" onclick="changeView('logistica')">
         <i class="fa-solid fa-truck-ramp-box"></i> LOGÍSTICA EXTERNA
     </div>
-    <div id="btn-menu-usuarios" class="sidebar-item" style="display: none; background: #0f172a; color: #a78bfa; font-weight: bold;" onclick="changeView('usuarios-admin')">
+    <div id="btn-menu-usuarios" class="sidebar-item" style="display: none; background: var(--primary); color: var(--accent-lt); font-weight: bold;" onclick="changeView('usuarios-admin')">
         <i class="fa-solid fa-users-gear"></i> GESTIÓN DE PERSONAL
     </div>
-    <div id="btn-menu-proveedores" class="sidebar-item" style="display: none; background: #0f172a; color: #2dd4bf; font-weight: bold;" onclick="changeView('proveedores')">
+    <div id="btn-menu-proveedores" class="sidebar-item" style="display: none; background: var(--primary); color: var(--success); font-weight: bold;" onclick="changeView('proveedores')">
         <i class="fa-solid fa-address-book"></i> PROVEEDORES
     </div>
 
-    <div id="btn-menu-contratos" class="sidebar-item" style="display: none; background: #0f172a; color: #10b981; font-weight: bold;" onclick="changeView('contratos')">
+    <div id="btn-menu-contratos" class="sidebar-item" style="display: none; background: var(--primary); color: var(--success); font-weight: bold;" onclick="changeView('contratos')">
         <i class="fa-solid fa-file-excel"></i> REPORTES Y VENTAS
     </div>
 
-    <div class="sidebar-item" onclick="cerrarSesion()" style="color: #ef4444; border-top: 1px solid #334155; margin-top: 20px;">
+    <div class="sidebar-item" onclick="cerrarSesion()" style="color: var(--danger); border-top: 1px solid rgba(255,255,255,0.08); margin-top: 20px;">
         <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
     </div>
 </nav>
@@ -248,7 +112,7 @@
             <i id="view-icon" class="fa-solid fa-book-open"></i>
             <h2 id="view-title" style="margin: 0;">NUESTRA CARTA DE MODELOS</h2>
         </div>
-        <button id="btn-add-producto" class="btn-primary" style="display: none; font-size: 11px; padding: 8px 15px; border-radius: 6px; background: #0f172a;" onclick="abrirModalProductoDirecto()">
+        <button id="btn-add-producto" class="btn-primary" style="display: none; font-size: 11px; padding: 8px 15px; border-radius: 6px; background: var(--primary);" onclick="abrirModalProductoDirecto()">
             <i class="fa-solid fa-plus"></i> Añadir Producto
         </button>
     </div>
@@ -261,8 +125,8 @@
         <div class="grid">
 
             <div class="card card-template" style="position:relative;">
-                <div style="width:100%;height:170px;background:linear-gradient(135deg,#0f172a,#1e3a5f);display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-couch" style="font-size:4rem;color:#558fc5;opacity:0.9;"></i>
+                <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),#4a6a4a);display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-couch" style="font-size:4rem;color:var(--accent);opacity:0.9;"></i>
                 </div>
                 <div class="card-info">
                     <span class="status-badge status-template">DISEÑO A MEDIDA</span>
@@ -275,8 +139,8 @@
             </div>
 
             <div class="card card-template" style="position:relative;">
-                <div style="width:100%;height:170px;background:linear-gradient(135deg,#0f172a,#1a3a2a);display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-utensils" style="font-size:4rem;color:#6fcc86;opacity:0.9;"></i>
+                <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),#3a5c3a);display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-utensils" style="font-size:4rem;color:var(--success);opacity:0.9;"></i>
                 </div>
                 <div class="card-info">
                     <span class="status-badge status-template">DISEÑO A MEDIDA</span>
@@ -289,7 +153,7 @@
             </div>
 
             <div class="card card-template" style="position:relative;">
-                <div style="width:100%;height:170px;background:linear-gradient(135deg,#0f172a,#2d1a0f);display:flex;align-items:center;justify-content:center;">
+                <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),var(--caramel));display:flex;align-items:center;justify-content:center;">
                     <i class="fa-solid fa-table" style="font-size:4rem;color:#f59e0b;opacity:0.9;"></i>
                 </div>
                 <div class="card-info">
@@ -303,8 +167,8 @@
             </div>
 
             <div class="card card-template" style="position:relative;">
-                <div style="width:100%;height:170px;background:linear-gradient(135deg,#0f172a,#2d0f2d);display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-chair" style="font-size:4rem;color:#a78bfa;opacity:0.9;"></i>
+                <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),#6b3a2a);display:flex;align-items:center;justify-content:center;">
+                    <i class="fa-solid fa-chair" style="font-size:4rem;color:var(--accent-lt);opacity:0.9;"></i>
                 </div>
                 <div class="card-info">
                     <span class="status-badge status-template">DISEÑO A MEDIDA</span>
@@ -325,13 +189,13 @@
 
     <div id="view-taller" class="view-section" style="display:none; padding: 20px;">
         
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; flex-wrap:wrap; gap:10px;">
-            <h2 style="font-family: 'Inter', sans-serif; font-weight: 800; color: #0f172a; margin:0; letter-spacing: -1px;">
-                <i class="fa-solid fa-industry" style="color: #d4af37; margin-right: 10px;"></i> CONTROL DE PRODUCCIÓN
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid var(--border); padding-bottom: 15px; flex-wrap:wrap; gap:10px;">
+            <h2 style="font-family: var(--font-ui); font-weight: 800; color: var(--primary); margin:0; letter-spacing: -1px;">
+                <i class="fa-solid fa-industry" style="color: var(--accent); margin-right: 10px;"></i> CONTROL DE PRODUCCIÓN
             </h2>
             <!-- Badge de stats: se puebla vía cargarStatsTaller() -->
-            <div id="stats-taller" style="font-size: 11px; font-weight: 900; color: #64748b; background: #f1f5f9; padding: 8px 16px; border-radius: 50px; text-transform: uppercase; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                <i class="fa-solid fa-circle-notch fa-spin" style="color:#94a3b8;"></i> Sincronizando...
+            <div id="stats-taller" style="font-size: 11px; font-weight: 900; color: var(--text-muted); background: var(--bg); padding: 8px 16px; border-radius: 50px; text-transform: uppercase; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--text-muted);"></i> Sincronizando...
             </div>
         </div>
 
@@ -339,7 +203,7 @@
         </div>
     </div>
 <div id="view-inventario" class="view-section" style="display:none; padding: 20px;">
-    <div style="background: #0f172a; padding: 20px; color: white; border-radius: 12px; margin-bottom: 30px;">
+    <div style="background: var(--primary); padding: 20px; color: white; border-radius: 12px; margin-bottom: 30px;">
         <h2 style="margin:0; font-size: 18px;"><i class="fa-solid fa-plus-circle"></i> REGISTRAR NUEVAS PARTES</h2>
         <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
             <button class="btn-primary" onclick="abrirModalNuevo('tela', 'inventario')" style="background: #7c3aed; border:none;">+ Registrar Tela</button>
@@ -352,28 +216,28 @@
         </div>
     </div>
 
-    <h3 style="color:#0f172a; border-bottom: 2px solid #7c3aed; padding-bottom: 5px; margin-bottom: 15px;">
+    <h3 style="color:var(--primary); border-bottom: 2px solid #7c3aed; padding-bottom: 5px; margin-bottom: 15px;">
         <i class="fa-solid fa-scroll"></i> MAESTRO DE TELAS
     </h3>
     <div id="contenedor-telas-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;">
         </div>
 
-    <h3 style="color:#0f172a; border-bottom: 2px solid #ec4899; padding-bottom: 5px; margin-bottom: 15px;">
+    <h3 style="color:var(--primary); border-bottom: 2px solid #ec4899; padding-bottom: 5px; margin-bottom: 15px;">
         <i class="fa-solid fa-palette"></i> DISEÑOS DE COJINES DECORATIVOS
     </h3>
     <div id="contenedor-cojines-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
 
-    <h3 style="color:#0f172a; border-bottom: 2px solid #0284c7; padding-bottom: 5px; margin-bottom: 15px;">
+    <h3 style="color:var(--primary); border-bottom: 2px solid #0284c7; padding-bottom: 5px; margin-bottom: 15px;">
         <i class="fa-solid fa-table-cells-large"></i> TABLEROS (MÁRMOL / MADERA)
     </h3>
     <div id="contenedor-tableros-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
 
-    <h3 style="color:#0f172a; border-bottom: 2px solid #0369a1; padding-bottom: 5px; margin-bottom: 15px;">
+    <h3 style="color:var(--primary); border-bottom: 2px solid #0369a1; padding-bottom: 5px; margin-bottom: 15px;">
         <i class="fa-solid fa-microchip"></i> BASES Y SOPORTES METÁLICOS
     </h3>
     <div id="contenedor-metal-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
 
-    <h3 style="color:#0f172a; border-bottom: 2px solid #b45309; padding-bottom: 5px; margin-bottom: 15px;">
+    <h3 style="color:var(--primary); border-bottom: 2px solid #b45309; padding-bottom: 5px; margin-bottom: 15px;">
         <i class="fa-solid fa-hammer"></i> ESTRUCTURAS DE MADERA (SILLERÍA)
     </h3>
     <div id="contenedor-madera-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
@@ -381,11 +245,11 @@
     <div id="lista-insumos-maestra" class="grid-productos" style="display: none;"></div>
 </div>
     <div id="view-gestor-aprobacion" class="view-section" style="display:none; padding: 20px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px;">
-            <h2 style="font-family: 'Inter', sans-serif; font-weight: 800; color: #0f172a; margin:0; letter-spacing: -1px;">
-                <i class="fa-solid fa-clipboard-check" style="color: #38bdf8; margin-right: 10px;"></i> GESTOR DE APROBACIÓN
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid var(--border); padding-bottom: 15px;">
+            <h2 style="font-family: var(--font-ui); font-weight: 800; color: var(--primary); margin:0; letter-spacing: -1px;">
+                <i class="fa-solid fa-clipboard-check" style="color: var(--accent); margin-right: 10px;"></i> GESTOR DE APROBACIÓN
             </h2>
-            <button class="btn-primary" onclick="cargarGestorAprobacion()" style="font-size: 11px; padding: 8px 15px; background: #0f172a; border-radius: 6px;">
+            <button class="btn-primary" onclick="cargarGestorAprobacion()" style="font-size: 11px; padding: 8px 15px; background: var(--primary); border-radius: 6px;">
                 <i class="fa-solid fa-rotate"></i> Actualizar Bandeja
             </button>
         </div>
@@ -397,11 +261,11 @@
         <div style="margin-top: 35px; border-top: 2px solid #fef3c7; padding-top: 20px;">
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
                 <i class="fa-solid fa-tags" style="color:#d97706; font-size:18px;"></i>
-                <h3 style="margin:0; font-weight:800; color:#0f172a; font-size:16px;">SOLICITUDES DE CAMBIO DE PRECIO</h3>
+                <h3 style="margin:0; font-weight:800; color:var(--primary); font-size:16px;">SOLICITUDES DE CAMBIO DE PRECIO</h3>
                 <span id="badge-cambios-precio" style="background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; padding:3px 10px; border-radius:20px; display:none;"></span>
             </div>
             <div id="lista-cambios-precio" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:14px;">
-                <p style="color:#94a3b8; font-size:13px;">Sin solicitudes pendientes.</p>
+                <p style="color:var(--text-muted); font-size:13px;">Sin solicitudes pendientes.</p>
             </div>
         </div>
     </div>
@@ -410,23 +274,23 @@
     <div id="modal-cambio-precio" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9000; align-items:center; justify-content:center;">
         <div style="background:white; border-radius:16px; padding:28px; width:90%; max-width:420px; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="margin:0; font-weight:800; color:#0f172a;"><i class="fa-solid fa-tag" style="color:#d97706;"></i> Proponer cambio de precio</h3>
-                <button onclick="cerrarModalCambioPrecio()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#94a3b8;">✕</button>
+                <h3 style="margin:0; font-weight:800; color:var(--primary);"><i class="fa-solid fa-tag" style="color:#d97706;"></i> Proponer cambio de precio</h3>
+                <button onclick="cerrarModalCambioPrecio()" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-muted);">✕</button>
             </div>
             <div style="background:#fef3c7; border-radius:8px; padding:12px; margin-bottom:16px; font-size:13px; color:#78350f;">
                 <strong id="cambio-precio-codigo-label"></strong>
                 <div style="margin-top:4px;">Precio actual: <strong id="cambio-precio-actual-label" style="color:#d97706;"></strong></div>
             </div>
             <div style="margin-bottom:14px;">
-                <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:6px;">NUEVO PRECIO (S/)</label>
+                <label style="font-size:12px; font-weight:700; color:var(--text-muted); display:block; margin-bottom:6px;">NUEVO PRECIO (S/)</label>
                 <input type="number" id="input-precio-nuevo" class="form-input" min="1" step="0.01" placeholder="0.00" style="font-size:18px; font-weight:800; color:#065f46;">
             </div>
             <div style="margin-bottom:20px;">
-                <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:6px;">MOTIVO DEL CAMBIO <span style="color:#ef4444;">*</span></label>
+                <label style="font-size:12px; font-weight:700; color:var(--text-muted); display:block; margin-bottom:6px;">MOTIVO DEL CAMBIO <span style="color:var(--danger);">*</span></label>
                 <textarea id="input-motivo-precio" class="form-input" rows="3" placeholder="Ej: Cambio de tela solicitado por el cliente, incremento en precio de materiales..."></textarea>
             </div>
             <div style="display:flex; gap:10px;">
-                <button onclick="cerrarModalCambioPrecio()" style="flex:1; padding:12px; border:1px solid #e2e8f0; border-radius:8px; background:white; cursor:pointer; font-weight:700; color:#64748b;">Cancelar</button>
+                <button onclick="cerrarModalCambioPrecio()" style="flex:1; padding:12px; border:1px solid #e2e8f0; border-radius:8px; background:white; cursor:pointer; font-weight:700; color:var(--text-muted);">Cancelar</button>
                 <button onclick="enviarCambioPrecio()" style="flex:2; padding:12px; background:#d97706; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:800; font-size:14px;">
                     <i class="fa-solid fa-paper-plane"></i> Enviar solicitud
                 </button>
@@ -441,13 +305,13 @@
                 <i class="fa-solid fa-file-excel"></i> EXPORTAR VENTAS (.xlsx)
             </button>
         </div>
-        <div id="tabla-logistica-externa" style="background: white; border-radius: 12px; padding: 15px; border: 1px solid #e2e8f0;">
+        <div id="tabla-logistica-externa" style="background: white; border-radius: 12px; padding: 15px; border: 1px solid var(--border);">
             <!-- Cargado vía JS -->
         </div>
     </div>
 
     <div id="view-usuarios-admin" class="view-section" style="display:none; padding: 20px;">
-        <div style="background: #0f172a; padding: 20px; color: white; border-radius: 12px; margin-bottom: 20px;">
+        <div style="background: var(--primary); padding: 20px; color: white; border-radius: 12px; margin-bottom: 20px;">
             <h3><i class="fa-solid fa-user-plus"></i> REGISTRAR PERSONAL</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px;">
                 <input type="text" id="nu-nombre" class="form-input-sm" placeholder="Nombre completo">
@@ -481,7 +345,7 @@
     </div>
 
     <div id="view-proveedores" class="view-section" style="display:none; padding: 20px;">
-        <div style="background: #0f172a; padding: 20px; color: white; border-radius: 12px; margin-bottom: 20px;">
+        <div style="background: var(--primary); padding: 20px; color: white; border-radius: 12px; margin-bottom: 20px;">
             <h3><i class="fa-solid fa-handshake"></i> DIRECTORIO DE PROVEEDORES</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px;">
                 <input type="text" id="np-nombre" class="form-input-sm" placeholder="Empresa / Contacto">
@@ -533,7 +397,7 @@
  <div id="contratos-table-wrapper" style="overflow-x: auto;">
     <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
         <thead>
-            <tr style="background: #0f172a; color: white; border-bottom: 2px solid #e2e8f0;">
+            <tr style="background: var(--primary); color: white; border-bottom: 2px solid #e2e8f0;">
                 <th style="padding: 14px;">Contrato</th>
                 <th style="padding: 14px;">Cliente / Vendedor</th>
                 <th style="padding: 14px;">Sede</th> <th style="padding: 14px;">Total Venta</th>
@@ -713,7 +577,7 @@
             </div>
             
             <div class="modal-footer" style="margin-top: 20px;">
-                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: #b8860b; border: 1px solid #d4af37; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
+                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: var(--caramel); border: 1px solid var(--accent); padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
                     <i class="fa-solid fa-star"></i> Guardar como Mi Plantilla
                 </button>
                 
@@ -743,7 +607,7 @@
                         </select>
                     </div>
                     
-                    <div class="img-preview-container" style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 10px;">
+                    <div class="img-preview-container" style="background: var(--bg); border: 2px dashed #cbd5e1; padding: 10px;">
                         <img id="preview-comedor" src="imagenes/sin_foto.jpg" alt="Plano Comedor">
                     </div>
                     
@@ -847,7 +711,7 @@
             </div>
             
             <div class="modal-footer" style="margin-top: 20px;">
-                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: #b8860b; border: 1px solid #d4af37; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
+                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: var(--caramel); border: 1px solid var(--accent); padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
                     <i class="fa-solid fa-star"></i> Guardar como Mi Plantilla
                 </button>
                 
@@ -873,7 +737,7 @@
                         </select>
                     </div>
                     
-                    <div class="img-preview-container" style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 10px;">
+                    <div class="img-preview-container" style="background: var(--bg); border: 2px dashed #cbd5e1; padding: 10px;">
                         <img id="preview-centro" src="imagenes/sin_foto.jpg" alt="Vista Previa">
                     </div>
                     
@@ -939,7 +803,7 @@
             </div>
             
             <div class="modal-footer" style="margin-top: 20px;">
-                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: #b8860b; border: 1px solid #d4af37; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
+                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: var(--caramel); border: 1px solid var(--accent); padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
                     <i class="fa-solid fa-star"></i> Guardar como Mi Plantilla
                 </button>
                 <button class="btn-action btn-primary" style="width: 100%;" onclick="confirmarCentro()">CONFIRMAR AL CARRO</button>
@@ -964,7 +828,7 @@
                         </select>
                     </div>
                     
-                    <div class="img-preview-container" style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 10px;">
+                    <div class="img-preview-container" style="background: var(--bg); border: 2px dashed #cbd5e1; padding: 10px;">
                         <img id="preview-butaca" src="imagenes/sin_foto.jpg" alt="Vista Previa">
                     </div>
 
@@ -1022,7 +886,7 @@
             </div>
             
             <div class="modal-footer" style="margin-top: 20px;">
-                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: #b8860b; border: 1px solid #d4af37; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
+                <button type="button" onclick="abrirModalCreacion()" style="background: #fffcf0; color: var(--caramel); border: 1px solid var(--accent); padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.3s;">
                     <i class="fa-solid fa-star"></i> Guardar como Mi Plantilla
                 </button>
                 <button class="btn-action btn-primary" style="width: 100%;" onclick="confirmarButaca()">CONFIRMAR AL CARRO</button>
@@ -1095,7 +959,7 @@
        <div id="step-3" class="step-content">
             <button class="btn-ghost" onclick="goToStep(2)"><i class="fa-solid fa-arrow-left"></i> Volver a Cliente</button>
             
-            <div class="form-group" style="margin-top:15px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
+            <div class="form-group" style="margin-top:15px; background: var(--bg); padding: 15px; border-radius: 10px; border: 1px solid var(--border);">
     <label style="font-size: 12px; font-weight: 800; color: var(--accent); margin-bottom: 10px; display: block;"><i class="fa-solid fa-cash-register"></i> REGISTRAR NUEVO PAGO</label>
     
     <div style="display: flex; gap: 8px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #cbd5e1;">
@@ -1117,7 +981,7 @@
     </div>
 
     <div style="margin-bottom: 8px;">
-        <select id="pago-empresa" class="form-input-sm" style="width:100%; background:#fffdf0; border-color:#d4af37; font-weight:bold;">
+        <select id="pago-empresa" class="form-input-sm" style="width:100%; background:#fffdf0; border-color:var(--accent); font-weight:bold;">
             <option value="">⚠️ ¿A qué empresa entró el dinero?</option>
             <option value="INNOVA MOBILI S.A.C.">🏢 INNOVA MOBILI S.A.C. (RUC: 20600768175)</option>
             <option value="INNOVA MOBILI LIMA E.I.R.L.">🏢 INNOVA MOBILI LIMA E.I.R.L. (RUC: 20614763044)</option>
@@ -1181,7 +1045,7 @@
   <div id="modal-creacion" class="modal-overlay" style="z-index: 4000; display: none;">
         <div class="modal-content" style="max-width: 400px; width: 90%;">
             <div class="modal-header">
-                <h3 style="color: #b8860b;"><i class="fa-solid fa-star"></i> Guardar Plantilla</h3>
+                <h3 style="color: var(--caramel);"><i class="fa-solid fa-star"></i> Guardar Plantilla</h3>
                 <button type="button" class="close-btn" onclick="document.getElementById('modal-creacion').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
             </div>
             
@@ -1202,12 +1066,12 @@
     <div id="modal-producto-directo" class="modal-overlay" style="z-index: 4500;">
         <div class="modal-content" style="max-width: 400px; width: 90%;">
             <div class="modal-header">
-                <h3 style="color: #0f172a;"><i class="fa-solid fa-box-open"></i> Nuevo Producto</h3>
+                <h3 style="color: var(--primary);"><i class="fa-solid fa-box-open"></i> Nuevo Producto</h3>
                 <button type="button" class="close-btn" onclick="document.getElementById('modal-producto-directo').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
             </div>
             
             <div style="padding: 10px;">
-                <div class="form-group" style="background:#f8fafc; padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
+                <div class="form-group" style="background:var(--bg); padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
                     <label style="color:var(--accent);"><i class="fa-solid fa-camera"></i> Subir Foto del Producto</label>
                     <input type="file" id="pd-foto" class="form-input-sm" accept="image/*" style="margin-top:10px;">
                 </div>
@@ -1236,7 +1100,7 @@
                     </select>
                 </div>
 
-                <button class="btn-primary" style="width: 100%; margin-top: 15px; background-color: #0f172a;" onclick="guardarProductoDirecto()">
+                <button class="btn-primary" style="width: 100%; margin-top: 15px; background-color: var(--primary);" onclick="guardarProductoDirecto()">
                     <i class="fa-solid fa-cloud-arrow-up"></i> Publicar en Catálogo
                 </button>
             </div>
@@ -1252,7 +1116,7 @@
         </div>
         
         <div style="padding: 15px; text-align: center;">
-            <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
                 Selecciona la categoría exacta de la pieza solicitada por el cliente para abrir su ficha técnica descriptiva:
             </p>
 
@@ -1271,28 +1135,28 @@
 <div id="modal-nuevo-material" class="modal-overlay" style="z-index: 5000; display: none;">
     <div class="modal-content" style="max-width: 450px; width: 95%;">
         <div class="modal-header">
-            <h3 id="nm-title" style="color: #0f172a;">Añadir Parte</h3>
+            <h3 id="nm-title" style="color: var(--primary);">Añadir Parte</h3>
             <button type="button" class="close-btn" onclick="document.getElementById('modal-nuevo-material').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div style="padding: 15px;">
             <!-- ID nm-tipo añadido para evitar error de consola -->
             <input type="hidden" id="nm-tipo"> 
             
-            <div class="form-group" style="background:#f8fafc; padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
+            <div class="form-group" style="background:var(--bg); padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
                 <label style="color:var(--accent); font-weight: bold;"><i class="fa-solid fa-camera"></i> Foto de la Parte</label>
                 <div style="display:flex; gap:8px; margin-top:10px;">
-                    <label style="flex:1; cursor:pointer; background:#0f172a; color:white; padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
+                    <label style="flex:1; cursor:pointer; background:var(--primary); color:white; padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
                         <i class="fa-solid fa-camera"></i> Tomar Foto
                         <input type="file" id="nm-foto-camara" accept="image/*" capture="environment" style="display:none;" onchange="sincronizarFoto(this)">
                     </label>
-                    <label style="flex:1; cursor:pointer; background:#e2e8f0; color:#0f172a; padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
+                    <label style="flex:1; cursor:pointer; background:#e2e8f0; color:var(--primary); padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
                         <i class="fa-solid fa-folder-open"></i> Subir Archivo
                         <input type="file" id="nm-foto" accept="image/*" style="display:none;" onchange="sincronizarFoto(this)">
                     </label>
                 </div>
                 <div id="nm-foto-preview-container" style="display:none; margin-top:10px;">
                     <img id="nm-foto-preview" style="max-height:80px; border-radius:8px; border:1px solid #e2e8f0;">
-                    <p id="nm-foto-nombre" style="font-size:11px; color:#64748b; margin:4px 0 0;"></p>
+                    <p id="nm-foto-nombre" style="font-size:11px; color:var(--text-muted); margin:4px 0 0;"></p>
                 </div>
             </div>
 
@@ -1308,7 +1172,7 @@
             <div id="nm-campos-dinamicos">
                 </div>
 
-            <button class="btn-primary" style="width: 100%; margin-top: 5px; background-color: #0f172a;" onclick="guardarNuevoMaterial()">
+            <button class="btn-primary" style="width: 100%; margin-top: 5px; background-color: var(--primary);" onclick="guardarNuevoMaterial()">
                 <i class="fa-solid fa-save"></i> GUARDAR EN MAESTRO
             </button>
         </div>
