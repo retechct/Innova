@@ -237,11 +237,15 @@ def verificar_email_pin():
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        # Acepta si coincide con pin_acceso O con contrasena
+        # (cubre usuarios registrados antes y después del fix)
         cursor.execute("""
             SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email, area_asignada
             FROM usuarios
-            WHERE LOWER(email) = %s AND pin_acceso = %s;
-        """, (email, pin))
+            WHERE LOWER(email) = %s
+              AND (pin_acceso = %s OR contrasena = %s)
+              AND COALESCE(estado, true) = true;
+        """, (email, pin, pin))
         usuario = cursor.fetchone()
         cursor.close(); release_db_connection(conexion)
 
@@ -274,7 +278,9 @@ def verificar_email_pin():
 def registrar_usuario_web():
     """
     Registro desde el landing público.
-    Rol = 'Pendiente', estado = false hasta que un Admin active la cuenta.
+    La contraseña se guarda en ambas columnas (contrasena y pin_acceso)
+    para que el login por email+contraseña funcione de inmediato.
+    Rol = 'Cliente', estado = true (acceso habilitado desde el momento del registro).
     """
     data       = request.json or {}
     nombre     = (data.get('nombre')     or '').strip()
@@ -293,14 +299,15 @@ def registrar_usuario_web():
             cursor.close(); release_db_connection(conexion)
             return jsonify({'error': 'Este correo ya está registrado'}), 409
 
+        # pin_acceso = contrasena → el login por email+pin busca en pin_acceso
         cursor.execute("""
             INSERT INTO usuarios (nombre, email, contrasena, pin_acceso, rol, estado)
-            VALUES (%s, %s, %s, '0000', 'Pendiente', false);
-        """, (nombre, email, contrasena))
+            VALUES (%s, %s, %s, %s, 'Cliente', true);
+        """, (nombre, email, contrasena, contrasena))
         conexion.commit()
         cursor.close(); release_db_connection(conexion)
         return jsonify({'exito': True,
-                        'mensaje': 'Registro exitoso. Un administrador activará tu acceso.'}), 201
+                        'mensaje': '¡Registro exitoso! Ya puedes ingresar con tu correo y contraseña.'}), 201
 
     except Exception as e:
         import traceback; traceback.print_exc()
