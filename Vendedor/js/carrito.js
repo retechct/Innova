@@ -744,6 +744,88 @@ function imprimirContratoElegante() {
     printWindow.document.close();
     printWindow.onload = () => { setTimeout(() => { printWindow.print(); }, 500); };
 }
+// =============================================================
+// AUTOCOMPLETE DE CLIENTES — pegar en carrito.js
+// Busca en /api/clientes/buscar mientras el vendedor escribe
+// el nombre del cliente y rellena dni/celular/dirección solos.
+// =============================================================
+
+(function iniciarAutocompleteClientes() {
+    // Esperar a que el DOM esté listo
+    const intervalo = setInterval(() => {
+        const inputNombre = document.getElementById('c-nombre');
+        if (!inputNombre) return;
+        clearInterval(intervalo);
+
+        // Contenedor de sugerencias
+        const dropdown = document.createElement('div');
+        dropdown.id = 'cliente-sugerencias';
+        dropdown.style.cssText = `
+            position: absolute; z-index: 9999; background: #fff;
+            border: 1px solid #d1d5db; border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.12);
+            width: 100%; max-height: 260px; overflow-y: auto;
+            display: none; top: 100%; left: 0;
+        `;
+        // El input necesita position: relative en su contenedor
+        inputNombre.parentElement.style.position = 'relative';
+        inputNombre.parentElement.appendChild(dropdown);
+
+        let debounceTimer = null;
+
+        inputNombre.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            const q = inputNombre.value.trim();
+            if (q.length < 2) { dropdown.style.display = 'none'; return; }
+
+            debounceTimer = setTimeout(async () => {
+                try {
+                    const resp = await fetch(`${API_URL}/api/clientes/buscar?q=${encodeURIComponent(q)}`);
+                    const lista = await resp.json();
+                    if (!lista.length) { dropdown.style.display = 'none'; return; }
+
+                    dropdown.innerHTML = lista.map(c => `
+                        <div class="cli-item" data-id="${c.id}"
+                             data-nombre="${c.nombre}"
+                             data-dni="${c.dni}"
+                             data-telefono="${c.telefono}"
+                             data-direccion="${c.direccion}"
+                             style="padding:10px 14px; cursor:pointer; border-bottom:1px solid #f3f4f6;
+                                    font-size:14px; transition: background .15s;">
+                            <strong>${c.nombre}</strong>
+                            ${c.dni      ? `<span style="color:#6b7280;margin-left:8px;">DNI ${c.dni}</span>` : ''}
+                            ${c.telefono ? `<span style="color:#6b7280;margin-left:8px;">📞 ${c.telefono}</span>` : ''}
+                        </div>
+                    `).join('');
+
+                    dropdown.querySelectorAll('.cli-item').forEach(item => {
+                        item.addEventListener('mouseenter', () => item.style.background = '#f0f9ff');
+                        item.addEventListener('mouseleave', () => item.style.background = '');
+                        item.addEventListener('click', () => {
+                            // Rellenar campos automáticamente
+                            document.getElementById('c-nombre').value    = item.dataset.nombre;
+                            document.getElementById('c-dni').value       = item.dataset.dni       || '';
+                            document.getElementById('c-celular').value   = item.dataset.telefono  || '';
+                            document.getElementById('c-direccion').value = item.dataset.direccion || '';
+                            dropdown.style.display = 'none';
+                        });
+                    });
+
+                    dropdown.style.display = 'block';
+                } catch (err) {
+                    console.warn('Autocomplete clientes:', err);
+                }
+            }, 280);   // 280 ms de debounce
+        });
+
+        // Cerrar dropdown al hacer click fuera
+        document.addEventListener('click', (e) => {
+            if (!inputNombre.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    }, 300);
+})();
 // ==========================================
 // MÓDULO DE TALLER: DETALLES E IMPRESIÓN
 // ==========================================

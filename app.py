@@ -77,6 +77,8 @@ app.register_blueprint(ventas_bp)
 app.register_blueprint(materiales_bp)
 app.register_blueprint(usuarios_bp)
 app.register_blueprint(produccion_bp)
+from routes_clientes import clientes_bp       # ← clientes del landing
+app.register_blueprint(clientes_bp)           # ← sin aprobación
 
 # Aplicar rate limit al endpoint de login
 limiter.limit("10 per minute")(app.view_functions['usuarios.verificar_pin'])

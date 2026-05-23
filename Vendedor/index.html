@@ -626,6 +626,16 @@ async function imEntrarAlSistema() {
       usuarioActivo.horaLogin = new Date().toLocaleTimeString();
       localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
 
+      // Cliente: se queda en el landing, no entra al panel
+      if (usuarioActivo.rol === 'Cliente') {
+        Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
+          title:`¡Hola, ${usuarioActivo.nombre}!`,
+          text:'Has iniciado sesión correctamente. Pronto podrás ver el seguimiento de tus pedidos aquí.',
+          confirmButtonColor:'#c9a84c' });
+        return;
+      }
+
+      // Trabajador: entra al ERP normalmente
       document.getElementById('pantalla-login').style.display = 'none';
       imMostrarBotonTrabajador();
       configurarInterfazPorRol();
@@ -702,8 +712,8 @@ async function imAceptarTerminosYRegistrar() {
     const data = await res.json();
     if (res.ok && data.exito) {
       Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
-        title:'¡Solicitud enviada!',
-        text:'Tu cuenta fue registrada. Un administrador activará tu acceso en breve.',
+        title:'¡Registro exitoso!',
+        text:'Ya puedes iniciar sesión con tu correo y contraseña.',
         confirmButtonColor:'#c9a84c' });
       document.getElementById('reg-nombre').value = '';
       document.getElementById('reg-correo').value = '';

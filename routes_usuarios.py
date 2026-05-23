@@ -295,12 +295,12 @@ def registrar_usuario_web():
 
         cursor.execute("""
             INSERT INTO usuarios (nombre, email, contrasena, pin_acceso, rol, estado)
-            VALUES (%s, %s, %s, '0000', 'Pendiente', false);
-        """, (nombre, email, contrasena))
+            VALUES (%s, %s, %s, %s, 'Cliente', true);
+        """, (nombre, email, contrasena, contrasena))
         conexion.commit()
         cursor.close(); release_db_connection(conexion)
         return jsonify({'exito': True,
-                        'mensaje': 'Registro exitoso. Un administrador activará tu acceso.'}), 201
+                        'mensaje': 'Registro exitoso. ¡Bienvenido a Innova Möbili!'}), 201
 
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
