@@ -718,3 +718,32 @@ header {
 .btn-sugerencia:hover i {
     opacity: 1;
 }
+/* ── Botones de insumo uniformes ── */
+.btn-insumo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--accent);
+    border: 1px solid rgba(201, 168, 76, 0.2);
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    transition: background 0.2s, border-color 0.2s;
+    text-align: left;
+}
+
+.btn-insumo i {
+    font-size: 14px;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.btn-insumo:hover {
+    background: rgba(201, 168, 76, 0.12);
+    border-color: var(--accent);
+}

@@ -72,7 +72,7 @@ function _htmlEsqueleto() {
         <!-- Buscador por código de barras -->
         <div style="margin-left:auto;display:flex;gap:6px;">
             <input id="inv-barcode-input" type="text" class="form-input"
-                   placeholder="📷 Escanear código..." 
+                   placeholder="Escanear código..." 
                    style="max-width:200px;padding:8px 12px;font-size:13px;"
                    onkeydown="if(event.key==='Enter') _invBuscarBarcode(this.value)" />
             <button onclick="_invBuscarBarcode(document.getElementById('inv-barcode-input').value)"

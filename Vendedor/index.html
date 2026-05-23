@@ -353,18 +353,35 @@
         </div>
     </div>
 <div id="view-inventario" class="view-section" style="display:none; padding: 20px;">
-    <div style="background: var(--primary); padding: 20px; color: white; border-radius: 12px; margin-bottom: 30px;">
-        <h2 style="margin:0; font-size: 18px;"><i class="fa-solid fa-plus-circle"></i> REGISTRAR NUEVAS PARTES</h2>
-        <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
-            <button class="btn-primary" onclick="abrirModalNuevo('tela', 'inventario')" style="background: #7c3aed; border:none;">+ Registrar Tela</button>
-            <button class="btn-primary" onclick="abrirModalNuevo('tablero', 'inventario')" style="background: #059669; border:none;">+ Registrar Tablero</button>
-            <button class="btn-primary" onclick="abrirModalNuevo('base', 'inventario')" style="background: #0284c7; border:none;">+ Pata/Zócalo Sofá</button>
-            <button class="btn-primary" onclick="abrirModalNuevo('base-comedor', 'inventario')" style="background: #0369a1; border:none;">+ Base de Mesa</button>
-            <button class="btn-primary" onclick="abrirModalNuevo('silla', 'inventario')" style="background: #b45309; border:none;">+ Estructura Silla</button>
-            <button class="btn-primary" onclick="abrirModalNuevo('butaca', 'inventario')" style="background: #92400e; border:none;">+ Estructura Butaca</button>
-            <button class="btn-primary" onclick="abrirModalNuevo('cojin', 'inventario')" style="background: #ec4899; border:none;">+ Registrar Cojín</button>
-        </div>
+    <!-- REEMPLAZA POR ESTO -->
+<div style="background: var(--primary); padding: 24px; border-radius: 12px; margin-bottom: 30px;">
+    <h2 style="margin: 0 0 18px 0; font-size: 15px; font-weight: 900; color: var(--accent); letter-spacing: 0.08em;">
+        <i class="fa-solid fa-plus-circle" style="margin-right: 8px;"></i> REGISTRAR NUEVAS PARTES
+    </h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px;">
+        <button class="btn-insumo" onclick="abrirModalNuevo('tela', 'inventario')">
+            <i class="fa-solid fa-scroll"></i> Tela
+        </button>
+        <button class="btn-insumo" onclick="abrirModalNuevo('tablero', 'inventario')">
+            <i class="fa-solid fa-table-cells-large"></i> Tablero
+        </button>
+        <button class="btn-insumo" onclick="abrirModalNuevo('base', 'inventario')">
+            <i class="fa-solid fa-ruler-combined"></i> Pata / Zócalo Sofá
+        </button>
+        <button class="btn-insumo" onclick="abrirModalNuevo('base-comedor', 'inventario')">
+            <i class="fa-solid fa-border-none"></i> Base de Mesa
+        </button>
+        <button class="btn-insumo" onclick="abrirModalNuevo('silla', 'inventario')">
+            <i class="fa-solid fa-chair"></i> Estructura Silla
+        </button>
+        <button class="btn-insumo" onclick="abrirModalNuevo('butaca', 'inventario')">
+            <i class="fa-solid fa-couch"></i> Estructura Butaca
+        </button>
+        <button class="btn-insumo" onclick="abrirModalNuevo('cojin', 'inventario')">
+            <i class="fa-solid fa-wind"></i> Cojín
+        </button>
     </div>
+</div>
 
     <h3 style="color:var(--primary); border-bottom: 2px solid #7c3aed; padding-bottom: 5px; margin-bottom: 15px;">
         <i class="fa-solid fa-scroll"></i> MAESTRO DE TELAS
