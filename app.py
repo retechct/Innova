@@ -71,6 +71,8 @@ from routes_ventas     import ventas_bp
 from routes_materiales import materiales_bp
 from routes_usuarios   import usuarios_bp
 from routes_produccion import produccion_bp
+from routes_seguimiento import seguimiento_bp
+app.register_blueprint(seguimiento_bp)
 
 app.register_blueprint(catalogo_bp)
 app.register_blueprint(ventas_bp)

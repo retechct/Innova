@@ -1,4 +1,16 @@
-// === MÓDULO: App principal, init, vistas, sesión ===
+// ─── Helper: fetch con token JWT automático ──────────────────
+function apiFetch(url, options = {}) {
+    const token = sessionStorage.getItem('innova_token');
+    return fetch(url, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...(options.headers || {}),
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+    });
+}
+// ─────────────────────────────────────────────────────────────// === MÓDULO: App principal, init, vistas, sesión ===
 async function init() {
     try {
         const [catRes, matRes] = await Promise.all([

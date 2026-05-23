@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
 <!-- ═══════════════════════════════════════════════════════════════
@@ -569,9 +570,12 @@ function imActualizarNavbarCliente() {
   if (!navLinks) return;
 
   // Reemplazar botones de registro/login por saludo + cerrar sesión
-  navLinks.innerHTML = `
+   navLinks.innerHTML = `
     <div id="im-nav-sesion">
       <p class="im-nav-saludo">Hola, <span>${u.nombre.split(' ')[0]}</span></p>
+      <button class="im-nav-link" onclick="abrirSeguimiento()" style="color:#c9a84c;border-color:rgba(201,168,76,0.4)">
+        Mis Pedidos
+      </button>
       <button id="im-nav-btn-logout" onclick="imCerrarSesionCliente()">
         Cerrar sesión
       </button>
@@ -688,12 +692,9 @@ async function imEntrarAlSistema() {
       // Cliente: se queda en el landing
       if (usuarioActivo.rol === 'Cliente') {
         imActualizarNavbarCliente();
-        Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
-          title:`¡Hola, ${usuarioActivo.nombre.split(' ')[0]}!`,
-          text:'Has iniciado sesión correctamente.',
-          confirmButtonColor:'#c9a84c' });
+        abrirPortalCliente(usuarioActivo.email);
         return;
-      }
+        }
 
       // Cualquier otro rol no reconocido: bloquear
       const ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
@@ -2064,6 +2065,687 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </div>
 </div>
+<div id="portal-seguimiento" style="display:none; position:fixed; inset:0; z-index:9998; overflow-y:auto; overflow-x:hidden; background:#0d0b08; font-family:'Jost',sans-serif;">
+ 
+<style>
+/* ── Reset ── */
+#portal-seguimiento * { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+/* ── Topbar ── */
+#ps-topbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 5%; height: 64px;
+  background: rgba(13,11,8,0.9);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(201,168,76,0.15);
+}
+.ps-brand {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 16px; font-weight: 300; letter-spacing: 0.25em;
+  color: #f5f0e8; text-transform: uppercase;
+}
+.ps-brand em { color: #c9a84c; font-style: italic; }
+#ps-btn-cerrar {
+  background: transparent; border: 1px solid rgba(201,168,76,0.3);
+  color: rgba(245,240,232,0.5); font-family: 'Jost', sans-serif;
+  font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  padding: 8px 18px; cursor: pointer; transition: all 0.3s;
+}
+#ps-btn-cerrar:hover { color: #c9a84c; border-color: rgba(201,168,76,0.6); }
+ 
+/* ── Hero / Search ── */
+#ps-hero {
+  min-height: 30vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 60px 5% 40px;
+  text-align: center;
+  background: radial-gradient(ellipse 70% 60% at 50% 50%, rgba(201,168,76,0.06) 0%, transparent 70%);
+}
+.ps-hero-label {
+  font-size: 10px; letter-spacing: 0.4em; color: #c9a84c;
+  text-transform: uppercase; margin-bottom: 16px;
+}
+.ps-hero-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(28px, 5vw, 48px); font-weight: 300;
+  color: #f5f0e8; line-height: 1.2; margin-bottom: 8px;
+}
+.ps-hero-title em { font-style: italic; color: #c9a84c; }
+.ps-hero-sub {
+  font-size: 13px; font-weight: 300; letter-spacing: 0.08em;
+  color: rgba(245,240,232,0.45); margin-bottom: 36px;
+}
+ 
+/* ── Search bar ── */
+#ps-search-wrap {
+  display: flex; align-items: stretch;
+  width: 100%; max-width: 520px;
+  border: 1px solid rgba(201,168,76,0.25);
+  background: rgba(245,240,232,0.04);
+  transition: border-color 0.3s;
+}
+#ps-search-wrap:focus-within { border-color: rgba(201,168,76,0.6); }
+#ps-email-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #f5f0e8; font-family: 'Jost', sans-serif;
+  font-size: 13px; font-weight: 300; letter-spacing: 0.06em;
+  padding: 14px 20px;
+}
+#ps-email-input::placeholder { color: rgba(245,240,232,0.3); }
+#ps-btn-buscar {
+  background: rgba(201,168,76,0.12); border: none;
+  border-left: 1px solid rgba(201,168,76,0.2);
+  color: #c9a84c; font-family: 'Jost', sans-serif;
+  font-size: 10px; font-weight: 400; letter-spacing: 0.25em;
+  text-transform: uppercase; padding: 0 24px; cursor: pointer;
+  transition: background 0.3s;
+}
+#ps-btn-buscar:hover { background: rgba(201,168,76,0.22); }
+ 
+/* ── Loader ── */
+#ps-loader {
+  display: none; flex-direction: column; align-items: center;
+  padding: 60px; gap: 16px;
+}
+.ps-spinner {
+  width: 32px; height: 32px;
+  border: 1px solid rgba(201,168,76,0.15);
+  border-top-color: #c9a84c;
+  border-radius: 50%;
+  animation: ps-spin 0.8s linear infinite;
+}
+@keyframes ps-spin { to { transform: rotate(360deg); } }
+.ps-loader-text {
+  font-size: 11px; letter-spacing: 0.25em; color: rgba(201,168,76,0.5);
+  text-transform: uppercase;
+}
+ 
+/* ── Error ── */
+#ps-error {
+  display: none; text-align: center;
+  padding: 40px 5%; color: rgba(245,240,232,0.45);
+  font-size: 13px; letter-spacing: 0.06em;
+}
+.ps-error-icon { font-size: 32px; margin-bottom: 12px; }
+ 
+/* ── Saludo ── */
+#ps-saludo {
+  display: none; text-align: center;
+  padding: 0 5% 20px;
+}
+.ps-saludo-nombre {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 300; color: #f5f0e8;
+  letter-spacing: 0.05em;
+}
+.ps-saludo-nombre em { color: #c9a84c; font-style: italic; }
+.ps-saludo-sub {
+  font-size: 11px; letter-spacing: 0.2em;
+  color: rgba(245,240,232,0.35); margin-top: 4px;
+}
+ 
+/* ── Lista de pedidos ── */
+#ps-lista {
+  display: none;
+  max-width: 780px; margin: 0 auto;
+  padding: 0 5% 80px;
+}
+.ps-lista-titulo {
+  font-size: 10px; letter-spacing: 0.35em; color: rgba(201,168,76,0.5);
+  text-transform: uppercase; margin-bottom: 20px;
+  padding-bottom: 12px; border-bottom: 1px solid rgba(201,168,76,0.1);
+}
+ 
+/* ── Card de pedido ── */
+.ps-card {
+  background: rgba(245,240,232,0.03);
+  border: 1px solid rgba(201,168,76,0.12);
+  margin-bottom: 16px; cursor: pointer;
+  transition: border-color 0.3s, background 0.3s;
+  position: relative; overflow: hidden;
+}
+.ps-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: #c9a84c; opacity: 0; transition: opacity 0.3s;
+}
+.ps-card:hover { border-color: rgba(201,168,76,0.3); background: rgba(245,240,232,0.05); }
+.ps-card:hover::before { opacity: 1; }
+ 
+.ps-card-inner {
+  display: flex; align-items: center; gap: 20px; padding: 20px 24px;
+}
+.ps-card-thumb {
+  width: 60px; height: 60px; flex-shrink: 0;
+  object-fit: cover; opacity: 0.85;
+  border: 1px solid rgba(201,168,76,0.15);
+}
+.ps-card-body { flex: 1; min-width: 0; }
+.ps-card-codigo {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px; font-weight: 400; color: #f5f0e8;
+  letter-spacing: 0.05em;
+}
+.ps-card-producto {
+  font-size: 11px; color: rgba(245,240,232,0.45);
+  letter-spacing: 0.08em; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ps-card-meta {
+  display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px;
+}
+.ps-meta-item { font-size: 10px; letter-spacing: 0.12em; color: rgba(245,240,232,0.35); }
+.ps-meta-item strong { color: rgba(201,168,76,0.7); font-weight: 400; }
+.ps-card-right { flex-shrink: 0; text-align: right; }
+.ps-estado-badge {
+  display: inline-block;
+  font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+  padding: 4px 12px; border: 1px solid rgba(201,168,76,0.3);
+  color: #c9a84c; margin-bottom: 8px;
+}
+.ps-estado-badge.entregado { border-color: rgba(90,158,114,0.4); color: #5a9e72; }
+.ps-estado-badge.cancelado { border-color: rgba(192,57,43,0.3); color: #c0392b; }
+.ps-progreso-wrap { width: 100px; }
+.ps-progreso-bar-bg {
+  height: 2px; background: rgba(245,240,232,0.08);
+}
+.ps-progreso-bar-fill {
+  height: 100%; background: #c9a84c;
+  transition: width 0.8s ease;
+}
+.ps-progreso-pct {
+  font-size: 9px; letter-spacing: 0.15em;
+  color: rgba(201,168,76,0.5); margin-top: 4px; text-align: right;
+}
+ 
+/* ── Detalle de pedido ── */
+#ps-detalle {
+  display: none;
+  max-width: 780px; margin: 0 auto;
+  padding: 0 5% 80px;
+}
+#ps-btn-volver {
+  display: flex; align-items: center; gap: 8px;
+  background: transparent; border: none; cursor: pointer;
+  color: rgba(245,240,232,0.4); font-family: 'Jost', sans-serif;
+  font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  padding: 0; margin-bottom: 32px; transition: color 0.3s;
+}
+#ps-btn-volver:hover { color: #c9a84c; }
+#ps-btn-volver::before { content: '←'; font-size: 14px; }
+ 
+.ps-det-header {
+  border-bottom: 1px solid rgba(201,168,76,0.15);
+  padding-bottom: 24px; margin-bottom: 32px;
+}
+.ps-det-codigo {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 32px; font-weight: 300; color: #f5f0e8;
+  letter-spacing: 0.05em; margin-bottom: 6px;
+}
+.ps-det-estado-label {
+  font-size: 14px; color: #c9a84c; letter-spacing: 0.08em;
+}
+.ps-det-descripcion {
+  font-size: 11px; color: rgba(245,240,232,0.35);
+  letter-spacing: 0.06em; margin-top: 4px;
+}
+ 
+/* ── Progreso global ── */
+.ps-progreso-global { margin-bottom: 32px; }
+.ps-seccion-label {
+  font-size: 9px; letter-spacing: 0.35em; text-transform: uppercase;
+  color: rgba(201,168,76,0.45); margin-bottom: 12px;
+}
+.ps-prog-grande-bg {
+  height: 3px; background: rgba(245,240,232,0.06); margin-bottom: 6px;
+}
+.ps-prog-grande-fill {
+  height: 100%; background: linear-gradient(90deg, #c9a84c, #f0dfa0);
+  transition: width 1s ease;
+}
+.ps-prog-texto {
+  display: flex; justify-content: space-between;
+  font-size: 10px; letter-spacing: 0.12em;
+}
+.ps-prog-texto span { color: rgba(245,240,232,0.35); }
+.ps-prog-texto strong { color: #c9a84c; }
+ 
+/* ── Grid de áreas ── */
+.ps-areas-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px; margin-bottom: 32px;
+}
+.ps-area-item {
+  padding: 12px 16px;
+  background: rgba(245,240,232,0.03);
+  border: 1px solid rgba(201,168,76,0.1);
+}
+.ps-area-nombre {
+  font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+  color: rgba(245,240,232,0.4); margin-bottom: 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ps-area-mini-bg { height: 2px; background: rgba(245,240,232,0.06); }
+.ps-area-mini-fill { height: 100%; background: #c9a84c; }
+.ps-area-mini-pct {
+  font-size: 9px; letter-spacing: 0.1em;
+  color: rgba(201,168,76,0.5); margin-top: 4px;
+  text-align: right;
+}
+.ps-area-listo .ps-area-nombre { color: rgba(90,158,114,0.7); }
+.ps-area-listo .ps-area-mini-fill { background: #5a9e72; }
+ 
+/* ── Ítems ── */
+.ps-items-lista { display: flex; flex-direction: column; gap: 10px; margin-bottom: 32px; }
+.ps-item {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 20px;
+  background: rgba(245,240,232,0.03);
+  border: 1px solid rgba(201,168,76,0.1);
+}
+.ps-item-thumb {
+  width: 48px; height: 48px; flex-shrink: 0;
+  object-fit: cover; opacity: 0.8;
+  border: 1px solid rgba(201,168,76,0.15);
+}
+.ps-item-nombre {
+  font-size: 14px; color: #f5f0e8; letter-spacing: 0.05em;
+}
+.ps-item-detalles {
+  font-size: 11px; color: rgba(245,240,232,0.35);
+  letter-spacing: 0.06em; margin-top: 2px;
+}
+ 
+/* ── Pagos ── */
+.ps-pagos-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 32px; }
+.ps-pago {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px;
+  border: 1px solid rgba(201,168,76,0.1);
+  background: rgba(245,240,232,0.02);
+}
+.ps-pago-info { font-size: 12px; color: rgba(245,240,232,0.5); letter-spacing: 0.06em; }
+.ps-pago-monto { font-size: 14px; color: #c9a84c; letter-spacing: 0.05em; }
+ 
+/* ── Resumen financiero ── */
+.ps-financiero {
+  border: 1px solid rgba(201,168,76,0.15);
+  background: rgba(201,168,76,0.04);
+  padding: 24px;
+}
+.ps-fin-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid rgba(201,168,76,0.08);
+  font-size: 12px; letter-spacing: 0.08em;
+}
+.ps-fin-row:last-child { border-bottom: none; }
+.ps-fin-label { color: rgba(245,240,232,0.4); }
+.ps-fin-valor { color: #f5f0e8; }
+.ps-fin-row.saldo .ps-fin-label { color: rgba(245,240,232,0.6); font-size: 13px; }
+.ps-fin-row.saldo .ps-fin-valor { color: #c9a84c; font-size: 16px; }
+ 
+/* ── Fecha de entrega destacada ── */
+.ps-entrega-box {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px; margin-bottom: 32px;
+  border: 1px solid rgba(201,168,76,0.2);
+  background: rgba(201,168,76,0.05);
+}
+.ps-entrega-label {
+  font-size: 9px; letter-spacing: 0.35em; text-transform: uppercase;
+  color: rgba(201,168,76,0.5);
+}
+.ps-entrega-fecha {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 300; color: #c9a84c;
+  letter-spacing: 0.1em;
+}
+ 
+/* ── Vacío ── */
+.ps-vacio {
+  text-align: center; padding: 60px 20px;
+  color: rgba(245,240,232,0.3); font-size: 13px; letter-spacing: 0.08em;
+}
+.ps-vacio-icon { font-size: 40px; margin-bottom: 16px; }
+ 
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .ps-card-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .ps-card-right { width: 100%; display: flex; align-items: center; gap: 12px; }
+  .ps-progreso-wrap { flex: 1; }
+  .ps-det-codigo { font-size: 24px; }
+  .ps-areas-grid { grid-template-columns: 1fr 1fr; }
+  .ps-entrega-box { flex-direction: column; align-items: flex-start; gap: 6px; }
+}
+</style>
+ 
+<!-- Topbar -->
+<div id="ps-topbar">
+  <div class="ps-brand">Innova <em>Möbili</em></div>
+  <button id="ps-btn-cerrar" onclick="cerrarSeguimiento()">← Volver al inicio</button>
+</div>
+ 
+<!-- Hero + Búsqueda -->
+<div id="ps-hero">
+  <div class="ps-hero-label">Portal de clientes</div>
+  <h1 class="ps-hero-title">El estado de<br><em>tu pedido</em></h1>
+  <p class="ps-hero-sub">Ingresa tu correo para ver el avance de tus muebles</p>
+  <div id="ps-search-wrap">
+    <input
+      id="ps-email-input"
+      type="email"
+      placeholder="tu@correo.com"
+      autocomplete="email"
+      onkeydown="if(event.key==='Enter') buscarPedidos()"
+    >
+    <button id="ps-btn-buscar" onclick="buscarPedidos()">Buscar</button>
+  </div>
+</div>
+ 
+<!-- Loader -->
+<div id="ps-loader">
+  <div class="ps-spinner"></div>
+  <div class="ps-loader-text">Consultando pedidos</div>
+</div>
+ 
+<!-- Error -->
+<div id="ps-error">
+  <div class="ps-error-icon">⚠️</div>
+  <div id="ps-error-msg">No se encontraron pedidos para este correo.</div>
+</div>
+ 
+<!-- Saludo -->
+<div id="ps-saludo">
+  <div class="ps-saludo-nombre" id="ps-saludo-nombre">Hola, <em>—</em></div>
+  <div class="ps-saludo-sub">Estos son tus pedidos en Innova Möbili</div>
+</div>
+ 
+<!-- Lista de pedidos -->
+<div id="ps-lista">
+  <div class="ps-lista-titulo" id="ps-lista-titulo">— pedidos encontrados</div>
+  <div id="ps-cards-container"></div>
+</div>
+ 
+<!-- Detalle de pedido -->
+<div id="ps-detalle">
+  <button id="ps-btn-volver" onclick="volverALista()">Volver a mis pedidos</button>
+  <div id="ps-detalle-contenido"></div>
+</div>
+ 
+</div><!-- /portal-seguimiento -->
+ 
+ 
+<script>
+// ────────────────────────────────────────────────────────────────
+// PORTAL DE SEGUIMIENTO — Innova Mobili
+// ────────────────────────────────────────────────────────────────
+ 
+let _psEmailActual = '';
+ 
+function abrirSeguimiento() {
+  document.getElementById('portal-seguimiento').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+ 
+  // Si el cliente ya está logueado, autocargar
+  const sesion = localStorage.getItem('usuarioInnova');
+  if (sesion) {
+    try {
+      const u = JSON.parse(sesion);
+      if (u.email && u.rol === 'Cliente') {
+        document.getElementById('ps-email-input').value = u.email;
+        buscarPedidos();
+        return;
+      }
+    } catch(e) {}
+  }
+}
+ 
+function abrirPortalCliente(email) {
+  /* Llamar desde el login cuando rol === 'Cliente' */
+  document.getElementById('portal-seguimiento').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  document.getElementById('ps-email-input').value = email;
+  buscarPedidos();
+}
+ 
+function cerrarSeguimiento() {
+  document.getElementById('portal-seguimiento').style.display = 'none';
+  document.body.style.overflow = '';
+  _psReset();
+}
+ 
+function _psReset() {
+  ['ps-loader','ps-error','ps-saludo','ps-lista','ps-detalle'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+}
+ 
+async function buscarPedidos() {
+  const email = document.getElementById('ps-email-input').value.trim();
+  if (!email || !email.includes('@')) {
+    document.getElementById('ps-email-input').focus();
+    return;
+  }
+  _psEmailActual = email;
+  _psReset();
+  document.getElementById('ps-loader').style.display = 'flex';
+ 
+  try {
+    const res = await fetch(`${API_URL}/api/seguimiento/mis-pedidos?email=${encodeURIComponent(email)}`);
+    const data = await res.json();
+    document.getElementById('ps-loader').style.display = 'none';
+ 
+    if (!res.ok || data.error) {
+      _psShowError(data.error || 'No se encontraron pedidos para este correo.');
+      return;
+    }
+ 
+    if (!data.pedidos || data.pedidos.length === 0) {
+      _psShowError('No encontramos pedidos asociados a este correo.<br><small>Si tienes una compra, escríbenos al WhatsApp.</small>');
+      return;
+    }
+ 
+    // Mostrar saludo
+    const saludo = document.getElementById('ps-saludo');
+    saludo.style.display = 'block';
+    document.getElementById('ps-saludo-nombre').innerHTML =
+      `Hola, <em>${(data.nombre_cliente || email).split(' ')[0]}</em>`;
+ 
+    // Renderizar lista
+    const lista = document.getElementById('ps-lista');
+    lista.style.display = 'block';
+    document.getElementById('ps-lista-titulo').textContent =
+      `${data.pedidos.length} pedido${data.pedidos.length !== 1 ? 's' : ''} encontrado${data.pedidos.length !== 1 ? 's' : ''}`;
+ 
+    document.getElementById('ps-cards-container').innerHTML =
+      data.pedidos.map(p => _psCardHTML(p)).join('');
+ 
+  } catch(e) {
+    document.getElementById('ps-loader').style.display = 'none';
+    _psShowError('Error de conexión. Intenta de nuevo.');
+  }
+}
+ 
+function _psShowError(msg) {
+  const el = document.getElementById('ps-error');
+  document.getElementById('ps-error-msg').innerHTML = msg;
+  el.style.display = 'block';
+}
+ 
+function _psCardHTML(p) {
+  const badgeClass = p.estado.raw === 'Entregado' ? 'entregado' :
+                     p.estado.raw === 'Cancelado'  ? 'cancelado' : '';
+  const pct = p.estado.raw === 'Entregado' ? 100 : (p.progreso?.porcentaje || 0);
+ 
+  return `
+  <div class="ps-card" onclick="verDetallePedido('${p.codigo}')">
+    <div class="ps-card-inner">
+      <img class="ps-card-thumb" src="${p.thumbnail}" alt="${p.primer_producto}"
+           onerror="this.src='imagenes/sin_foto.jpg'">
+      <div class="ps-card-body">
+        <div class="ps-card-codigo">${p.codigo}</div>
+        <div class="ps-card-producto">${p.primer_producto}</div>
+        <div class="ps-card-meta">
+          <div class="ps-meta-item">Emisión: <strong>${p.fecha_emision}</strong></div>
+          <div class="ps-meta-item">Entrega: <strong>${p.fecha_entrega}</strong></div>
+          ${p.saldo > 0 ? `<div class="ps-meta-item">Saldo: <strong>S/ ${p.saldo.toFixed(2)}</strong></div>` : ''}
+        </div>
+      </div>
+      <div class="ps-card-right">
+        <div class="ps-estado-badge ${badgeClass}">${p.estado.label}</div>
+        <div class="ps-progreso-wrap">
+          <div class="ps-progreso-bar-bg">
+            <div class="ps-progreso-bar-fill" style="width:${pct}%"></div>
+          </div>
+          <div class="ps-progreso-pct">${pct}% completado</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+ 
+async function verDetallePedido(codigo) {
+  document.getElementById('ps-saludo').style.display = 'none';
+  document.getElementById('ps-lista').style.display = 'none';
+  document.getElementById('ps-loader').style.display = 'flex';
+ 
+  try {
+    const res = await fetch(
+      `${API_URL}/api/seguimiento/pedido/${codigo}?email=${encodeURIComponent(_psEmailActual)}`
+    );
+    const d = await res.json();
+    document.getElementById('ps-loader').style.display = 'none';
+ 
+    if (!res.ok || d.error) {
+      _psShowError(d.error || 'No se pudo cargar el detalle.');
+      return;
+    }
+ 
+    const pct = d.estado.raw === 'Entregado' ? 100 : (d.progreso?.porcentaje || 0);
+    const moneda = d.moneda === 'USD' ? '$' : 'S/';
+ 
+    // Áreas de producción
+    const areasHTML = (d.areas || []).length > 0 ? `
+      <div class="ps-seccion-label">Avance por área</div>
+      <div class="ps-areas-grid">
+        ${d.areas.map(a => `
+          <div class="ps-area-item ${a.listo ? 'ps-area-listo' : ''}">
+            <div class="ps-area-nombre">${_formatArea(a.area)}</div>
+            <div class="ps-area-mini-bg">
+              <div class="ps-area-mini-fill" style="width:${a.porcentaje}%"></div>
+            </div>
+            <div class="ps-area-mini-pct">${a.listo ? '✓ Listo' : `${a.porcentaje}%`}</div>
+          </div>`).join('')}
+      </div>` : '';
+ 
+    // Ítems
+    const itemsHTML = d.items.map(i => `
+      <div class="ps-item">
+        <img class="ps-item-thumb" src="${i.foto}" alt="${i.producto}"
+             onerror="this.src='imagenes/sin_foto.jpg'">
+        <div>
+          <div class="ps-item-nombre">${i.producto}</div>
+          ${i.detalles ? `<div class="ps-item-detalles">${i.detalles}</div>` : ''}
+        </div>
+      </div>`).join('');
+ 
+    // Pagos
+    const pagosHTML = (d.pagos || []).length > 0
+      ? d.pagos.map(p => `
+          <div class="ps-pago">
+            <div class="ps-pago-info">${p.tipo} · ${p.entidad} · ${p.fecha}</div>
+            <div class="ps-pago-monto">${moneda} ${p.monto.toFixed(2)}</div>
+          </div>`).join('')
+      : '<div style="color:rgba(245,240,232,0.3);font-size:12px;padding:12px 0;">Sin pagos registrados aún.</div>';
+ 
+    document.getElementById('ps-detalle-contenido').innerHTML = `
+      <div class="ps-det-header">
+        <div class="ps-det-codigo">${d.codigo}</div>
+        <div class="ps-det-estado-label">${d.estado.label}</div>
+        <div class="ps-det-descripcion">${d.estado.descripcion}</div>
+      </div>
+ 
+      <div class="ps-entrega-box">
+        <div>
+          <div class="ps-entrega-label">Fecha de entrega estimada</div>
+          <div class="ps-entrega-fecha">${d.fecha_entrega}</div>
+        </div>
+        <div class="ps-seccion-label" style="text-align:right">
+          Sede: ${d.sede || '—'}<br>
+          Asesor: ${d.vendedor || '—'}
+        </div>
+      </div>
+ 
+      <div class="ps-progreso-global">
+        <div class="ps-seccion-label">Progreso de fabricación</div>
+        <div class="ps-prog-grande-bg">
+          <div class="ps-prog-grande-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="ps-prog-texto">
+          <span>${d.progreso.terminados} de ${d.progreso.total} etapas</span>
+          <strong>${pct}%</strong>
+        </div>
+      </div>
+ 
+      ${areasHTML}
+ 
+      <div class="ps-seccion-label" style="margin-bottom:12px">Tu pedido incluye</div>
+      <div class="ps-items-lista">${itemsHTML}</div>
+ 
+      <div class="ps-seccion-label" style="margin-bottom:12px">Pagos registrados</div>
+      <div class="ps-pagos-lista">${pagosHTML}</div>
+ 
+      <div class="ps-financiero">
+        <div class="ps-fin-row">
+          <span class="ps-fin-label">Total del pedido</span>
+          <span class="ps-fin-valor">${moneda} ${d.total.toFixed(2)}</span>
+        </div>
+        <div class="ps-fin-row">
+          <span class="ps-fin-label">Adelanto pagado</span>
+          <span class="ps-fin-valor">${moneda} ${d.adelanto.toFixed(2)}</span>
+        </div>
+        <div class="ps-fin-row saldo">
+          <span class="ps-fin-label">Saldo pendiente</span>
+          <span class="ps-fin-valor">${moneda} ${d.saldo.toFixed(2)}</span>
+        </div>
+      </div>
+    `;
+ 
+    document.getElementById('ps-detalle').style.display = 'block';
+    document.getElementById('portal-seguimiento').scrollTo({ top: 0, behavior: 'smooth' });
+ 
+  } catch(e) {
+    document.getElementById('ps-loader').style.display = 'none';
+    _psShowError('Error al cargar el detalle. Intenta de nuevo.');
+  }
+}
+ 
+function volverALista() {
+  document.getElementById('ps-detalle').style.display = 'none';
+  document.getElementById('ps-saludo').style.display = 'block';
+  document.getElementById('ps-lista').style.display = 'block';
+  document.getElementById('portal-seguimiento').scrollTo({ top: 0, behavior: 'smooth' });
+}
+ 
+function _formatArea(area) {
+  const nombres = {
+    'CORTE_Y_CONTROL_TELAS': 'Corte de telas',
+    'TAPICERIA_SOFAS':       'Tapicería sofás',
+    'TAPICERIA_SILLAS':      'Tapicería sillas',
+    'ESTRUCTURAS_MUEBLES':   'Estructuras',
+    'ESTRUCTURAS_SILLAS':    'Estructuras sillas',
+    'ARMADO_COJINES':        'Cojines',
+    'PREPARACION_PATAS_ZOCALO': 'Patas y zócalo',
+    'TABLEROS_Y_PIEDRAS':    'Tableros',
+    'DESPACHO_CENTRAL':      'Despacho',
+  };
+  return nombres[area] || area.replace(/_/g, ' ').toLowerCase()
+    .replace(/^\w/, c => c.toUpperCase());
+}
+</script>
+ 
     <!-- Módulos JS (orden importa: config primero, app al final) -->
     <script src="js/config.js"></script>
     <script src="js/catalogo.js"></script>
