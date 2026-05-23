@@ -227,18 +227,22 @@ def crear_proveedor():
 
 @usuarios_bp.route('/api/login/email', methods=['POST'])
 def verificar_email_pin():
-    """Login por correo + PIN. Sin dropdowns, sin cambios en la BD."""
+    """
+    Login por correo + contraseña.
+    Busca primero en `usuarios` (staff del ERP).
+    Si no encuentra, busca en `clientes` (registrados desde el landing).
+    """
     try:
         email = (request.json.get('email') or '').strip().lower()
         pin   = (request.json.get('pin')   or '').strip()
 
         if not email or not pin:
-            return jsonify({"exito": False, "error": "Correo y PIN son obligatorios"}), 400
+            return jsonify({"exito": False, "error": "Correo y contraseña son obligatorios"}), 400
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        # Acepta si coincide con pin_acceso O con contrasena
-        # (cubre usuarios registrados antes y después del fix)
+
+        # ── 1. Buscar en usuarios (staff: Admin, Vendedor, Operario…) ──────
         cursor.execute("""
             SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email, area_asignada
             FROM usuarios
@@ -247,9 +251,9 @@ def verificar_email_pin():
               AND COALESCE(estado, true) = true;
         """, (email, pin, pin))
         usuario = cursor.fetchone()
-        cursor.close(); release_db_connection(conexion)
 
         if usuario:
+            cursor.close(); release_db_connection(conexion)
             return jsonify({
                 "exito": True,
                 "usuario": {
@@ -263,11 +267,36 @@ def verificar_email_pin():
                 }
             }), 200
 
+        # ── 2. Buscar en clientes (registrados desde el landing) ───────────
+        cursor.execute("""
+            SELECT id, nombre, email, telefono
+            FROM clientes
+            WHERE LOWER(email) = %s
+              AND contrasena = %s;
+        """, (email, pin))
+        cliente = cursor.fetchone()
+        cursor.close(); release_db_connection(conexion)
+
+        if cliente:
+            return jsonify({
+                "exito": True,
+                "usuario": {
+                    "id":            cliente[0],
+                    "nombre":        cliente[1],
+                    "rol":           "Cliente",
+                    "email":         cliente[2],
+                    "telefono":      cliente[3] or "",
+                    "empresa":       "",
+                    "ruc":           "",
+                    "area_asignada": ""
+                }
+            }), 200
+
         return jsonify({"exito": False, "error": "Correo o contraseña incorrectos"}), 401
 
     except Exception as e:
         print(f"❌ Error en login email+pin: {e}")
-        return jsonify({'error': 'Error interno del servidor'}), 500
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 # ==========================================
@@ -278,13 +307,14 @@ def verificar_email_pin():
 def registrar_usuario_web():
     """
     Registro desde el landing público.
-    La contraseña se guarda en ambas columnas (contrasena y pin_acceso)
-    para que el login por email+contraseña funcione de inmediato.
-    Rol = 'Cliente', estado = true (acceso habilitado desde el momento del registro).
+    Guarda el cliente en la tabla `clientes` (no en usuarios).
+    Esto permite que el vendedor lo encuentre en el autocomplete y
+    que el cliente pueda rastrear sus pedidos por email.
     """
     data       = request.json or {}
     nombre     = (data.get('nombre')     or '').strip()
     email      = (data.get('email')      or '').strip().lower()
+    telefono   = (data.get('telefono')   or '').strip()
     contrasena = (data.get('contrasena') or '').strip()
 
     if not nombre or not email or not contrasena:
@@ -294,20 +324,35 @@ def registrar_usuario_web():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        cursor.execute("SELECT id FROM usuarios WHERE LOWER(email) = %s;", (email,))
+        # Verificar duplicado en clientes
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS clientes (
+                id         SERIAL PRIMARY KEY,
+                nombre     VARCHAR(150) NOT NULL,
+                email      VARCHAR(120),
+                telefono   VARCHAR(20),
+                dni        VARCHAR(20),
+                direccion  TEXT,
+                contrasena VARCHAR(255),
+                fecha_alta TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        cursor.execute("SELECT id FROM clientes WHERE LOWER(email) = %s;", (email,))
         if cursor.fetchone():
             cursor.close(); release_db_connection(conexion)
             return jsonify({'error': 'Este correo ya está registrado'}), 409
 
-        # pin_acceso = contrasena → el login por email+pin busca en pin_acceso
         cursor.execute("""
-            INSERT INTO usuarios (nombre, email, contrasena, pin_acceso, rol, estado)
-            VALUES (%s, %s, %s, %s, 'Cliente', true);
-        """, (nombre, email, contrasena, contrasena))
+            INSERT INTO clientes (nombre, email, telefono, contrasena)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id;
+        """, (nombre, email, telefono or None, contrasena))
         conexion.commit()
         cursor.close(); release_db_connection(conexion)
-        return jsonify({'exito': True,
-                        'mensaje': '¡Registro exitoso! Ya puedes ingresar con tu correo y contraseña.'}), 201
+        return jsonify({
+            'exito':   True,
+            'mensaje': '¡Registro exitoso! Ya puedes rastrear tus pedidos con tu correo.'
+        }), 201
 
     except Exception as e:
         import traceback; traceback.print_exc()

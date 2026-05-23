@@ -745,31 +745,167 @@ function imprimirContratoElegante() {
     printWindow.onload = () => { setTimeout(() => { printWindow.print(); }, 500); };
 }
 // =============================================================
-// AUTOCOMPLETE DE CLIENTES — pegar en carrito.js
-// Busca en /api/clientes/buscar mientras el vendedor escribe
-// el nombre del cliente y rellena dni/celular/dirección solos.
+// AUTOCOMPLETE + REGISTRO RÁPIDO DE CLIENTES
+// El vendedor escribe el nombre → aparecen sugerencias de la tabla clientes.
+// Si el cliente no está registrado, el botón ➕ abre un mini-modal para
+// registrarlo en el momento y rellenar los campos automáticamente.
 // =============================================================
 
 (function iniciarAutocompleteClientes() {
-    // Esperar a que el DOM esté listo
+
+    // ── Inyectar modal de registro rápido (una sola vez) ──────────────────
+    if (!document.getElementById('modal-reg-cliente')) {
+        document.body.insertAdjacentHTML('beforeend', `
+        <div id="modal-reg-cliente" style="
+            display:none; position:fixed; inset:0; z-index:99999;
+            background:rgba(0,0,0,.55); align-items:center; justify-content:center;">
+          <div style="
+              background:#fff; border-radius:14px; padding:28px 24px;
+              width:100%; max-width:400px; box-shadow:0 8px 40px rgba(0,0,0,.25);
+              font-family:inherit;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+              <h3 style="margin:0;font-size:16px;color:#111;">➕ Registrar cliente</h3>
+              <button id="modal-reg-cerrar" style="
+                  background:none;border:none;font-size:22px;cursor:pointer;
+                  color:#6b7280;line-height:1;">&times;</button>
+            </div>
+            <input id="reg-nombre"    placeholder="Nombre completo *"
+                   style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;
+                          margin-bottom:10px;font-size:14px;box-sizing:border-box;">
+            <input id="reg-telefono"  placeholder="Teléfono / Celular"
+                   style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;
+                          margin-bottom:10px;font-size:14px;box-sizing:border-box;">
+            <input id="reg-email"     placeholder="Correo electrónico"
+                   style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;
+                          margin-bottom:10px;font-size:14px;box-sizing:border-box;">
+            <input id="reg-dni"       placeholder="DNI / RUC (opcional)"
+                   style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;
+                          margin-bottom:10px;font-size:14px;box-sizing:border-box;">
+            <input id="reg-direccion" placeholder="Dirección (opcional)"
+                   style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;
+                          margin-bottom:16px;font-size:14px;box-sizing:border-box;">
+            <p id="reg-error" style="color:#dc2626;font-size:13px;margin:0 0 10px;display:none;"></p>
+            <button id="modal-reg-guardar" style="
+                width:100%;padding:11px;background:#1d4ed8;color:#fff;border:none;
+                border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">
+              Guardar y usar este cliente
+            </button>
+          </div>
+        </div>`);
+
+        // Cerrar al hacer click en la X o fuera del panel
+        document.getElementById('modal-reg-cerrar').addEventListener('click', _cerrarModalReg);
+        document.getElementById('modal-reg-cliente').addEventListener('click', e => {
+            if (e.target === document.getElementById('modal-reg-cliente')) _cerrarModalReg();
+        });
+
+        // Guardar cliente
+        document.getElementById('modal-reg-guardar').addEventListener('click', async () => {
+            const nombre    = document.getElementById('reg-nombre').value.trim();
+            const telefono  = document.getElementById('reg-telefono').value.trim();
+            const email     = document.getElementById('reg-email').value.trim();
+            const dni       = document.getElementById('reg-dni').value.trim();
+            const direccion = document.getElementById('reg-direccion').value.trim();
+            const errEl     = document.getElementById('reg-error');
+            const btnGuardar = document.getElementById('modal-reg-guardar');
+
+            if (!nombre) {
+                errEl.textContent = 'El nombre es obligatorio.';
+                errEl.style.display = 'block';
+                return;
+            }
+            errEl.style.display = 'none';
+            btnGuardar.disabled = true;
+            btnGuardar.textContent = 'Guardando...';
+
+            try {
+                const resp = await fetch(`${API_URL}/api/clientes/registro`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, telefono, email, dni, direccion })
+                });
+                const data = await resp.json();
+
+                if (!resp.ok || data.error) {
+                    errEl.textContent = data.error || 'Error al registrar cliente.';
+                    errEl.style.display = 'block';
+                    return;
+                }
+
+                // Rellenar formulario de venta con los datos recién registrados
+                document.getElementById('c-nombre').value    = nombre;
+                document.getElementById('c-celular').value   = telefono || '';
+                document.getElementById('c-dni').value       = dni      || '';
+                document.getElementById('c-direccion').value = direccion || '';
+                _cerrarModalReg();
+
+            } catch (err) {
+                errEl.textContent = 'Error de conexión. Intenta de nuevo.';
+                errEl.style.display = 'block';
+            } finally {
+                btnGuardar.disabled = false;
+                btnGuardar.textContent = 'Guardar y usar este cliente';
+            }
+        });
+    }
+
+    function _cerrarModalReg() {
+        const m = document.getElementById('modal-reg-cliente');
+        if (m) m.style.display = 'none';
+        ['reg-nombre','reg-telefono','reg-email','reg-dni','reg-direccion'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        const err = document.getElementById('reg-error');
+        if (err) err.style.display = 'none';
+    }
+
+    function _abrirModalReg(nombrePrevio) {
+        document.getElementById('reg-nombre').value = nombrePrevio || '';
+        document.getElementById('modal-reg-cliente').style.display = 'flex';
+        document.getElementById('reg-nombre').focus();
+    }
+
+    // ── Esperar a que el DOM tenga el input de nombre ─────────────────────
     const intervalo = setInterval(() => {
         const inputNombre = document.getElementById('c-nombre');
         if (!inputNombre) return;
         clearInterval(intervalo);
 
-        // Contenedor de sugerencias
+        // Contenedor wrapper con posición relativa
+        const wrapper = inputNombre.parentElement;
+        wrapper.style.position = 'relative';
+
+        // Botón ➕ Registrar cliente
+        const btnReg = document.createElement('button');
+        btnReg.type = 'button';
+        btnReg.id   = 'btn-reg-cliente';
+        btnReg.title = 'Registrar nuevo cliente';
+        btnReg.textContent = '➕ Registrar cliente';
+        btnReg.style.cssText = `
+            display:inline-block; margin-top:6px; margin-bottom:4px;
+            padding:5px 12px; font-size:12px; font-weight:600;
+            background:#eff6ff; color:#1d4ed8;
+            border:1px solid #bfdbfe; border-radius:6px;
+            cursor:pointer; transition: background .15s;
+        `;
+        btnReg.addEventListener('mouseenter', () => btnReg.style.background = '#dbeafe');
+        btnReg.addEventListener('mouseleave', () => btnReg.style.background = '#eff6ff');
+        btnReg.addEventListener('click', () => _abrirModalReg(inputNombre.value.trim()));
+        // Insertar debajo del input de nombre
+        inputNombre.insertAdjacentElement('afterend', btnReg);
+
+        // Dropdown de sugerencias
         const dropdown = document.createElement('div');
         dropdown.id = 'cliente-sugerencias';
         dropdown.style.cssText = `
-            position: absolute; z-index: 9999; background: #fff;
-            border: 1px solid #d1d5db; border-radius: 8px;
-            box-shadow: 0 4px 16px rgba(0,0,0,.12);
-            width: 100%; max-height: 260px; overflow-y: auto;
-            display: none; top: 100%; left: 0;
+            position:absolute; z-index:9999; background:#fff;
+            border:1px solid #d1d5db; border-radius:8px;
+            box-shadow:0 4px 16px rgba(0,0,0,.12);
+            width:100%; max-height:260px; overflow-y:auto;
+            display:none; top:calc(100% + 2px); left:0;
         `;
-        // El input necesita position: relative en su contenedor
-        inputNombre.parentElement.style.position = 'relative';
-        inputNombre.parentElement.appendChild(dropdown);
+        wrapper.appendChild(dropdown);
 
         let debounceTimer = null;
 
@@ -782,19 +918,37 @@ function imprimirContratoElegante() {
                 try {
                     const resp = await fetch(`${API_URL}/api/clientes/buscar?q=${encodeURIComponent(q)}`);
                     const lista = await resp.json();
-                    if (!lista.length) { dropdown.style.display = 'none'; return; }
+
+                    if (!lista.length) {
+                        // Sin resultados: mostrar opción de registrar
+                        dropdown.innerHTML = `
+                            <div style="padding:12px 14px; font-size:13px; color:#6b7280;">
+                                No hay clientes registrados con ese nombre.
+                                <br><span style="color:#1d4ed8; cursor:pointer; font-weight:600;"
+                                          id="dd-link-registrar">➕ Registrar a "${q}" ahora</span>
+                            </div>`;
+                        dropdown.style.display = 'block';
+                        document.getElementById('dd-link-registrar')
+                            ?.addEventListener('click', () => {
+                                dropdown.style.display = 'none';
+                                _abrirModalReg(q);
+                            });
+                        return;
+                    }
 
                     dropdown.innerHTML = lista.map(c => `
-                        <div class="cli-item" data-id="${c.id}"
+                        <div class="cli-item"
                              data-nombre="${c.nombre}"
                              data-dni="${c.dni}"
                              data-telefono="${c.telefono}"
                              data-direccion="${c.direccion}"
-                             style="padding:10px 14px; cursor:pointer; border-bottom:1px solid #f3f4f6;
-                                    font-size:14px; transition: background .15s;">
-                            <strong>${c.nombre}</strong>
-                            ${c.dni      ? `<span style="color:#6b7280;margin-left:8px;">DNI ${c.dni}</span>` : ''}
-                            ${c.telefono ? `<span style="color:#6b7280;margin-left:8px;">📞 ${c.telefono}</span>` : ''}
+                             style="padding:10px 14px; cursor:pointer;
+                                    border-bottom:1px solid #f3f4f6;
+                                    font-size:14px; transition:background .15s;">
+                          <strong>${c.nombre}</strong>
+                          ${c.dni      ? `<span style="color:#6b7280;margin-left:8px;">DNI ${c.dni}</span>` : ''}
+                          ${c.telefono ? `<span style="color:#6b7280;margin-left:8px;">📞 ${c.telefono}</span>` : ''}
+                          ${c.email    ? `<span style="color:#9ca3af;margin-left:8px;font-size:12px;">${c.email}</span>` : ''}
                         </div>
                     `).join('');
 
@@ -802,7 +956,6 @@ function imprimirContratoElegante() {
                         item.addEventListener('mouseenter', () => item.style.background = '#f0f9ff');
                         item.addEventListener('mouseleave', () => item.style.background = '');
                         item.addEventListener('click', () => {
-                            // Rellenar campos automáticamente
                             document.getElementById('c-nombre').value    = item.dataset.nombre;
                             document.getElementById('c-dni').value       = item.dataset.dni       || '';
                             document.getElementById('c-celular').value   = item.dataset.telefono  || '';
@@ -815,17 +968,16 @@ function imprimirContratoElegante() {
                 } catch (err) {
                     console.warn('Autocomplete clientes:', err);
                 }
-            }, 280);   // 280 ms de debounce
+            }, 280);
         });
 
         // Cerrar dropdown al hacer click fuera
-        document.addEventListener('click', (e) => {
-            if (!inputNombre.contains(e.target) && !dropdown.contains(e.target)) {
-                dropdown.style.display = 'none';
-            }
+        document.addEventListener('click', e => {
+            if (!wrapper.contains(e.target)) dropdown.style.display = 'none';
         });
     }, 300);
 })();
+
 // ==========================================
 // MÓDULO DE TALLER: DETALLES E IMPRESIÓN
 // ==========================================

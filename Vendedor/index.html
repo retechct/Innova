@@ -450,6 +450,9 @@
         <label class="im-lf-label" for="reg-correo">Correo electrónico</label>
         <input type="email" id="reg-correo" class="im-lf-input" placeholder="tu@correo.com">
 
+        <label class="im-lf-label" for="reg-telefono">Teléfono / Celular</label>
+        <input type="tel" id="reg-telefono" class="im-lf-input" placeholder="Ej: 987 654 321">
+
         <label class="im-lf-label" for="reg-clave">Contraseña</label>
         <div style="position:relative;">
           <input type="password" id="reg-clave" class="im-lf-input" placeholder="Mínimo 6 caracteres"
@@ -732,10 +735,11 @@ async function imEntrarAlSistema() {
 
 // ── REGISTRO: validar y mostrar términos ─────────────────────────
 function imSolicitarTerminos() {
-  const nombre = document.getElementById('reg-nombre').value.trim();
-  const correo = document.getElementById('reg-correo').value.trim();
-  const clave  = document.getElementById('reg-clave').value.trim();
-  const clave2 = document.getElementById('reg-clave2').value.trim();
+  const nombre    = document.getElementById('reg-nombre').value.trim();
+  const correo    = document.getElementById('reg-correo').value.trim();
+  const telefono  = document.getElementById('reg-telefono').value.trim();
+  const clave     = document.getElementById('reg-clave').value.trim();
+  const clave2    = document.getElementById('reg-clave2').value.trim();
 
   const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo);
 
@@ -769,15 +773,16 @@ function imCerrarTerminos() {
 
 async function imAceptarTerminosYRegistrar() {
   imCerrarTerminos();
-  const nombre = document.getElementById('reg-nombre').value.trim();
-  const correo = document.getElementById('reg-correo').value.trim();
-  const clave  = document.getElementById('reg-clave').value.trim();
+  const nombre   = document.getElementById('reg-nombre').value.trim();
+  const correo   = document.getElementById('reg-correo').value.trim();
+  const telefono = document.getElementById('reg-telefono').value.trim();
+  const clave    = document.getElementById('reg-clave').value.trim();
 
   try {
     const res = await fetch(`${API_URL}/api/usuarios/registrar-web`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre, email: correo, contrasena: clave })
+      body: JSON.stringify({ nombre, email: correo, contrasena: clave, telefono })
     });
     const data = await res.json();
     if (res.ok && data.exito) {
@@ -785,10 +790,11 @@ async function imAceptarTerminosYRegistrar() {
         title:'¡Registro exitoso!',
         text:'Ya puedes iniciar sesión con tu correo y contraseña.',
         confirmButtonColor:'#c9a84c' });
-      document.getElementById('reg-nombre').value = '';
-      document.getElementById('reg-correo').value = '';
-      document.getElementById('reg-clave').value  = '';
-      document.getElementById('reg-clave2').value = '';
+      document.getElementById('reg-nombre').value    = '';
+      document.getElementById('reg-correo').value    = '';
+      document.getElementById('reg-telefono').value  = '';
+      document.getElementById('reg-clave').value     = '';
+      document.getElementById('reg-clave2').value    = '';
       imAbrirPanel('login');
     } else {
       Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'error',
