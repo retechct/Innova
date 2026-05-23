@@ -88,6 +88,20 @@
 }
 .im-nav-btn-login.active-panel { color: #0d0b08; background: #c9a84c; border-color: #c9a84c; }
 .im-nav-btn-login.active-panel::before { display: none; }
+#im-nav-sesion { display: flex; align-items: center; gap: 12px; }
+#im-nav-sesion .im-nav-saludo {
+  font-size: 11px; font-weight: 300; letter-spacing: 0.15em;
+  color: rgba(201,168,76,0.8); text-transform: uppercase;
+}
+#im-nav-sesion .im-nav-saludo span { color: #c9a84c; font-weight: 400; }
+#im-nav-btn-logout {
+  background: transparent; border: 1px solid rgba(201,168,76,0.35);
+  color: rgba(245,240,232,0.5); font-family: 'Jost', sans-serif;
+  font-size: 10px; font-weight: 400; letter-spacing: 0.2em;
+  text-transform: uppercase; padding: 8px 18px; cursor: pointer;
+  transition: all 0.3s; border-radius: 0;
+}
+#im-nav-btn-logout:hover { border-color: rgba(201,168,76,0.6); color: #c9a84c; }
 
 /* ── SECCIÓN HERO (full-height) ── */
 #im-hero {
@@ -543,6 +557,47 @@
 // LANDING INNOVA — Login por email+contraseña y Registro limpio
 // ═══════════════════════════════════════════════════════════════
 
+// ── Navbar: estado sesión cliente ────────────────────────────────
+function imActualizarNavbarCliente() {
+  const sesion = localStorage.getItem('usuarioInnova');
+  if (!sesion) return;
+  const u = JSON.parse(sesion);
+  // Solo aplica si el rol es Cliente (los trabajadores entran al ERP)
+  if (u.rol !== 'Cliente') return;
+
+  const navLinks = document.querySelector('.im-nav-links');
+  if (!navLinks) return;
+
+  // Reemplazar botones de registro/login por saludo + cerrar sesión
+  navLinks.innerHTML = `
+    <div id="im-nav-sesion">
+      <p class="im-nav-saludo">Hola, <span>${u.nombre.split(' ')[0]}</span></p>
+      <button id="im-nav-btn-logout" onclick="imCerrarSesionCliente()">
+        Cerrar sesión
+      </button>
+    </div>
+  `;
+
+  // Cerrar el panel si estaba abierto
+  const wrapper = document.getElementById('im-panel-wrapper');
+  if (wrapper) { wrapper.classList.remove('visible'); imPanelActivo = null; }
+}
+
+function imCerrarSesionCliente() {
+  Swal.fire({
+    background: '#14100a', color: '#f5f0e8', icon: 'question',
+    title: '¿Cerrar sesión?',
+    showCancelButton: true,
+    confirmButtonColor: '#c9a84c', cancelButtonColor: 'transparent',
+    confirmButtonText: 'Sí, salir', cancelButtonText: 'Cancelar'
+  }).then(r => {
+    if (r.isConfirmed) {
+      localStorage.removeItem('usuarioInnova');
+      location.reload();
+    }
+  });
+}
+
 let imPanelActivo = null;
 
 // ── Toggle mostrar/ocultar contraseña ────────────────────────────
@@ -597,6 +652,9 @@ document.getElementById('pantalla-login').addEventListener('scroll', function() 
   imNavbar.classList.toggle('scrolled', this.scrollTop > 40);
 });
 
+// Restaurar navbar si ya había sesión de cliente guardada
+imActualizarNavbarCliente();
+
 // ── LOGIN — correo + PIN ─────────────────────────────────────────
 async function imEntrarAlSistema() {
   const email = (document.getElementById('login-email').value || '').trim();
@@ -627,24 +685,35 @@ async function imEntrarAlSistema() {
       localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
 
       // Cliente: se queda en el landing, no entra al panel
+      // Cliente: se queda en el landing
       if (usuarioActivo.rol === 'Cliente') {
+        imActualizarNavbarCliente();
         Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
-          title:`¡Hola, ${usuarioActivo.nombre}!`,
-          text:'Has iniciado sesión correctamente. Pronto podrás ver el seguimiento de tus pedidos aquí.',
+          title:`¡Hola, ${usuarioActivo.nombre.split(' ')[0]}!`,
+          text:'Has iniciado sesión correctamente.',
           confirmButtonColor:'#c9a84c' });
         return;
       }
 
+      // Cualquier otro rol no reconocido: bloquear
+      const ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
+      if (!ROLES_ERP.includes(usuarioActivo.rol)) {
+        localStorage.removeItem('usuarioInnova');
+        return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'warning',
+          title:'Sin acceso', text:'Tu cuenta aún no tiene acceso al panel interno.',
+          confirmButtonColor:'#c9a84c' });
+      }
+
       // Trabajador: entra al ERP normalmente
       document.getElementById('pantalla-login').style.display = 'none';
-      imMostrarBotonTrabajador();
       configurarInterfazPorRol();
+      mostrarUsuarioEnHeader();
 
       const esOperario = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
       changeView(esOperario ? 'taller' : 'catalogo');
 
       Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
-        title:`¡Hola, ${usuarioActivo.nombre}!`,
+        title:`¡Hola, ${usuarioActivo.nombre.split(' ')[0]}!`,
         text:`Bienvenido al sistema Innova Möbili.`,
         timer: 2200, showConfirmButton: false });
     } else {

@@ -19,9 +19,16 @@ async function init() {
         const sesion = localStorage.getItem('usuarioInnova');
         if (sesion) {
             usuarioActivo = JSON.parse(sesion);
+
+            // SEGURIDAD: Clientes y roles no autorizados no pueden entrar al panel ERP
+            const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN'];
+            if (!ROLES_ERP.includes(usuarioActivo.rol)) {
+                return; // Se queda en el landing
+            }
+
             configurarInterfazPorRol();
+            mostrarUsuarioEnHeader();
             document.getElementById('pantalla-login').style.display = 'none';
-            // Lógica de ruteo inicial al cargar la sesión
             if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER') {
                 changeView('taller');
             } else {
@@ -501,6 +508,12 @@ async function entrarAlSistema() {
         if (result.exito) {
             usuarioActivo = result.usuario;
             
+            // SEGURIDAD: Clientes no pueden entrar al panel ERP
+            const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN'];
+            if (!ROLES_ERP.includes(usuarioActivo.rol)) {
+                return Swal.fire('Acceso Denegado', 'Tu cuenta no tiene acceso al panel interno.', 'warning');
+            }
+
             // Agregamos la tienda y la hora al perfil del usuario
             usuarioActivo.sede_id = tiendaSelect.value;
             usuarioActivo.tienda = nombreTienda;
@@ -513,6 +526,7 @@ async function entrarAlSistema() {
             document.getElementById('pantalla-login').style.display = 'none';
             
             configurarInterfazPorRol();
+            mostrarUsuarioEnHeader();
 
             // Lógica de ruteo inicial después del login
             if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER') {
@@ -536,6 +550,48 @@ async function entrarAlSistema() {
     } catch (error) {
         Swal.fire('Error', 'No hay conexión con el servidor Python.', 'error');
     }
+}
+
+// ── Usuario activo en el header del panel ─────────────────────────
+function mostrarUsuarioEnHeader() {
+    if (!usuarioActivo) return;
+    const slot = document.getElementById('header-worker-slot');
+    if (!slot) return;
+
+    // Evitar duplicados
+    const existing = document.getElementById('header-user-info');
+    if (existing) existing.remove();
+
+    const ROL_LABELS = {
+        'Admin':       'Admin',
+        'Vendedor':    'Vendedor',
+        'Operario':    'Operario',
+        'Jefe_Taller': 'Jefe Taller',
+        'JEFE_TALLER': 'Jefe Taller',
+        'ALMACEN':     'Almacén',
+    };
+    const rolLabel = ROL_LABELS[usuarioActivo.rol] || usuarioActivo.rol;
+    const nombre   = usuarioActivo.nombre.split(' ')[0];
+
+    const wrap = document.createElement('div');
+    wrap.id = 'header-user-info';
+    wrap.style.cssText = `
+        display: flex; align-items: center; gap: 10px;
+        font-family: 'Inter', sans-serif;
+    `;
+    wrap.innerHTML = `
+        <div style="text-align:right; line-height:1.3;">
+            <div style="font-size:13px; font-weight:600; color:var(--text, #1e293b);">${nombre}</div>
+            <div style="font-size:10px; color:var(--text-muted, #94a3b8); letter-spacing:0.05em; text-transform:uppercase;">${rolLabel}</div>
+        </div>
+        <div style="
+            width:34px; height:34px; border-radius:50%;
+            background: linear-gradient(135deg, var(--primary,#2d5a27), var(--accent,#d4af37));
+            display:flex; align-items:center; justify-content:center;
+            font-size:14px; font-weight:700; color:#fff; flex-shrink:0;
+        ">${nombre.charAt(0).toUpperCase()}</div>
+    `;
+    slot.appendChild(wrap);
 }
 
 // FUNCIÓN PARA CERRAR SESIÓN
