@@ -321,4 +321,3 @@ function _formatArea(area) {
   return nombres[area] || area.replace(/_/g, ' ').toLowerCase()
     .replace(/^\w/, c => c.toUpperCase());
 }
-}
