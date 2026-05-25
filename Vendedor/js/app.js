@@ -539,6 +539,9 @@ async function entrarAlSistema() {
             usuarioActivo.tienda = nombreTienda;
             usuarioActivo.horaLogin = new Date().toLocaleTimeString();
             
+            // SEGURIDAD: Guardamos el token JWT para las peticiones API
+            if (result.token) sessionStorage.setItem('innova_token', result.token);
+            
             // Guardamos todo junto en la memoria del navegador
             localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
             
@@ -627,6 +630,7 @@ function cerrarSesion() {
     }).then((result) => {
         if (result.isConfirmed) {
             localStorage.removeItem('usuarioInnova');
+            sessionStorage.removeItem('innova_token');
             location.reload();
         }
     });

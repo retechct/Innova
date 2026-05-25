@@ -26,7 +26,16 @@ const CATEGORIAS_PIEZA = [
 /* ─── Punto de entrada ─────────────────────────────────────── */
 async function cargarVistaInventario() {
     const main = document.getElementById('main-content');
-    main.innerHTML = _htmlEsqueleto();
+    
+    // Creamos y usamos un contenedor dinámico sin borrar las demás vistas de la página
+    let wrapper = document.getElementById('inv-dinamico-wrapper');
+    if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.id = 'inv-dinamico-wrapper';
+        main.appendChild(wrapper);
+    }
+    wrapper.innerHTML = _htmlEsqueleto();
+    
     await _cargarMaestrosInv();
     await _cargarDatosTab();
     _bindInvEventos();
