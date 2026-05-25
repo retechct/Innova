@@ -20,11 +20,9 @@ import io
 from datetime import datetime
 import pytz
 from flask import Blueprint, request, jsonify, Response
-import psycopg2
-from psycopg2 import pool as pg_pool
+from database import get_db_connection, release_db_connection
 
 inventario_bp = Blueprint('inventario', __name__)
-_pool = None
 tz_peru = pytz.timezone('America/Lima')
 
 # Roles autorizados para modificar stock
@@ -47,26 +45,12 @@ PREFIJOS = {
 }
 
 
-def init_inventario_pool():
-    """Llamar desde app.py DESPUÉS de load_dotenv()."""
-    global _pool
-    if _pool is None:
-        _pool = pg_pool.ThreadedConnectionPool(
-            minconn=1, maxconn=5,
-            host=os.getenv("DB_HOST"),
-            database=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-        )
-
-
 def _conn():
-    return _pool.getconn()
+    return get_db_connection()
 
 
 def _rel(c):
-    if c:
-        _pool.putconn(c)
+    release_db_connection(c)
 
 
 def _verificar_rol(rol):

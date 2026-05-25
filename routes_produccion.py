@@ -5,6 +5,7 @@ Blueprint: produccion_bp  (sin prefijo de URL)
 """
 
 import json
+from datetime import datetime
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto
@@ -377,6 +378,101 @@ def derivar_ticket():
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
 
+@produccion_bp.route('/api/taller/stats', methods=['GET'])
+def obtener_taller_stats():
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        
+        cursor.execute("SELECT COUNT(*) FROM tickets_produccion WHERE estado_ticket = 'Pendiente'")
+        pendientes = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM tickets_produccion WHERE estado_ticket = 'En Proceso'")
+        en_proceso = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM tickets_produccion WHERE estado_ticket IN ('Pendiente', 'En Proceso', 'Bloqueado')")
+        activos = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM ventas WHERE estado_general = 'Listo'")
+        ventas_listas = cursor.fetchone()[0]
+        
+        return jsonify({
+            'pendientes': pendientes,
+            'en_proceso': en_proceso,
+            'activos': activos,
+            'ventas_listas': ventas_listas
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+@produccion_bp.route('/api/taller/ordenes', methods=['GET'])
+def obtener_ordenes_produccion():
+    estado = request.args.get('estado', 'activas')
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        
+        query = """
+            SELECT v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega, v.vendedor_nombre, v.sede, v.estado_general
+            FROM ventas v
+            WHERE v.estado_general NOT IN ('Entregado', 'Cancelado')
+            ORDER BY v.fecha_entrega ASC
+        """
+        cursor.execute(query)
+        ventas = cursor.fetchall()
+        
+        resultado = []
+        for v in ventas:
+            venta_id = v[0]
+            
+            cursor.execute("SELECT id, producto, foto_url FROM items_venta WHERE venta_id = %s", (venta_id,))
+            items = cursor.fetchall()
+            
+            items_list = []
+            tickets_term = 0
+            tickets_total = 0
+            
+            for item in items:
+                item_id = item[0]
+                cursor.execute("""
+                    SELECT id, area_trabajo, estado_ticket, 
+                           COALESCE((SELECT nombre FROM usuarios WHERE id = trabajador_asignado_id), 'Sin asignar') 
+                    FROM tickets_produccion 
+                    WHERE item_id = %s
+                """, (item_id,))
+                tickets = cursor.fetchall()
+                
+                tickets_list = []
+                for t in tickets:
+                    tickets_total += 1
+                    if t[2] == 'Terminado':
+                        tickets_term += 1
+                    tickets_list.append({
+                        'id': t[0],
+                        'area': t[1],
+                        'estado': t[2],
+                        'trabajador': t[3]
+                    })
+                
+                items_list.append({
+                    'id': item_id,
+                    'producto': item[1],
+                    'foto': limpiar_foto(item[2]),
+                    'tickets': tickets_list
+                })
+                
+            progreso = round((tickets_term / tickets_total * 100)) if tickets_total > 0 else 0
+            resultado.append({'id': venta_id, 'codigo': v[1], 'cliente': v[2], 'fecha_entrega': v[3].strftime('%d/%m/%Y') if v[3] else 'S/F', 'vendedor': v[4], 'sede': v[5], 'estado': v[6], 'progreso': progreso, 'tickets_term': tickets_term, 'tickets_total': tickets_total, 'items': items_list})
+            
+        return jsonify(resultado), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
 
 # ==========================================
 # 9. INVENTARIO DE MATERIALES
@@ -406,6 +502,29 @@ def obtener_fotos_skus():
         resultados += [{'sku': r[0], 'nombre': r[1], 'foto_url': r[2], 'tipo': r[3]} for r in cursor.fetchall()]
         return jsonify(resultados), 200
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+@produccion_bp.route('/api/taller/ticket/<int:ticket_id>/nota', methods=['POST'])
+def agregar_nota_ticket(ticket_id):
+    data = request.json
+    nota = data.get('nota')
+    usuario = data.get('usuario_nombre', 'Usuario')
+    
+    if not nota:
+        return jsonify({'error': 'La nota es obligatoria'}), 400
+        
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        nota_formateada = f"\n\n[NOTA {datetime.now().strftime('%d/%m %H:%M')} - {usuario}]: {nota}"
+        cursor.execute("UPDATE tickets_produccion SET ticket_details_override = COALESCE(ticket_details_override, '') || %s WHERE id = %s", (nota_formateada, ticket_id))
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': 'Nota agregada correctamente'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
