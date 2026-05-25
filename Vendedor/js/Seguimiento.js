@@ -4,11 +4,6 @@
 
 let _psEmailActual = '';
 
-function abrirSeguimiento() {
-  document.getElementById('portal-seguimiento').style.display = 'block';
-  document.body.style.overflow = 'hidden';
-
-  // Adaptamos el buscador para que acepte tanto correos como número de contrato
 // Forzar la actualización visual de los textos desde JavaScript al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('ps-email-input');

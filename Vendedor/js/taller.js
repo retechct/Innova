@@ -1333,9 +1333,9 @@ async function cargarInventarioTaller() {
             </div>`;
         };
 
-        const setHtml = (id, data) => {
+        const setHtml = (id, htmlContent) => {
             const el = document.getElementById(id);
-            if (el) el.innerHTML = data.map(dibujarCard).join('');
+            if (el) el.innerHTML = htmlContent;
         };
 
   // DESPUÉS:
