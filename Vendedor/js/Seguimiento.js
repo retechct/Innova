@@ -8,6 +8,13 @@ function abrirSeguimiento() {
   document.getElementById('portal-seguimiento').style.display = 'block';
   document.body.style.overflow = 'hidden';
 
+  // Adaptamos el buscador para que acepte tanto correos como número de contrato
+  const input = document.getElementById('ps-email-input');
+  if (input) {
+      input.placeholder = "Correo o N° de contrato (ej: INV-0001)";
+      input.type = "text";
+  }
+
   // Si el cliente ya está logueado, autocargar
   const sesion = localStorage.getItem('usuarioInnova');
   if (sesion) {
@@ -43,61 +50,69 @@ function _psReset() {
 }
 
 async function buscarPedidos() {
-  const email = document.getElementById('ps-email-input').value.trim();
-  if (!email || !email.includes('@')) {
+  const inputVal = document.getElementById('ps-email-input').value.trim();
+  if (!inputVal) {
     document.getElementById('ps-email-input').focus();
     return;
   }
-  _psEmailActual = email;
+  _psEmailActual = inputVal;
   _psReset();
   document.getElementById('ps-loader').style.display = 'flex';
 
-  try {
-    const res = await fetch(`${API_URL}/api/seguimiento/mis-pedidos?email=${encodeURIComponent(email)}`);
-    const data = await res.json();
-    document.getElementById('ps-loader').style.display = 'none';
-
-    if (!res.ok || data.error) {
-      _psShowError(data.error || 'No se encontraron pedidos para este correo.');
-      return;
-    }
-
-    if (!data.pedidos || data.pedidos.length === 0) {
+  // Si contiene un "@", asumimos que busca por correo como antes
+  if (inputVal.includes('@')) {
+    try {
+      const res = await fetch(`${API_URL}/api/seguimiento/mis-pedidos?email=${encodeURIComponent(inputVal)}`);
+      const data = await res.json();
+      document.getElementById('ps-loader').style.display = 'none';
+  
+      if (!res.ok || data.error) {
+        _psShowError(data.error || 'No se encontraron pedidos para este correo.');
+        return;
+      }
+  
+      if (!data.pedidos || data.pedidos.length === 0) {
+        const saludo = document.getElementById('ps-saludo');
+        saludo.style.display = 'block';
+        document.getElementById('ps-saludo-nombre').innerHTML =
+          `Hola, <em>${(data.nombre_cliente || inputVal).split(' ')[0]}</em>`;
+        const lista = document.getElementById('ps-lista');
+        lista.style.display = 'block';
+        document.getElementById('ps-lista-titulo').textContent = 'Aún no tienes pedidos registrados';
+        document.getElementById('ps-cards-container').innerHTML = `
+          <div style="text-align:center;padding:40px 20px;color:#6b7280;font-size:14px;">
+            <div style="font-size:40px;margin-bottom:12px;">🛋️</div>
+            <p style="margin:0 0 8px;font-weight:600;color:#374151;">Sin pedidos por ahora</p>
+            <p style="margin:0;">Cuando realices una compra aparecerá aquí.<br>
+            ¿Tienes dudas? Escríbenos al WhatsApp.</p>
+          </div>`;
+        return;
+      }
+  
+      // Mostrar saludo
       const saludo = document.getElementById('ps-saludo');
       saludo.style.display = 'block';
       document.getElementById('ps-saludo-nombre').innerHTML =
-        `Hola, <em>${(data.nombre_cliente || email).split(' ')[0]}</em>`;
+        `Hola, <em>${(data.nombre_cliente || inputVal).split(' ')[0]}</em>`;
+  
+      // Renderizar lista
       const lista = document.getElementById('ps-lista');
       lista.style.display = 'block';
-      document.getElementById('ps-lista-titulo').textContent = 'Aún no tienes pedidos registrados';
-      document.getElementById('ps-cards-container').innerHTML = `
-        <div style="text-align:center;padding:40px 20px;color:#6b7280;font-size:14px;">
-          <div style="font-size:40px;margin-bottom:12px;">🛋️</div>
-          <p style="margin:0 0 8px;font-weight:600;color:#374151;">Sin pedidos por ahora</p>
-          <p style="margin:0;">Cuando realices una compra aparecerá aquí.<br>
-          ¿Tienes dudas? Escríbenos al WhatsApp.</p>
-        </div>`;
-      return;
+      document.getElementById('ps-lista-titulo').textContent =
+        `${data.pedidos.length} pedido${data.pedidos.length !== 1 ? 's' : ''} encontrado${data.pedidos.length !== 1 ? 's' : ''}`;
+  
+      document.getElementById('ps-cards-container').innerHTML =
+        data.pedidos.map(p => _psCardHTML(p)).join('');
+  
+    } catch(e) {
+      document.getElementById('ps-loader').style.display = 'none';
+      _psShowError('Error de conexión. Intenta de nuevo.');
     }
-
-    // Mostrar saludo
-    const saludo = document.getElementById('ps-saludo');
-    saludo.style.display = 'block';
-    document.getElementById('ps-saludo-nombre').innerHTML =
-      `Hola, <em>${(data.nombre_cliente || email).split(' ')[0]}</em>`;
-
-    // Renderizar lista
-    const lista = document.getElementById('ps-lista');
-    lista.style.display = 'block';
-    document.getElementById('ps-lista-titulo').textContent =
-      `${data.pedidos.length} pedido${data.pedidos.length !== 1 ? 's' : ''} encontrado${data.pedidos.length !== 1 ? 's' : ''}`;
-
-    document.getElementById('ps-cards-container').innerHTML =
-      data.pedidos.map(p => _psCardHTML(p)).join('');
-
-  } catch(e) {
+  } else {
+    // Si NO tiene "@", es un código de contrato. Vamos directo al detalle
     document.getElementById('ps-loader').style.display = 'none';
-    _psShowError('Error de conexión. Intenta de nuevo.');
+    let codigoLimpio = inputVal.toUpperCase();
+    verDetallePedido(codigoLimpio, true);
   }
 }
 
@@ -139,9 +154,10 @@ function _psCardHTML(p) {
   </div>`;
 }
 
-async function verDetallePedido(codigo) {
+async function verDetallePedido(codigo, isDirectSearch = false) {
   document.getElementById('ps-saludo').style.display = 'none';
   document.getElementById('ps-lista').style.display = 'none';
+  document.getElementById('ps-error').style.display = 'none';
   document.getElementById('ps-loader').style.display = 'flex';
 
   try {
@@ -152,7 +168,7 @@ async function verDetallePedido(codigo) {
     document.getElementById('ps-loader').style.display = 'none';
 
     if (!res.ok || d.error) {
-      _psShowError(d.error || 'No se pudo cargar el detalle.');
+      _psShowError(d.error || (isDirectSearch ? `No encontramos el pedido #${codigo}. Verifica el número.` : 'No se pudo cargar el detalle.'));
       return;
     }
 
@@ -257,8 +273,15 @@ async function verDetallePedido(codigo) {
 
 function volverALista() {
   document.getElementById('ps-detalle').style.display = 'none';
-  document.getElementById('ps-saludo').style.display = 'block';
-  document.getElementById('ps-lista').style.display = 'block';
+  
+  // Si la búsqueda fue por contrato (sin email), volvemos a mostrar el buscador limpio
+  if (!_psEmailActual.includes('@')) {
+    _psReset();
+    document.getElementById('ps-email-input').value = '';
+  } else {
+    document.getElementById('ps-saludo').style.display = 'block';
+    document.getElementById('ps-lista').style.display = 'block';
+  }
   document.getElementById('portal-seguimiento').scrollTo({ top: 0, behavior: 'smooth' });
 }
 
