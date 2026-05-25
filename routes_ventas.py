@@ -307,6 +307,78 @@ def listar_ventas():
 
 
 # ==========================================
+# GESTIÓN MANUAL DE ESTADOS Y ANULACIÓN
+# ==========================================
+
+@ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])
+def cambiar_estado_venta(venta_id):
+    nuevo_estado = request.json.get('estado')
+    if not nuevo_estado:
+        return jsonify({'error': 'El estado es obligatorio'}), 400
+        
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("UPDATE ventas SET estado_general = %s WHERE id = %s", (nuevo_estado, venta_id))
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': f'Estado actualizado a {nuevo_estado}'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+@ventas_bp.route('/api/ventas/<int:venta_id>/anular', methods=['POST'])
+def anular_venta_completa(venta_id):
+    try:
+        conexion = get_db_connection()
+        conexion.autocommit = False
+        cursor   = conexion.cursor()
+
+        # 1. Marcar venta como Cancelado
+        cursor.execute("UPDATE ventas SET estado_general = 'Cancelado' WHERE id = %s", (venta_id,))
+        
+        # 2. Cancelar Tickets de Producción
+        cursor.execute("""
+            UPDATE tickets_produccion 
+            SET estado_ticket = 'Cancelado' 
+            WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
+              AND estado_ticket != 'Terminado'
+        """, (venta_id,))
+        
+        # 3. Cancelar compras en Logística Externa
+        cursor.execute("""
+            UPDATE logistica_externa 
+            SET estado = 'Cancelado' 
+            WHERE venta_id = %s AND estado != 'Recibido'
+        """, (venta_id,))
+        
+        # 4. Devolver stock si era producto directo
+        cursor.execute("""
+            SELECT cp.id 
+            FROM catalogo_productos cp
+            JOIN items_venta iv ON cp.nombre_modelo = iv.producto
+            WHERE iv.venta_id = %s
+        """, (venta_id,))
+        productos = cursor.fetchall()
+        for p in productos:
+            cursor.execute("""
+                UPDATE catalogo_productos 
+                SET stock_cantidad = stock_cantidad + 1, en_stock = true 
+                WHERE id = %s
+            """, (p[0],))
+
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': 'Venta y procesos de taller anulados con éxito.'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+# ==========================================
 # SEGUIMIENTO Y PRODUCCIÓN
 # ==========================================
 

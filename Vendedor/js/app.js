@@ -754,6 +754,11 @@ tbody.innerHTML = lista.map((v, i) => `
                     style="background:#f1f5f9; color:#475569; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
                 <i class="fa-solid fa-clock-rotate-left"></i>
             </button>
+            ${(usuarioActivo?.rol === 'Admin') ? `
+            <button onclick="gestionarEstadoVenta(${v.id}, '${v.estado}')" title="Cambiar Estado / Anular"
+                    style="background:#fee2e2; color:#b91c1c; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
+                <i class="fa-solid fa-gear"></i>
+            </button>` : ''}
             ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
             <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
                     title="Proponer cambio de precio"
@@ -1040,6 +1045,57 @@ function descargarExcelContratos() {
     const url = `${API_URL}/api/ventas/exportar?inicio=${desde}&fin=${hasta}`;
     window.open(url, '_blank');
 }
+
+// ==========================================
+// GESTIÓN MANUAL DE ESTADO Y ANULACIÓN (ADMIN)
+// ==========================================
+async function gestionarEstadoVenta(ventaId, estadoActual) {
+    const { value: accion } = await Swal.fire({
+        title: 'Gestionar Venta',
+        input: 'select',
+        inputOptions: {
+            'Estados': {
+                'Pendiente': 'Marcar como Pendiente',
+                'En producción': 'Marcar como En Producción',
+                'Listo': 'Marcar como Listo',
+                'Despachado': 'Marcar como Despachado',
+                'Entregado': 'Marcar como Entregado'
+            },
+            'Peligro': {
+                'ANULAR': '❌ ANULAR VENTA COMPLETA'
+            }
+        },
+        inputPlaceholder: 'Selecciona una acción',
+        showCancelButton: true,
+        confirmButtonColor: '#0f172a'
+    });
+
+    if (!accion) return;
+
+    try {
+        let url, body;
+        if (accion === 'ANULAR') {
+            const confirm = await Swal.fire({ title: '¿Seguro?', text: 'Esto cancelará el pedido, vaciará los tickets del taller y cancelará la logística externa.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#b91c1c' });
+            if (!confirm.isConfirmed) return;
+            url = `${API_URL}/api/ventas/${ventaId}/anular`;
+        } else {
+            url = `${API_URL}/api/ventas/${ventaId}/estado`;
+            body = JSON.stringify({ estado: accion });
+        }
+
+        Swal.fire({ title: 'Procesando...', didOpen: () => Swal.showLoading() });
+        const res = await fetch(url, { method: accion === 'ANULAR' ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: body });
+        const data = await res.json();
+        
+        if (data.exito) {
+            Swal.fire('Éxito', data.mensaje, 'success');
+            loadContratos();
+        } else throw new Error(data.error);
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
 // ==========================================
 // PUNTO DE ENTRADA — se ejecuta al cargar la página
 // FIX: un solo DOMContentLoaded que llama init() + cargarUsuariosLogin()

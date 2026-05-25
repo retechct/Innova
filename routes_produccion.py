@@ -680,6 +680,22 @@ def aprobar_sugerencia_insumo():
     finally:
         if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
+@produccion_bp.route('/api/sugerencias/rechazar', methods=['POST'])
+def rechazar_sugerencia_insumo():
+    data          = request.json
+    sugerencia_id = data.get('sugerencia_id')
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("UPDATE sugerencias_insumos SET estado = 'Rechazado' WHERE id = %s;", (sugerencia_id,))
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': 'Sugerencia de insumo rechazada.'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
+
 
 # ==========================================
 # 13. DESPACHO — ASIGNAR CHOFER Y PROGRESO
