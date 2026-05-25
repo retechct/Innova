@@ -1,9 +1,21 @@
 """
 routes_materiales.py — Módulos 4 y 5: Maestro de materiales (SKU/fotos) y creaciones.
 Blueprint: materiales_bp  (sin prefijo de URL)
+
+PLAN DE ACCIÓN B (Mayo 2026) — Cambios aplicados:
+  B1 + B2: INSERT para 'base' y 'base-comedor' ahora guardan el campo 'acabado'.
+           Los campos categóricos (tipo, material, acabado) se validan aquí.
+  B3: Los 7 endpoints PUT para editar materiales por SKU son código real
+      (antes estaban atrapados dentro de un triple-quoted string).
+  Listas: Todas las consultas devuelven 'id' y 'acabado' donde aplica,
+          para que las tarjetas de B3 puedan actualizar estado y editar.
+
+MIGRACIÓN SQL REQUERIDA (solo una vez):
+  Si las tablas ya existían antes de este cambio, ejecutar:
+    ALTER TABLE maestro_bases         ADD COLUMN IF NOT EXISTS acabado VARCHAR(50) DEFAULT '';
+    ALTER TABLE maestro_bases_comedor ADD COLUMN IF NOT EXISTS acabado VARCHAR(50) DEFAULT '';
 """
 
-import json
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto
@@ -50,14 +62,21 @@ def agregar_nuevo_material():
             """, (nuevo_sku, request.form.get('nombre_diseno'), request.form.get('tipo_tela'), foto_ruta, origen))
 
         elif tipo_material == 'base':
+            # B2: incluye 'acabado' (nuevo campo). Ver nota de migración SQL arriba.
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_bases")
             nuevo_sku = f"BAS-{str(cursor.fetchone()[0]+1).zfill(4)}"
             cursor.execute("""
-                INSERT INTO maestro_bases (sku, tipo, material, modelo, color, medida_altura, foto_url, origen_produccion, estado)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
-            """, (nuevo_sku, request.form.get('tipo'), request.form.get('material'),
-                  request.form.get('modelo'), request.form.get('color'),
-                  request.form.get('medida_altura'), foto_ruta, origen))
+                INSERT INTO maestro_bases
+                    (sku, tipo, material, modelo, color, medida_altura, acabado, foto_url, origen_produccion, estado)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
+            """, (nuevo_sku,
+                  request.form.get('tipo'),
+                  request.form.get('material'),
+                  request.form.get('modelo'),
+                  request.form.get('color'),
+                  request.form.get('medida_altura', ''),
+                  request.form.get('acabado', ''),
+                  foto_ruta, origen))
 
         elif tipo_material == 'tablero':
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_tableros")
@@ -69,13 +88,19 @@ def agregar_nuevo_material():
                   request.form.get('color_veta'), request.form.get('acabado'), foto_ruta, origen))
 
         elif tipo_material == 'base-comedor':
+            # B2: incluye 'acabado' (nuevo campo). Ver nota de migración SQL arriba.
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_bases_comedor")
             nuevo_sku = f"BAC-{str(cursor.fetchone()[0]+1).zfill(4)}"
             cursor.execute("""
-                INSERT INTO maestro_bases_comedor (sku, material, modelo, color, foto_url, origen_produccion, estado)
-                VALUES (%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
-            """, (nuevo_sku, request.form.get('material'), request.form.get('modelo'),
-                  request.form.get('color'), foto_ruta, origen))
+                INSERT INTO maestro_bases_comedor
+                    (sku, material, modelo, color, acabado, foto_url, origen_produccion, estado)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
+            """, (nuevo_sku,
+                  request.form.get('material'),
+                  request.form.get('modelo'),
+                  request.form.get('color'),
+                  request.form.get('acabado', ''),
+                  foto_ruta, origen))
 
         elif tipo_material == 'silla':
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_sillas")
@@ -116,23 +141,111 @@ def agregar_nuevo_material():
 
 @materiales_bp.route('/api/materiales/listas', methods=['GET'])
 def obtener_listas_materiales():
+    """
+    B3: Devuelve 'id' en todos los registros (necesario para actualizarEstadoInsumo).
+        Devuelve 'acabado' en bases y bases_comedor (B2).
+    """
     try:
         conexion = get_db_connection()
-        cur_telas    = conexion.cursor(); cur_telas.execute("SELECT sku, proveedor, coleccion, color, foto_url, COALESCE(estado,'Disponible') FROM maestro_telas")
-        cur_cojines  = conexion.cursor(); cur_cojines.execute("SELECT sku, nombre_diseno, tipo_tela, foto_url, COALESCE(estado,'Disponible') FROM maestro_disenos_cojin")
-        cur_bases    = conexion.cursor(); cur_bases.execute("SELECT sku, tipo, material, modelo, color, medida_altura, foto_url, COALESCE(estado,'Disponible') FROM maestro_bases")
-        cur_tableros = conexion.cursor(); cur_tableros.execute("SELECT sku, material_base, nombre_modelo, color_veta, acabado, foto_url, COALESCE(estado,'Disponible') FROM maestro_tableros")
-        cur_bcom     = conexion.cursor(); cur_bcom.execute("SELECT sku, material, modelo, color, foto_url, COALESCE(estado,'Disponible') FROM maestro_bases_comedor")
-        cur_sillas   = conexion.cursor(); cur_sillas.execute("SELECT sku, material, modelo, color_estructura, foto_url, COALESCE(estado,'Disponible') FROM maestro_sillas")
-        cur_butacas  = conexion.cursor(); cur_butacas.execute("SELECT sku, material, modelo, color_estructura, foto_url, COALESCE(estado,'Disponible') FROM maestro_butacas")
 
-        telas         = [{"sku":r[0],"proveedor":r[1],"coleccion":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cur_telas.fetchall()]
-        cojines       = [{"sku":r[0],"nombre_diseno":r[1],"tipo_tela":r[2],"foto_url":limpiar_foto(r[3]),"estado":r[4]} for r in cur_cojines.fetchall()]
-        bases         = [{"sku":r[0],"tipo":r[1],"material":r[2],"modelo":r[3],"color":r[4],"medida":r[5],"foto_url":limpiar_foto(r[6]),"estado":r[7]} for r in cur_bases.fetchall()]
-        tableros      = [{"sku":r[0],"material_base":r[1],"nombre":r[2],"color":r[3],"acabado":r[4],"foto_url":limpiar_foto(r[5]),"estado":r[6]} for r in cur_tableros.fetchall()]
-        bases_comedor = [{"sku":r[0],"material":r[1],"modelo":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cur_bcom.fetchall()]
-        sillas        = [{"sku":r[0],"material":r[1],"modelo":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cur_sillas.fetchall()]
-        butacas       = [{"sku":r[0],"material":r[1],"modelo":r[2],"color":r[3],"foto_url":limpiar_foto(r[4]),"estado":r[5]} for r in cur_butacas.fetchall()]
+        cur_telas = conexion.cursor()
+        cur_telas.execute("""
+            SELECT id, sku, proveedor, coleccion, color,
+                   foto_url, COALESCE(estado,'Disponible')
+            FROM maestro_telas
+            ORDER BY id DESC
+        """)
+
+        cur_cojines = conexion.cursor()
+        cur_cojines.execute("""
+            SELECT id, sku, nombre_diseno, tipo_tela,
+                   foto_url, COALESCE(estado,'Disponible')
+            FROM maestro_disenos_cojin
+            ORDER BY id DESC
+        """)
+
+        cur_bases = conexion.cursor()
+        cur_bases.execute("""
+            SELECT id, sku, tipo, material, modelo, color,
+                   medida_altura, COALESCE(acabado,'') AS acabado,
+                   foto_url, COALESCE(estado,'Disponible')
+            FROM maestro_bases
+            ORDER BY id DESC
+        """)
+
+        cur_tableros = conexion.cursor()
+        cur_tableros.execute("""
+            SELECT id, sku, material_base, nombre_modelo, color_veta,
+                   acabado, foto_url, COALESCE(estado,'Disponible')
+            FROM maestro_tableros
+            ORDER BY id DESC
+        """)
+
+        cur_bcom = conexion.cursor()
+        cur_bcom.execute("""
+            SELECT id, sku, material, modelo, color,
+                   COALESCE(acabado,'') AS acabado,
+                   foto_url, COALESCE(estado,'Disponible')
+            FROM maestro_bases_comedor
+            ORDER BY id DESC
+        """)
+
+        cur_sillas = conexion.cursor()
+        cur_sillas.execute("""
+            SELECT id, sku, material, modelo, color_estructura,
+                   foto_url, COALESCE(estado,'Disponible')
+            FROM maestro_sillas
+            ORDER BY id DESC
+        """)
+
+        cur_butacas = conexion.cursor()
+        cur_butacas.execute("""
+            SELECT id, sku, material, modelo, color_estructura,
+                   foto_url, COALESCE(estado,'Disponible')
+            FROM maestro_butacas
+            ORDER BY id DESC
+        """)
+
+        telas = [{
+            "id": r[0], "sku": r[1], "proveedor": r[2], "coleccion": r[3],
+            "color": r[4], "foto_url": limpiar_foto(r[5]), "estado": r[6]
+        } for r in cur_telas.fetchall()]
+
+        cojines = [{
+            "id": r[0], "sku": r[1], "nombre_diseno": r[2], "tipo_tela": r[3],
+            "foto_url": limpiar_foto(r[4]), "estado": r[5]
+        } for r in cur_cojines.fetchall()]
+
+        bases = [{
+            "id": r[0], "sku": r[1], "tipo": r[2], "material": r[3],
+            "modelo": r[4], "color": r[5], "medida": r[6], "acabado": r[7],
+            "foto_url": limpiar_foto(r[8]), "estado": r[9],
+            "categoria": "BASE"
+        } for r in cur_bases.fetchall()]
+
+        tableros = [{
+            "id": r[0], "sku": r[1], "material_base": r[2], "nombre": r[3],
+            "color": r[4], "acabado": r[5], "foto_url": limpiar_foto(r[6]),
+            "estado": r[7], "categoria": "TABLERO"
+        } for r in cur_tableros.fetchall()]
+
+        bases_comedor = [{
+            "id": r[0], "sku": r[1], "material": r[2], "modelo": r[3],
+            "color": r[4], "acabado": r[5], "foto_url": limpiar_foto(r[6]),
+            "estado": r[7], "categoria": "BASE-COMEDOR"
+        } for r in cur_bcom.fetchall()]
+
+        sillas = [{
+            "id": r[0], "sku": r[1], "material": r[2], "modelo": r[3],
+            "color": r[4], "foto_url": limpiar_foto(r[5]),
+            "estado": r[6], "categoria": "SILLA"
+        } for r in cur_sillas.fetchall()]
+
+        butacas = [{
+            "id": r[0], "sku": r[1], "material": r[2], "modelo": r[3],
+            "color": r[4], "foto_url": limpiar_foto(r[5]),
+            "estado": r[6], "categoria": "BUTACA"
+        } for r in cur_butacas.fetchall()]
 
         for c in (cur_telas, cur_cojines, cur_bases, cur_tableros, cur_bcom, cur_sillas, cur_butacas):
             c.close()
@@ -142,6 +255,7 @@ def obtener_listas_materiales():
             "tableros": tableros, "bases_comedor": bases_comedor,
             "sillas": sillas, "butacas": butacas
         })
+
     except Exception as ex:
         print("Error en obtener_listas_materiales:", ex)
         return jsonify({"error": str(ex)}), 500
@@ -274,3 +388,136 @@ def rechazar_creacion():
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+
+
+# ==========================================
+# B3 — EDICIÓN DE MATERIALES POR SKU (PUT)
+# ==========================================
+# Helper genérico — evita 7 bloques idénticos.
+# Solo actualiza los campos presentes en el JSON que estén en campos_permitidos.
+
+def _actualizar_tabla(tabla: str, sku_columna: str, sku: str, campos_permitidos: list) -> tuple:
+    data = request.get_json(silent=True) or {}
+    updates = {k: v for k, v in data.items() if k in campos_permitidos and v is not None}
+
+    if not updates:
+        return {"error": "No se enviaron campos válidos para actualizar."}, 400
+
+    set_clause = ", ".join(f"{col} = %s" for col in updates)
+    values     = list(updates.values()) + [sku]
+
+    conexion = None
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute(f"SELECT 1 FROM {tabla} WHERE {sku_columna} = %s;", (sku,))
+        if not cursor.fetchone():
+            return {"error": f"No se encontró ningún registro con SKU '{sku}'."}, 404
+        cursor.execute(f"UPDATE {tabla} SET {set_clause} WHERE {sku_columna} = %s;", values)
+        conexion.commit()
+        return {"exito": True, "sku": sku}, 200
+    except Exception as ex:
+        if conexion: conexion.rollback()
+        print(f"[PUT {tabla}] Error: {ex}")
+        return {"error": str(ex)}, 500
+    finally:
+        if conexion:
+            cursor.close()
+            release_db_connection(conexion)
+
+
+@materiales_bp.route('/api/materiales/telas/<string:sku>', methods=['PUT'])
+def editar_tela(sku):
+    """B3: Actualiza una tela por SKU. Campos: proveedor, coleccion, color, foto_url, estado"""
+    resp, status = _actualizar_tabla(
+        tabla='maestro_telas', sku_columna='sku', sku=sku,
+        campos_permitidos=['proveedor', 'coleccion', 'color', 'foto_url', 'estado']
+    )
+    return jsonify(resp), status
+
+
+@materiales_bp.route('/api/materiales/cojines/<string:sku>', methods=['PUT'])
+def editar_cojin(sku):
+    """B3: Actualiza un diseño de cojín por SKU. Campos: nombre_diseno, tipo_tela, foto_url, estado"""
+    resp, status = _actualizar_tabla(
+        tabla='maestro_disenos_cojin', sku_columna='sku', sku=sku,
+        campos_permitidos=['nombre_diseno', 'tipo_tela', 'foto_url', 'estado']
+    )
+    return jsonify(resp), status
+
+
+@materiales_bp.route('/api/materiales/bases/<string:sku>', methods=['PUT'])
+def editar_base(sku):
+    """
+    B3: Actualiza una base de sofá por SKU.
+    B2: 'tipo' solo acepta: Zócalo / Patas / Combinado (Zócalo + Patas)
+    """
+    data = request.get_json(silent=True) or {}
+    tipo = data.get('tipo', '')
+    if tipo and tipo not in {'Zócalo', 'Patas', 'Combinado (Zócalo + Patas)'}:
+        return jsonify({"error": f"Tipo de base no válido: '{tipo}'. "
+                                 "Opciones: Zócalo / Patas / Combinado (Zócalo + Patas)"}), 400
+    resp, status = _actualizar_tabla(
+        tabla='maestro_bases', sku_columna='sku', sku=sku,
+        campos_permitidos=['tipo', 'material', 'modelo', 'color',
+                           'medida_altura', 'acabado', 'foto_url', 'estado']
+    )
+    return jsonify(resp), status
+
+
+@materiales_bp.route('/api/materiales/bases-comedor/<string:sku>', methods=['PUT'])
+def editar_base_comedor(sku):
+    """
+    B3: Actualiza una base de comedor por SKU.
+    B2: 'tipo' NO es editable en BASE-COMEDOR (siempre es 'Base de Comedor').
+    """
+    resp, status = _actualizar_tabla(
+        tabla='maestro_bases_comedor', sku_columna='sku', sku=sku,
+        campos_permitidos=['material', 'modelo', 'color', 'acabado', 'foto_url', 'estado']
+    )
+    return jsonify(resp), status
+
+
+@materiales_bp.route('/api/materiales/tableros/<string:sku>', methods=['PUT'])
+def editar_tablero(sku):
+    """B3: Actualiza un tablero por SKU. Campos: material_base, nombre_modelo, color_veta, acabado, foto_url, estado"""
+    resp, status = _actualizar_tabla(
+        tabla='maestro_tableros', sku_columna='sku', sku=sku,
+        campos_permitidos=['material_base', 'nombre_modelo', 'color_veta',
+                           'acabado', 'foto_url', 'estado']
+    )
+    return jsonify(resp), status
+
+
+@materiales_bp.route('/api/materiales/sillas/<string:sku>', methods=['PUT'])
+def editar_silla(sku):
+    """
+    B3: Actualiza una estructura de silla por SKU.
+    B1: 'material' solo acepta: Madera Maciza / Madera MDF / Fierro / Aluminio / Polipropileno
+    """
+    data     = request.get_json(silent=True) or {}
+    material = data.get('material', '')
+    if material and material not in {'Madera Maciza', 'Madera MDF', 'Fierro', 'Aluminio', 'Polipropileno'}:
+        return jsonify({"error": f"Material no válido para silla: '{material}'."}), 400
+    resp, status = _actualizar_tabla(
+        tabla='maestro_sillas', sku_columna='sku', sku=sku,
+        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado']
+    )
+    return jsonify(resp), status
+
+
+@materiales_bp.route('/api/materiales/butacas/<string:sku>', methods=['PUT'])
+def editar_butaca(sku):
+    """
+    B3: Actualiza una estructura de butaca por SKU.
+    B1: 'material' solo acepta: Madera Maciza / Fierro / Aluminio
+    """
+    data     = request.get_json(silent=True) or {}
+    material = data.get('material', '')
+    if material and material not in {'Madera Maciza', 'Fierro', 'Aluminio'}:
+        return jsonify({"error": f"Material no válido para butaca: '{material}'."}), 400
+    resp, status = _actualizar_tabla(
+        tabla='maestro_butacas', sku_columna='sku', sku=sku,
+        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado']
+    )
+    return jsonify(resp), status

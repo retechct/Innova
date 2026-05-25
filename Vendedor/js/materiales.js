@@ -96,230 +96,7 @@ document.addEventListener('click', function(e) {
 });
 // NOTA: destinoActual y tipoActual se declaran en config.js — no redeclarar aquí
 
-function abrirModalNuevo(tipo, destino) {
-    tipoActual = tipo;
-    destinoActual = destino; // 'directo' (Admin) o 'sugerencia' (Vendedor)
 
-    const modal = document.getElementById('modal-nuevo-material');
-    const contenedorCampos = document.getElementById('nm-campos-dinamicos');
-    const titleElem = document.getElementById('nm-title');
-    
-    if (!modal || !contenedorCampos) return;
-
-    // Limpiar archivos e imágenes previas
-    const nmFoto = document.getElementById('nm-foto');
-    const nmFotoCamara = document.getElementById('nm-foto-camara');
-    if (nmFoto) nmFoto.value = '';
-    if (nmFotoCamara) nmFotoCamara.value = '';
-    const prevContainer = document.getElementById('nm-foto-preview-container');
-    if (prevContainer) prevContainer.style.display = 'none';
-
-    // Ajuste dinámico del encabezado para dar contexto
-    if (destino === 'sugerencia') {
-        titleElem.innerText = `💡 Sugerir Insumo: ${tipo.toUpperCase()}`;
-    } else {
-        titleElem.innerText = `➕ Registrar Insumo: ${tipo.toUpperCase()}`;
-    }
-
-    // Ocultar el selector de origen para el vendedor (tú lo decides al aprobar)
-    const divOrigen = document.getElementById('nm-origen')?.parentElement;
-    if (divOrigen) {
-        divOrigen.style.display = (destino === 'sugerencia') ? 'none' : 'block';
-    }
-
-    // INYECCIÓN DE CAMPOS TÉCNICOS COMPLETOS
-    let htmlCampos = "";
-
-    if (tipo === 'tela') {
-        htmlCampos = `
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Proveedor</label>
-                <input type="text" id="nm-proveedor" class="form-input" placeholder="Ej. Textil San Jacinto" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Colección / Línea</label>
-                <input type="text" id="nm-coleccion" class="form-input" placeholder="Ej. Velvet, Ipanema, lino Rustico" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Color / Código de Color</label>
-                <input type="text" id="nm-color" class="form-input" placeholder="Ej. Gris Plata, Beige 05" required>
-            </div>
-        `;
-    } 
-    else if (tipo === 'cojin') {
-        htmlCampos = `
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Nombre del Diseño / Modelo</label>
-                <input type="text" id="nm-nombre-diseno" class="form-input" placeholder="Ej. Cojín de Respaldar Capitoneado" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Tipo de Tela Requerida</label>
-                <input type="text" id="nm-tipo-tela" class="form-input" placeholder="Ej. Terciopelo o Lino" required>
-            </div>
-        `;
-    } 
-    else if (tipo === 'base' || tipo === 'base-comedor') {
-        htmlCampos = `
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Tipo de Base</label>
-                <input type="text" id="nm-tipo-base" class="form-input" placeholder="Ej. Pata Metálica, Zócalo" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Material Estructural</label>
-                <input type="text" id="nm-material" class="form-input" placeholder="Ej. Acero Inoxidable, Madera Pino" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Modelo / Estilo</label>
-                <input type="text" id="nm-modelo" class="form-input" placeholder="Ej. Pata Aguja, Base de Mesa Cruzada" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Color / Acabado Superficial</label>
-                <input type="text" id="nm-color" class="form-input" placeholder="Ej. Dorado Cromado, Negro Mate" required>
-            </div>
-            ${tipo === 'base' ? `
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Medida de Altura (cm)</label>
-                <input type="text" id="nm-medida-altura" class="form-input" placeholder="Ej. 15 cm" required>
-            </div>` : ''}
-        `;
-    } 
-    else if (tipo === 'tablero') {
-        htmlCampos = `
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Material Base</label>
-                <input type="text" id="nm-material-base" class="form-input" placeholder="Ej. MDF, Cuarzo, Vidrio Templado" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Nombre del Modelo / Diseño</label>
-                <input type="text" id="nm-nombre-modelo" class="form-input" placeholder="Ej. Blanco Carrara, Roble Novopán" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Color de Veta / Tonalidad</label>
-                <input type="text" id="nm-color-veta" class="form-input" placeholder="Ej. Gris tenue, Tonalidad Miel">
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Acabado / Textura</label>
-                <input type="text" id="nm-acabado" class="form-input" placeholder="Ej. Alto Brillo, Mate texturizado" required>
-            </div>
-        `;
-    } 
-    else if (tipo === 'silla' || tipo === 'butaca') {
-        htmlCampos = `
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Modelo / Diseño Estructural</label>
-                <input type="text" id="nm-modelo" class="form-input" placeholder="Ej. Escandinava, Capitoné" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Material de la Estructura</label>
-                <input type="text" id="nm-material" class="form-input" placeholder="Ej. Madera Cachimbo, Fierro" required>
-            </div>
-            <div class="form-group">
-                <label style="font-size: 11px; font-weight: bold; color: var(--primary);">Color de Estructura / Barniz</label>
-                <input type="text" id="nm-color-estructura" class="form-input" placeholder="Ej. Nogal, Negro Satinado" required>
-            </div>
-        `;
-    }
-
-    contenedorCampos.innerHTML = htmlCampos;
-    modal.style.display = 'flex';
-}
-async function guardarNuevoMaterial() {
-    const fotoInput = document.getElementById('nm-foto');
-    if (!fotoInput || fotoInput.files.length === 0) {
-        return Swal.fire('Error', 'Debe adjuntar una foto de referencia', 'warning');
-    }
-
-    // Detectamos si el guardado actual es una sugerencia de vendedor
-    const esSugerencia = (destinoActual === 'sugerencia' || (usuarioActivo && usuarioActivo.rol === 'Vendedor'));
-
-    const formData = new FormData();
-    formData.append('foto', fotoInput.files[0]);
-
-    // Recolectamos dinámicamente las propiedades según el tipo actual
-    let datosObj = {};
-    let nombreInsumoCalculado = "";
-
-    try {
-        if (tipoActual === 'tela') {
-            datosObj.proveedor = document.getElementById('nm-proveedor').value;
-            datosObj.coleccion = document.getElementById('nm-coleccion').value;
-            datosObj.color = document.getElementById('nm-color').value;
-            nombreInsumoCalculado = `Tela ${datosObj.coleccion} - ${datosObj.color}`;
-        } 
-        else if (tipoActual === 'cojin') {
-            datosObj.nombre_diseno = document.getElementById('nm-nombre-diseno').value;
-            datosObj.tipo_tela = document.getElementById('nm-tipo-tela').value;
-            nombreInsumoCalculado = `Cojín ${datosObj.nombre_diseno}`;
-        } 
-        else if (tipoActual === 'base' || tipoActual === 'base-comedor') {
-            const matBase = document.getElementById('nm-material');
-            datosObj.material = matBase ? matBase.value : 'No especificado';
-            datosObj.modelo = document.getElementById('nm-modelo').value;
-            datosObj.color = document.getElementById('nm-color').value;
-            if (document.getElementById('nm-medida-altura')) datosObj.medida_altura = document.getElementById('nm-medida-altura').value;
-            if (document.getElementById('nm-tipo-base')) datosObj.tipo = document.getElementById('nm-tipo-base').value;
-            nombreInsumoCalculado = `Base ${datosObj.modelo} ${datosObj.color}`;
-        } 
-        else if (tipoActual === 'tablero') {
-            datosObj.material_base = document.getElementById('nm-material-base').value;
-            datosObj.nombre_modelo = document.getElementById('nm-nombre-modelo').value;
-            if (document.getElementById('nm-color-veta')) datosObj.color_veta = document.getElementById('nm-color-veta').value;
-            datosObj.acabado = document.getElementById('nm-acabado').value;
-            nombreInsumoCalculado = `Tablero ${datosObj.nombre_modelo}`;
-        } 
-        else if (tipoActual === 'silla' || tipoActual === 'butaca') {
-            datosObj.modelo = document.getElementById('nm-modelo').value;
-            datosObj.material = document.getElementById('nm-material').value;
-            datosObj.color_estructura = document.getElementById('nm-color-estructura').value;
-            nombreInsumoCalculado = `${tipoActual.charAt(0).toUpperCase() + tipoActual.slice(1)} ${datosObj.modelo}`;
-        }
-    } catch (error) {
-        return Swal.fire('Formulario Incompleto', 'Por favor llena los campos requeridos', 'warning');
-    }
-
-    Swal.fire({ title: 'Procesando requerimiento...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-
-    // RUTA BIFURCADA INTELIGENTE
-    let endpointUrl = `${API_URL}/api/materiales/nuevo`;
-    
-    if (esSugerencia) {
-        endpointUrl = `${API_URL}/api/sugerencias`;
-        formData.append('nombre', nombreInsumoCalculado);
-        formData.append('tipo', tipoActual);
-        if (!usuarioActivo) return Swal.fire('Sesión', 'Debes iniciar sesión.', 'warning');
-        formData.append('usuario_id', usuarioActivo.id)
-        formData.append('datos_json', JSON.stringify(datosObj));
-    } else {
-        // Flujo tradicional Admin Directo
-        formData.append('tipo_material', tipoActual);
-        const origenElem = document.getElementById('nm-origen');
-        formData.append('origen_produccion', origenElem ? origenElem.value : 'Externo');
-        
-        // Mapear al formData tradicional para no romper el backend original de inserción directa
-        for (const [key, value] of Object.entries(datosObj)) {
-            formData.append(key, value);
-        }
-    }
-
-    try {
-        const res = await apiFetch(endpointUrl, { method: 'POST', body: formData });
-        if (res.ok) {
-            Swal.fire({
-                icon: 'success',
-                title: esSugerencia ? '¡Sugerencia Enviada!' : '¡Insumo Guardado!',
-                text: esSugerencia ? 'Aparecerá en el Gestor del Admin para su oficialización.' : 'Disponible inmediatamente.',
-                confirmButtonColor: '#0f172a'
-            });
-            document.getElementById('modal-nuevo-material').style.display = 'none';
-            init();
-        } else {
-            const err = await res.json();
-            Swal.fire('Error', err.error || 'No se pudo procesar', 'error');
-        }
-    } catch (e) {
-        Swal.fire('Error de red', 'No se pudo contactar al servidor', 'error');
-    }
-}
 /* --- LÓGICA PARA AMPLIAR IMAGEN (ZOOM) --- */
 function ampliarImagen(url) {
     if (!url || url === '') return;
@@ -893,6 +670,747 @@ async function guardarProveedor() {
         }
     } catch(e) { Swal.fire('Error', 'Fallo de conexión', 'error'); }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// B3 — actualizarEstadoInsumo: cambia Disponible / Agotado / Descontinuado
+// Llamado desde el selector de cada tarjeta generada por dibujarTarjetaMaterial
+// ─────────────────────────────────────────────────────────────────────────────
+async function actualizarEstadoInsumo(itemId, categoria, nuevoEstado) {
+    // Mapa de categoría (devuelta por listas) → segmento de URL del endpoint PUT
+    const catEndpoint = {
+        'TELA':         'telas',
+        'COJ':          'cojines',
+        'BASE':         'bases',
+        'BASE-COMEDOR': 'bases-comedor',
+        'TABLERO':      'tableros',
+        'SILLA':        'sillas',
+        'BUTACA':       'butacas',
+    };
+
+    // Buscar el SKU real desde maestroMateriales usando el id
+    const catKey = Object.keys(catEndpoint).find(k => categoria.toUpperCase().startsWith(k));
+    const endpoint = catEndpoint[catKey] || null;
+    if (!endpoint) {
+        return Swal.fire('Error', 'Categoría de material no reconocida: ' + categoria, 'error');
+    }
+
+    // Buscar SKU en el maestro global para construir la URL correcta
+    const listaKey = {
+        'telas': 'telas', 'cojines': 'cojines', 'bases': 'bases',
+        'bases-comedor': 'bases_comedor', 'tableros': 'tableros',
+        'sillas': 'sillas', 'butacas': 'butacas'
+    }[endpoint];
+
+    const lista = maestroMateriales[listaKey] || [];
+    const item = lista.find(i => i.id === itemId);
+    if (!item) {
+        return Swal.fire('Error', 'No se encontró el material con id ' + itemId, 'error');
+    }
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/materiales/${endpoint}/${encodeURIComponent(item.sku)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estado: nuevoEstado })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.exito) {
+            Swal.fire('Error', data.error || 'No se pudo actualizar el estado.', 'error');
+        }
+        // Actualizar el estado en el maestro en memoria para no recargar toda la página
+        item.estado = nuevoEstado;
+    } catch (e) {
+        Swal.fire('Error', 'Fallo de conexión al actualizar estado.', 'error');
+    }
+}
+
+function abrirModalNuevo(tipo, destino) {
+    tipoActual    = tipo;
+    destinoActual = destino;
+
+    const modal              = document.getElementById('modal-nuevo-material');
+    const contenedorCampos   = document.getElementById('nm-campos-dinamicos');
+    const titleElem          = document.getElementById('nm-title');
+
+    if (!modal || !contenedorCampos) return;
+
+    // Limpiar foto previa
+    const nmFoto      = document.getElementById('nm-foto');
+    const nmFotoCamara = document.getElementById('nm-foto-camara');
+    if (nmFoto)      nmFoto.value      = '';
+    if (nmFotoCamara) nmFotoCamara.value = '';
+    const prevContainer = document.getElementById('nm-foto-preview-container');
+    if (prevContainer) prevContainer.style.display = 'none';
+
+    // Título dinámico
+    titleElem.innerText = destino === 'sugerencia'
+        ? `💡 Sugerir Insumo: ${tipo.toUpperCase()}`
+        : `➕ Registrar Insumo: ${tipo.toUpperCase()}`;
+
+    // Ocultar selector de origen para vendedores
+    const divOrigen = document.getElementById('nm-origen')?.parentElement;
+    if (divOrigen) divOrigen.style.display = (destino === 'sugerencia') ? 'none' : 'block';
+
+    // ── Estilos reutilizables ──────────────────────────────────────────────
+    const labelStyle = 'font-size:11px; font-weight:bold; color:var(--primary);';
+    const inputStyle = 'class="form-input"';
+
+    // Helper: construye un <select> con las opciones dadas
+    const mkSelect = (id, opciones, required = true) => `
+        <select id="${id}" class="form-input" ${required ? 'required' : ''}>
+            <option value="">— Seleccionar —</option>
+            ${opciones.map(o => `<option value="${o}">${o}</option>`).join('')}
+        </select>`;
+
+    let htmlCampos = '';
+
+    // ── TELA ──────────────────────────────────────────────────────────────
+    if (tipo === 'tela') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="${labelStyle}">Proveedor</label>
+                <input type="text" id="nm-proveedor" ${inputStyle} placeholder="Ej. Textil San Jacinto" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Colección / Línea</label>
+                <input type="text" id="nm-coleccion" ${inputStyle} placeholder="Ej. Velvet, Ipanema, Lino Rústico" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Color / Código de Color</label>
+                <input type="text" id="nm-color" ${inputStyle} placeholder="Ej. Gris Plata, Beige 05" required>
+            </div>`;
+    }
+
+    // ── COJÍN ─────────────────────────────────────────────────────────────
+    // B1: "Tipo de Tela Requerida" pasa a ser select vinculado al maestro de telas
+    else if (tipo === 'cojin') {
+        // Construir opciones desde el maestro cargado en memoria
+        const opcionesTelas = (maestroMateriales.telas || [])
+            .filter(t => t.estado !== 'Agotado')
+            .map(t => `<option value="${t.sku}">${t.coleccion} — ${t.color} (${t.sku})</option>`)
+            .join('');
+
+        htmlCampos = `
+            <div class="form-group">
+                <label style="${labelStyle}">Nombre del Diseño / Modelo</label>
+                <input type="text" id="nm-nombre-diseno" ${inputStyle} placeholder="Ej. Cojín de Respaldar Capitoneado" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Tipo de Tela Requerida</label>
+                <select id="nm-tipo-tela" class="form-input" required>
+                    <option value="">— Seleccionar tela del maestro —</option>
+                    ${opcionesTelas}
+                    <option value="Otra">Otra / No registrada aún</option>
+                </select>
+            </div>`;
+    }
+
+    // ── BASE DE SOFÁ ──────────────────────────────────────────────────────
+    // B2: Campos propios de sofá — Tipo Estructural (Zócalo / Patas / Combinado),
+    //     Material, Acabado. Nombre = texto libre.
+    else if (tipo === 'base') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="${labelStyle}">Nombre / Referencia <span style="font-weight:400;color:#64748b;">(identifica esta base)</span></label>
+                <input type="text" id="nm-modelo" ${inputStyle} placeholder="Ej. Zócalo Bajo Nogal, Patas Doradas Torneadas" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Tipo Estructural</label>
+                ${mkSelect('nm-tipo-base', ['Zócalo','Patas','Combinado (Zócalo + Patas)'])}
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Material</label>
+                ${mkSelect('nm-material', ['Madera','Acero','Fierro','Aluminio','Mixto'])}
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Acabado</label>
+                ${mkSelect('nm-acabado', ['Natural','Lacado','Pintado','Tapizado','Oxidado'])}
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Color <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
+                <input type="text" id="nm-color" ${inputStyle} placeholder="Ej. Nogal, Negro Mate, Dorado Champagne" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Medida de Altura (cm)</label>
+                <input type="text" id="nm-medida-altura" ${inputStyle} placeholder="Ej. 15 cm" required>
+            </div>`;
+    }
+
+    // ── BASE DE COMEDOR ───────────────────────────────────────────────────
+    // B2: Campos propios de comedor — sin "Zócalo" en ningún lugar,
+    //     Material (Acero Inoxidable, Fierro Negro…), Acabado.
+    else if (tipo === 'base-comedor') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="${labelStyle}">Nombre / Referencia <span style="font-weight:400;color:#64748b;">(identifica esta base)</span></label>
+                <input type="text" id="nm-modelo" ${inputStyle} placeholder="Ej. Base Pedestal Cónico, Base Cruz Negra" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Material</label>
+                ${mkSelect('nm-material', ['Acero Inoxidable','Fierro Negro','Madera Sólida','Aluminio','Mixto'])}
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Acabado</label>
+                ${mkSelect('nm-acabado', ['Mate','Brillante','Lacado','Natural','Oxidado','Cromado','Pintado'])}
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Color <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
+                <input type="text" id="nm-color" ${inputStyle} placeholder="Ej. Negro Satinado, Dorado Champagne" required>
+            </div>`;
+        // Nota: el backend usa los campos 'tipo', 'material', 'modelo', 'color' para base-comedor.
+        // El campo 'tipo' se fija programáticamente en guardarNuevoMaterial() como 'Base de Comedor'.
+    }
+
+    // ── TABLERO ───────────────────────────────────────────────────────────
+    // B1: Material Base pasa a selector
+    else if (tipo === 'tablero') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="${labelStyle}">Material Base</label>
+                ${mkSelect('nm-material-base', ['MDF','Madera Sólida','Vidrio Templado','Cuarzo','Mármol','Porcelanato'])}
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Nombre del Modelo / Diseño <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
+                <input type="text" id="nm-nombre-modelo" ${inputStyle} placeholder="Ej. Blanco Carrara, Roble Novopán" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Color de Veta / Tonalidad <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
+                <input type="text" id="nm-color-veta" ${inputStyle} placeholder="Ej. Gris tenue, Tonalidad Miel">
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Acabado / Textura</label>
+                ${mkSelect('nm-acabado', ['Alto Brillo','Mate','Texturizado','Pulido','Satinado'])}
+            </div>`;
+    }
+
+    // ── SILLA ─────────────────────────────────────────────────────────────
+    // B1: Material de la Estructura pasa a selector
+    else if (tipo === 'silla') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="${labelStyle}">Modelo / Diseño Estructural <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
+                <input type="text" id="nm-modelo" ${inputStyle} placeholder="Ej. Escandinava, Capitoné, Industrial" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Material de la Estructura</label>
+                ${mkSelect('nm-material', ['Madera Maciza','Madera MDF','Fierro','Aluminio','Polipropileno'])}
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Color de Estructura / Barniz <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
+                <input type="text" id="nm-color-estructura" ${inputStyle} placeholder="Ej. Nogal, Negro Satinado" required>
+            </div>`;
+    }
+
+    // ── BUTACA ────────────────────────────────────────────────────────────
+    // B1: Material de la Estructura pasa a selector
+    else if (tipo === 'butaca') {
+        htmlCampos = `
+            <div class="form-group">
+                <label style="${labelStyle}">Modelo / Diseño Estructural <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
+                <input type="text" id="nm-modelo" ${inputStyle} placeholder="Ej. Bergère, Orejero, Capitoné" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Material de la Estructura</label>
+                ${mkSelect('nm-material', ['Madera Maciza','Fierro','Aluminio'])}
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Color de Estructura / Barniz <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
+                <input type="text" id="nm-color-estructura" ${inputStyle} placeholder="Ej. Wengue, Dorado Satinado" required>
+            </div>`;
+    }
+
+    contenedorCampos.innerHTML = htmlCampos;
+    modal.style.display = 'flex';
+}
+
+
+/**
+ * Reemplaza guardarNuevoMaterial() de materiales.js.
+ * La lógica es idéntica; solo se adapta la recolección de campos
+ * para los nuevos IDs (nm-acabado, nm-tipo-base que ya no existe en base-comedor, etc.)
+ */
+async function guardarNuevoMaterial() {
+    const fotoInput = document.getElementById('nm-foto');
+    if (!fotoInput || fotoInput.files.length === 0) {
+        return Swal.fire('Error', 'Debe adjuntar una foto de referencia', 'warning');
+    }
+
+    const esSugerencia = (destinoActual === 'sugerencia' ||
+        (usuarioActivo && usuarioActivo.rol === 'Vendedor'));
+
+    const formData = new FormData();
+    formData.append('foto', fotoInput.files[0]);
+
+    let datosObj = {};
+    let nombreInsumoCalculado = '';
+
+    try {
+        if (tipoActual === 'tela') {
+            datosObj.proveedor = document.getElementById('nm-proveedor').value;
+            datosObj.coleccion = document.getElementById('nm-coleccion').value;
+            datosObj.color     = document.getElementById('nm-color').value;
+            nombreInsumoCalculado = `Tela ${datosObj.coleccion} — ${datosObj.color}`;
+
+        } else if (tipoActual === 'cojin') {
+            datosObj.nombre_diseno = document.getElementById('nm-nombre-diseno').value;
+            datosObj.tipo_tela     = document.getElementById('nm-tipo-tela').value;
+            nombreInsumoCalculado  = `Cojín ${datosObj.nombre_diseno}`;
+
+        } else if (tipoActual === 'base') {
+            // B2: recolectar los campos del formulario separado de BASE sofá
+            datosObj.modelo        = document.getElementById('nm-modelo').value;
+            datosObj.tipo          = document.getElementById('nm-tipo-base')?.value || 'Patas';
+            datosObj.material      = document.getElementById('nm-material').value;
+            datosObj.acabado       = document.getElementById('nm-acabado')?.value || '';
+            datosObj.color         = document.getElementById('nm-color').value;
+            datosObj.medida_altura = document.getElementById('nm-medida-altura')?.value || '';
+            nombreInsumoCalculado  = `Base Sofá ${datosObj.modelo} ${datosObj.color}`;
+
+        } else if (tipoActual === 'base-comedor') {
+            // B2: BASE-COMEDOR no tiene 'tipo' de zócalo — se fija como identificador de categoría
+            datosObj.modelo   = document.getElementById('nm-modelo').value;
+            datosObj.material = document.getElementById('nm-material').value;
+            datosObj.acabado  = document.getElementById('nm-acabado')?.value || '';
+            datosObj.color    = document.getElementById('nm-color').value;
+            datosObj.tipo     = 'Base de Comedor'; // fijo, no editable por el usuario
+            nombreInsumoCalculado = `Base Comedor ${datosObj.modelo} ${datosObj.color}`;
+
+        } else if (tipoActual === 'tablero') {
+            datosObj.material_base = document.getElementById('nm-material-base').value;
+            datosObj.nombre_modelo = document.getElementById('nm-nombre-modelo').value;
+            datosObj.color_veta    = document.getElementById('nm-color-veta')?.value || '';
+            datosObj.acabado       = document.getElementById('nm-acabado').value;
+            nombreInsumoCalculado  = `Tablero ${datosObj.nombre_modelo}`;
+
+        } else if (tipoActual === 'silla' || tipoActual === 'butaca') {
+            datosObj.modelo           = document.getElementById('nm-modelo').value;
+            datosObj.material         = document.getElementById('nm-material').value;
+            datosObj.color_estructura = document.getElementById('nm-color-estructura').value;
+            nombreInsumoCalculado     = `${tipoActual === 'silla' ? 'Silla' : 'Butaca'} ${datosObj.modelo}`;
+        }
+    } catch {
+        return Swal.fire('Formulario Incompleto', 'Por favor llena todos los campos requeridos.', 'warning');
+    }
+
+    Swal.fire({ title: 'Procesando requerimiento...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    let endpointUrl = `${API_URL}/api/materiales/nuevo`;
+
+    if (esSugerencia) {
+        endpointUrl = `${API_URL}/api/sugerencias`;
+        formData.append('nombre', nombreInsumoCalculado);
+        formData.append('tipo', tipoActual);
+        if (!usuarioActivo) return Swal.fire('Sesión', 'Debes iniciar sesión.', 'warning');
+        formData.append('usuario_id', usuarioActivo.id);
+        formData.append('datos_json', JSON.stringify(datosObj));
+    } else {
+        formData.append('tipo_material', tipoActual);
+        const origenElem = document.getElementById('nm-origen');
+        formData.append('origen_produccion', origenElem ? origenElem.value : 'Externo');
+        for (const [key, value] of Object.entries(datosObj)) {
+            formData.append(key, value);
+        }
+    }
+
+    try {
+        const res = await apiFetch(endpointUrl, { method: 'POST', body: formData });
+        if (res.ok) {
+            Swal.fire({
+                icon: 'success',
+                title: esSugerencia ? '¡Sugerencia Enviada!' : '¡Insumo Guardado!',
+                text:  esSugerencia
+                    ? 'Aparecerá en el Gestor del Admin para su oficialización.'
+                    : 'Disponible inmediatamente en el catálogo.',
+                confirmButtonColor: '#0f172a'
+            });
+            document.getElementById('modal-nuevo-material').style.display = 'none';
+            init();
+        } else {
+            const err = await res.json();
+            Swal.fire('Error', err.error || 'No se pudo procesar', 'error');
+        }
+    } catch {
+        Swal.fire('Error de red', 'No se pudo contactar al servidor', 'error');
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECCIÓN B3 — Tarjetas con foto + descripción + botón Editar
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Genera el HTML de una tarjeta de material mejorada.
+ * Muestra foto, SKU, campos descriptivos, selector de estado y botón Editar.
+ *
+ * @param {Object} item   - Objeto devuelto por /api/taller/inventario
+ * @param {string} tipo   - 'tela'|'cojin'|'base'|'base-comedor'|'tablero'|'silla'|'butaca'
+ */
+function dibujarTarjetaMaterial(item, tipo) {
+    const colorEstado = {
+        'Disponible':    '#dcfce7',
+        'Agotado':       '#fee2e2',
+        'Descontinuado': '#f3f4f6',
+    };
+    const bgEstado = colorEstado[item.estado] || '#f3f4f6';
+
+    // Construir líneas descriptivas según el tipo
+    let lineas = [];
+    if (tipo === 'tela') {
+        if (item.proveedor) lineas.push(`<b>Proveedor:</b> ${item.proveedor}`);
+        if (item.coleccion) lineas.push(`<b>Colección:</b> ${item.coleccion}`);
+        if (item.color)     lineas.push(`<b>Color:</b> ${item.color}`);
+    } else if (tipo === 'cojin') {
+        if (item.nombre_diseno) lineas.push(`<b>Diseño:</b> ${item.nombre_diseno}`);
+        if (item.tipo_tela)     lineas.push(`<b>Tela req.:</b> ${item.tipo_tela}`);
+    } else if (tipo === 'base') {
+        if (item.tipo)     lineas.push(`<b>Tipo:</b> ${item.tipo}`);
+        if (item.material) lineas.push(`<b>Material:</b> ${item.material}`);
+        if (item.modelo)   lineas.push(`<b>Modelo:</b> ${item.modelo}`);
+        if (item.color)    lineas.push(`<b>Color:</b> ${item.color}`);
+        if (item.medida)   lineas.push(`<b>Altura:</b> ${item.medida}`);
+    } else if (tipo === 'base-comedor') {
+        if (item.material) lineas.push(`<b>Material:</b> ${item.material}`);
+        if (item.modelo)   lineas.push(`<b>Modelo:</b> ${item.modelo}`);
+        if (item.color)    lineas.push(`<b>Color:</b> ${item.color}`);
+    } else if (tipo === 'tablero') {
+        if (item.material_base) lineas.push(`<b>Material:</b> ${item.material_base}`);
+        if (item.nombre)        lineas.push(`<b>Modelo:</b> ${item.nombre}`);
+        if (item.color)         lineas.push(`<b>Veta:</b> ${item.color}`);
+        if (item.acabado)       lineas.push(`<b>Acabado:</b> ${item.acabado}`);
+    } else if (tipo === 'silla' || tipo === 'butaca') {
+        if (item.material) lineas.push(`<b>Material:</b> ${item.material}`);
+        if (item.modelo)   lineas.push(`<b>Modelo:</b> ${item.modelo}`);
+        if (item.color)    lineas.push(`<b>Color:</b> ${item.color}`);
+    }
+
+    const descHTML = lineas.length
+        ? lineas.map(l => `<p style="margin:2px 0;font-size:11px;color:#475569;line-height:1.5;">${l}</p>`).join('')
+        : '<p style="font-size:11px;color:#94a3b8;">Sin descripción registrada.</p>';
+
+    const skuDisplay = item.sku || item.id || '—';
+    const foto       = item.foto_url || 'imagenes/sin_foto.jpg';
+    const catLabel   = item.categoria || tipo.toUpperCase();
+
+    return `
+    <div style="
+        background:white;
+        border:1px solid #e2e8f0;
+        border-radius:12px;
+        overflow:hidden;
+        box-shadow:0 2px 6px rgba(0,0,0,0.04);
+        display:flex;
+        flex-direction:column;
+        position:relative;
+    ">
+        <!-- SKU badge -->
+        <div style="
+            position:absolute; top:8px; left:8px; z-index:2;
+            background:rgba(15,23,42,0.75); color:#f0dfa0;
+            font-size:9px; font-weight:900; letter-spacing:0.1em;
+            padding:3px 8px; border-radius:20px;
+        ">${skuDisplay}</div>
+
+        <!-- Foto -->
+        <div style="position:relative; cursor:pointer;" onclick="ampliarImagen('${foto}')">
+            <img src="${foto}"
+                 onerror="this.src='imagenes/sin_foto.jpg'"
+                 style="width:100%; height:140px; object-fit:cover; display:block;">
+            <div style="
+                position:absolute; bottom:0; left:0; right:0;
+                background:linear-gradient(transparent,rgba(0,0,0,0.35));
+                height:40px;
+            "></div>
+        </div>
+
+        <!-- Cuerpo -->
+        <div style="padding:12px; flex:1; display:flex; flex-direction:column; gap:8px;">
+            <!-- Categoría -->
+            <div style="font-size:9px; font-weight:900; color:#a78bfa; letter-spacing:0.1em;">${catLabel}</div>
+
+            <!-- Campos descriptivos -->
+            <div>${descHTML}</div>
+
+            <!-- Selector de estado -->
+            <select
+                onchange="actualizarEstadoInsumo(${item.id}, '${catLabel}', this.value)"
+                style="
+                    width:100%; padding:6px 8px; border-radius:6px;
+                    border:1px solid #e2e8f0; font-size:11px; font-weight:700;
+                    background:${bgEstado}; cursor:pointer;
+                    margin-top:auto;
+                ">
+                <option value="Disponible"    ${item.estado==='Disponible'    ? 'selected':''}>🟢 Disponible</option>
+                <option value="Agotado"       ${item.estado==='Agotado'       ? 'selected':''}>🔴 Agotado</option>
+                <option value="Descontinuado" ${item.estado==='Descontinuado' ? 'selected':''}>⚫ Descontinuado</option>
+            </select>
+
+            <!-- Botón Editar -->
+            <button
+                onclick="abrirEditorMaterial('${skuDisplay}', '${tipo}')"
+                style="
+                    width:100%; padding:8px;
+                    background:#f1f5f9; color:#475569;
+                    border:1px solid #e2e8f0; border-radius:6px;
+                    font-size:11px; font-weight:700; cursor:pointer;
+                    display:flex; align-items:center; justify-content:center; gap:6px;
+                    transition:background 0.2s;
+                "
+                onmouseover="this.style.background='#e2e8f0'"
+                onmouseout="this.style.background='#f1f5f9'"
+            >
+                <i class="fa-solid fa-pen"></i> Editar
+            </button>
+        </div>
+    </div>`;
+}
+
+
+/**
+ * Abre el modal de edición para un material, cargando sus datos actuales.
+ * Hace GET al backend para obtener el estado más reciente del SKU.
+ */
+async function abrirEditorMaterial(sku, tipo) {
+    // Mapa de tipo → clave en el objeto del maestro en memoria
+    const tipoAData = {
+        'tela':         'telas',
+        'cojin':        'cojines',
+        'base':         'bases',
+        'base-comedor': 'bases_comedor',
+        'tablero':      'tableros',
+        'silla':        'sillas',
+        'butaca':       'butacas',
+    };
+
+    const listaKey = tipoAData[tipo];
+    const lista    = maestroMateriales[listaKey] || [];
+    const item     = lista.find(i => i.sku === sku);
+
+    if (!item) {
+        return Swal.fire('Error', `No se encontró el registro con SKU ${sku}.`, 'error');
+    }
+
+    // Guardar contexto de edición
+    _editorSku   = sku;
+    _editorTipo  = tipo;
+    _editorFotoActual = item.foto_url || '';
+
+    const modal = document.getElementById('modal-editar-material');
+    if (!modal) {
+        return Swal.fire('Error de Configuración', 'El modal #modal-editar-material no está en el HTML. Agrégalo según las instrucciones al final de materiales_parteB.js.', 'error');
+    }
+
+    // Construir campos del formulario según tipo
+    const labelStyle = 'font-size:11px;font-weight:bold;color:var(--primary);display:block;margin-bottom:4px;';
+    const mkSelect = (id, opciones, valorActual = '') => `
+        <select id="em-${id}" class="form-input">
+            ${opciones.map(o => `<option value="${o}" ${o===valorActual?'selected':''}>${o}</option>`).join('')}
+        </select>`;
+
+    let campos = '';
+
+    if (tipo === 'tela') {
+        campos = `
+            <div class="form-group"><label style="${labelStyle}">Proveedor</label>
+                <input id="em-proveedor" class="form-input" value="${item.proveedor || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Colección</label>
+                <input id="em-coleccion" class="form-input" value="${item.coleccion || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Color</label>
+                <input id="em-color" class="form-input" value="${item.color || ''}"></div>`;
+
+    } else if (tipo === 'cojin') {
+        const opcionesTelas = (maestroMateriales.telas || [])
+            .map(t => `<option value="${t.sku}" ${t.sku===item.tipo_tela?'selected':''}>${t.coleccion} — ${t.color} (${t.sku})</option>`)
+            .join('');
+        campos = `
+            <div class="form-group"><label style="${labelStyle}">Nombre del Diseño</label>
+                <input id="em-nombre-diseno" class="form-input" value="${item.nombre_diseno || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Tipo de Tela Requerida</label>
+                <select id="em-tipo-tela" class="form-input">
+                    ${opcionesTelas}
+                    <option value="Otra" ${item.tipo_tela==='Otra'?'selected':''}>Otra / No registrada</option>
+                </select></div>`;
+
+    } else if (tipo === 'base') {
+        campos = `
+            <div class="form-group"><label style="${labelStyle}">Nombre / Referencia</label>
+                <input id="em-modelo" class="form-input" value="${item.modelo || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Tipo Estructural</label>
+                ${mkSelect('tipo-base', ['Zócalo','Patas','Combinado (Zócalo + Patas)'], item.tipo)}</div>
+            <div class="form-group"><label style="${labelStyle}">Material</label>
+                ${mkSelect('material', ['Madera','Acero','Fierro','Aluminio','Mixto'], item.material)}</div>
+            <div class="form-group"><label style="${labelStyle}">Acabado</label>
+                ${mkSelect('acabado', ['Natural','Lacado','Pintado','Tapizado','Oxidado'], item.acabado)}</div>
+            <div class="form-group"><label style="${labelStyle}">Color</label>
+                <input id="em-color" class="form-input" value="${item.color || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Altura (cm)</label>
+                <input id="em-medida-altura" class="form-input" value="${item.medida || ''}"></div>`;
+
+    } else if (tipo === 'base-comedor') {
+        campos = `
+            <div class="form-group"><label style="${labelStyle}">Nombre / Referencia</label>
+                <input id="em-modelo" class="form-input" value="${item.modelo || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Material</label>
+                ${mkSelect('material', ['Acero Inoxidable','Fierro Negro','Madera Sólida','Aluminio','Mixto'], item.material)}</div>
+            <div class="form-group"><label style="${labelStyle}">Acabado</label>
+                ${mkSelect('acabado', ['Mate','Brillante','Lacado','Natural','Oxidado','Cromado','Pintado'], item.acabado)}</div>
+            <div class="form-group"><label style="${labelStyle}">Color</label>
+                <input id="em-color" class="form-input" value="${item.color || ''}"></div>`;
+
+    } else if (tipo === 'tablero') {
+        campos = `
+            <div class="form-group"><label style="${labelStyle}">Material Base</label>
+                ${mkSelect('material-base', ['MDF','Madera Sólida','Vidrio Templado','Cuarzo','Mármol','Porcelanato'], item.material_base)}</div>
+            <div class="form-group"><label style="${labelStyle}">Nombre del Modelo</label>
+                <input id="em-nombre-modelo" class="form-input" value="${item.nombre || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Color de Veta</label>
+                <input id="em-color-veta" class="form-input" value="${item.color || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Acabado</label>
+                ${mkSelect('acabado', ['Alto Brillo','Mate','Texturizado','Pulido','Satinado'], item.acabado)}</div>`;
+
+    } else if (tipo === 'silla' || tipo === 'butaca') {
+        const matOpts = tipo === 'silla'
+            ? ['Madera Maciza','Madera MDF','Fierro','Aluminio','Polipropileno']
+            : ['Madera Maciza','Fierro','Aluminio'];
+        campos = `
+            <div class="form-group"><label style="${labelStyle}">Modelo / Diseño</label>
+                <input id="em-modelo" class="form-input" value="${item.modelo || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Material</label>
+                ${mkSelect('material', matOpts, item.material)}</div>
+            <div class="form-group"><label style="${labelStyle}">Color de Estructura</label>
+                <input id="em-color-estructura" class="form-input" value="${item.color || ''}"></div>`;
+    }
+
+    // Inyectar contenido en el modal
+    document.getElementById('em-sku-display').textContent  = sku;
+    document.getElementById('em-tipo-display').textContent = tipo.toUpperCase();
+    document.getElementById('em-campos').innerHTML          = campos;
+
+    // Foto actual
+    const fotoPreview = document.getElementById('em-foto-preview');
+    if (fotoPreview) {
+        fotoPreview.src     = _editorFotoActual || 'imagenes/sin_foto.jpg';
+        fotoPreview.style.display = 'block';
+    }
+
+    modal.style.display = 'flex';
+}
+
+// Variables de estado del editor
+let _editorSku        = '';
+let _editorTipo       = '';
+let _editorFotoActual = '';
+
+/**
+ * Recoge los valores del modal de edición y hace PUT al backend.
+ * Si se seleccionó una nueva foto, primero la sube y luego actualiza.
+ */
+async function guardarCambiosMaterial() {
+    const sku  = _editorSku;
+    const tipo = _editorTipo;
+
+    if (!sku || !tipo) return;
+
+    Swal.fire({ title: 'Guardando cambios...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    // Recoger campos según tipo
+    const get = id => document.getElementById(id)?.value?.trim() || '';
+    let payload = {};
+
+    if (tipo === 'tela') {
+        payload = { proveedor: get('em-proveedor'), coleccion: get('em-coleccion'), color: get('em-color') };
+    } else if (tipo === 'cojin') {
+        payload = { nombre_diseno: get('em-nombre-diseno'), tipo_tela: get('em-tipo-tela') };
+    } else if (tipo === 'base') {
+        payload = {
+            modelo: get('em-modelo'), tipo: get('em-tipo-base'),
+            material: get('em-material'), acabado: get('em-acabado'),
+            color: get('em-color'), medida_altura: get('em-medida-altura')
+        };
+    } else if (tipo === 'base-comedor') {
+        payload = { modelo: get('em-modelo'), material: get('em-material'), acabado: get('em-acabado'), color: get('em-color') };
+    } else if (tipo === 'tablero') {
+        payload = {
+            material_base: get('em-material-base'), nombre_modelo: get('em-nombre-modelo'),
+            color_veta: get('em-color-veta'), acabado: get('em-acabado')
+        };
+    } else if (tipo === 'silla' || tipo === 'butaca') {
+        payload = { modelo: get('em-modelo'), material: get('em-material'), color_estructura: get('em-color-estructura') };
+    }
+
+    // ¿Hay nueva foto?
+    const nuevaFotoInput = document.getElementById('em-nueva-foto');
+    if (nuevaFotoInput && nuevaFotoInput.files.length > 0) {
+        const fd = new FormData();
+        fd.append('archivo', nuevaFotoInput.files[0]);
+        try {
+            const uploadRes = await apiFetch(`${API_URL}/api/upload-voucher`, { method: 'POST', body: fd });
+            const uploadData = await uploadRes.json();
+            if (uploadData.url) payload.foto_url = uploadData.url;
+        } catch {
+            Swal.close();
+            return Swal.fire('Error', 'No se pudo subir la foto. Los demás cambios no se guardaron.', 'error');
+        }
+    }
+
+    // Mapa de tipo → segmento de URL del endpoint PUT
+    const tipoEndpoint = {
+        'tela':         'telas',
+        'cojin':        'cojines',
+        'base':         'bases',
+        'base-comedor': 'bases-comedor',
+        'tablero':      'tableros',
+        'silla':        'sillas',
+        'butaca':       'butacas',
+    };
+
+    const urlPUT = `${API_URL}/api/materiales/${tipoEndpoint[tipo]}/${encodeURIComponent(sku)}`;
+
+    try {
+        const res = await apiFetch(urlPUT, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (res.ok && data.exito) {
+            Swal.fire({ icon: 'success', title: '¡Cambios guardados!', timer: 1800, showConfirmButton: false });
+            document.getElementById('modal-editar-material').style.display = 'none';
+            await _refreshMaestro(); // Recarga el maestro y re-renderiza las tarjetas
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo guardar.', 'error');
+        }
+    } catch {
+        Swal.fire('Error', 'Fallo de conexión al intentar guardar.', 'error');
+    }
+}
+
+/**
+ * Recarga el maestro de materiales desde el backend y vuelve a renderizar
+ * todas las secciones del Maestro en la vista de taller/admin.
+ */
+async function _refreshMaestro() {
+    try {
+        const res = await apiFetch(`${API_URL}/api/materiales/listas`);
+        const mat = await res.json();
+        // Actualizar el estado global
+        maestroMateriales.telas        = mat.telas        || [];
+        maestroMateriales.cojines      = mat.cojines      || [];
+        maestroMateriales.bases        = mat.bases        || [];
+        maestroMateriales.tableros     = mat.tableros     || [];
+        maestroMateriales.bases_comedor = mat.bases_comedor || [];
+        maestroMateriales.sillas       = mat.sillas       || [];
+        maestroMateriales.butacas      = mat.butacas      || [];
+    } catch { /* ignorar error de red — no re-lanzar */ }
+
+    // Re-renderizar si la función está disponible (taller.js)
+    if (typeof cargarInventarioTaller === 'function') {
+        await cargarInventarioTaller();
+    }
+}
+
+
 
 /* ================================================================= */
 /* --- INICIO DEL SISTEMA --- */

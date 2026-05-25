@@ -1450,6 +1450,55 @@
 </div>
  
 </div><!-- /portal-seguimiento -->
+<!-- MODAL: Editar Material (B3) -->
+<div id="modal-editar-material" class="modal-overlay" style="display:none; z-index:9990; align-items:center; justify-content:center; padding:20px;">
+    <div style="background:white; border-radius:16px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; box-shadow:0 25px 60px rgba(0,0,0,0.18);">
+ 
+        <!-- Header del modal -->
+        <div style="padding:20px 24px 0; display:flex; align-items:center; justify-content:space-between;">
+            <div>
+                <div id="em-tipo-display" style="font-size:9px; font-weight:900; color:#a78bfa; letter-spacing:0.15em;"></div>
+                <h3 style="margin:4px 0 0; font-size:16px; color:var(--primary);">
+                    Editar — <span id="em-sku-display" style="color:var(--accent);"></span>
+                </h3>
+            </div>
+            <button onclick="document.getElementById('modal-editar-material').style.display='none'"
+                    style="background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;">✕</button>
+        </div>
+ 
+        <!-- Foto actual + cambiar -->
+        <div style="padding:16px 24px 0;">
+            <img id="em-foto-preview" src="" alt="Foto actual"
+                 style="width:100%; height:160px; object-fit:cover; border-radius:10px; border:1px solid #e2e8f0; cursor:pointer;"
+                 onclick="ampliarImagen(this.src)">
+            <label style="display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer;
+                          background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; padding:10px 14px;
+                          font-size:12px; color:#475569; font-weight:600;">
+                <i class="fa-solid fa-camera" style="color:var(--accent);"></i>
+                Cambiar imagen
+                <input id="em-nueva-foto" type="file" accept="image/*" style="display:none;"
+                       onchange="document.getElementById('em-foto-preview').src=URL.createObjectURL(this.files[0])">
+            </label>
+        </div>
+ 
+        <!-- Campos dinámicos -->
+        <div id="em-campos" style="padding:16px 24px 0; display:flex; flex-direction:column; gap:12px;"></div>
+ 
+        <!-- Acciones -->
+        <div style="padding:20px 24px; display:flex; gap:10px;">
+            <button onclick="guardarCambiosMaterial()"
+                    style="flex:2; background:var(--primary); color:white; border:none; border-radius:8px;
+                           padding:12px; font-size:13px; font-weight:700; cursor:pointer;">
+                <i class="fa-solid fa-floppy-disk"></i> Guardar cambios
+            </button>
+            <button onclick="document.getElementById('modal-editar-material').style.display='none'"
+                    style="flex:1; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:8px;
+                           padding:12px; font-size:13px; cursor:pointer;">
+                Cancelar
+            </button>
+        </div>
+    </div>
+</div>
 
     <!-- Módulos JS (orden importa: config primero, app al final) -->
     <script src="js/config.js"></script>

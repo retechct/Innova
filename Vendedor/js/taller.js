@@ -1338,11 +1338,12 @@ async function cargarInventarioTaller() {
             if (el) el.innerHTML = data.map(dibujarCard).join('');
         };
 
-        setHtml('contenedor-telas-admin', telas);
-        setHtml('contenedor-cojines-admin', cojines);
-        setHtml('contenedor-tableros-admin', tableros);
-        setHtml('contenedor-metal-admin', metal);
-        setHtml('contenedor-madera-admin', madera);
+  // DESPUÉS:
+        setHtml('contenedor-telas-admin',    telas.map(i=>dibujarTarjetaMaterial(i,'tela')).join(''));
+        setHtml('contenedor-cojines-admin',  cojines.map(i=>dibujarTarjetaMaterial(i,'cojin')).join(''));
+        setHtml('contenedor-tableros-admin', tableros.map(i=>dibujarTarjetaMaterial(i,'tablero')).join(''));
+        setHtml('contenedor-metal-admin',    metal.map(i=>dibujarTarjetaMaterial(i, i.categoria==='BASE'?'base':'base-comedor')).join(''));
+        setHtml('contenedor-madera-admin',   madera.map(i=>dibujarTarjetaMaterial(i, i.categoria==='SILLA'?'silla':'butaca')).join(''));
 
     } catch (error) {
         console.error("Error al cargar inventario:", error);
