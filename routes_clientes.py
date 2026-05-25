@@ -1,15 +1,20 @@
 """
 routes_clientes.py — Clientes del landing público.
 
-Los clientes NO son usuarios del ERP. Se guardan en la tabla `clientes`
-(separada de `usuarios`) sin aprobación y sin acceso al sistema interno.
+DECISIÓN A6 (Plan de Acción Mayo 2026):
+  - El flujo oficial de REGISTRO con cuenta y contraseña es:
+      POST /api/usuarios/registrar-web  (en routes_usuarios.py)
+    Permite al cliente hacer login y rastrear sus pedidos.
 
-Endpoints:
-  POST /api/clientes/registro   → registro desde el landing (sin aprobación)
-  GET  /api/clientes/buscar     → autocomplete para el vendedor al crear una venta
-  GET  /api/clientes            → lista completa (solo Admin)
+  - Este módulo conserva solo:
+      GET  /api/clientes/buscar   → autocomplete para el vendedor al crear una venta
+      GET  /api/clientes          → lista completa (solo Admin)
 
-Tabla esperada en PostgreSQL (créala con el script de abajo si no existe):
+  El endpoint POST /api/clientes/registro fue eliminado para evitar
+  dos flujos de registro paralelos. El frontend (carrito.js) usa ahora
+  /api/usuarios/registrar-web para registrar clientes en el acto de la venta.
+
+Tabla esperada en PostgreSQL:
 
     CREATE TABLE IF NOT EXISTS clientes (
         id          SERIAL PRIMARY KEY,
@@ -18,6 +23,7 @@ Tabla esperada en PostgreSQL (créala con el script de abajo si no existe):
         telefono    VARCHAR(20),
         dni         VARCHAR(20),
         direccion   TEXT,
+        contrasena  VARCHAR(255),
         fecha_alta  TIMESTAMP DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_clientes_nombre ON clientes (LOWER(nombre));
@@ -46,64 +52,6 @@ def _ensure_tabla_clientes(cursor):
         CREATE INDEX IF NOT EXISTS idx_clientes_nombre ON clientes (LOWER(nombre));
         CREATE INDEX IF NOT EXISTS idx_clientes_email  ON clientes (LOWER(email));
     """)
-
-
-# ==========================================
-# REGISTRO PÚBLICO — sin aprobación
-# ==========================================
-
-@clientes_bp.route('/api/clientes/registro', methods=['POST'])
-def registrar_cliente():
-    """
-    Llamado desde el landing público.
-    No requiere autenticación. No requiere aprobación.
-    Si el correo ya existe, devuelve los datos actuales (idempotente).
-    """
-    data     = request.json or {}
-    nombre   = (data.get('nombre')   or '').strip()
-    email    = (data.get('email')    or '').strip().lower()
-    telefono = (data.get('telefono') or '').strip()
-    dni      = (data.get('dni')      or '').strip()
-    direccion = (data.get('direccion') or '').strip()
-
-    if not nombre:
-        return jsonify({'error': 'El nombre es obligatorio'}), 400
-
-    try:
-        conexion = get_db_connection()
-        cursor   = conexion.cursor()
-        _ensure_tabla_clientes(cursor)
-
-        # Si ya existe por email, no duplicar — solo devolver id
-        if email:
-            cursor.execute("SELECT id FROM clientes WHERE LOWER(email) = %s;", (email,))
-            existente = cursor.fetchone()
-            if existente:
-                cursor.close(); release_db_connection(conexion)
-                return jsonify({
-                    'exito':   True,
-                    'id':      existente[0],
-                    'mensaje': 'Ya estás registrado. ¡Bienvenido de vuelta!'
-                }), 200
-
-        cursor.execute("""
-            INSERT INTO clientes (nombre, email, telefono, dni, direccion)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id;
-        """, (nombre, email or None, telefono or None, dni or None, direccion or None))
-        nuevo_id = cursor.fetchone()[0]
-        conexion.commit()
-        cursor.close(); release_db_connection(conexion)
-
-        return jsonify({
-            'exito':   True,
-            'id':      nuevo_id,
-            'mensaje': '¡Registro exitoso! Pronto un asesor se pondrá en contacto contigo.'
-        }), 201
-
-    except Exception as e:
-        if 'conexion' in locals() and conexion: conexion.rollback()
-        return jsonify({'error': str(e)}), 500
 
 
 # ==========================================

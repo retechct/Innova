@@ -4,13 +4,12 @@ Blueprint: ventas_bp  (sin prefijo de URL)
 """
 
 import io
-import csv
 import openpyxl
 from datetime import datetime
 from io import BytesIO, StringIO
 
 import cloudinary.uploader
-from flask import Blueprint, jsonify, request, send_file, Response
+from flask import Blueprint, jsonify, request, send_file
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from database import get_db_connection, release_db_connection, enviar_notificacion_venta
@@ -736,22 +735,6 @@ def exportar_ventas_excel():
         if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 
-@ventas_bp.route('/api/exportar_ventas', methods=['GET'])
-def exportar_ventas_csv():
-    inicio = request.args.get('inicio')
-    fin    = request.args.get('fin')
-    if not inicio or not fin:
-        return jsonify({'error': 'Faltan fechas de inicio y fin'}), 400
-    si = StringIO()
-    cw = csv.writer(si)
-    cw.writerow(['Codigo Contrato', 'Cliente', 'Documento', 'Fecha Emision',
-                 'Total Venta (S/)', 'Total Pagado (S/)', 'Saldo (S/)', 'Sede'])
-    cw.writerow(['INV-0001', 'Cliente de Prueba', '12345678', inicio,
-                 '1500.00', '500.00', '1000.00', 'Tienda Principal'])
-    output = si.getvalue()
-    nombre_archivo = f"Reporte_Ventas_{inicio}_al_{fin}.csv"
-    return Response(
-        output,
-        mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment;filename={nombre_archivo}"}
-    )
+# A4: La ruta /api/exportar_ventas (CSV stub) fue eliminada.
+# El único endpoint de exportación es /api/ventas/exportar (Excel completo).
+# El frontend ya apunta correctamente a /api/ventas/exportar.

@@ -1,0 +1,158 @@
+/* ============================================================
+   INNOVA MÖBILI — Base: Variables, Reset, Tipografía
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap');
+
+:root {
+  --font-ui:       'Jost', sans-serif;
+  --font-serif:    'Cormorant Garamond', serif;
+  --sidebar-dark:  #1e293b;
+  --border-dark:   #334155;
+  --accent-lt:     #f0dfa0;
+  /* Paleta nueva — elegante y cálida */
+  --primary:    #2c1f0e;        /* marrón oscuro profundo */
+  --accent:     #c9a84c;        /* dorado Innova */
+  --accent-lt:  #f0dfa0;        /* dorado claro para hover */
+  --cream:      #f5f0e8;        /* crema base */
+  --sand:       #e8dcc8;        /* arena medio */
+  --caramel:    #b07d3a;        /* caramelo oscuro */
+  --success:    #5a9e72;
+  --danger:     #c0392b;
+  --warning:    #c9a84c;
+  --bg:         #f2ece0;        /* fondo general warm */
+  --white:      #fdfaf5;        /* blanco cálido */
+  --text-muted: #8a7560;
+  --border:     #ddd3bc;
+  --sidebar-bg: #1e140a;        /* marrón muy oscuro sidebar */
+  --shadow-sm:  0 2px 8px rgba(44,31,14,0.08);
+  --shadow-md:  0 8px 24px rgba(44,31,14,0.12);
+  --shadow-lg:  0 20px 48px rgba(44,31,14,0.18);
+
+  /* Escala de grises funcionales */
+  --gray-50:  #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-400: #94a3b8;
+  --gray-600: #475569;
+  --gray-900: #0f172a;
+}
+
+/* ─── BASE ──────────────────────────────────────────────── */
+body {
+  font-family: 'Jost', sans-serif;
+  margin: 0;
+  background: var(--bg);
+  color: var(--primary);
+  overflow-x: hidden;
+}
+
+/* ─── PILLS DE ESTADO ────────────────────────────────────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.pill::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+.pill--verde   { background: #ecfdf5; color: #15803d; }
+.pill--rojo    { background: #fef2f2; color: #b91c1c; }
+.pill--dorado  { background: rgba(201,168,76,0.12); color: var(--caramel); border: 1px solid rgba(201,168,76,0.25); }
+.pill--gris    { background: var(--gray-100); color: var(--gray-600); }
+.pill--azul    { background: #eff6ff; color: #1d4ed8; }
+
+/* ─── BLOQUE NEUTRO ──────────────────────────────────────── */
+.bloque-neutro {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.bloque-neutro h2,
+.bloque-neutro h3 {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bloque-neutro h2 i,
+.bloque-neutro h3 i { color: var(--accent); font-size: 15px; }
+
+/* ─── SEPARADOR DE SECCIÓN ───────────────────────────────── */
+.seccion-titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.seccion-titulo i { color: var(--accent); font-size: 15px; }
+.seccion-titulo h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ─── CARD DATO ───────────────────────────────────────────── */
+.card-dato {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.card-dato__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.card-dato__valor {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--primary);
+  font-family: 'Cormorant Garamond', serif;
+  line-height: 1;
+}
+.card-dato__sub { font-size: 11px; color: var(--gray-400); }
+
+/* ─── INPUT CON ICONO ────────────────────────────────────── */
+.input-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-icon-wrapper i {
+  position: absolute;
+  left: 12px;
+  color: var(--gray-400);
+  font-size: 13px;
+  pointer-events: none;
+}
+.input-icon-wrapper input { padding-left: 34px; }
+
+/* ─── SWEETALERT ─────────────────────────────────────────── */
+.swal2-container { z-index: 9999 !important; }

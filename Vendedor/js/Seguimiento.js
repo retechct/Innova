@@ -9,11 +9,31 @@ function abrirSeguimiento() {
   document.body.style.overflow = 'hidden';
 
   // Adaptamos el buscador para que acepte tanto correos como número de contrato
+// Forzar la actualización visual de los textos desde JavaScript al cargar la página
+document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('ps-email-input');
   if (input) {
       input.placeholder = "Correo o N° de contrato (ej: INV-0001)";
       input.type = "text";
   }
+  
+  // Buscar y reemplazar el texto estático en el portal de seguimiento
+  const portal = document.getElementById('portal-seguimiento');
+  if (portal) {
+      const cambiarTexto = (nodo) => {
+          if (nodo.nodeType === 3 && nodo.nodeValue.includes('Ingresa tu correo para ver el avance')) {
+              nodo.nodeValue = nodo.nodeValue.replace('Ingresa tu correo para ver el avance de tus muebles', 'Ingresa tu correo o N° de contrato para ver el avance de tus pedidos');
+          } else if (nodo.nodeType === 1 && nodo.nodeName !== 'SCRIPT') {
+              nodo.childNodes.forEach(cambiarTexto);
+          }
+      };
+      cambiarTexto(portal);
+  }
+});
+
+function abrirSeguimiento() {
+  document.getElementById('portal-seguimiento').style.display = 'block';
+  document.body.style.overflow = 'hidden';
 
   // Si el cliente ya está logueado, autocargar
   const sesion = localStorage.getItem('usuarioInnova');
@@ -305,4 +325,5 @@ function _formatArea(area) {
   };
   return nombres[area] || area.replace(/_/g, ' ').toLowerCase()
     .replace(/^\w/, c => c.toUpperCase());
+}
 }

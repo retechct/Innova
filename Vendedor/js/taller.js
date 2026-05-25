@@ -2,7 +2,7 @@
 async function abrirDetallePedido(codigo) {
     try {
         Swal.fire({ title: 'Buscando ficha de taller...', didOpen: () => Swal.showLoading() });
-        const res = await fetch(`${API_URL}/api/pedido/detalle/${codigo}`);
+        const res = await apiFetch(`${API_URL}/api/pedido/detalle/${codigo}`);
         const data = await res.json();
 
         if(data.error) return Swal.fire('Error', data.error, 'error');
@@ -329,7 +329,7 @@ const CONFIG_AREAS = {
 
 async function cargarVistaColaRecojo(contenedor) {
     try {
-        const res  = await fetch(`${API_URL}/api/taller/cola-recojo`);
+        const res  = await apiFetch(`${API_URL}/api/taller/cola-recojo`);
         const cola = await res.json();
 
         if (!Array.isArray(cola) || cola.length === 0) {
@@ -721,7 +721,7 @@ async function cargarTicketsTaller() {
             ? `${API_URL}/api/taller/tickets?area=${encodeURIComponent(usuarioActivo.area_asignada)}`
             : `${API_URL}/api/taller/tickets`;
 
-        const res     = await fetch(url);
+        const res     = await apiFetch(url);
         const tickets = await res.json();
 
         if (!Array.isArray(tickets)) {
@@ -936,7 +936,7 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
         didOpen: async () => {
             if (skusEncontrados.size === 0) return;
             try {
-                const res  = await fetch(`${API_URL}/api/taller/fichatecnica-skus?skus=${[...skusEncontrados].join(',')}`);
+                const res  = await apiFetch(`${API_URL}/api/taller/fichatecnica-skus?skus=${[...skusEncontrados].join(',')}`);
                 const data = await res.json();
                 const galeria = document.getElementById('galeria-skus');
                 if (!galeria) return;
@@ -966,11 +966,11 @@ async function asignarChoferDespacho(ticketId) {
         // Traer choferes
         let choferes = [];
         try {
-            const r = await fetch(`${API_URL}/api/usuarios/choferes`);
+            const r = await apiFetch(`${API_URL}/api/usuarios/choferes`);
             choferes = await r.json();
         } catch (_) {}
         if (!Array.isArray(choferes) || choferes.length === 0) {
-            const r2 = await fetch(`${API_URL}/api/usuarios`);
+            const r2 = await apiFetch(`${API_URL}/api/usuarios`);
             choferes = await r2.json();
         }
 
@@ -997,7 +997,7 @@ async function asignarChoferDespacho(ticketId) {
 
         Swal.fire({ title: 'Activando despacho...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-        const response = await fetch(`${API_URL}/api/despacho/asignar-chofer`, {
+        const response = await apiFetch(`${API_URL}/api/despacho/asignar-chofer`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ticket_id: ticketId, chofer_id: choferId })
@@ -1035,7 +1035,7 @@ async function abrirModalDerivar(ticketId) {
         const tieneCojines = /COJIN|COJ-/i.test(specsTexto);
 
         // Cargar usuarios
-        const resAll = await fetch(`${API_URL}/api/usuarios`);
+        const resAll = await apiFetch(`${API_URL}/api/usuarios`);
         const todosUsuarios = await resAll.json();
 
         // /api/usuarios devuelve area_asignada (no 'area')
@@ -1116,7 +1116,7 @@ async function abrirModalDerivar(ticketId) {
         // 1. Finalizar el ticket de TELAS con la foto (marca como Terminado)
         const formData = new FormData();
         formData.append('foto', confirmado.foto);
-        const resFin = await fetch(`${API_URL}/api/taller/ticket/${ticketId}/finalizar`, {
+        const resFin = await apiFetch(`${API_URL}/api/taller/ticket/${ticketId}/finalizar`, {
             method: 'POST', body: formData
         });
         const dataFin = await resFin.json();
@@ -1125,7 +1125,7 @@ async function abrirModalDerivar(ticketId) {
         }
 
         // 2. Crear ticket de Tapicería
-        const resTap = await fetch(`${API_URL}/api/taller/ticket/derivar`, {
+        const resTap = await apiFetch(`${API_URL}/api/taller/ticket/derivar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1159,7 +1159,7 @@ async function asignarTrabajador(ticketId, areaTicket) {
         Swal.fire({ title: 'Buscando personal...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
         // Traemos SOLO los operarios del área del ticket (+ jefes como respaldo)
-        const res = await fetch(`${API_URL}/api/usuarios/por-area/${encodeURIComponent(areaTicket)}`);
+        const res = await apiFetch(`${API_URL}/api/usuarios/por-area/${encodeURIComponent(areaTicket)}`);
         const usuarios = await res.json();
         Swal.close();
 
@@ -1230,7 +1230,7 @@ async function asignarTrabajador(ticketId, areaTicket) {
                 didOpen: () => Swal.showLoading() 
             });
             
-            const response = await fetch(`${API_URL}/api/taller/asignar`, {
+            const response = await apiFetch(`${API_URL}/api/taller/asignar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -1282,7 +1282,7 @@ async function finalizarTicketTaller(ticketId, inputFile, area, producto) {
         const formData = new FormData();
         formData.append('foto', archivo);
 
-        const res = await fetch(`${API_URL}/api/taller/ticket/${ticketId}/finalizar`, {
+        const res = await apiFetch(`${API_URL}/api/taller/ticket/${ticketId}/finalizar`, {
             method: 'POST',
             body: formData
         });
@@ -1304,7 +1304,7 @@ async function finalizarTicketTaller(ticketId, inputFile, area, producto) {
 /* --- CARGAR INVENTARIO DE TALLER --- */
 async function cargarInventarioTaller() {
     try {
-        const res = await fetch(`${API_URL}/api/taller/inventario`);
+        const res = await apiFetch(`${API_URL}/api/taller/inventario`);
         const insumos = await res.json();
 
         // Validación para evitar el error "filter is not a function"
@@ -1350,7 +1350,7 @@ async function cargarInventarioTaller() {
 }
 async function actualizarEstadoInsumo(id, categoria, nuevoEstado) {
     try {
-        const res = await fetch(`${API_URL}/api/inventario/actualizar`, {
+        const res = await apiFetch(`${API_URL}/api/inventario/actualizar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: id, categoria: categoria, estado: nuevoEstado })
@@ -1384,8 +1384,8 @@ async function cargarGestorAprobacion() {
     try {
         // Ejecutamos ambas consultas simultáneamente
         const [resMuebles, resInsumos] = await Promise.all([
-            fetch(`${API_URL}/api/creaciones`),
-            fetch(`${API_URL}/api/sugerencias`)
+            apiFetch(`${API_URL}/api/creaciones`),
+            apiFetch(`${API_URL}/api/sugerencias`)
         ]);
 
         const creaciones = await resMuebles.json();
@@ -1483,7 +1483,7 @@ async function procesarAprobacionInsumo(id, nombre) {
     if (origenEstrategia) {
         Swal.fire({ title: 'Insertando en maestros...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         try {
-            const res = await fetch(`${API_URL}/api/sugerencias/aprobar`, {
+            const res = await apiFetch(`${API_URL}/api/sugerencias/aprobar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sugerencia_id: id, origen: origenEstrategia })
@@ -1557,7 +1557,7 @@ async function procesarAprobacion(id, nombre) {
 async function ejecutarAprobacion(id, origen, precio_base) {
     try {
         Swal.fire({ title: 'Aprobando y publicando...', didOpen: () => Swal.showLoading() });
-        const res = await fetch(`${API_URL}/api/creaciones/aprobar`, {
+        const res = await apiFetch(`${API_URL}/api/creaciones/aprobar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1591,7 +1591,7 @@ async function cargarStatsTaller() {
     const badge = document.getElementById('stats-taller');
     if (!badge) return;
     try {
-        const res  = await fetch(`${API_URL}/api/taller/stats`);
+        const res  = await apiFetch(`${API_URL}/api/taller/stats`);
         const data = await res.json();
         if (data.error) { badge.innerText = 'Error de stats'; return; }
 
@@ -1619,7 +1619,7 @@ async function cargarStatsTaller() {
 /* --- 2. VISTA DE ÓRDENES POR PEDIDO (Admin) --- */
 async function cargarOrdenesProduccion(contenedor) {
     try {
-        const res    = await fetch(`${API_URL}/api/taller/ordenes?estado=activas`);
+        const res    = await apiFetch(`${API_URL}/api/taller/ordenes?estado=activas`);
         const ordenes = await res.json();
 
         if (!Array.isArray(ordenes) || ordenes.length === 0) {
@@ -1778,7 +1778,7 @@ async function abrirNotaOrden(ticketId) {
 
     try {
         Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-        const res = await fetch(`${API_URL}/api/taller/ticket/${ticketId}/nota`, {
+        const res = await apiFetch(`${API_URL}/api/taller/ticket/${ticketId}/nota`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

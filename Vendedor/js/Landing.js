@@ -131,6 +131,8 @@ async function imEntrarAlSistema() {
       usuarioActivo = data.usuario;
       usuarioActivo.horaLogin = new Date().toLocaleTimeString();
       localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
+      // Guardar token JWT para las peticiones al API
+      if (data.token) sessionStorage.setItem('innova_token', data.token);
 
       // Cliente: se queda en el landing, no entra al panel
       if (usuarioActivo.rol === 'Cliente') {

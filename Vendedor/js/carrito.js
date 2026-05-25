@@ -193,7 +193,7 @@ async function agregarMetodoPago() {
     try {
         const formDataFoto = new FormData();
         formDataFoto.append('archivo', comprobanteInput.files[0]);
-        const res = await fetch(`${API_URL}/api/upload-voucher`, {
+        const res = await apiFetch(`${API_URL}/api/upload-voucher`, {
             method: 'POST',
             body: formDataFoto
         });
@@ -253,7 +253,7 @@ function actualizarValidacionDoc() {
 async function exportarVentas() {
     Swal.fire({ title: 'Generando Excel...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
     try {
-        const res = await fetch(`${API_URL}/api/ventas/exportar`);
+        const res = await apiFetch(`${API_URL}/api/ventas/exportar`);
         if (!res.ok) throw new Error('Error del servidor');
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -362,7 +362,7 @@ async function guardarVenta() {
     Swal.fire({ title: 'Guardando en Base de Datos...', didOpen: () => Swal.showLoading() });
 
     try {
-        const res = await fetch(`${API_URL}/api/ventas`, {
+        const res = await apiFetch(`${API_URL}/api/ventas`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
@@ -432,7 +432,7 @@ async function solicitarCambioPrecio(codigoVenta, precioActual) {
     if (!formValues) return;
 
     try {
-        const res = await fetch(`${API_URL}/api/ventas/${codigoVenta}/proponer-cambio-precio`, {
+        const res = await apiFetch(`${API_URL}/api/ventas/${codigoVenta}/proponer-cambio-precio`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -819,10 +819,10 @@ function imprimirContratoElegante() {
             btnGuardar.textContent = 'Guardando...';
 
             try {
-                const resp = await fetch(`${API_URL}/api/clientes/registro`, {
+                // A6: Usar el endpoint oficial registrar-web (unifica el flujo de clientes)
+                const resp = await apiFetch(`${API_URL}/api/usuarios/registrar-web`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nombre, telefono, email, dni, direccion })
+                    body: JSON.stringify({ nombre, telefono, email, dni })
                 });
                 const data = await resp.json();
 
@@ -916,7 +916,7 @@ function imprimirContratoElegante() {
 
             debounceTimer = setTimeout(async () => {
                 try {
-                    const resp = await fetch(`${API_URL}/api/clientes/buscar?q=${encodeURIComponent(q)}`);
+                    const resp = await apiFetch(`${API_URL}/api/clientes/buscar?q=${encodeURIComponent(q)}`);
                     const lista = await resp.json();
 
                     if (!lista.length) {

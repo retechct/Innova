@@ -150,9 +150,9 @@ function _puedeEditarInv() {
 async function _cargarMaestrosInv() {
     try {
         const [resMat, resCat, resSedes] = await Promise.all([
-            fetch(`${API_URL}/api/materiales/listas`),
-            fetch(`${API_URL}/api/catalogo`),
-            fetch(`${API_URL}/api/sedes`)
+            apiFetch(`${API_URL}/api/materiales/listas`),
+            apiFetch(`${API_URL}/api/catalogo`),
+            apiFetch(`${API_URL}/api/sedes`)
         ]);
         const mat   = await resMat.json();
         const cat   = await resCat.json();
@@ -213,7 +213,7 @@ async function _cargarDatosTab() {
             if (_invFiltroCat)  p.set('categoria', _invFiltroCat);
             if (_invFiltroQ)    p.set('q', _invFiltroQ);
             if (_invFiltroSede) p.set('sede_id', _invFiltroSede);
-            const res = await fetch(`${API_URL}/api/inventario/resumen?${p}`);
+            const res = await apiFetch(`${API_URL}/api/inventario/resumen?${p}`);
             _invDataProd = await res.json();
             _renderTablaProductos();
 
@@ -221,7 +221,7 @@ async function _cargarDatosTab() {
             const p = new URLSearchParams();
             if (_invFiltroCat) p.set('categoria', _invFiltroCat);
             if (_invFiltroQ)   p.set('q', _invFiltroQ);
-            const res = await fetch(`${API_URL}/api/inventario/piezas/resumen?${p}`);
+            const res = await apiFetch(`${API_URL}/api/inventario/piezas/resumen?${p}`);
             _invDataPiezas = await res.json();
             _renderTablaPiezas();
 
@@ -409,7 +409,7 @@ async function _invCargarHistorialSede(sedeId, sedeNombre) {
     wrap.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);">
         <i class="fas fa-spinner fa-spin"></i> Cargando...</div>`;
     try {
-        const res  = await fetch(`${API_URL}/api/inventario/historial/sede/${sedeId}`);
+        const res  = await apiFetch(`${API_URL}/api/inventario/historial/sede/${sedeId}`);
         const rows = await res.json();
 
         if (!rows.length) {
@@ -470,7 +470,7 @@ async function _invBuscarBarcode(barcode) {
     barcode = (barcode || '').trim();
     if (!barcode) return;
     try {
-        const res = await fetch(`${API_URL}/api/inventario/buscar/${encodeURIComponent(barcode)}`);
+        const res = await apiFetch(`${API_URL}/api/inventario/buscar/${encodeURIComponent(barcode)}`);
         const d   = await res.json();
         if (d.error) { Swal.fire('No encontrado', d.error, 'warning'); return; }
         _invMostrarDetalleUnidad(d);
@@ -578,7 +578,7 @@ async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
     }[estadoNuevo] || 'Ajuste';
 
     try {
-        const res = await fetch(`${API_URL}/api/inventario/${tipo}/${id}/estado`, {
+        const res = await apiFetch(`${API_URL}/api/inventario/${tipo}/${id}/estado`, {
             method:  'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -601,7 +601,7 @@ async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
 
 async function _invVerHistorialUnidad(tipo, id) {
     try {
-        const res  = await fetch(`${API_URL}/api/inventario/historial/${tipo}/${id}`);
+        const res  = await apiFetch(`${API_URL}/api/inventario/historial/${tipo}/${id}`);
         const rows = await res.json();
         if (!rows.length) { Swal.fire('Sin historial', 'Esta unidad no tiene movimientos registrados.', 'info'); return; }
         let tabla = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
@@ -775,7 +775,7 @@ async function _invGuardarProducto() {
     const catId  = catStr.split('|')[0] ? parseInt(catStr.split('|')[0]) : null;
 
     try {
-        const res = await fetch(`${API_URL}/api/inventario/producto/nuevo`, {
+        const res = await apiFetch(`${API_URL}/api/inventario/producto/nuevo`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 catalogo_id:    catId,
@@ -813,7 +813,7 @@ async function _invGuardarPieza() {
         Swal.fire('Incompleto', 'Selecciona el modelo y la sede.', 'warning'); return;
     }
     try {
-        const res = await fetch(`${API_URL}/api/inventario/pieza/nueva`, {
+        const res = await apiFetch(`${API_URL}/api/inventario/pieza/nueva`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 sku_maestro:    sku,
@@ -851,7 +851,7 @@ async function _invGuardarPieza() {
 async function _invVerUnidades(nombre, categoria, catalogoId) {
     try {
         const p = new URLSearchParams({ categoria, q: nombre });
-        const res  = await fetch(`${API_URL}/api/inventario/resumen?${p}`);
+        const res  = await apiFetch(`${API_URL}/api/inventario/resumen?${p}`);
         const data = await res.json();
         const m    = (data.modelos||[]).find(x=>x.nombre_modelo===nombre);
         if (!m) { Swal.fire('Sin datos', '', 'info'); return; }

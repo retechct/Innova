@@ -5,6 +5,7 @@ Blueprint: usuarios_bp  (sin prefijo de URL)
 
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection
+from auth_middleware import generar_token
 
 usuarios_bp = Blueprint('usuarios', __name__)
 
@@ -158,8 +159,15 @@ def verificar_pin():
         usuario = cursor.fetchone()
 
         if usuario:
+            token = generar_token({
+                "id":            usuario[0],
+                "nombre":        usuario[1],
+                "rol":           usuario[2],
+                "area_asignada": usuario[6],
+            })
             res = jsonify({
                 "exito": True,
+                "token": token,
                 "usuario": {
                     "id":            usuario[0],
                     "nombre":        usuario[1],
@@ -253,9 +261,16 @@ def verificar_email_pin():
         usuario = cursor.fetchone()
 
         if usuario:
+            token = generar_token({
+                "id":            usuario[0],
+                "nombre":        usuario[1],
+                "rol":           usuario[2],
+                "area_asignada": usuario[6],
+            })
             cursor.close(); release_db_connection(conexion)
             return jsonify({
                 "exito": True,
+                "token": token,
                 "usuario": {
                     "id":            usuario[0],
                     "nombre":        usuario[1],
@@ -278,8 +293,15 @@ def verificar_email_pin():
         cursor.close(); release_db_connection(conexion)
 
         if cliente:
+            token = generar_token({
+                "id":            cliente[0],
+                "nombre":        cliente[1],
+                "rol":           "Cliente",
+                "area_asignada": "",
+            })
             return jsonify({
                 "exito": True,
+                "token": token,
                 "usuario": {
                     "id":            cliente[0],
                     "nombre":        cliente[1],

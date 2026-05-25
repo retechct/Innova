@@ -1,10 +1,14 @@
 // ─── Helper: fetch con token JWT automático ──────────────────
+// A3: Maneja FormData correctamente (no sobreescribe Content-Type)
+// A2: Token desde sessionStorage (más seguro que localStorage)
 function apiFetch(url, options = {}) {
     const token = sessionStorage.getItem('innova_token');
+    const esFormData = options.body instanceof FormData;
     return fetch(url, {
         ...options,
         headers: {
-            'Content-Type': 'application/json',
+            // Si es FormData, NO poner Content-Type: el browser lo pone con el boundary correcto
+            ...(esFormData ? {} : { 'Content-Type': 'application/json' }),
             ...(options.headers || {}),
             ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
@@ -14,8 +18,8 @@ function apiFetch(url, options = {}) {
 async function init() {
     try {
         const [catRes, matRes] = await Promise.all([
-            fetch(`${API_URL}/api/catalogo`),
-            fetch(`${API_URL}/api/materiales/listas`) 
+            apiFetch(`${API_URL}/api/catalogo`),
+            apiFetch(`${API_URL}/api/materiales/listas`)
         ]);
         
         allProducts = await catRes.json();
@@ -120,7 +124,7 @@ async function loadMisPedidos() {
        // ✅ CORRECCIÓN:
         if (!usuarioActivo) return; // salir sin hacer el fetch
         const idVendedor = usuarioActivo.id;
-        const res = await fetch(`${API_URL}/api/mis-ventas/${idVendedor}`);
+        const res = await apiFetch(`${API_URL}/api/mis-ventas/${idVendedor}`);
         const data = await res.json();
         
         if (data.length === 0) {
@@ -176,8 +180,8 @@ async function cargarLogisticaExterna() {
 
     try {
         const [resLog, resProv] = await Promise.all([
-            fetch(`${API_URL}/api/logistica`),
-            fetch(`${API_URL}/api/proveedores`)
+            apiFetch(`${API_URL}/api/logistica`),
+            apiFetch(`${API_URL}/api/proveedores`)
         ]);
         const items     = await resLog.json();
         const proveedores = await resProv.json();
@@ -314,7 +318,7 @@ async function _abrirEditarLogistica(item, proveedores) {
     if (!isConfirmed || !datos) return;
 
     try {
-        const res = await fetch(`${API_URL}/api/logistica/actualizar`, {
+        const res = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(datos)
         });
@@ -455,7 +459,7 @@ function changeView(view) {
 async function cargarDatosInicialesLogin() {
     try {
         // 1. Cargar Sedes
-        const resSedes = await fetch(`${API_URL}/api/sedes`);
+        const resSedes = await apiFetch(`${API_URL}/api/sedes`);
         const sedes = await resSedes.json();
         const selectSede = document.getElementById('login-tienda');
         
@@ -467,7 +471,7 @@ async function cargarDatosInicialesLogin() {
         }
 
         // 2. Cargar Usuarios
-        const resUser = await fetch(`${API_URL}/api/usuarios`);
+        const resUser = await apiFetch(`${API_URL}/api/usuarios`);
         const usuarios = await resUser.json();
         const selectUser = document.getElementById('login-usuario');
         if (selectUser) {
@@ -649,7 +653,7 @@ async function loadContratos() {
         <i class="fa-solid fa-spinner fa-spin"></i> Cargando contratos...</td></tr>`;
 
     try {
-        const res = await fetch(`${API_URL}/api/ventas`);
+        const res = await apiFetch(`${API_URL}/api/ventas`);
         _contratosData = await res.json();
         if (_contratosData.error) throw new Error(_contratosData.error);
         filtrarContratos();
@@ -813,7 +817,7 @@ function verDetalleContrato(codigo) {
 async function verHistorialPrecios(codigo) {
     try {
         Swal.fire({ title: 'Cargando historial...', didOpen: () => Swal.showLoading() });
-        const res = await fetch(`${API_URL}/api/ventas/${codigo}/historial-precios`);
+        const res = await apiFetch(`${API_URL}/api/ventas/${codigo}/historial-precios`);
         const data = await res.json();
         Swal.close();
 
@@ -892,7 +896,7 @@ async function enviarCambioPrecio() {
     }
 
     try {
-        const res = await fetch(`${API_URL}/api/ventas/${_cambioPrecioActual.codigo}/proponer-cambio-precio`, {
+        const res = await apiFetch(`${API_URL}/api/ventas/${_cambioPrecioActual.codigo}/proponer-cambio-precio`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -918,7 +922,7 @@ async function cargarCambiosPrecioPendientes() {
     if (!contenedor) return;
 
     try {
-        const res  = await fetch(`${API_URL}/api/cambios-precio/pendientes`);
+        const res  = await apiFetch(`${API_URL}/api/cambios-precio/pendientes`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
 
@@ -1011,7 +1015,7 @@ async function resolverCambioPrecio(cambioId, accion) {
 
     try {
         const url = `${API_URL}/api/cambios-precio/${cambioId}/${esAprobar ? 'aprobar' : 'rechazar'}`;
-        const res = await fetch(url, {
+        const res = await apiFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1084,7 +1088,7 @@ async function gestionarEstadoVenta(ventaId, estadoActual) {
         }
 
         Swal.fire({ title: 'Procesando...', didOpen: () => Swal.showLoading() });
-        const res = await fetch(url, { method: accion === 'ANULAR' ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: body });
+        const res = await apiFetch(url, { method: accion === 'ANULAR' ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: body });
         const data = await res.json();
         
         if (data.exito) {

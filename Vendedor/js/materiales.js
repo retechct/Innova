@@ -302,7 +302,7 @@ async function guardarNuevoMaterial() {
     }
 
     try {
-        const res = await fetch(endpointUrl, { method: 'POST', body: formData });
+        const res = await apiFetch(endpointUrl, { method: 'POST', body: formData });
         if (res.ok) {
             Swal.fire({
                 icon: 'success',
@@ -414,7 +414,7 @@ async function enviarCreacionBD() {
 
     try {
         Swal.fire({ title: 'Guardando plantilla...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
-        const response = await fetch(`${API_URL}/api/creaciones`, { method: 'POST', body: formData });
+        const response = await apiFetch(`${API_URL}/api/creaciones`, { method: 'POST', body: formData });
         const result = await response.json();
 
         if (response.ok) {
@@ -439,7 +439,7 @@ async function verMisCreaciones() {
         document.getElementById('view-icon').className = 'fa-solid fa-wand-magic-sparkles';
         
         // 3. Pedimos los datos a tu servidor Python
-        const response = await fetch(`${API_URL}/api/creaciones`);
+        const response = await apiFetch(`${API_URL}/api/creaciones`);
         const creaciones = await response.json();
         
         // ¡AQUÍ ESTABA EL ERROR! Ahora usamos el ID correcto de tu HTML: 'product-grid'
@@ -494,7 +494,7 @@ async function editarPlantilla(id) {
     try {
         Swal.fire({ title: 'Cargando diseño en el taller...', didOpen: () => Swal.showLoading() });
         
-        const response = await fetch(`${API_URL}/api/creaciones`);
+        const response = await apiFetch(`${API_URL}/api/creaciones`);
         const creaciones = await response.json();
         const plantilla = creaciones.find(c => c.id === id);
 
@@ -554,7 +554,7 @@ async function cargarPlantilla(id) {
     try {
         // 1. Buscamos la plantilla específica en el servidor
         Swal.fire({ title: 'Cargando...', didOpen: () => Swal.showLoading() });
-        const response = await fetch(`${API_URL}/api/creaciones`);
+        const response = await apiFetch(`${API_URL}/api/creaciones`);
         const creaciones = await response.json();
         const plantilla = creaciones.find(c => c.id === id);
 
@@ -643,7 +643,7 @@ async function guardarProductoDirecto() {
     Swal.fire({ title: 'Publicando en Catálogo...', didOpen: () => Swal.showLoading() });
 
     try {
-        const res = await fetch(`${API_URL}/api/catalogo/nuevo`, {
+        const res = await apiFetch(`${API_URL}/api/catalogo/nuevo`, {
             method: 'POST',
             body: formData
         });
@@ -752,7 +752,7 @@ async function enviarSugerencia() {
     if (btnEnviar) { btnEnviar.disabled = true; btnEnviar.innerText = 'Enviando...'; }
 
     try {
-        const res = await fetch(`${API_URL}/api/sugerencias`, {
+        const res = await apiFetch(`${API_URL}/api/sugerencias`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -785,7 +785,7 @@ async function listarUsuarios() {
     if (!container) return;
     container.innerHTML = '<p style="text-align:center; padding:20px; color:gray;">Cargando personal...</p>';
     try {
-        const res = await fetch(`${API_URL}/api/usuarios/detalle`);
+        const res = await apiFetch(`${API_URL}/api/usuarios/detalle`);
         const usuarios = await res.json();
         if (usuarios.length === 0) {
             container.innerHTML = '<p style="text-align:center; color:gray;">No hay usuarios registrados.</p>';
@@ -833,7 +833,7 @@ async function guardarUsuario() {
     if(!nombre || !pin || !correo) return Swal.fire('Faltan Datos', 'Nombre, Correo y PIN son obligatorios.', 'warning');
 
     try {
-        const res = await fetch(`${API_URL}/api/usuarios/nuevo`, {
+        const res = await apiFetch(`${API_URL}/api/usuarios/nuevo`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ nombre, correo, pin, rol, area, empresa_nombre, empresa_ruc })
@@ -855,7 +855,7 @@ async function listarProveedores() {
     const container = document.getElementById('lista-proveedores-sistema');
     if (!container) return;
     try {
-        const res = await fetch(`${API_URL}/api/proveedores`);
+        const res = await apiFetch(`${API_URL}/api/proveedores`);
         const provs = await res.json();
         container.innerHTML = provs.map(p => `
             <div class="card" style="padding:15px; border-left: 5px solid #2dd4bf; background:white;">
@@ -879,7 +879,7 @@ async function guardarProveedor() {
     if(!nombre || !correo || !telefono) return Swal.fire('Error', 'Nombre, Correo y WhatsApp son obligatorios.', 'warning');
 
     try {
-        const res = await fetch(`${API_URL}/api/proveedores/nuevo`, {
+        const res = await apiFetch(`${API_URL}/api/proveedores/nuevo`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ nombre, especialidad, correo, telefono })
