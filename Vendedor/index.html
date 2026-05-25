@@ -402,7 +402,7 @@
   <div class="im-hero-text">
     <div class="im-hero-eyebrow">Innova Möbili</div>
     <h1 class="im-hero-h1">Donde el<br><em>diseño</em><br>vive.</h1>
-    <p class="im-hero-sub"> Ayudandote.<br>Acceso exclusivo para personal autorizado.</p>
+    <p class="im-hero-sub"> Diseños.<br>Innovadores para tu hogar.</p>
     <div class="im-hero-deco"><div class="im-hero-deco-diamond"></div></div>
   </div>
 
@@ -694,10 +694,11 @@ async function imEntrarAlSistema() {
       // Cliente: se queda en el landing, no entra al panel
       // Cliente: se queda en el landing
       if (usuarioActivo.rol === 'Cliente') {
-        imActualizarNavbarCliente();
-        abrirPortalCliente(usuarioActivo.email);
-        return;
-        }
+    document.getElementById('pantalla-login').style.display = 'none'; // ← AÑADIR ESTA LÍNEA
+    imActualizarNavbarCliente();
+    abrirPortalCliente(usuarioActivo.email);
+    return;
+}
 
       // Cualquier otro rol no reconocido: bloquear
       const ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
@@ -2071,7 +2072,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </div>
 </div>
-<div id="portal-seguimiento" style="display:none; position:fixed; inset:0; z-index:9998; overflow-y:auto; overflow-x:hidden; background:#0d0b08; font-family:'Jost',sans-serif;">
+<div id="portal-seguimiento" style="display:none; position:fixed; inset:0; z-index:10000;overflow-y:auto; overflow-x:hidden; background:#0d0b08; font-family:'Jost',sans-serif;">
  
 <style>
 /* ── Reset ── */
