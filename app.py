@@ -88,13 +88,12 @@ limiter.limit("10 per minute")(app.view_functions['usuarios.verificar_pin'])
 # ─── Blueprints externos (ya existían antes de la refactorización) ────────────
 from routes_kardex    import kardex_bp
 from routes_taller    import taller_bp, init_taller_pool
-from routes_inventario import inventario_bp, init_inventario_pool
+from routes_inventario import inventario_bp
 
 app.register_blueprint(kardex_bp, url_prefix='/api/kardex')
 app.register_blueprint(taller_bp)
 app.register_blueprint(inventario_bp)
 init_taller_pool()
-init_inventario_pool()
 
 # ─── Rutas de infraestructura (sedes, archivos estáticos) ────────────────────
 from flask import jsonify, request
