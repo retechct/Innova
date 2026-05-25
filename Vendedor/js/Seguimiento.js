@@ -112,6 +112,12 @@ async function buscarPedidos() {
     // Si NO tiene "@", es un código de contrato. Vamos directo al detalle
     document.getElementById('ps-loader').style.display = 'none';
     let codigoLimpio = inputVal.toUpperCase();
+
+    // Si el usuario ingresó solo números, rellenamos con ceros y agregamos 'INV-'
+    if (/^\d+$/.test(codigoLimpio)) {
+      codigoLimpio = 'INV-' + codigoLimpio.padStart(4, '0');
+    }
+
     verDetallePedido(codigoLimpio, true);
   }
 }
