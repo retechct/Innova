@@ -142,9 +142,6 @@ def inicializar_sedes():
             cursor.close(); release_db_connection(conexion)
 
 
-@app.route('/', methods=['GET'])
-def bienvenida():
-    return send_from_directory('Vendedor', 'index.html')
 
 @app.route('/uploads/<filename>')
 def mostrar_foto(filename):
