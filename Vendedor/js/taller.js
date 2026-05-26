@@ -1304,34 +1304,16 @@ async function finalizarTicketTaller(ticketId, inputFile, area, producto) {
 /* --- CARGAR INVENTARIO DE TALLER --- */
 async function cargarInventarioTaller() {
     try {
-        const res = await apiFetch(`${API_URL}/api/taller/inventario`);
-        const insumos = await res.json();
-
-        // Validación para evitar el error "filter is not a function"
-        if (!Array.isArray(insumos)) {
-            console.error("El servidor no devolvió un arreglo:", insumos);
-            return;
+        // Usar los datos del maestro en memoria para asegurar que tengan sku y foto_url
+        if (!maestroMateriales || !maestroMateriales.telas) {
+            if (typeof _refreshMaestro === 'function') await _refreshMaestro();
         }
 
-        const telas = insumos.filter(i => i.categoria === 'TELA');
-        const cojines = insumos.filter(i => i.categoria === 'COJIN');
-        const tableros = insumos.filter(i => i.categoria === 'TABLERO');
-        const metal = insumos.filter(i => i.categoria === 'BASE' || i.categoria === 'BASE-COMEDOR');
-        const madera = insumos.filter(i => i.categoria === 'SILLA' || i.categoria === 'BUTACA');
-
-        const dibujarCard = (item) => {
-            let color = item.estado === 'Agotado' ? '#fee2e2' : '#dcfce7';
-            return `
-            <div style="background:white; border:1px solid #e2e8f0; border-radius:10px; padding:12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                <div style="font-size:10px; color:gray; font-weight:900; margin-bottom:5px;">${item.categoria}</div>
-                <h4 style="margin:0 0 10px 0; font-size:13px;">${item.nombre}</h4>
-                <select onchange="actualizarEstadoInsumo(${item.id}, '${item.categoria}', this.value)" 
-                        style="width:100%; padding:5px; border-radius:5px; background:${color}; font-size:11px; font-weight:bold;">
-                    <option value="Disponible" ${item.estado === 'Disponible' ? 'selected' : ''}>🟢 Disponible</option>
-                    <option value="Agotado" ${item.estado === 'Agotado' ? 'selected' : ''}>🔴 Agotado</option>
-                </select>
-            </div>`;
-        };
+        const telas = maestroMateriales.telas || [];
+        const cojines = maestroMateriales.cojines || [];
+        const tableros = maestroMateriales.tableros || [];
+        const metal = [...(maestroMateriales.bases || []), ...(maestroMateriales.bases_comedor || [])];
+        const madera = [...(maestroMateriales.sillas || []), ...(maestroMateriales.butacas || [])];
 
         const setHtml = (id, htmlContent) => {
             const el = document.getElementById(id);
@@ -1347,28 +1329,6 @@ async function cargarInventarioTaller() {
 
     } catch (error) {
         console.error("Error al cargar inventario:", error);
-    }
-}
-async function actualizarEstadoInsumo(id, categoria, nuevoEstado) {
-    try {
-        const res = await apiFetch(`${API_URL}/api/inventario/actualizar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: id, categoria: categoria, estado: nuevoEstado })
-        });
-        const data = await res.json();
-        
-        if (data.exito) {
-            // Un mensaje chiquito que no moleste (Toast)
-            const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
-            Toast.fire({ icon: 'success', title: 'Inventario Actualizado' });
-            
-            cargarInventarioTaller(); // Recarga para actualizar los colores rojo/amarillo/verde
-        } else {
-            Swal.fire('Error', data.error, 'error');
-        }
-    } catch(e) {
-        Swal.fire('Error', 'No se pudo conectar con el servidor', 'error');
     }
 }
 /* ================================================================= */
