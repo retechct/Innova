@@ -847,7 +847,7 @@ function abrirModalNuevo(tipo, destino) {
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Material</label>
-                ${mkSelect('nm-material', ['Acero Inoxidable','Fierro Negro','Madera Sólida','Aluminio','Mixto'])}
+                ${mkSelect('nm-material', ['Acero','Acero Inoxidable','Fierro Negro','Madera Sólida','Aluminio','Mixto'])}
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Acabado</label>
@@ -867,7 +867,7 @@ function abrirModalNuevo(tipo, destino) {
         htmlCampos = `
             <div class="form-group">
                 <label style="${labelStyle}">Material Base</label>
-                ${mkSelect('nm-material-base', ['MDF','Madera Sólida','Vidrio Templado','Cuarzo','Mármol','Porcelanato'])}
+                ${mkSelect('nm-material-base', ['MDF','Madera Sólida','Vidrio Templado','Cuarzo','Mármol','Porcelanato','Piedra Sinterizada'])}
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Nombre del Modelo / Diseño <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
@@ -879,7 +879,7 @@ function abrirModalNuevo(tipo, destino) {
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Acabado / Textura</label>
-                ${mkSelect('nm-acabado', ['Alto Brillo','Mate','Texturizado','Pulido','Satinado'])}
+                ${mkSelect('nm-acabado', ['Alto Brillo','Brillante y Mate','Texturizado','Pulido','Satinado'])}
             </div>`;
     }
 
@@ -1251,7 +1251,7 @@ async function abrirEditorMaterial(sku, tipo) {
             <div class="form-group"><label style="${labelStyle}">Nombre / Referencia</label>
                 <input id="em-modelo" class="form-input" value="${item.modelo || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Material</label>
-                ${mkSelect('material', ['Acero Inoxidable','Fierro Negro','Madera Sólida','Aluminio','Mixto'], item.material)}</div>
+                ${mkSelect('material', ['Acero','Acero Inoxidable','Fierro Negro','Madera Sólida','Aluminio','Mixto'], item.material)}</div>
             <div class="form-group"><label style="${labelStyle}">Acabado</label>
                 ${mkSelect('acabado', ['Mate','Brillante','Lacado','Natural','Oxidado','Cromado','Pintado'], item.acabado)}</div>
             <div class="form-group"><label style="${labelStyle}">Color</label>
@@ -1260,13 +1260,13 @@ async function abrirEditorMaterial(sku, tipo) {
     } else if (tipo === 'tablero') {
         campos = `
             <div class="form-group"><label style="${labelStyle}">Material Base</label>
-                ${mkSelect('material-base', ['MDF','Madera Sólida','Vidrio Templado','Cuarzo','Mármol','Porcelanato'], item.material_base)}</div>
+                ${mkSelect('material-base', ['MDF','Madera Sólida','Vidrio Templado','Cuarzo','Mármol','Porcelanato','Piedra Sinterizada'], item.material_base)}</div>
             <div class="form-group"><label style="${labelStyle}">Nombre del Modelo</label>
                 <input id="em-nombre-modelo" class="form-input" value="${item.nombre || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Color de Veta</label>
                 <input id="em-color-veta" class="form-input" value="${item.color || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Acabado</label>
-                ${mkSelect('acabado', ['Alto Brillo','Mate','Texturizado','Pulido','Satinado'], item.acabado)}</div>`;
+                ${mkSelect('acabado', ['Alto Brillo','Brillante y Mate','Texturizado','Pulido','Satinado'], item.acabado)}</div>`;
 
     } else if (tipo === 'silla' || tipo === 'butaca') {
         const matOpts = tipo === 'silla'
