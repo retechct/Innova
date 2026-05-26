@@ -177,7 +177,9 @@ def obtener_tickets_taller():
         cursor   = conexion.cursor()
         query = """
             SELECT t.id, i.producto, t.estado_ticket, t.area_trabajo, t.ticket_details_override,
-                   t.trabajador_asignado_id, v.codigo_venta, i.color_tela, t.item_id,
+                t.trabajador_asignado_id, v.codigo_venta,
+                COALESCE(i.detalles, i.color_tela, '') AS color_tela,
+                t.item_id,
                    i.foto_url, t.foto_evidencia, u.nombre
             FROM tickets_produccion t
             JOIN items_venta i ON t.item_id  = i.id
