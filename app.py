@@ -152,6 +152,19 @@ def mostrar_foto(filename):
 def bienvenida():
     return send_from_directory('Vendedor', 'index.html')
 
+@app.route('/uploads/<filename>')
+def mostrar_foto(filename):
+    return send_from_directory('uploads', filename)
+
+@app.route('/', methods=['GET'])
+def bienvenida():
+    return send_from_directory('Vendedor', 'index.html')
+
+# ← AGREGAR AQUÍ
+@app.route('/<path:filename>')
+def serve_frontend(filename):
+    return send_from_directory('Vendedor', filename)
+
 
 # ─── Arranque ─────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
