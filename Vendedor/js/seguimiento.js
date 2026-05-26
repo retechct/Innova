@@ -56,6 +56,18 @@ function cerrarSeguimiento() {
   document.getElementById('portal-seguimiento').style.display = 'none';
   document.body.style.overflow = '';
   _psReset();
+
+  // Si quien cierra es un Cliente, volver al landing (no al panel ERP)
+  try {
+    const sesion = localStorage.getItem('usuarioInnova');
+    if (sesion) {
+      const u = JSON.parse(sesion);
+      if (u.rol === 'Cliente') {
+        const landing = document.getElementById('pantalla-login');
+        if (landing) landing.style.display = 'block';
+      }
+    }
+  } catch(e) {}
 }
 
 function _psReset() {
