@@ -142,12 +142,6 @@ def inicializar_sedes():
             cursor.close(); release_db_connection(conexion)
 
 
-@app.route('/uploads/<filename>')
-def mostrar_foto(filename):
-    """Ruta de compatibilidad para fotos antiguas guardadas localmente."""
-    return send_from_directory('uploads', filename)
-
-
 @app.route('/', methods=['GET'])
 def bienvenida():
     return send_from_directory('Vendedor', 'index.html')
