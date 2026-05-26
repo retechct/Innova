@@ -224,7 +224,8 @@ def obtener_listas_materiales():
         } for r in cur_bases.fetchall()]
 
         tableros = [{
-            "id": r[0], "sku": r[1], "material_base": r[2], "nombre": r[3],
+            "id": r[0], "sku": r[1], "material_base": r[2], 
+            "nombre": r[3], "nombre_modelo": r[3],   # ← mismo valor, dos claves
             "color": r[4], "acabado": r[5], "foto_url": limpiar_foto(r[6]),
             "estado": r[7], "categoria": "TABLERO"
         } for r in cur_tableros.fetchall()]

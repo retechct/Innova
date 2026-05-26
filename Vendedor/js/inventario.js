@@ -11,7 +11,7 @@ let _invDataPiezas = { sedes: [], piezas:  [] };
 let _invFiltroCat  = '';
 let _invFiltroQ    = '';
 let _invFiltroSede = '';
-let _maestroInv    = { tableros: [], bases_comedor: [], catalogo: [] };
+let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], catalogo: [] };
 
 const CATEGORIAS_PRODUCTO = [
     'Sofa','Butaca','Silla','Espejo','Cuadro','Cojin','Mesa Centro','Consola'
@@ -21,8 +21,9 @@ const CATEGORIAS_PIEZA = [
     { val: 'base-comedor',     label: 'Base de Comedor' },
     { val: 'base-consola',     label: 'Base de Consola' },
     { val: 'base-mesa-centro', label: 'Base de Mesa de Centro' },
+    { val: 'silla',            label: 'Silla' },
+    { val: 'butaca',           label: 'Butaca' },
 ];
-
 /* ─── Punto de entrada ─────────────────────────────────────── */
 async function cargarVistaInventario() {
     const main = document.getElementById('main-content');
@@ -158,8 +159,11 @@ async function _cargarMaestrosInv() {
         const cat   = await resCat.json();
         const sedes = await resSedes.json();
 
+        // DESPUÉS:
         _maestroInv.tableros      = mat.tableros      || [];
         _maestroInv.bases_comedor = mat.bases_comedor || [];
+        _maestroInv.sillas        = mat.sillas        || [];
+        _maestroInv.butacas       = mat.butacas       || [];
         _maestroInv.catalogo      = cat || [];
 
         // Poblar selector de sedes en filtros
@@ -739,9 +743,25 @@ function _invActualizarModelosPieza() {
     const cat = document.getElementById('npf-cat')?.value;
     const sel = document.getElementById('npf-sku');
     if (!sel) return;
-    const lista = (cat === 'tablero')
-        ? _maestroInv.tableros.map(t=>`<option value="${t.sku}|${(t.nombre||'').replace(/"/g,'')}|${t.material_base||''}|${t.color||''}">${t.sku} — ${t.nombre}</option>`).join('')
-        : _maestroInv.bases_comedor.map(b=>`<option value="${b.sku}|${(b.modelo||'').replace(/"/g,'')}|${b.material||''}|${b.color||''}">${b.sku} — ${b.modelo}</option>`).join('');
+    let lista = '';
+    if (cat === 'tablero') {
+        lista = _maestroInv.tableros.map(t =>
+            `<option value="${t.sku}|${(t.nombre_modelo||t.nombre||'').replace(/"/g,'')}|${t.material_base||''}|${t.color||''}">${t.sku} — ${t.nombre_modelo||t.nombre}</option>`
+        ).join('');
+    } else if (cat === 'silla') {
+        lista = (_maestroInv.sillas||[]).map(s =>
+            `<option value="${s.sku}|${(s.modelo||'').replace(/"/g,'')}|${s.material||''}|${s.color||''}">${s.sku} — ${s.modelo}</option>`
+        ).join('');
+    } else if (cat === 'butaca') {
+        lista = (_maestroInv.butacas||[]).map(b =>
+            `<option value="${b.sku}|${(b.modelo||'').replace(/"/g,'')}|${b.material||''}|${b.color||''}">${b.sku} — ${b.modelo}</option>`
+        ).join('');
+    } else {
+        lista = _maestroInv.bases_comedor.map(b =>
+            `<option value="${b.sku}|${(b.modelo||'').replace(/"/g,'')}|${b.material||''}|${b.color||''}">${b.sku} — ${b.modelo}</option>`
+        ).join('');
+    }
+
     sel.innerHTML = `<option value="">— Seleccionar —</option>${lista}`;
 }
 
@@ -793,9 +813,22 @@ async function _invGuardarProducto() {
         });
         const d = await res.json();
         if (d.error) throw new Error(d.error);
+
+        const nombreProd = document.getElementById('nf-nombre')?.value || '';
+        const sedeSel    = document.getElementById('nf-sede');
+        const sedeNombre = sedeSel?.options[sedeSel.selectedIndex]?.text || '';
+
         Swal.fire({
             icon: 'success', title: '¡Registrado!',
-            html: `Código de barras generado:<br><b style="font-size:1.3rem;color:var(--accent);">${d.codigo_barra}</b>`,
+            html: `
+                Código de barras generado:<br>
+                <b style="font-size:1.3rem;color:var(--accent);">${d.codigo_barra}</b><br><br>
+                <button onclick="imprimirEtiqueta('${d.codigo_barra}','${nombreProd.replace(/'/g,"\\'")}','${sedeNombre}')"
+                    style="background:var(--primary);color:white;border:none;padding:10px 20px;
+                           border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
+                    🖨️ Imprimir Etiqueta
+                </button>`,
+            confirmButtonText: 'Cerrar',
             confirmButtonColor: '#0f172a'
         });
         _cerrarModalInvNuevo();
@@ -836,10 +869,25 @@ async function _invGuardarPieza() {
         });
         const d = await res.json();
         if (d.error) throw new Error(d.error);
-        const codigos = (d.unidades || []).map(u=>u.codigo_barra).join('<br>');
+
+        const sedeSel    = document.getElementById('npf-sede');
+        const sedeNombre = sedeSel?.options[sedeSel.selectedIndex]?.text || '';
+        const nombrePieza = document.getElementById('npf-nombre-val')?.value || '';
+
+        const codigosHTML = (d.unidades || []).map(u => `
+            <div style="margin:6px 0;">
+                <b style="color:var(--accent);">${u.codigo_barra}</b>
+                <button onclick="imprimirEtiqueta('${u.codigo_barra}','${nombrePieza.replace(/'/g,"\\'")}','${sedeNombre}')"
+                    style="margin-left:10px;background:var(--primary);color:white;border:none;
+                           padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;">
+                    🖨️ Imprimir
+                </button>
+            </div>`).join('');
+
         Swal.fire({
             icon: 'success', title: `¡${d.unidades.length} pieza(s) registradas!`,
-            html: `Códigos generados:<br><b style="color:var(--accent);">${codigos}</b>`,
+            html: `Códigos generados:<br>${codigosHTML}`,
+            confirmButtonText: 'Cerrar',
             confirmButtonColor: '#0f172a'
         });
         _cerrarModalInvNuevo();
@@ -939,4 +987,97 @@ function _bindInvEventos() {
             await _cargarDatosTab();
         }, 350);
     });
+}
+
+/* ─── Imprimir Etiqueta de Código de Barras ─────────────────── */
+function imprimirEtiqueta(codigo, nombre, sede) {
+    // Cargar JsBarcode si no está ya disponible
+    function _renderEtiqueta() {
+        const win = window.open('', '_blank', 'width=420,height=320');
+        win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Etiqueta — ${codigo}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; background: #fff;
+        }
+        .etiqueta {
+            border: 2px solid #1e140a;
+            border-radius: 6px;
+            padding: 16px 20px;
+            width: 320px;
+            text-align: center;
+        }
+        .marca {
+            font-size: 9px;
+            letter-spacing: 0.35em;
+            text-transform: uppercase;
+            color: #c9a84c;
+            margin-bottom: 4px;
+        }
+        .nombre {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1e140a;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sede {
+            font-size: 10px;
+            color: #8a7560;
+            margin-bottom: 10px;
+        }
+        svg { display: block; margin: 0 auto; }
+        .codigo-texto {
+            font-size: 12px;
+            font-weight: 900;
+            color: #1e140a;
+            letter-spacing: 0.15em;
+            margin-top: 6px;
+        }
+        @media print {
+            body { background: white; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="etiqueta">
+        <div class="marca">INNOVA MÖBILI</div>
+        <div class="nombre">${nombre}</div>
+        <div class="sede">${sede}</div>
+        <svg id="barcode"></svg>
+        <div class="codigo-texto">${codigo}</div>
+        <div style="margin-top:12px;" class="no-print">
+            <button onclick="window.print()"
+                style="background:#1e140a;color:white;border:none;padding:8px 24px;
+                       border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;">
+                🖨️ Imprimir
+            </button>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <script>
+        window.onload = function() {
+            JsBarcode("#barcode", "${codigo}", {
+                format: "CODE128",
+                width: 2,
+                height: 60,
+                displayValue: false,
+                margin: 4
+            });
+        };
+    <\/script>
+</body>
+</html>`);
+        win.document.close();
+    }
+    _renderEtiqueta();
 }

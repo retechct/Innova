@@ -94,25 +94,146 @@ function renderGrid() {
 
 /**
  * addStockItemToCart — wrapper para ítems de Stock en Tienda.
- * Guarda el catalogo_id para que el backend descuente stock_cantidad.
+// =============================================================================
+// PATCH para catalogo.js
+// =============================================================================
+// INSTRUCCIÓN: Reemplaza toda la función addStockItemToCart (líneas ~97-115
+// en catalogo.js original) con el bloque de abajo.
+//
+// Qué cambia:
+//   - Antes: pushaba el ítem al carrito directamente.
+//   - Ahora: primero consulta /api/inventario/disponibles/<id> para obtener
+//     las unidades físicas disponibles. Si hay más de una, muestra un picker.
+//     El ítem que se agrega al carrito lleva stock_producto_id con el id real
+//     de la fila en stock_productos — el "puente" con el inventario.
+// =============================================================================
+
+/**
+ * addStockItemToCart — wrapper para ítems de Stock en Tienda.
+ *
+ * 1. Consulta las unidades físicas disponibles para este producto de catálogo.
+ * 2. Si hay una sola, la selecciona automáticamente.
+ * 3. Si hay varias, muestra un picker para que el vendedor elija cuál pieza
+ *    física está vendiendo (por código de barras / sede).
+ * 4. Agrega el ítem al carrito con stock_producto_id para que el backend
+ *    marque esa unidad específica como "Reservado" al guardar la venta.
  */
-function addStockItemToCart(catalogoId, nombre, precio, foto) {
+async function addStockItemToCart(catalogoId, nombre, precio, foto) {
+    // Indicar que estamos consultando
+    const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+
+    let unidades = [];
+    try {
+        const res = await apiFetch(`${API_URL}/api/inventario/disponibles/${catalogoId}`);
+        unidades  = await res.json();
+    } catch (e) {
+        // Si el endpoint aún no está disponible (p.ej. deploy en curso),
+        // caemos al comportamiento anterior para no bloquear las ventas.
+        console.warn('addStockItemToCart: no se pudo consultar disponibles, modo legacy.', e);
+        _addStockLegacy(catalogoId, nombre, precio, foto);
+        return;
+    }
+
+    if (unidades.error) {
+        console.warn('addStockItemToCart: error del servidor:', unidades.error);
+        _addStockLegacy(catalogoId, nombre, precio, foto);
+        return;
+    }
+
+    if (!unidades.length) {
+        return Swal.fire({
+            icon: 'warning',
+            title: 'Sin unidades disponibles',
+            text:  `No hay unidades físicas registradas de "${nombre}" en el inventario. ` +
+                   'Si el producto existe en tienda, regístralo primero en el módulo de Inventario.',
+            confirmButtonColor: 'var(--accent)'
+        });
+    }
+
+    // ── Selección de la unidad física ────────────────────────────────────────
+    let unidad;
+
+    if (unidades.length === 1) {
+        // Una sola unidad disponible: selección automática
+        unidad = unidades[0];
+    } else {
+        // Varias unidades: el vendedor elige cuál está vendiendo
+        const opciones = unidades
+            .map(u => `<option value="${u.id}">${u.label}</option>`)
+            .join('');
+
+        const { value: idSeleccionado, isConfirmed } = await Swal.fire({
+            title: `Seleccionar unidad — ${nombre}`,
+            html: `
+                <p style="font-size:13px;color:#6b7280;margin-bottom:12px;">
+                    Hay <strong>${unidades.length}</strong> unidades disponibles.<br>
+                    Elige la que estás vendiendo físicamente:
+                </p>
+                <select id="swal-picker-unidad"
+                    style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;
+                           border-radius:8px;font-size:13px;font-family:inherit;">
+                    ${opciones}
+                </select>`,
+            confirmButtonText: 'Seleccionar esta unidad',
+            confirmButtonColor: '#0f172a',
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => document.getElementById('swal-picker-unidad').value
+        });
+
+        if (!isConfirmed || !idSeleccionado) return; // El vendedor canceló
+
+        unidad = unidades.find(u => u.id == idSeleccionado);
+    }
+
+    if (!unidad) return;
+
+    // ── Agregar al carrito con la referencia física ───────────────────────────
+    const detalleLabel = [
+        `Cód: ${unidad.codigo_barra}`,
+        unidad.sede       && unidad.sede,
+        unidad.color_tela && unidad.color_tela,
+        unidad.acabado    && unidad.acabado,
+    ].filter(Boolean).join(' · ');
+
+    cart.push({
+        name:              nombre,
+        price:             precio,
+        img:               foto,
+        details:           detalleLabel,
+        componentes:       {},
+        es_stock:          true,
+        catalogo_id:       catalogoId,
+        stock_producto_id: unidad.id,    // ← EL PUENTE con stock_productos
+    });
+
+    document.getElementById('cart-count').innerText = cart.length;
+    updateCartUI();
+
+    Toast.fire({ icon: 'success', title: `"${nombre}" añadido al carrito` });
+}
+
+/**
+ * Comportamiento de respaldo (modo legacy) cuando el endpoint de inventario
+ * no responde. Permite seguir vendiendo sin el puente de inventario.
+ * @private
+ */
+function _addStockLegacy(catalogoId, nombre, precio, foto) {
     cart.push({
         name:        nombre,
         price:       precio,
         img:         foto,
         details:     'Venta Estándar',
         componentes: {},
-        es_stock:    true,          // ← flag que llega al backend
-        catalogo_id: catalogoId     // ← id real en catalogo_productos
+        es_stock:    true,
+        catalogo_id: catalogoId
+        // stock_producto_id ausente → solo descuenta el contador genérico
     });
     document.getElementById('cart-count').innerText = cart.length;
     updateCartUI();
-
     const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
     Toast.fire({ icon: 'success', title: `"${nombre}" añadido al carrito` });
 }
-
 /* --- LÓGICA DEL NUEVO MODAL DE SOFÁS --- */
 /* --- REEMPLAZA TU FUNCIÓN openConfig COMPLETA --- */
 function openConfig(name, img) {

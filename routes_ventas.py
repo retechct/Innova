@@ -1,6 +1,20 @@
 """
 routes_ventas.py — Módulos 2, 3 y 14: Ventas, seguimiento, producción y exportación.
 Blueprint: ventas_bp  (sin prefijo de URL)
+
+PUENTE INVENTARIO (Mayo 2026)
+─────────────────────────────
+Cuando se registra una venta con muebles que tienen es_stock=True y un
+stock_producto_id / stock_pieza_id, este módulo ahora:
+  1. Marca la unidad física como "Reservado"  en stock_productos / stock_piezas
+  2. Deja registro en historial_inventario
+  3. Vincula el id de la unidad al ítem de venta (items_venta.stock_producto_id)
+
+Al cambiar estado a "Entregado":  Reservado → Vendido
+Al anular la venta:               Reservado → Disponible
+
+El carrito (carrito.js) debe enviar stock_producto_id o stock_pieza_id
+dentro de cada elemento del array muebles.
 """
 
 import io
@@ -15,6 +29,34 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from database import get_db_connection, release_db_connection, enviar_notificacion_venta
 
 ventas_bp = Blueprint('ventas', __name__)
+
+# ─── Migración de esquema (se ejecuta una sola vez por proceso) ───────────────
+_schema_listo = False
+
+def _asegurar_columnas_inventario():
+    """
+    Añade stock_producto_id / stock_pieza_id a items_venta si aún no existen.
+    ADD COLUMN IF NOT EXISTS no falla si ya existen.
+    """
+    global _schema_listo
+    if _schema_listo:
+        return
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor()
+        cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS stock_producto_id INTEGER;")
+        cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS stock_pieza_id INTEGER;")
+        conn.commit()
+        _schema_listo = True
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"⚠️ _asegurar_columnas_inventario: {e}")
+    finally:
+        if conn:
+            cur.close()
+            release_db_connection(conn)
 
 
 # ─── Helper: historial de precios ────────────────────────────────────────────
@@ -41,6 +83,91 @@ def _crear_tabla_historial_precios(cursor):
     """)
 
 
+# ─── Helper: puente con el inventario real ───────────────────────────────────
+
+def _reservar_unidad(cursor, venta_id, codigo_venta,
+                     stock_prod_id, stock_piez_id,
+                     usuario_id, usuario_nombre, item_id):
+    """
+    Marca una unidad física como 'Reservado' y deja huella en
+    historial_inventario. Vincula el id al ítem de venta.
+    """
+    if stock_prod_id:
+        tabla, col, tipo = 'stock_productos', 'stock_producto_id', 'producto'
+        reg_id = stock_prod_id
+    elif stock_piez_id:
+        tabla, col, tipo = 'stock_piezas', 'stock_pieza_id', 'pieza'
+        reg_id = stock_piez_id
+    else:
+        return
+
+    cursor.execute(
+        f"SELECT estado, sede_id, codigo_barra FROM {tabla} WHERE id = %s",
+        (reg_id,)
+    )
+    fila = cursor.fetchone()
+    if not fila:
+        return  # La unidad ya no existe; continuar sin romper la transacción
+
+    estado_ant, sede_id, barcode = fila
+
+    # Cambiar a Reservado
+    cursor.execute(
+        f"UPDATE {tabla} SET estado = 'Reservado', actualizado_en = NOW() WHERE id = %s",
+        (reg_id,)
+    )
+
+    # Historial
+    cursor.execute("""
+        INSERT INTO historial_inventario
+            (tipo_registro, registro_id, codigo_barra, tipo_evento,
+             sede_origen_id, sede_destino_id, estado_anterior, estado_nuevo,
+             usuario_id, usuario_nombre, venta_id, codigo_venta, notas)
+        VALUES (%s,%s,%s,'Reserva',%s,NULL,%s,'Reservado',%s,%s,%s,%s,%s);
+    """, (tipo, reg_id, barcode, sede_id, estado_ant,
+          usuario_id, usuario_nombre, venta_id, codigo_venta,
+          f"Reservado al registrar venta {codigo_venta}"))
+
+    # Vincular al ítem de venta
+    cursor.execute(f"UPDATE items_venta SET {col} = %s WHERE id = %s", (reg_id, item_id))
+
+
+def _liberar_unidades(cursor, venta_id, estado_destino, evento_nombre):
+    """
+    Itera los ítems de la venta y pasa las unidades reservadas al
+    estado indicado (Disponible para anulaciones, Vendido para entregas).
+    """
+    for tabla, col, tipo in [
+        ('stock_productos', 'stock_producto_id', 'producto'),
+        ('stock_piezas',    'stock_pieza_id',    'pieza'),
+    ]:
+        try:
+            cursor.execute(f"""
+                SELECT iv.{col}, sp.estado, sp.sede_id, sp.codigo_barra
+                FROM items_venta iv
+                JOIN {tabla} sp ON sp.id = iv.{col}
+                WHERE iv.venta_id = %s AND iv.{col} IS NOT NULL
+                  AND sp.estado = 'Reservado'
+            """, (venta_id,))
+        except Exception:
+            continue  # La columna puede no existir en BD más antiguas
+
+        for reg_id, estado_ant, sede_id, barcode in cursor.fetchall():
+            cursor.execute(
+                f"UPDATE {tabla} SET estado = %s, actualizado_en = NOW() WHERE id = %s",
+                (estado_destino, reg_id)
+            )
+            cursor.execute("""
+                INSERT INTO historial_inventario
+                    (tipo_registro, registro_id, codigo_barra, tipo_evento,
+                     sede_origen_id, sede_destino_id, estado_anterior, estado_nuevo,
+                     usuario_id, usuario_nombre, venta_id, codigo_venta, notas)
+                VALUES (%s,%s,%s,%s,%s,NULL,%s,%s,NULL,'Sistema',%s,NULL,%s);
+            """, (tipo, reg_id, barcode, evento_nombre,
+                  sede_id, estado_ant, estado_destino,
+                  venta_id, f"Cambio automático — {evento_nombre}"))
+
+
 # ==========================================
 # VENTAS — REGISTRO Y LISTADO
 # ==========================================
@@ -49,6 +176,9 @@ def _crear_tabla_historial_precios(cursor):
 def guardar_venta():
     if request.method == 'GET':
         return listar_ventas()
+
+    _asegurar_columnas_inventario()   # ← migración segura al primer uso
+
     datos = request.json
     try:
         conexion = get_db_connection()
@@ -219,7 +349,7 @@ def guardar_venta():
                 VALUES (%s, 'DESPACHO_CENTRAL', %s, 99)
             """, (item_id, estado_despacho))
 
-            # Descuento de stock
+            # Descuento genérico de stock (contador en catálogo)
             if m.get('es_stock') and m.get('catalogo_id'):
                 cursor.execute("""
                     UPDATE catalogo_productos
@@ -228,7 +358,20 @@ def guardar_venta():
                     WHERE id = %s AND en_stock = true
                 """, (m['catalogo_id'],))
 
-            # Descuento de insumos por receta
+            # ── PUENTE INVENTARIO REAL ────────────────────────────────────────
+            # Si el vendedor escaneó / seleccionó una unidad física específica,
+            # la marcamos como Reservado y guardamos la referencia.
+            _reservar_unidad(
+                cursor, venta_id, datos['codigo'],
+                m.get('stock_producto_id'),
+                m.get('stock_pieza_id'),
+                datos.get('vendedor_id'),
+                datos.get('vendedor_nombre', ''),
+                item_id
+            )
+            # ─────────────────────────────────────────────────────────────────
+
+            # Descuento de insumos por receta (solo productos fabricados)
             cursor.execute(
                 "SELECT cp.id FROM catalogo_productos cp WHERE cp.nombre_modelo = %s LIMIT 1;",
                 (m['tipo'],)
@@ -314,11 +457,19 @@ def cambiar_estado_venta(venta_id):
     nuevo_estado = request.json.get('estado')
     if not nuevo_estado:
         return jsonify({'error': 'El estado es obligatorio'}), 400
-        
+
     try:
         conexion = get_db_connection()
+        conexion.autocommit = False
         cursor   = conexion.cursor()
+
         cursor.execute("UPDATE ventas SET estado_general = %s WHERE id = %s", (nuevo_estado, venta_id))
+
+        # ── PUENTE INVENTARIO: Entregado → marcar unidades como Vendido ──────
+        if nuevo_estado == 'Entregado':
+            _liberar_unidades(cursor, venta_id, 'Vendido', 'Venta')
+        # ─────────────────────────────────────────────────────────────────────
+
         conexion.commit()
         return jsonify({'exito': True, 'mensaje': f'Estado actualizado a {nuevo_estado}'}), 200
     except Exception as e:
@@ -327,6 +478,7 @@ def cambiar_estado_venta(venta_id):
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/anular', methods=['POST'])
 def anular_venta_completa(venta_id):
@@ -337,36 +489,39 @@ def anular_venta_completa(venta_id):
 
         # 1. Marcar venta como Cancelado
         cursor.execute("UPDATE ventas SET estado_general = 'Cancelado' WHERE id = %s", (venta_id,))
-        
+
         # 2. Cancelar Tickets de Producción
         cursor.execute("""
-            UPDATE tickets_produccion 
-            SET estado_ticket = 'Cancelado' 
+            UPDATE tickets_produccion
+            SET estado_ticket = 'Cancelado'
             WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
               AND estado_ticket != 'Terminado'
         """, (venta_id,))
-        
+
         # 3. Cancelar compras en Logística Externa
         cursor.execute("""
-            UPDATE logistica_externa 
-            SET estado = 'Cancelado' 
+            UPDATE logistica_externa
+            SET estado = 'Cancelado'
             WHERE venta_id = %s AND estado != 'Recibido'
         """, (venta_id,))
-        
-        # 4. Devolver stock si era producto directo
+
+        # 4. Devolver stock genérico (contador en catalogo_productos)
         cursor.execute("""
-            SELECT cp.id 
+            SELECT cp.id
             FROM catalogo_productos cp
             JOIN items_venta iv ON cp.nombre_modelo = iv.producto
             WHERE iv.venta_id = %s
         """, (venta_id,))
-        productos = cursor.fetchall()
-        for p in productos:
+        for p in cursor.fetchall():
             cursor.execute("""
-                UPDATE catalogo_productos 
-                SET stock_cantidad = stock_cantidad + 1, en_stock = true 
+                UPDATE catalogo_productos
+                SET stock_cantidad = stock_cantidad + 1, en_stock = true
                 WHERE id = %s
             """, (p[0],))
+
+        # 5. ── PUENTE INVENTARIO: liberar unidades físicas reservadas ─────────
+        _liberar_unidades(cursor, venta_id, 'Disponible', 'Devolucion')
+        # ─────────────────────────────────────────────────────────────────────
 
         conexion.commit()
         return jsonify({'exito': True, 'mensaje': 'Venta y procesos de taller anulados con éxito.'}), 200
@@ -376,6 +531,7 @@ def anular_venta_completa(venta_id):
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+
 
 # ==========================================
 # SEGUIMIENTO Y PRODUCCIÓN
@@ -700,7 +856,7 @@ def exportar_ventas_excel():
         anchos = [12, 25, 12, 14, 14, 14, 12, 40, 30, 30, 15, 30, 14, 14, 10, 20]
         for col, ancho in enumerate(anchos, 1):
             ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = ancho
-        fill_par  = PatternFill("solid", fgColor="F8FAFC")
+        fill_par   = PatternFill("solid", fgColor="F8FAFC")
         fill_impar = PatternFill("solid", fgColor="FFFFFF")
         for row_num, f in enumerate(filas, 2):
             fill = fill_par if row_num % 2 == 0 else fill_impar

@@ -42,6 +42,8 @@ PREFIJOS = {
     'base-comedor':   'BAC',
     'base-consola':   'BCS',
     'base-mesa-centro': 'BMC',
+    'silla':            'SIL',   # ← AGREGAR
+    'butaca':           'BUT',   # ← AGREGAR
 }
 
 
@@ -410,8 +412,8 @@ def registrar_pieza():
             cur.execute("""
                 INSERT INTO stock_piezas
                     (categoria, sku_maestro, nombre_modelo, material, color_acabado,
-                     codigo_barra, forma, largo_cm, ancho_cm, alto_cm,
-                     sede_id, estado, costo_ingreso, proveedor, creado_por)
+                    codigo_barra, forma, largo_cm, ancho_cm, alto_cm,
+                    sede_id, estado, costo_ingreso, proveedor, usuario_ingreso_id)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
                 RETURNING id;
             """, (
@@ -635,6 +637,71 @@ def exportar_inventario():
             mimetype='text/csv',
             headers={'Content-Disposition': f'attachment; filename=inventario_{fecha}.csv'}
         )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        _rel(conn)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. UNIDADES DISPONIBLES POR CATÁLOGO (para el picker del carrito)
+# ─────────────────────────────────────────────────────────────────────────────
+@inventario_bp.route('/api/inventario/disponibles/<int:catalogo_id>', methods=['GET'])
+def unidades_disponibles_por_catalogo(catalogo_id):
+    """
+    Devuelve todas las unidades de stock_productos con estado='Disponible'
+    que pertenecen al producto de catálogo indicado.
+
+    Usado por addStockItemToCart() en catalogo.js para que el vendedor
+    pueda elegir la pieza física exacta que va a vender.
+
+    Query param opcional:  ?sede_id=3  → filtrar por tienda
+    """
+    sede_id = request.args.get('sede_id', '')
+    conn = None
+    try:
+        conn = _conn(); cur = conn.cursor()
+
+        where_extra = ""
+        params = [catalogo_id]
+        if sede_id:
+            where_extra = " AND sp.sede_id = %s"
+            params.append(sede_id)
+
+        cur.execute(f"""
+            SELECT sp.id, sp.codigo_barra, se.nombre AS sede,
+                   sp.color_tela, sp.acabado, sp.observaciones,
+                   sp.costo_ingreso, sp.precio_venta,
+                   TO_CHAR(sp.fecha_ingreso, 'DD/MM/YYYY') AS fecha_ingreso
+            FROM stock_productos sp
+            JOIN sedes se ON sp.sede_id = se.id
+            WHERE sp.catalogo_id = %s
+              AND sp.estado = 'Disponible'
+              {where_extra}
+            ORDER BY se.nombre, sp.fecha_ingreso;
+        """, params)
+
+        unidades = []
+        for r in cur.fetchall():
+            # Etiqueta descriptiva para el picker
+            label_parts = [r[1], r[2]]                   # código + sede
+            if r[3]: label_parts.append(r[3])            # color/tela
+            if r[4]: label_parts.append(r[4])            # acabado
+            if r[5]: label_parts.append(r[5])            # observaciones
+            unidades.append({
+                'id':            r[0],
+                'codigo_barra':  r[1],
+                'sede':          r[2],
+                'color_tela':    r[3] or '',
+                'acabado':       r[4] or '',
+                'observaciones': r[5] or '',
+                'costo_ingreso': float(r[6]) if r[6] else None,
+                'precio_venta':  float(r[7]) if r[7] else None,
+                'fecha_ingreso': r[8] or '',
+                'label':         ' — '.join(label_parts),
+            })
+
+        return jsonify(unidades), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:

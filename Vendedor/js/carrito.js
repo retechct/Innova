@@ -347,14 +347,18 @@ async function guardarVenta() {
     vendedor_nombre: usuarioActivo.nombre,
     empresa_ruc: usuarioActivo.ruc,
 
-     muebles: cart.map(c => ({ 
-        tipo:          c.name, 
-        precio:        c.price, 
-        tela:          typeof c.details === 'object' ? JSON.stringify(c.details) : (c.details || "Venta Estándar"), 
-        foto:          c.img,
-        componentes:   c.componentes,
-        es_stock:      c.es_stock    || false,   // ← NUEVO: indica si es producto de stock
-        catalogo_id:   c.catalogo_id || null      // ← NUEVO: id en catalogo_productos
+        muebles: cart.map(c => ({
+        tipo:              c.name,
+        precio:            c.price,
+        tela:              typeof c.details === 'object'
+                               ? JSON.stringify(c.details)
+                               : (c.details || 'Venta Estándar'),
+        foto:              c.img,
+        componentes:       c.componentes,
+        es_stock:          c.es_stock           || false,
+        catalogo_id:       c.catalogo_id        || null,
+        stock_producto_id: c.stock_producto_id  || null,   // ← NUEVO: id en stock_productos
+        stock_pieza_id:    c.stock_pieza_id     || null,   // ← NUEVO: id en stock_piezas
     }))
  
 };
