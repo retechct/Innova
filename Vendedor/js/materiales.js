@@ -843,7 +843,7 @@ function abrirModalNuevo(tipo, destino) {
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Material</label>
-                ${mkSelect('nm-material', ['Acero','Acero Inoxidable','Fierro Negro','Madera Sólida','Aluminio','Mixto'])}
+                ${mkSelect('nm-material', ['Acero','Acero Inoxidable','Fierro Negro','Madera','Aluminio','Mixto'])}
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Acabado</label>
@@ -863,7 +863,7 @@ function abrirModalNuevo(tipo, destino) {
         htmlCampos = `
             <div class="form-group">
                 <label style="${labelStyle}">Material Base</label>
-                ${mkSelect('nm-material-base', ['MDF','Madera Sólida','Vidrio Templado','Cuarzo','Mármol','Porcelanato','Piedra Sinterizada'])}
+                ${mkSelect('nm-material-base', ['MDF','Madera','Vidrio Templado','Cuarzo','Mármol','Porcelanato','Piedra Sinterizada'])}
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Nombre del Modelo / Diseño <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
@@ -1256,7 +1256,7 @@ async function abrirEditorMaterial(sku, tipo) {
     } else if (tipo === 'tablero') {
         campos = `
             <div class="form-group"><label style="${labelStyle}">Material Base</label>
-                ${mkSelect('material-base', ['MDF','Madera Sólida','Vidrio Templado','Cuarzo','Mármol','Porcelanato','Piedra Sinterizada'], item.material_base)}</div>
+                ${mkSelect('material-base', ['MDF','Madera','Vidrio Templado','Cuarzo','Mármol','Porcelanato','Piedra Sinterizada'], item.material_base)}</div>
             <div class="form-group"><label style="${labelStyle}">Nombre del Modelo</label>
                 <input id="em-nombre-modelo" class="form-input" value="${item.nombre || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Color de Veta</label>
