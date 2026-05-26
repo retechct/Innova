@@ -829,10 +829,6 @@ function abrirModalNuevo(tipo, destino) {
             <div class="form-group">
                 <label style="${labelStyle}">Color <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
                 <input type="text" id="nm-color" ${inputStyle} placeholder="Ej. Nogal, Negro Mate, Dorado Champagne" required>
-            </div>
-            <div class="form-group">
-                <label style="${labelStyle}">Medida de Altura (cm)</label>
-                <input type="text" id="nm-medida-altura" ${inputStyle} placeholder="Ej. 15 cm" required>
             </div>`;
     }
 
