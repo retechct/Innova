@@ -1247,7 +1247,7 @@ async function abrirEditorMaterial(sku, tipo) {
             <div class="form-group"><label style="${labelStyle}">Nombre / Referencia</label>
                 <input id="em-modelo" class="form-input" value="${item.modelo || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Material</label>
-                ${mkSelect('material', ['Acero','Acero Inoxidable','Fierro Negro','Madera Sólida','Aluminio','Mixto'], item.material)}</div>
+                ${mkSelect('material', ['Acero','Acero Inoxidable','Fierro Negro','Madera','Aluminio','Mixto'], item.material)}</div>
             <div class="form-group"><label style="${labelStyle}">Acabado</label>
                 ${mkSelect('acabado', ['Mate','Brillante','Lacado','Natural','Oxidado','Cromado','Pintado'], item.acabado)}</div>
             <div class="form-group"><label style="${labelStyle}">Color</label>
@@ -1262,7 +1262,7 @@ async function abrirEditorMaterial(sku, tipo) {
             <div class="form-group"><label style="${labelStyle}">Color de Veta</label>
                 <input id="em-color-veta" class="form-input" value="${item.color || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Acabado</label>
-                ${mkSelect('acabado', ['Alto Brillo','Brillante y Mate','Texturizado','Pulido','Satinado'], item.acabado)}</div>`;
+                ${mkSelect('acabado', ['Alto Brillo','Brillante y Mate','Texturizado','Pulido','Satinado', 'Mate'], item.acabado)}</div>`;
 
     } else if (tipo === 'silla' || tipo === 'butaca') {
         const matOpts = tipo === 'silla'
