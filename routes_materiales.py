@@ -136,7 +136,8 @@ def agregar_nuevo_material():
         return jsonify({"error": str(ex)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
 
 
 @materiales_bp.route('/api/materiales/listas', methods=['GET'])
@@ -306,7 +307,8 @@ def guardar_creacion():
         return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
 
 
 @materiales_bp.route('/api/creaciones', methods=['GET'])
@@ -333,7 +335,8 @@ def obtener_creaciones():
         return jsonify({'error': 'Error al cargar creaciones'}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
 
 
 @materiales_bp.route('/api/creaciones/aprobar', methods=['POST'])
@@ -367,7 +370,8 @@ def aprobar_creacion():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
 
 
 @materiales_bp.route('/api/creaciones/rechazar', methods=['POST'])
@@ -388,7 +392,8 @@ def rechazar_creacion():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
 
 
 # ==========================================

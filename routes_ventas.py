@@ -278,8 +278,8 @@ def guardar_venta():
         for m in datos['muebles']:
             cursor.execute("""
                 INSERT INTO items_venta (venta_id, producto, color_tela, foto_url, precio_unitario)
-                    VALUES (%s, %s, %s, %s, %s) RETURNING id;
-            """, (venta_id, m['tipo'], m['tela'], m['foto']))
+                VALUES (%s, %s, %s, %s, %s) RETURNING id;
+            """, (venta_id, m.get('tipo'), m.get('tela'), m.get('foto'), m.get('precio')))
             item_id = cursor.fetchone()[0]
 
             componentes = m.get('componentes', {})
@@ -450,7 +450,8 @@ def guardar_venta():
         return jsonify({"error": error_msg}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
 
 
 def listar_ventas():
@@ -524,7 +525,8 @@ def cambiar_estado_venta(venta_id):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
 
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/anular', methods=['POST'])
@@ -577,7 +579,8 @@ def anular_venta_completa(venta_id):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
 
 
 # ==========================================
