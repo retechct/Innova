@@ -306,6 +306,43 @@ def guardar_venta():
                 """, (item_id, area_tap))
                 areas_internas_creadas.add(area_tap)
 
+            # ── Acumular detalle de cojines para ticket_details_override ─────
+            # Leemos los SKUs de cojines del componente antes de procesar el loop
+            detalle_cojines_armado  = []   # para ARMADO_COJINES
+            detalle_cojines_corte   = []   # para CORTE_Y_CONTROL_TELAS
+
+            for key_c, sku_c in componentes.items():
+                if not sku_c:
+                    continue
+                if key_c == 'cojin-entero':
+                    try:
+                        cursor.execute(
+                            "SELECT nombre_tela FROM maestro_telas WHERE sku = %s", (sku_c,)
+                        )
+                        row_te = cursor.fetchone()
+                        nombre_tela = row_te[0] if row_te else sku_c
+                    except Exception:
+                        nombre_tela = sku_c
+                    linea = f"Cojín Entero → [{sku_c}] {nombre_tela}"
+                    detalle_cojines_armado.append(linea)
+                    detalle_cojines_corte.append(linea)
+
+                elif key_c == 'cojin-diseno':
+                    try:
+                        cursor.execute(
+                            "SELECT nombre_diseno, tipo_tela FROM maestro_disenos_cojin WHERE sku = %s", (sku_c,)
+                        )
+                        row_dc = cursor.fetchone()
+                        nombre_dis = row_dc[0] if row_dc else sku_c
+                        tipo_tela  = row_dc[1] if row_dc else ''
+                    except Exception:
+                        nombre_dis, tipo_tela = sku_c, ''
+                    linea = f"Cojín c/Diseño → [{sku_c}] {nombre_dis}" + (f" ({tipo_tela})" if tipo_tela else "")
+                    detalle_cojines_armado.append(linea)
+                    detalle_cojines_corte.append(linea)
+
+            # ─────────────────────────────────────────────────────────────────
+
             for key, sku in componentes.items():
                 if not sku or key not in mapeo_erp:
                     continue
@@ -331,10 +368,20 @@ def guardar_venta():
 
                 if res and res[0] == 'Interno':
                     if area_destino not in areas_internas_creadas:
+                        # Determinar detalle a guardar en el ticket
+                        override_texto = None
+                        if area_destino == 'ARMADO_COJINES' and detalle_cojines_armado:
+                            override_texto = "COJINERÍA:\n" + "\n".join(detalle_cojines_armado)
+                        elif area_destino == 'CORTE_Y_CONTROL_TELAS' and detalle_cojines_corte:
+                            # Agregar detalle de cojines al ticket de corte (junto al tipo de tela general)
+                            tela_general = componentes.get('tela') or componentes.get('tela-silla') or componentes.get('tela-butaca') or ''
+                            override_texto = ("TELA PRINCIPAL: " + tela_general + "\n" if tela_general else "")
+                            override_texto += "COJINES:\n" + "\n".join(detalle_cojines_corte)
+
                         cursor.execute("""
-                            INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa)
-                            VALUES (%s, %s, 'Pendiente', 1)
-                        """, (item_id, area_destino))
+                            INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa, ticket_details_override)
+                            VALUES (%s, %s, 'Pendiente', 1, %s)
+                        """, (item_id, area_destino, override_texto))
                         areas_internas_creadas.add(area_destino)
                 elif res is None or res[0] == 'Externo':
                     cursor.execute(

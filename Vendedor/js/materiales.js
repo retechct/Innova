@@ -780,26 +780,15 @@ function abrirModalNuevo(tipo, destino) {
     }
 
     // ── COJÍN ─────────────────────────────────────────────────────────────
-    // B1: "Tipo de Tela Requerida" pasa a ser select vinculado al maestro de telas
     else if (tipo === 'cojin') {
-        // Construir opciones desde el maestro cargado en memoria
-        const opcionesTelas = (maestroMateriales.telas || [])
-            .filter(t => t.estado !== 'Agotado')
-            .map(t => `<option value="${t.sku}">${t.coleccion} — ${t.color} (${t.sku})</option>`)
-            .join('');
-
         htmlCampos = `
             <div class="form-group">
-                <label style="${labelStyle}">Nombre del Diseño / Modelo</label>
-                <input type="text" id="nm-nombre-diseno" ${inputStyle} placeholder="Ej. Cojín de Respaldar Capitoneado" required>
+                <label style="${labelStyle}">Nombre del Diseño / Patrón</label>
+                <input type="text" id="nm-nombre-diseno" ${inputStyle} placeholder="Ej. Geométrico, Floral, Capitoneado..." required>
             </div>
             <div class="form-group">
-                <label style="${labelStyle}">Tipo de Tela Requerida</label>
-                <select id="nm-tipo-tela" class="form-input" required>
-                    <option value="">— Seleccionar tela del maestro —</option>
-                    ${opcionesTelas}
-                    <option value="Otra">Otra / No registrada aún</option>
-                </select>
+                <label style="${labelStyle}">Material / Composición (Texto libre)</label>
+                <input type="text" id="nm-tipo-tela" ${inputStyle} placeholder="Ej. Jacquard estampado, Lino bordado, Terciopelo..." required>
             </div>`;
     }
 
@@ -1214,17 +1203,11 @@ async function abrirEditorMaterial(sku, tipo) {
                 <input id="em-color" class="form-input" value="${item.color || ''}"></div>`;
 
     } else if (tipo === 'cojin') {
-        const opcionesTelas = (maestroMateriales.telas || [])
-            .map(t => `<option value="${t.sku}" ${t.sku===item.tipo_tela?'selected':''}>${t.coleccion} — ${t.color} (${t.sku})</option>`)
-            .join('');
         campos = `
-            <div class="form-group"><label style="${labelStyle}">Nombre del Diseño</label>
+            <div class="form-group"><label style="${labelStyle}">Nombre del Diseño / Patrón</label>
                 <input id="em-nombre-diseno" class="form-input" value="${item.nombre_diseno || ''}"></div>
-            <div class="form-group"><label style="${labelStyle}">Tipo de Tela Requerida</label>
-                <select id="em-tipo-tela" class="form-input">
-                    ${opcionesTelas}
-                    <option value="Otra" ${item.tipo_tela==='Otra'?'selected':''}>Otra / No registrada</option>
-                </select></div>`;
+            <div class="form-group"><label style="${labelStyle}">Material / Composición</label>
+                <input id="em-tipo-tela" class="form-input" value="${item.tipo_tela || ''}" placeholder="Ej. Jacquard, Lino bordado..."></div>`;
 
     } else if (tipo === 'base') {
         campos = `
