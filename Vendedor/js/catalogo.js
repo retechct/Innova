@@ -417,6 +417,9 @@ function confirmarPersonalizadoSofa() {
     const cDiseno = document.getElementById('c-diseno').value || '0';
     const skuCojinEnt = document.getElementById('sku-cojin-entero').value || 'N/A';
     const skuCojinDis = document.getElementById('sku-cojin-diseno').value || 'N/A';
+    const nombreCojinEnt = document.getElementById('search-cojin-entero').value || '';
+    const nombreCojinDis = document.getElementById('search-cojin-diseno').value || '';
+    const tipoCojinDis = document.getElementById('tipo-tela-cojin-diseno')?.value || '';
 
     const skuBase = document.getElementById('sku-base').value;
     const nombreBase = document.getElementById('search-base').value;
@@ -426,8 +429,8 @@ function confirmarPersonalizadoSofa() {
         <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}<br>
         <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>
-        - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}]<br>
-        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}]<br>
+        - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}<br>
+        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}<br>
         <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}
         ${banquetaText}
     `;

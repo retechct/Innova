@@ -676,8 +676,7 @@ async function guardarProveedor() {
 // Llamado desde el selector de cada tarjeta generada por dibujarTarjetaMaterial
 // ─────────────────────────────────────────────────────────────────────────────
 async function actualizarEstadoInsumo(itemId, categoria, nuevoEstado) {
-    // Mapa de categoría (devuelta por listas) → segmento de URL del endpoint PUT
-    const catEndpoint = {
+    const catToEndpoint = {
         'TELA':         'telas',
         'COJ':          'cojines',
         'BASE':         'bases',
@@ -687,14 +686,13 @@ async function actualizarEstadoInsumo(itemId, categoria, nuevoEstado) {
         'BUTACA':       'butacas',
     };
 
-    // Buscar el SKU real desde maestroMateriales usando el id
-    const catKey = Object.keys(catEndpoint).find(k => categoria.toUpperCase().startsWith(k));
-    const endpoint = catEndpoint[catKey] || null;
+    const catUpper = (categoria || '').toUpperCase();
+    const endpoint = catToEndpoint[catUpper];
+
     if (!endpoint) {
-        return Swal.fire('Error', 'Categoría de material no reconocida: ' + categoria, 'error');
+        return Swal.fire('Error', 'Categoría no reconocida: ' + categoria, 'error');
     }
 
-    // Buscar SKU en el maestro global para construir la URL correcta
     const listaKey = {
         'telas': 'telas', 'cojines': 'cojines', 'bases': 'bases',
         'bases-comedor': 'bases_comedor', 'tableros': 'tableros',
@@ -702,9 +700,10 @@ async function actualizarEstadoInsumo(itemId, categoria, nuevoEstado) {
     }[endpoint];
 
     const lista = maestroMateriales[listaKey] || [];
-    const item = lista.find(i => i.id === itemId);
+    const item  = lista.find(i => i.id === itemId);
+
     if (!item) {
-        return Swal.fire('Error', 'No se encontró el material con id ' + itemId, 'error');
+        return Swal.fire('Error', `Material id=${itemId} no encontrado. Recarga la página.`, 'error');
     }
 
     try {
@@ -715,9 +714,8 @@ async function actualizarEstadoInsumo(itemId, categoria, nuevoEstado) {
         });
         const data = await res.json();
         if (!res.ok || !data.exito) {
-            Swal.fire('Error', data.error || 'No se pudo actualizar el estado.', 'error');
+            return Swal.fire('Error', data.error || 'No se pudo actualizar el estado.', 'error');
         }
-        // Actualizar el estado en el maestro en memoria para no recargar toda la página
         item.estado = nuevoEstado;
     } catch (e) {
         Swal.fire('Error', 'Fallo de conexión al actualizar estado.', 'error');
@@ -1129,7 +1127,8 @@ function dibujarTarjetaMaterial(item, tipo) {
 
             <!-- Selector de estado -->
             <select
-                onchange="actualizarEstadoInsumo(${item.id}, '${catLabel}', this.value)"
+                
+                onchange="actualizarEstadoInsumo(${item.id}, '${item.categoria}', this.value)"
                 style="
                     width:100%; padding:6px 8px; border-radius:6px;
                     border:1px solid #e2e8f0; font-size:11px; font-weight:700;

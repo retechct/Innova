@@ -162,7 +162,7 @@ def _liberar_unidades(cursor, venta_id, estado_destino, evento_nombre):
                     (tipo_registro, registro_id, codigo_barra, tipo_evento,
                      sede_origen_id, sede_destino_id, estado_anterior, estado_nuevo,
                      usuario_id, usuario_nombre, venta_id, codigo_venta, notas)
-                VALUES (%s,%s,%s,%s,%s,NULL,%s,%s,NULL,'Sistema',%s,NULL,%s);
+                VALUES (%s,%s,%s,%s,%s,0,'Sistema',%s,%s,%s,NULL,%s)
             """, (tipo, reg_id, barcode, evento_nombre,
                   sede_id, estado_ant, estado_destino,
                   venta_id, f"Cambio automático — {evento_nombre}"))
@@ -265,7 +265,7 @@ def guardar_venta():
             'tela-silla':        ('maestro_telas',         'CORTE_Y_CONTROL_TELAS'),
             'tela-butaca':       ('maestro_telas',         'CORTE_Y_CONTROL_TELAS'),
             'cojin-entero':      ('maestro_telas',         'CORTE_Y_CONTROL_TELAS'),
-            'cojin-diseno':      ('maestro_disenos_cojin', 'CORTE_Y_CONTROL_TELAS'),
+            'cojin-diseno':      ('maestro_disenos_cojin', 'ARMADO_COJINES'),
             'base':              ('maestro_bases',          'PREPARACION_PATAS_ZOCALO'),
             'tablero':           ('maestro_tableros',       'TABLEROS_Y_PIEDRAS'),
             'tablero-centro':    ('maestro_tableros',       'TABLEROS_Y_PIEDRAS'),
@@ -277,8 +277,8 @@ def guardar_venta():
 
         for m in datos['muebles']:
             cursor.execute("""
-                INSERT INTO items_venta (venta_id, producto, color_tela, foto_url)
-                VALUES (%s, %s, %s, %s) RETURNING id;
+                INSERT INTO items_venta (venta_id, producto, color_tela, foto_url, precio_unitario)
+                    VALUES (%s, %s, %s, %s, %s) RETURNING id;
             """, (venta_id, m['tipo'], m['tela'], m['foto']))
             item_id = cursor.fetchone()[0]
 

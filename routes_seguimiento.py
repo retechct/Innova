@@ -166,24 +166,25 @@ def detalle_pedido_cliente(codigo):
             return jsonify({'error': 'Pedido no encontrado'}), 404
 
         venta_id = venta[0]
-        
+
         moneda = 'PEN'
         comprobante = 'Boleta'
         try:
-            # Intentamos obtener moneda y comprobante, por si las columnas fueron creadas recientemente
             cursor.execute("SELECT moneda, tipo_comprobante FROM ventas WHERE id = %s;", (venta_id,))
             row_extra = cursor.fetchone()
             if row_extra:
-                moneda = row_extra[0] or 'PEN'
+                moneda      = row_extra[0] or 'PEN'
                 comprobante = row_extra[1] or 'Boleta'
         except Exception:
-            conexion.rollback() # Si la columna no existe, ignorar y usar los valores por defecto
+            conexion.rollback()
 
         # Ítems
         items = []
         try:
             cursor.execute("""
-                SELECT producto, detalles, foto_url, precio_unitario
+                SELECT producto,
+                       COALESCE(detalles, color_tela, '') AS detalles,
+                       foto_url, precio_unitario
                 FROM items_venta WHERE venta_id = %s ORDER BY id;
             """, (venta_id,))
             items = [{
@@ -193,18 +194,7 @@ def detalle_pedido_cliente(codigo):
                 'precio':   float(r[3]) if r[3] else None,
             } for r in cursor.fetchall()]
         except Exception:
-            conexion.rollback()
-            # Fallback por si la columna de detalles se llamaba color_tela en versiones anteriores
-            cursor.execute("""
-                SELECT producto, color_tela AS detalles, foto_url, precio_unitario
-                FROM items_venta WHERE venta_id = %s ORDER BY id;
-            """, (venta_id,))
-            items = [{
-                'producto': r[0],
-                'detalles': r[1] or '',
-                'foto':     limpiar_foto(r[2]),
-                'precio':   float(r[3]) if r[3] else None,
-            } for r in cursor.fetchall()]
+            pass
 
         # Pagos
         pagos = []
