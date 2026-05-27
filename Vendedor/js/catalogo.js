@@ -406,6 +406,7 @@ function confirmarPersonalizadoSofa() {
     // 3. CAPTURAR DATOS DE ERP
     const skuTela = document.getElementById('sku-tela').value;
     const nombreTela = document.getElementById('search-tela').value;
+    const notaTela = document.getElementById('nota-tela')?.value || '';
     if(!skuTela) return Swal.fire('Dato Faltante', 'Debe seleccionar una Tela Principal', 'warning');
 
     const espuma = document.getElementById('c-espuma').value;
@@ -420,18 +421,21 @@ function confirmarPersonalizadoSofa() {
     const nombreCojinEnt = document.getElementById('search-cojin-entero').value || '';
     const nombreCojinDis = document.getElementById('search-cojin-diseno').value || '';
     const tipoCojinDis = document.getElementById('tipo-tela-cojin-diseno')?.value || '';
+    const notaCojinEnt = document.getElementById('nota-cojin-entero')?.value || '';
+    const notaCojinDis = document.getElementById('nota-cojin-diseno')?.value || '';
 
     const skuBase = document.getElementById('sku-base').value;
     const nombreBase = document.getElementById('search-base').value;
+    const notaBase = document.getElementById('nota-base')?.value || '';
 
     const specs = `
         <b>MOD:</b> ${modeloBase} ${medidasText}<br>
-        <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}<br>
+        <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${notaTela ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTela}</i></span>` : ''}<br>
         <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>
-        - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}<br>
-        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}<br>
-        <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}
+        - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${notaCojinEnt ? `<br>&nbsp;&nbsp;<span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaCojinEnt}</i></span>` : ''}<br>
+        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${notaCojinDis ? `<br>&nbsp;&nbsp;<span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaCojinDis}</i></span>` : ''}<br>
+        <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}${notaBase ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaBase}</i></span>` : ''}
         ${banquetaText}
     `;
 
@@ -495,22 +499,26 @@ function confirmarComedor() {
     const nombreTablero = document.getElementById('search-tablero').value;
     const corte = document.getElementById('tablero-corte').value;
     const canto = document.getElementById('tablero-canto').value;
+    const notaTablero = document.getElementById('nota-tablero')?.value || '';
 
     const nombreBaseMesa = document.getElementById('search-base-mesa').value;
     const alturaBase = document.getElementById('base-altura').value || "0";
     const anchoBase = document.getElementById('base-ancho').value || "0";
+    const notaBaseMesa = document.getElementById('nota-base-mesa')?.value || '';
 
     const nombreSilla = document.getElementById('search-silla').value;
     const nombreTelaSilla = document.getElementById('search-tela-silla').value;
     const skuTelaSilla = document.getElementById('sku-tela-silla').value;
+    const notaSilla = document.getElementById('nota-silla')?.value || '';
+    const notaTelaSilla = document.getElementById('nota-tela-silla')?.value || '';
 
     const specs = `
         <b>FORMATO:</b> ${formatoTexto} para ${cantidadSillas} personas<br>
         <b>MEDIDAS:</b> ${medidasTexto}<br>
-        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (Corte: ${corte}, Canto: ${canto})<br>
-        <b>BASE MESA:</b> [SKU: ${skuBaseMesa}] ${nombreBaseMesa} (Alto: ${alturaBase}cm, Ancho: ${anchoBase}cm)<br>
-        <b>SILLERÍA:</b> ${cantidadSillas} Unds x [SKU: ${skuSilla}] ${nombreSilla}<br>
-        <b>TAPIZ SILLAS:</b> ${skuTelaSilla ? `[SKU: ${skuTelaSilla}] ${nombreTelaSilla}` : "Sin tapiz específico"}
+        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (Corte: ${corte}, Canto: ${canto})${notaTablero ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTablero}</i></span>` : ''}<br>
+        <b>BASE MESA:</b> [SKU: ${skuBaseMesa}] ${nombreBaseMesa} (Alto: ${alturaBase}cm, Ancho: ${anchoBase}cm)${notaBaseMesa ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaBaseMesa}</i></span>` : ''}<br>
+        <b>SILLERÍA:</b> ${cantidadSillas} Unds x [SKU: ${skuSilla}] ${nombreSilla}${notaSilla ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaSilla}</i></span>` : ''}<br>
+        <b>TAPIZ SILLAS:</b> ${skuTelaSilla ? `[SKU: ${skuTelaSilla}] ${nombreTelaSilla}` : "Sin tapiz específico"}${notaTelaSilla ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTelaSilla}</i></span>` : ''}
     `;
 
     const nombreProducto = `Comedor Pro ${formatoTexto} (${cantidadSillas} Sillas)`;
@@ -647,11 +655,13 @@ function confirmarCentro() {
     const nombreTablero = document.getElementById('search-tablero-centro').value;
     const nombreBase = document.getElementById('search-base-centro').value;
     const notas = document.getElementById('centro-notas').value;
+    const notaTablero = document.getElementById('nota-tablero-centro')?.value || '';
+    const notaBase = document.getElementById('nota-base-centro')?.value || '';
 
     const specs = `
         <b>FORMATO:</b> ${tipo}<br>
-        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (L${l}cm x A${a}cm x Espesor: ${e}cm)<br>
-        <b>BASE ESTRUCTURAL:</b> [SKU: ${skuBase}] ${nombreBase} (Alto: ${hBase}cm x Ancho: ${aBase}cm)<br>
+        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (L${l}cm x A${a}cm x Espesor: ${e}cm)${notaTablero ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTablero}</i></span>` : ''}<br>
+        <b>BASE ESTRUCTURAL:</b> [SKU: ${skuBase}] ${nombreBase} (Alto: ${hBase}cm x Ancho: ${aBase}cm)${notaBase ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaBase}</i></span>` : ''}<br>
         ${notas ? `<b style="color:var(--accent);">NOTAS:</b> ${notas}` : ''}
     `;
 
@@ -728,11 +738,13 @@ function confirmarButaca() {
     const nombreEstructura = document.getElementById('search-estructura-butaca').value;
     const nombreTela = document.getElementById('search-tela-butaca').value || "Sin tapiz específico";
     const notas = document.getElementById('butaca-notas').value;
+    const notaEstructura = document.getElementById('nota-estructura-butaca')?.value || '';
+    const notaTela = document.getElementById('nota-tela-butaca')?.value || '';
 
     const specs = `
         <b>PRODUCTO:</b> ${cantidad} Und(s) de ${tipo}<br>
-        <b>ESTRUCTURA/MODELO:</b> [SKU: ${skuEstructura}] ${nombreEstructura}<br>
-        <b>TAPIZ:</b> ${skuTela ? `[SKU: ${skuTela}] ${nombreTela}` : nombreTela}<br>
+        <b>ESTRUCTURA/MODELO:</b> [SKU: ${skuEstructura}] ${nombreEstructura}${notaEstructura ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaEstructura}</i></span>` : ''}<br>
+        <b>TAPIZ:</b> ${skuTela ? `[SKU: ${skuTela}] ${nombreTela}` : nombreTela}${notaTela ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTela}</i></span>` : ''}<br>
         ${notas ? `<b style="color:var(--accent);">NOTAS:</b> ${notas}` : ''}
     `;
 

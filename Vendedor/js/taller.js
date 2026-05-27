@@ -909,7 +909,13 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
 
     // ── Construir HTML de las líneas de texto ──
     const specsHtml = seccionesFiltradas
-        .map(l => `<div style="padding:5px 0; border-bottom:1px solid #e2e8f0; font-size:12px;">${l}</div>`)
+        .map(l => {
+            const urlRegex = /(https?:\/\/[^\s"<]+)/g;
+            let formattedLine = l.replace(urlRegex, function(url) {
+                return `<br><img src="${url}" style="width:140px; height:140px; object-fit:cover; border-radius:8px; border:2px dashed #f59e0b; margin-top:6px; display:block;" onerror="this.style.display='none'"><a href="${url}" target="_blank" style="font-size:9px; color:#3b82f6;">Ver foto completa</a>`;
+            });
+            return `<div style="padding:5px 0; border-bottom:1px solid #e2e8f0; font-size:12px;">${formattedLine}</div>`;
+        })
         .join('');
 
     // ── Foto del mueble ──

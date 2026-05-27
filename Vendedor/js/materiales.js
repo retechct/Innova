@@ -81,11 +81,37 @@ function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl) {
     
     // MOSTRAMOS LA IMAGEN EN MINIATURA
     let imgPreview = document.getElementById(`img-preview-${tipoInput}`);
-    imgPreview.src = fotoUrl;
-    imgPreview.style.display = 'block'; 
+    if (imgPreview) {
+        imgPreview.src = fotoUrl;
+        imgPreview.style.display = 'block'; 
+    }
+
+    // INYECTAMOS CAMPO DE NOTA DINÁMICO
+    let searchInput = document.getElementById(`search-${tipoInput}`);
+    let noteInputId = `nota-${tipoInput}`;
+    let noteInput = document.getElementById(noteInputId);
+    
+    if (!noteInput && searchInput) {
+        noteInput = document.createElement('input');
+        noteInput.type = 'text';
+        noteInput.id = noteInputId;
+        noteInput.className = 'form-input-sm';
+        noteInput.placeholder = 'Añadir nota a esta pieza (opcional)';
+        noteInput.style.cssText = 'margin-top: 6px; width: 100%; font-size: 11px; border: 1px dashed #a78bfa; background-color: #fdf4ff; box-sizing: border-box;';
+        searchInput.parentNode.insertBefore(noteInput, searchInput.nextSibling);
+    }
+    
+    if (noteInput) {
+        if (sku.startsWith('REQ-PIN-')) {
+            noteInput.value = `Ver foto adjunta: ${fotoUrl}`;
+        } else {
+            noteInput.value = ''; 
+        }
+    }
     
     // Cerramos la lista
-    document.getElementById(`list-${tipoInput}`).classList.remove('show');
+    let listContainer = document.getElementById(`list-${tipoInput}`);
+    if (listContainer) listContainer.classList.remove('show');
 }
 
 // Para cerrar las listas desplegables si se hace clic afuera
@@ -441,42 +467,60 @@ async function guardarProductoDirecto() {
 /* --- MÓDULO: INTERCEPTOR PINTEREST (Piezas Especiales) --- */
 /* ================================================================= */
 async function abrirModalPinterest(tipoInput) {
-    const { value: descripcion } = await Swal.fire({
-        title: '📐 Especificación de la Pieza',
+    const { value: formValues } = await Swal.fire({
+        title: '✨ Diseño Pinterest / Especial',
         html: `
             <p style="font-size: 13px; color: #64748b; text-align: left; margin-bottom: 10px;">
-                Escribe las instrucciones <b>solo para esta parte del mueble</b>:
+                1. Describe las instrucciones para esta pieza:
             </p>
             <textarea id="swal-pin-desc" class="swal2-textarea" placeholder="Ej: Patas cruzadas en forma de X, color negro mate..." style="margin-top: 0; height: 80px; font-size: 14px;"></textarea>
             
-            <div style="background: #fffcf0; padding: 12px; border-radius: 6px; border-left: 4px solid #f59e0b; margin-top: 15px; text-align: left; font-size: 12px; color: #b45309;">
-                <b>📷 IMPORTANTE:</b> Recuerda subir la imagen de esta pieza usando el botón <b>"Fotos de Referencia"</b> que está en el menú izquierdo.
-            </div>
+            <p style="font-size: 13px; color: #64748b; text-align: left; margin: 15px 0 10px 0;">
+                2. Sube la foto de referencia (Obligatorio para el taller):
+            </p>
+            <input type="file" id="swal-pin-img" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
         `,
         focusConfirm: false,
         showCancelButton: true,
-        confirmButtonText: 'Guardar Pieza',
+        confirmButtonText: 'Subir y Guardar',
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#0f172a',
-        preConfirm: () => {
+        preConfirm: async () => {
             const desc = document.getElementById('swal-pin-desc').value;
+            const file = document.getElementById('swal-pin-img').files[0];
+            
             if (!desc || desc.trim() === '') {
-                Swal.showValidationMessage('Debes escribir una descripción para el taller.');
+                Swal.showValidationMessage('Debes escribir una descripción.');
                 return false;
             }
-            return desc;
+            if (!file) {
+                Swal.showValidationMessage('Debes subir una foto de referencia.');
+                return false;
+            }
+
+            Swal.getConfirmButton().innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Subiendo foto...';
+            Swal.disableButtons();
+
+            try {
+                const formData = new FormData();
+                formData.append('archivo', file);
+                const res = await apiFetch(`${API_URL}/api/upload-voucher`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (!data.url) throw new Error('No se pudo obtener la URL de la imagen');
+                return { desc, url: data.url };
+            } catch (e) {
+                Swal.showValidationMessage('Error al subir la imagen. Intenta de nuevo.');
+                Swal.enableButtons();
+                Swal.getConfirmButton().innerHTML = 'Subir y Guardar';
+                return false;
+            }
         }
     });
 
-    if (descripcion) {
-        // Formateamos el texto para que se vea claro en el ticket del taller
-        let tituloEspecial = `✨ ESP: ${descripcion}`;
-        
-        // Creamos un SKU único temporal para esta pieza basada en la hora
+    if (formValues) {
+        let tituloEspecial = `✨ PINTEREST: ${formValues.desc}`;
         let skuTemporal = `REQ-PIN-${Date.now().toString().slice(-6)}`;
-        
-        // Usamos tu misma función para inyectar esto en el formulario visual
-        seleccionarMaterial(tipoInput, skuTemporal, tituloEspecial, 'imagenes/sin_foto.jpg');
+        seleccionarMaterial(tipoInput, skuTemporal, tituloEspecial, formValues.url);
     }
 }
 /* ================================================================= */
