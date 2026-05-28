@@ -522,8 +522,8 @@ def guardar_venta():
         print(f"[ERROR] TRACEBACK COMPLETO:\n{tb}")
         print(f"{'!'*60}\n")
         error_msg = str(ex)
-        if "llave duplicada" in error_msg or "UniqueViolation" in error_msg:
-            return jsonify({"error": "El N° de Contrato ya fue registrado."}), 400
+        if "llave duplicada" in error_msg.lower() or "uniqueviolation" in error_msg.lower() or "duplicate key" in error_msg.lower():
+            return jsonify({"error": f"El N° de Contrato ({datos.get('codigo')}) ya está registrado en el sistema. Por favor, utiliza un código diferente."}), 400
         return jsonify({
             "error": error_msg,
             "paso": _paso_actual,
