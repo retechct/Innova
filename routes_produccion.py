@@ -93,6 +93,7 @@ def finalizar_ticket(id):
                     desbloqueados += cursor.rowcount
 
         venta_actualizada = False
+        despacho_desbloqueado = False
         if row:
             cursor.execute("SELECT venta_id FROM items_venta WHERE id = %s", (item_id,))
             venta_row = cursor.fetchone()
@@ -110,13 +111,35 @@ def finalizar_ticket(id):
                     """, (venta_id_check,))
                     venta_actualizada = cursor.rowcount > 0
 
+            # ── Desbloquear DESPACHO_CENTRAL si ya no quedan áreas pendientes ──
+            # Se verifica a nivel de item_id (no de venta) para que cada ítem
+            # se desbloquee en el momento exacto en que sus propias áreas terminan,
+            # sin esperar a que los demás ítems de la misma venta también terminen.
+            cursor.execute("""
+                SELECT COUNT(*) FROM tickets_produccion
+                WHERE item_id = %s
+                  AND area_trabajo != 'DESPACHO_CENTRAL'
+                  AND estado_ticket != 'Terminado'
+            """, (item_id,))
+            if cursor.fetchone()[0] == 0:
+                cursor.execute("""
+                    UPDATE tickets_produccion
+                    SET estado_ticket = 'Pendiente'
+                    WHERE item_id = %s
+                      AND area_trabajo = 'DESPACHO_CENTRAL'
+                      AND estado_ticket = 'Bloqueado'
+                """, (item_id,))
+                despacho_desbloqueado = cursor.rowcount > 0
+
         conexion.commit()
         msg = 'Ticket finalizado correctamente'
         if desbloqueados > 0:
             msg += f'. {desbloqueados} ticket(s) de tapicería desbloqueado(s) automáticamente.'
+        if despacho_desbloqueado:
+            msg += '. 📦 ¡Producción del ítem completa! Despacho habilitado para asignar chofer.'
         if venta_actualizada:
             msg += '. ✅ ¡Producción completa! La venta pasó a estado Listo.'
-        return jsonify({'exito': True, 'mensaje': msg, 'desbloqueados': desbloqueados, 'venta_lista': venta_actualizada}), 200
+        return jsonify({'exito': True, 'mensaje': msg, 'desbloqueados': desbloqueados, 'venta_lista': venta_actualizada, 'despacho_desbloqueado': despacho_desbloqueado}), 200
 
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
