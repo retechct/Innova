@@ -359,7 +359,7 @@ async function cargarVistaColaRecojo(contenedor) {
             <div style="display:flex; flex-direction:column; gap:15px;">`;
 
         cola.forEach((c, idx) => {
-            const fotoEstructura = c.foto_url && !c.foto_url.includes('sin_foto') ? c.foto_url : null;
+            const fotoEstructura = c.foto_url && !c.foto_url.includes('sin_foto') ? c.foto_url.split('|')[0] : null;
             const fotoEvidencia  = c.foto_evidencia || null;
 
             html += `
@@ -467,7 +467,7 @@ function abrirVentanaPDFRecojo(items, titulo) {
                     ${c.foto_url && !c.foto_url.includes('sin_foto') ? `
                     <div class="foto-box">
                         <div class="foto-label">Foto del Mueble</div>
-                        <img src="${c.foto_url}" class="foto-img" onerror="this.parentElement.style.display='none'">
+                        <img src="${c.foto_url.split('|')[0]}" class="foto-img" onerror="this.parentElement.style.display='none'">
                     </div>` : ''}
                     ${c.foto_evidencia ? `
                     <div class="foto-box">
@@ -911,17 +911,56 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
     const specsHtml = seccionesFiltradas
         .map(l => {
             const urlRegex = /(https?:\/\/[^\s"<]+)/g;
-            let formattedLine = l.replace(urlRegex, function(url) {
-                return `<br><img src="${url}" style="width:140px; height:140px; object-fit:cover; border-radius:8px; border:2px dashed #f59e0b; margin-top:6px; display:block;" onerror="this.style.display='none'"><a href="${url}" target="_blank" style="font-size:9px; color:#3b82f6;">Ver foto completa</a>`;
+            let fLine = l.replace(urlRegex, function(url) {
+                return `<br><img src="${url}" style="width:120px; height:120px; object-fit:cover; border-radius:6px; border:2px solid #cbd5e1; margin-top:4px;" onclick="ampliarImagen('${url}')">`;
             });
-            return `<div style="padding:5px 0; border-bottom:1px solid #e2e8f0; font-size:12px;">${formattedLine}</div>`;
+            
+            if (fLine.includes(':') && !fLine.startsWith('http') && !fLine.includes('<img')) {
+                const parts = fLine.split(':');
+                const prefix = parts.shift().trim();
+                const rest = parts.join(':').trim();
+                
+                if (prefix.includes('Nota') || prefix.includes('↳')) {
+                    return `<div style="padding:6px 8px; background:#fffbeb; color:#92400e; border-left:3px solid #f59e0b; font-size:11px; margin:4px 0; border-radius:0 4px 4px 0;"><i><i class="fa-solid fa-circle-info"></i> ${prefix}: ${rest}</i></div>`;
+                }
+                if (prefix.startsWith('-') || prefix.startsWith('•')) {
+                     return `<div style="padding:4px 0; font-size:12px; display:flex;"><span style="color:#64748b; margin-right:5px;">•</span><div style="flex:1;"><b>${prefix.replace(/^[-•]\s*/, '')}:</b> ${rest}</div></div>`;
+                }
+                return `<div style="padding:6px 0; border-bottom:1px solid #f1f5f9; font-size:12px;"><b style="color:#475569; font-size:10px; text-transform:uppercase; display:block; margin-bottom:2px;">${prefix}</b><span style="color:#0f172a; font-weight:600;">${rest}</span></div>`;
+            }
+            
+            if (/^[A-ZÁÉÍÓÚÑ ]+$/.test(fLine.trim()) && fLine.trim().length > 3) {
+                 return `<div style="padding:10px 0 2px 0; font-size:11px; font-weight:900; color:var(--primary); text-transform:uppercase; border-bottom:2px solid #e2e8f0; margin-bottom:4px;">${fLine}</div>`;
+            }
+            return `<div style="padding:4px 0; font-size:12px; color:#1e293b;">${fLine}</div>`;
         })
         .join('');
 
-    // ── Foto del mueble ──
-    const fotoMueble = foto
-        ? `<img src="${foto}" style="width:100%; max-height:180px; object-fit:cover; border-radius:10px; margin-bottom:12px;" onerror="this.style.display='none'">`
-        : '';
+    // ── Foto del mueble (Slider si hay más de 1) ──
+    let fotoMueble = '';
+    if (foto) {
+        const fotosArray = foto.split('|').filter(f => f.trim() !== '');
+        if (fotosArray.length === 1) {
+            fotoMueble = `<img src="${fotosArray[0]}" style="width:100%; height:200px; object-fit:contain; background:#f1f5f9; border-radius:10px; margin-bottom:12px; border:1px solid #e2e8f0;" onerror="this.style.display='none'">`;
+        } else if (fotosArray.length > 1) {
+            const slides = fotosArray.map(f => `
+                <div style="min-width:100%; flex-shrink:0; display:flex; justify-content:center; align-items:center; scroll-snap-align:center;">
+                    <img src="${f}" style="width:100%; height:200px; object-fit:contain; background:#f1f5f9; border-radius:10px; border:1px solid #e2e8f0;" onerror="this.style.display='none'">
+                </div>`).join('');
+            
+            fotoMueble = `
+                <div style="position:relative; margin-bottom:12px; border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;">
+                    <div style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scroll-behavior:smooth; gap:0; -webkit-overflow-scrolling:touch;" class="hide-scroll">
+                        ${slides}
+                    </div>
+                    <div style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.8); color:white; padding:4px 12px; border-radius:20px; font-size:10px; font-weight:bold; pointer-events:none; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+                        📸 ${fotosArray.length} FOTOS (Desliza <i class="fa-solid fa-arrows-left-right"></i>)
+                    </div>
+                </div>
+                <style>.hide-scroll::-webkit-scrollbar { display:none; } .hide-scroll { -ms-overflow-style:none; scrollbar-width:none; }</style>
+            `;
+        }
+    }
 
     // ── Mostrar modal con loader mientras buscamos fotos de SKUs ──
     Swal.fire({

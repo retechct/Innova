@@ -252,6 +252,10 @@ function openConfig(name, img) {
     document.getElementById('check-banqueta').checked = false;
     toggleBanqueta();
 
+    // Forzamos que el input de fotos acepte múltiples archivos
+    const fInp = document.getElementById('sofa-fotos');
+    if (fInp) fInp.setAttribute('multiple', 'multiple');
+
     document.getElementById('modal-config').style.display = 'flex';
     document.getElementById('sofa-modelo').value = 'multi3'; 
     actualizarVistaSofa(); 
@@ -359,7 +363,7 @@ function seleccionarPieza(elementoFila, tipoCuerpo) {
 /* ----------------------------------------------- */
 
 /* --- REEMPLAZA LA FUNCIÓN confirmarPersonalizadoSofa COMPLETA --- */
-function confirmarPersonalizadoSofa() {
+async function confirmarPersonalizadoSofa() {
     const precio = parseFloat(document.getElementById('conf-precio').value);
     if (isNaN(precio) || precio <= 0) return Swal.fire('Error', 'Debe ingresar el precio total.', 'warning');
 
@@ -446,7 +450,8 @@ function confirmarPersonalizadoSofa() {
         base: document.getElementById('sku-base').value
     };
 
-    addToCart(tempItem.name, precio, tempItem.img, specs, componentes);
+    const imagenFinal = await subirFotosReferencia('sofa-fotos', tempItem.img);
+    addToCart(tempItem.name, precio, imagenFinal, specs, componentes);
     closeModal();
 
     Swal.fire({
@@ -468,7 +473,7 @@ function confirmarPersonalizadoSofa() {
 /* --- ENVIAR COMEDOR AL CARRITO --- */
 /* ================================================================= */
 
-function confirmarComedor() {
+async function confirmarComedor() {
     const precio = parseFloat(document.getElementById('conf-precio-comedor').value);
     const skuTablero = document.getElementById('sku-tablero').value;
     const skuBaseMesa = document.getElementById('sku-base-mesa').value;
@@ -565,6 +570,9 @@ function openConfigComedor() {
         if(searchEl) searchEl.value = '';
     });
 
+    const fInp = document.getElementById('comedor-fotos');
+    if (fInp) fInp.setAttribute('multiple', 'multiple');
+
     document.getElementById('modal-config-comedor').style.display = 'flex';
     document.getElementById('comedor-formato').value = 'rect-6';
     actualizarVistaComedor();
@@ -613,6 +621,9 @@ function openConfigCentro() {
         if(imgEl) imgEl.style.display = 'none';
     });
 
+    const fInp = document.getElementById('centro-fotos');
+    if (fInp) fInp.setAttribute('multiple', 'multiple');
+
     document.getElementById('modal-config-centro').style.display = 'flex';
     document.getElementById('centro-tipo').selectedIndex = 0;
     actualizarVistaCentro();
@@ -637,7 +648,7 @@ function actualizarVistaCentro() {
     };
 }
 
-function confirmarCentro() {
+async function confirmarCentro() {
     const precio = parseFloat(document.getElementById('conf-precio-centro').value);
     const skuTablero = document.getElementById('sku-tablero-centro').value;
     const skuBase = document.getElementById('sku-base-centro').value;
@@ -672,7 +683,8 @@ function confirmarCentro() {
         'base-centro': skuBase
     };
     
-    addToCart(tipo + " Personalizada", precio, imagenUrl, specs, componentes);
+    const imagenFinal = await subirFotosReferencia('centro-fotos', imagenUrl);
+    addToCart(tipo + " Personalizada", precio, imagenFinal, specs, componentes);
 
     document.getElementById('modal-config-centro').style.display = 'none';
     
@@ -700,6 +712,9 @@ function openConfigButaca() {
         if(imgEl) imgEl.style.display = 'none';
     });
 
+    const fInp = document.getElementById('butaca-fotos');
+    if (fInp) fInp.setAttribute('multiple', 'multiple');
+
     document.getElementById('modal-config-butaca').style.display = 'flex';
     document.getElementById('butaca-tipo').selectedIndex = 0;
     actualizarVistaButaca();
@@ -725,7 +740,7 @@ function actualizarVistaButaca() {
     };
 }
 
-function confirmarButaca() {
+async function confirmarButaca() {
     const precio = parseFloat(document.getElementById('conf-precio-butaca').value);
     const cantidad = document.getElementById('butaca-cantidad').value || "1";
     const skuEstructura = document.getElementById('sku-estructura-butaca').value;
@@ -756,7 +771,8 @@ function confirmarButaca() {
         'tela-butaca': skuTela
     };
     
-    addToCart(tituloCarrito, precio, imagenUrl, specs, componentes);
+    const imagenFinal = await subirFotosReferencia('comedor-fotos', imagenUrl);
+    addToCart(nombreProducto, precio, imagenFinal, specs, componentes);
 
     document.getElementById('modal-config-butaca').style.display = 'none';
     

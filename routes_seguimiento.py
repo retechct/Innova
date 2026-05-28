@@ -111,7 +111,8 @@ def mis_pedidos():
                 item_row = cursor.fetchone()
                 if item_row:
                     primer_producto = item_row[0] or '—'
-                    thumbnail = limpiar_foto(item_row[1])
+                    thumbnail_raw = limpiar_foto(item_row[1])
+                    thumbnail = thumbnail_raw.split('|')[0] if thumbnail_raw else 'imagenes/sin_foto.jpg'
             except Exception:
                 pass
 
@@ -190,7 +191,7 @@ def detalle_pedido_cliente(codigo):
             items = [{
                 'producto': r[0],
                 'detalles': r[1] or '',
-                'foto':     limpiar_foto(r[2]),
+                'foto':     limpiar_foto(r[2]).split('|')[0] if r[2] else 'imagenes/sin_foto.jpg',
                 'precio':   float(r[3]) if r[3] else None,
             } for r in cursor.fetchall()]
         except Exception:

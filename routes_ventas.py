@@ -746,7 +746,7 @@ def obtener_detalle_pedido(codigo):
         if not venta:
             return jsonify({"error": "Pedido no encontrado"}), 404
         cursor.execute("SELECT producto, color_tela, foto_url FROM items_venta WHERE venta_id = %s;", (venta[0],))
-        items = [{"producto": i[0], "detalles": i[1], "foto": i[2]} for i in cursor.fetchall()]
+        items = [{"producto": i[0], "detalles": i[1], "foto": i[2].split('|')[0] if i[2] else ""} for i in cursor.fetchall()]
         return jsonify({
             "codigo":  venta[1], "cliente": venta[2],
             "entrega": venta[3].strftime('%d/%m/%Y') if venta[3] else "S/F",
