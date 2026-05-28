@@ -840,13 +840,9 @@ async function cargarTicketsTaller() {
 
         if (esAdmin) {
             // Admin ve:
-            // 1. Tickets SIN asignar (Pendiente sin trabajador) → para asignar
-            // 2. Tickets ya asignados pero no terminados → para reasignar si es necesario
-            // 3. DESPACHO_CENTRAL siempre → gestión de choferes
-            ticketsFiltrados = tickets.filter(t =>
-                t.estado !== 'Terminado' ||
-                t.area === 'DESPACHO_CENTRAL'
-            );
+            // Admin ve tickets no terminados.
+            // DESPACHO_CENTRAL Terminado va al historial de Entregados, no aquí.
+            ticketsFiltrados = tickets.filter(t => t.estado !== 'Terminado');
         } else if (esOperario) {
             // Operario: solo los asignados a él
             ticketsFiltrados = tickets.filter(t => Number(t.trabajador) === Number(usuarioActivo.id));
