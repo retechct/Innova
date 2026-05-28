@@ -494,12 +494,44 @@ def obtener_fotos_skus():
             SELECT sku, CONCAT(coleccion, ' - ', color) AS nombre, foto_url, 'tela' AS tipo
             FROM maestro_telas WHERE UPPER(sku) IN ({placeholders})
         """, skus)
-        resultados = [{'sku': r[0], 'nombre': r[1], 'foto_url': r[2], 'tipo': r[3]} for r in cursor.fetchall()]
+        resultados = [{'sku': r[0], 'nombre': r[1], 'foto_url': limpiar_foto(r[2]), 'tipo': r[3]} for r in cursor.fetchall()]
+        
         cursor.execute(f"""
             SELECT sku, nombre_diseno AS nombre, foto_url, 'cojin' AS tipo
             FROM maestro_disenos_cojin WHERE UPPER(sku) IN ({placeholders})
         """, skus)
-        resultados += [{'sku': r[0], 'nombre': r[1], 'foto_url': r[2], 'tipo': r[3]} for r in cursor.fetchall()]
+        resultados += [{'sku': r[0], 'nombre': r[1], 'foto_url': limpiar_foto(r[2]), 'tipo': r[3]} for r in cursor.fetchall()]
+        
+        cursor.execute(f"""
+            SELECT sku, CONCAT(modelo, ' - ', color) AS nombre, foto_url, 'base' AS tipo
+            FROM maestro_bases WHERE UPPER(sku) IN ({placeholders})
+        """, skus)
+        resultados += [{'sku': r[0], 'nombre': r[1], 'foto_url': limpiar_foto(r[2]), 'tipo': r[3]} for r in cursor.fetchall()]
+        
+        cursor.execute(f"""
+            SELECT sku, CONCAT(modelo, ' - ', color) AS nombre, foto_url, 'base-comedor' AS tipo
+            FROM maestro_bases_comedor WHERE UPPER(sku) IN ({placeholders})
+        """, skus)
+        resultados += [{'sku': r[0], 'nombre': r[1], 'foto_url': limpiar_foto(r[2]), 'tipo': r[3]} for r in cursor.fetchall()]
+        
+        cursor.execute(f"""
+            SELECT sku, CONCAT(nombre_modelo, ' - ', color_veta) AS nombre, foto_url, 'tablero' AS tipo
+            FROM maestro_tableros WHERE UPPER(sku) IN ({placeholders})
+        """, skus)
+        resultados += [{'sku': r[0], 'nombre': r[1], 'foto_url': limpiar_foto(r[2]), 'tipo': r[3]} for r in cursor.fetchall()]
+        
+        cursor.execute(f"""
+            SELECT sku, CONCAT(modelo, ' - ', color_estructura) AS nombre, foto_url, 'silla' AS tipo
+            FROM maestro_sillas WHERE UPPER(sku) IN ({placeholders})
+        """, skus)
+        resultados += [{'sku': r[0], 'nombre': r[1], 'foto_url': limpiar_foto(r[2]), 'tipo': r[3]} for r in cursor.fetchall()]
+        
+        cursor.execute(f"""
+            SELECT sku, CONCAT(modelo, ' - ', color_estructura) AS nombre, foto_url, 'butaca' AS tipo
+            FROM maestro_butacas WHERE UPPER(sku) IN ({placeholders})
+        """, skus)
+        resultados += [{'sku': r[0], 'nombre': r[1], 'foto_url': limpiar_foto(r[2]), 'tipo': r[3]} for r in cursor.fetchall()]
+        
         return jsonify(resultados), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

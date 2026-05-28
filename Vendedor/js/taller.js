@@ -950,15 +950,24 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
                     galeria.innerHTML = '<span style="color:#94a3b8; font-size:11px;">Sin fotos de materiales disponibles</span>';
                     return;
                 }
-                galeria.innerHTML = data.map(item => `
+                galeria.innerHTML = data.map(item => {
+                    let borderColor = '#cbd5e1';
+                    let textColor = '#475569';
+                    if (item.tipo === 'tela') { borderColor = '#93c5fd'; textColor = '#1e40af'; }
+                    else if (item.tipo === 'cojin') { borderColor = '#c4b5fd'; textColor = '#5b21b6'; }
+                    else if (item.tipo.includes('base') || item.tipo === 'tablero') { borderColor = '#fcd34d'; textColor = '#92400e'; }
+                    else if (item.tipo === 'silla' || item.tipo === 'butaca') { borderColor = '#fca5a5'; textColor = '#991b1b'; }
+                    
+                    return `
                     <div style="text-align:center; width:90px;">
                         <img src="${item.foto_url}" alt="${item.sku}"
-                            style="width:80px; height:80px; object-fit:cover; border-radius:8px; border:2px solid ${item.tipo === 'tela' ? '#93c5fd' : '#c4b5fd'}; display:block; margin:0 auto 4px;"
+                            style="width:80px; height:80px; object-fit:cover; border-radius:8px; border:2px solid ${borderColor}; display:block; margin:0 auto 4px;"
                             onerror="this.src='imagenes/sin_foto.jpg'">
-                        <span style="font-size:9px; font-weight:900; color:${item.tipo === 'tela' ? '#1e40af' : '#5b21b6'}; display:block;">${item.sku}</span>
+                        <span style="font-size:9px; font-weight:900; color:${textColor}; display:block;">${item.sku}</span>
                         <span style="font-size:9px; color:#64748b; display:block; line-height:1.2;">${item.nombre}</span>
                     </div>
-                `).join('');
+                    `;
+                }).join('');
             } catch(e) {
                 const galeria = document.getElementById('galeria-skus');
                 if (galeria) galeria.innerHTML = '';
