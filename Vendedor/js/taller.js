@@ -860,6 +860,15 @@ async function cargarTicketsTaller() {
     }
 }
 
+/* --- HELPER: Scroll para el carrusel de la ficha técnica --- */
+function scrollFichaCarousel(direction) {
+    const container = document.getElementById('ficha-carousel-container');
+    if (container) {
+        const scrollAmount = container.clientWidth;
+        container.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+    }
+}
+
 /* --- FUNCIÓN PARA VER FICHA TÉCNICA (LIMPIEZA UX SEGÚN ÁREA) --- */
 async function verFichaTaller(producto, especificaciones, foto, area) {
     const lines = especificaciones.includes('<br>')
@@ -920,20 +929,31 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
                 return `<br><img src="${url}" style="width:120px; height:120px; object-fit:cover; border-radius:6px; border:2px solid #cbd5e1; margin-top:4px; cursor:pointer;" onclick="ampliarImagen('${url}')">`;
             });
             
+            // Si la línea tiene formato "Clave: Valor"
             if (fLine.includes(':') && !fLine.startsWith('http') && !fLine.includes('<img')) {
                 const parts = fLine.split(':');
                 const prefix = parts.shift().trim();
-                const rest = parts.join(':').trim();
+                let rest = parts.join(':').trim();
                 
-                if (prefix.includes('Nota') || prefix.includes('↳')) {
-                    return `<div style="padding:6px 8px; background:#fffbeb; color:#92400e; border-left:3px solid #f59e0b; font-size:11px; margin:4px 0; border-radius:0 4px 4px 0;"><i><i class="fa-solid fa-circle-info"></i> ${prefix}: ${rest}</i></div>`;
+                // Extraer nota si existe en la misma línea
+                let notaHtml = '';
+                const notaMarker = '↳ Nota:';
+                const notaIndex = rest.indexOf(notaMarker);
+                if (notaIndex !== -1) {
+                    const notaTexto = rest.substring(notaIndex + notaMarker.length).trim();
+                    rest = rest.substring(0, notaIndex).trim(); // Limpiar la nota del 'rest' principal
+                    notaHtml = `<div style="padding:4px 8px; margin-top:4px; background:#fffbeb; color:#92400e; border-left:3px solid #f59e0b; font-size:11px; border-radius:0 4px 4px 0;">
+                                    <i class="fa-solid fa-circle-info"></i> <b>Nota:</b> ${notaTexto}
+                                </div>`;
                 }
+                
                 if (prefix.startsWith('-') || prefix.startsWith('•')) {
                      return `<div style="padding:4px 0; font-size:12px; display:flex;"><span style="color:#64748b; margin-right:5px;">•</span><div style="flex:1;"><b>${prefix.replace(/^[-•]\s*/, '')}:</b> ${rest}</div></div>`;
                 }
-                return `<div style="padding:6px 0; border-bottom:1px solid #f1f5f9; font-size:12px;"><b style="color:#475569; font-size:10px; text-transform:uppercase; display:block; margin-bottom:2px;">${prefix}</b><span style="color:#0f172a; font-weight:600;">${rest}</span></div>`;
+                return `<div style="padding:6px 0; border-bottom:1px solid #f1f5f9; font-size:12px;"><b style="color:#475569; font-size:10px; text-transform:uppercase; display:block; margin-bottom:2px;">${prefix}</b><span style="color:#0f172a; font-weight:600;">${rest}</span>${notaHtml}</div>`;
             }
             
+            // Si es un título en mayúsculas (ej: COJINERÍA)
             if (/^[A-ZÁÉÍÓÚÑ ]+$/.test(fLine.trim()) && fLine.trim().length > 3) {
                  return `<div style="padding:10px 0 2px 0; font-size:11px; font-weight:900; color:var(--primary); text-transform:uppercase; border-bottom:2px solid #e2e8f0; margin-bottom:4px;">${fLine}</div>`;
             }
@@ -954,10 +974,18 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
                 </div>`).join('');
             
             fotoMueble = `
-                <div style="position:relative; margin-bottom:12px; border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;">
-                    <div style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scroll-behavior:smooth; gap:0; -webkit-overflow-scrolling:touch;" class="hide-scroll">
+                <div id="ficha-carousel-wrapper" style="position:relative; margin-bottom:12px; border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;">
+                    <div id="ficha-carousel-container" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scroll-behavior:smooth; gap:0; -webkit-overflow-scrolling:touch;" class="hide-scroll">
                         ${slides}
                     </div>
+                    <!-- Botones de Navegación -->
+                    <button onclick="scrollFichaCarousel(-1)" style="position:absolute; top:50%; left:8px; transform:translateY(-50%); background:rgba(15,23,42,0.6); color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:14px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center; transition: background 0.2s;" onmouseover="this.style.background='rgba(15,23,42,0.8)'" onmouseout="this.style.background='rgba(15,23,42,0.6)'">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <button onclick="scrollFichaCarousel(1)" style="position:absolute; top:50%; right:8px; transform:translateY(-50%); background:rgba(15,23,42,0.6); color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:14px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center; transition: background 0.2s;" onmouseover="this.style.background='rgba(15,23,42,0.8)'" onmouseout="this.style.background='rgba(15,23,42,0.6)'">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+
                     <div style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.8); color:white; padding:4px 12px; border-radius:20px; font-size:10px; font-weight:bold; pointer-events:none; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                         📸 ${fotosArray.length} FOTOS (Desliza <i class="fa-solid fa-arrows-left-right"></i>)
                     </div>

@@ -434,12 +434,12 @@ async function confirmarPersonalizadoSofa() {
 
     const specs = `
         <b>MOD:</b> ${modeloBase} ${medidasText}<br>
-        <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${notaTela ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTela}</i></span>` : ''}<br>
+        <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${notaTela ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTela}</span>` : ''}<br>
         <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>
-        - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${notaCojinEnt ? `<br>&nbsp;&nbsp;<span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaCojinEnt}</i></span>` : ''}<br>
-        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${notaCojinDis ? `<br>&nbsp;&nbsp;<span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaCojinDis}</i></span>` : ''}<br>
-        <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}${notaBase ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaBase}</i></span>` : ''}
+        - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${notaCojinEnt ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaCojinEnt}</span>` : ''}<br>
+        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${notaCojinDis ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaCojinDis}</span>` : ''}<br>
+        <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}${notaBase ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaBase}</span>` : ''}
         ${banquetaText}
     `;
 
@@ -520,10 +520,10 @@ async function confirmarComedor() {
     const specs = `
         <b>FORMATO:</b> ${formatoTexto} para ${cantidadSillas} personas<br>
         <b>MEDIDAS:</b> ${medidasTexto}<br>
-        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (Corte: ${corte}, Canto: ${canto})${notaTablero ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTablero}</i></span>` : ''}<br>
-        <b>BASE MESA:</b> [SKU: ${skuBaseMesa}] ${nombreBaseMesa} (Alto: ${alturaBase}cm, Ancho: ${anchoBase}cm)${notaBaseMesa ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaBaseMesa}</i></span>` : ''}<br>
-        <b>SILLERÍA:</b> ${cantidadSillas} Unds x [SKU: ${skuSilla}] ${nombreSilla}${notaSilla ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaSilla}</i></span>` : ''}<br>
-        <b>TAPIZ SILLAS:</b> ${skuTelaSilla ? `[SKU: ${skuTelaSilla}] ${nombreTelaSilla}` : "Sin tapiz específico"}${notaTelaSilla ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTelaSilla}</i></span>` : ''}
+        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (Corte: ${corte}, Canto: ${canto})${notaTablero ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTablero}</span>` : ''}<br>
+        <b>BASE MESA:</b> [SKU: ${skuBaseMesa}] ${nombreBaseMesa} (Alto: ${alturaBase}cm, Ancho: ${anchoBase}cm)${notaBaseMesa ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaBaseMesa}</span>` : ''}<br>
+        <b>SILLERÍA:</b> ${cantidadSillas} Unds x [SKU: ${skuSilla}] ${nombreSilla}${notaSilla ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaSilla}</span>` : ''}<br>
+        <b>TAPIZ SILLAS:</b> ${skuTelaSilla ? `[SKU: ${skuTelaSilla}] ${nombreTelaSilla}` : "Sin tapiz específico"}${notaTelaSilla ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTelaSilla}</span>` : ''}
     `;
 
     const nombreProducto = `Comedor Pro ${formatoTexto} (${cantidadSillas} Sillas)`;
@@ -672,8 +672,8 @@ async function confirmarCentro() {
 
     const specs = `
         <b>FORMATO:</b> ${tipo}<br>
-        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (L${l}cm x A${a}cm x Espesor: ${e}cm)${notaTablero ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTablero}</i></span>` : ''}<br>
-        <b>BASE ESTRUCTURAL:</b> [SKU: ${skuBase}] ${nombreBase} (Alto: ${hBase}cm x Ancho: ${aBase}cm)${notaBase ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaBase}</i></span>` : ''}<br>
+        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (L${l}cm x A${a}cm x Espesor: ${e}cm)${notaTablero ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTablero}</span>` : ''}<br>
+        <b>BASE ESTRUCTURAL:</b> [SKU: ${skuBase}] ${nombreBase} (Alto: ${hBase}cm x Ancho: ${aBase}cm)${notaBase ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaBase}</span>` : ''}<br>
         ${notas ? `<b style="color:var(--accent);">NOTAS:</b> ${notas}` : ''}
     `;
 
@@ -759,8 +759,8 @@ async function confirmarButaca() {
 
     const specs = `
         <b>PRODUCTO:</b> ${cantidad} Und(s) de ${tipo}<br>
-        <b>ESTRUCTURA/MODELO:</b> [SKU: ${skuEstructura}] ${nombreEstructura}${notaEstructura ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaEstructura}</i></span>` : ''}<br>
-        <b>TAPIZ:</b> ${skuTela ? `[SKU: ${skuTela}] ${nombreTela}` : nombreTela}${notaTela ? `<br><span style="color:#2563eb; font-size:11px;">↳ <i>Nota: ${notaTela}</i></span>` : ''}<br>
+        <b>ESTRUCTURA/MODELO:</b> [SKU: ${skuEstructura}] ${nombreEstructura}${notaEstructura ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaEstructura}</span>` : ''}<br>
+        <b>TAPIZ:</b> ${skuTela ? `[SKU: ${skuTela}] ${nombreTela}` : nombreTela}${notaTela ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTela}</span>` : ''}<br>
         ${notas ? `<b style="color:var(--accent);">NOTAS:</b> ${notas}` : ''}
     `;
 
