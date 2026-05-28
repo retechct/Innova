@@ -940,7 +940,7 @@ def ficha_chofer(item_id):
                 ) AS especificaciones,
                 i.foto_url,
                 v.nombre_cliente,
-                COALESCE(v.telefono_cliente, '') AS telefono,
+                COALESCE(v.celular_cliente, '') AS telefono,
                 COALESCE(v.direccion_cliente, '') AS direccion,
                 COALESCE(v.monto_total, 0)    AS total,
                 COALESCE(v.monto_adelanto, 0) AS adelanto,
