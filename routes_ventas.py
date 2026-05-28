@@ -318,10 +318,17 @@ def guardar_venta():
         for idx_m, m in enumerate(datos['muebles']):
             _paso_actual = f"mueble[{idx_m}] INSERT items_venta"
             print(f"[PASO 4.{idx_m+1}] Mueble: {m}")
+            # Limpiar foto_url: si viene con prefijo /uploads/ seguido de una URL absoluta, extraer solo la URL real
+            foto_url_raw = m.get('foto', '') or ''
+            if '/uploads/https://' in foto_url_raw:
+                foto_url_raw = foto_url_raw[foto_url_raw.index('/uploads/https://') + len('/uploads/'):]
+            elif '/uploads/http://' in foto_url_raw:
+                foto_url_raw = foto_url_raw[foto_url_raw.index('/uploads/http://') + len('/uploads/'):]
+
             cursor.execute("""
                 INSERT INTO items_venta (venta_id, producto, color_tela, foto_url, precio_unitario)
                 VALUES (%s, %s, %s, %s, %s) RETURNING id;
-            """, (venta_id, m.get('tipo'), m.get('tela'), m.get('foto'), m.get('precio')))
+            """, (venta_id, m.get('tipo'), m.get('tela'), foto_url_raw, m.get('precio')))
             item_id = cursor.fetchone()[0]
             print(f"[PASO 4.{idx_m+1}] item_id={item_id}")
 
@@ -361,12 +368,16 @@ def guardar_venta():
                     continue
                 if key_c == 'cojin-entero':
                     try:
+                        cursor.execute("SAVEPOINT sp_cojin_entero")
                         cursor.execute(
-                            "SELECT nombre_tela FROM maestro_telas WHERE sku = %s", (sku_c,)
+                            "SELECT coleccion, color FROM maestro_telas WHERE sku = %s", (sku_c,)
                         )
                         row_te = cursor.fetchone()
-                        nombre_tela = row_te[0] if row_te else sku_c
+                        nombre_tela = f"{row_te[0]} - {row_te[1]}" if row_te else sku_c
+                        cursor.execute("RELEASE SAVEPOINT sp_cojin_entero")
                     except Exception:
+                        cursor.execute("ROLLBACK TO SAVEPOINT sp_cojin_entero")
+                        cursor.execute("RELEASE SAVEPOINT sp_cojin_entero")
                         nombre_tela = sku_c
                     linea = f"Cojín Entero → [{sku_c}] {nombre_tela}"
                     detalle_cojines_armado.append(linea)
@@ -374,13 +385,17 @@ def guardar_venta():
 
                 elif key_c == 'cojin-diseno':
                     try:
+                        cursor.execute("SAVEPOINT sp_cojin_diseno")
                         cursor.execute(
                             "SELECT nombre_diseno, tipo_tela FROM maestro_disenos_cojin WHERE sku = %s", (sku_c,)
                         )
                         row_dc = cursor.fetchone()
                         nombre_dis = row_dc[0] if row_dc else sku_c
                         tipo_tela  = row_dc[1] if row_dc else ''
+                        cursor.execute("RELEASE SAVEPOINT sp_cojin_diseno")
                     except Exception:
+                        cursor.execute("ROLLBACK TO SAVEPOINT sp_cojin_diseno")
+                        cursor.execute("RELEASE SAVEPOINT sp_cojin_diseno")
                         nombre_dis, tipo_tela = sku_c, ''
                     linea = f"Cojín c/Diseño → [{sku_c}] {nombre_dis}" + (f" ({tipo_tela})" if tipo_tela else "")
                     detalle_cojines_armado.append(linea)
