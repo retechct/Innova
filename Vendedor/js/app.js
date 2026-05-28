@@ -124,6 +124,12 @@ function configurarInterfazPorRol() {
         if (btnProv)      btnProv.style.display      = 'flex';
         if (btnContratos) btnContratos.style.display = 'block';
     }
+
+    // ── Carrito flotante: solo Vendedor y Admin lo necesitan ─────────
+    const fab = document.querySelector('.fab');
+    if (fab) {
+        fab.style.display = (esAdmin || esVendedor) ? 'flex' : 'none';
+    }
 }
 
 function toggleSidebar() {
