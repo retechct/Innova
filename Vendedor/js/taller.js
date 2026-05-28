@@ -704,11 +704,11 @@ async function cargarTicketsTaller() {
             return;
         }
     } else if (esChofer) {
-        // Chofer: solo ve sus despachos asignados
+        // ── CHOFER: vista propia con fichas de entrega ──────────────────────
         tabsHeader.innerHTML = `
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; width:100%;">
                 <span style="font-size:13px; font-weight:800; color:#1e40af; padding:10px 16px; background:#eff6ff; border-radius:10px; border:2px solid #93c5fd;">
-                    <i class="fa-solid fa-truck"></i> MIS DESPACHOS ASIGNADOS
+                    <i class="fa-solid fa-truck"></i> MIS ENTREGAS ASIGNADAS
                 </span>
                 <button onclick="cargarTicketsTaller()"
                     style="padding:10px 16px; border-radius:10px; border:none; font-size:11px; font-weight:800; cursor:pointer; background:#f1f5f9; color:#475569; margin-left:auto;">
@@ -716,18 +716,17 @@ async function cargarTicketsTaller() {
                 </button>
             </div>`;
 
-        contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando tus despachos...</p>';
+        contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:30px;">Cargando tus entregas...</p>';
 
         try {
             const res     = await apiFetch(`${API_URL}/api/taller/tickets?area=DESPACHO_CENTRAL`);
             const tickets = await res.json();
 
             if (!Array.isArray(tickets)) {
-                contenedor.innerHTML = `<p style="color:red; text-align:center;">Error: ${tickets.error || 'Respuesta inválida'}</p>`;
+                contenedor.innerHTML = `<p style="color:red;text-align:center;">Error: ${tickets.error||'Respuesta inválida'}</p>`;
                 return;
             }
 
-            // Solo los asignados a este chofer y no terminados
             const misDespachos = tickets.filter(t =>
                 t.area === 'DESPACHO_CENTRAL' &&
                 Number(t.trabajador) === Number(usuarioActivo.id) &&
@@ -736,44 +735,53 @@ async function cargarTicketsTaller() {
 
             if (misDespachos.length === 0) {
                 contenedor.innerHTML = `
-                    <div style="text-align:center; padding:60px 20px; color:#64748b;">
-                        <div style="font-size:48px; margin-bottom:16px;">🚚</div>
-                        <p style="font-weight:700; font-size:15px; color:#374151; margin:0 0 8px;">Sin despachos pendientes</p>
-                        <p style="font-size:13px; margin:0;">Cuando el Admin te asigne una entrega aparecerá aquí.</p>
+                    <div style="text-align:center;padding:60px 20px;color:#64748b;">
+                        <div style="font-size:48px;margin-bottom:16px;">🚚</div>
+                        <p style="font-weight:700;font-size:15px;color:#374151;margin:0 0 8px;">Sin entregas pendientes</p>
+                        <p style="font-size:13px;margin:0;">Cuando el administrador te asigne una entrega aparecerá aquí.</p>
                     </div>`;
                 return;
             }
 
-            const CONFIG_AREAS_LOCAL = { 'DESPACHO_CENTRAL': { icono: '<i class="fa-solid fa-truck"></i>', nombre: 'Despacho Central' } };
             let html = '';
             for (const t of misDespachos) {
                 const isEnProceso = t.estado === 'En Proceso';
-                const isPendiente = t.estado === 'Pendiente';
                 html += `
-                <div style="background:#fff; border:2px solid #3b82f6; border-radius:12px; padding:18px; margin-bottom:16px; box-shadow:0 2px 8px rgba(59,130,246,0.12);">
-                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-                        <span style="font-size:20px;">🚚</span>
+                <div style="background:#fff;border:2px solid ${isEnProceso?'#3b82f6':'#e2e8f0'};border-radius:14px;padding:0;margin-bottom:20px;box-shadow:0 2px 10px rgba(0,0,0,0.07);overflow:hidden;">
+                    <!-- Cabecera -->
+                    <div style="background:${isEnProceso?'linear-gradient(135deg,#eff6ff,#dbeafe)':'#f8fafc'};padding:14px 16px;border-bottom:1px solid ${isEnProceso?'#93c5fd':'#e2e8f0'};display:flex;justify-content:space-between;align-items:center;">
                         <div>
-                            <div style="font-weight:800; font-size:13px; color:#0f172a;">${t.producto}</div>
-                            <div style="font-size:11px; color:#64748b; margin-top:2px;">${t.especificaciones || 'Sin notas adicionales'}</div>
+                            <div style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:1px;">Despacho asignado</div>
+                            <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${t.producto}</div>
                         </div>
-                        <span style="margin-left:auto; background:#dbeafe; color:#1e40af; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px;">
-                            ${isEnProceso ? '🔵 EN RUTA' : '🟡 PENDIENTE'}
+                        <span style="background:${isEnProceso?'#3b82f6':'#f59e0b'};color:white;font-size:11px;font-weight:800;padding:5px 12px;border-radius:20px;">
+                            ${isEnProceso?'🔵 EN RUTA':'🟡 PENDIENTE'}
                         </span>
                     </div>
-                    ${renderBotonTicket(t, false, false, isEnProceso, false)}
+                    <!-- Ficha técnica (se carga al abrir) -->
+                    <div id="ficha-chofer-${t.id}" style="display:none;"></div>
+                    <!-- Botones principales -->
+                    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+                        <button onclick="toggleFichaChofer(${t.id}, ${t.item_id})"
+                            id="btn-ficha-${t.id}"
+                            style="width:100%;background:#0f172a;color:white;border:none;padding:11px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+                            <i class="fa-solid fa-clipboard-list"></i> VER FICHA TÉCNICA
+                        </button>
+                        ${renderBotonTicket(t, false, false, isEnProceso, false)}
+                    </div>
                 </div>`;
             }
             contenedor.innerHTML = html;
         } catch(e) {
-            contenedor.innerHTML = `<p style="color:red; text-align:center;">Error de conexión. Intenta de nuevo.</p>`;
+            contenedor.innerHTML = `<p style="color:red;text-align:center;">Error de conexión. Intenta de nuevo.</p>`;
         }
         return; // El chofer no sigue el flujo normal del taller
+
     } else {
+        // Operario / Jefe de área: tabs Pendientes / Terminados
         tabsHeader.innerHTML = `
             <button onclick="filtroTaller='Pendientes'; cargarTicketsTaller()" class="btn-filter-taller ${filtroTaller === 'Pendientes' ? 'active' : ''}" style="flex:1;">
-                <i class="fa-solid fa-clock"></i> MIS TAREAS
-            </button>
+                <i class="fa-solid fa-clock"></i> MIS TAREAS\n            </button>
             <button onclick="filtroTaller='Terminado'; cargarTicketsTaller()" class="btn-filter-taller ${filtroTaller === 'Terminado' ? 'active' : ''}" style="flex:1;">
                 <i class="fa-solid fa-circle-check"></i> TRABAJOS TERMINADOS
             </button>`;
@@ -1909,4 +1917,141 @@ async function abrirNotaOrden(ticketId) {
     } catch (e) {
         Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
     }
+}
+
+/* ================================================================= */
+/* --- FICHA TÉCNICA DEL CHOFER — Toggle con carga lazy          --- */
+/* ================================================================= */
+
+const _fichaChoferCache = {};
+
+async function toggleFichaChofer(ticketId, itemId) {
+    const contenedor = document.getElementById(`ficha-chofer-${ticketId}`);
+    const btn        = document.getElementById(`btn-ficha-${ticketId}`);
+    if (!contenedor) return;
+
+    // Toggle: si ya está visible, ocultar
+    if (contenedor.style.display !== 'none') {
+        contenedor.style.display = 'none';
+        btn.innerHTML = '<i class="fa-solid fa-clipboard-list"></i> VER FICHA TÉCNICA';
+        return;
+    }
+
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando ficha...';
+    btn.disabled  = true;
+
+    // Usar caché si ya se cargó antes
+    if (_fichaChoferCache[itemId]) {
+        contenedor.innerHTML = _renderFichaChofer(_fichaChoferCache[itemId], ticketId);
+        contenedor.style.display = 'block';
+        btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> OCULTAR FICHA';
+        btn.disabled  = false;
+        return;
+    }
+
+    try {
+        const res  = await apiFetch(`${API_URL}/api/despacho/ficha-chofer/${itemId}`);
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+            Swal.fire('Error', data.error || 'No se pudo cargar la ficha.', 'error');
+            btn.innerHTML = '<i class="fa-solid fa-clipboard-list"></i> VER FICHA TÉCNICA';
+            btn.disabled  = false;
+            return;
+        }
+
+        _fichaChoferCache[itemId] = data;
+        contenedor.innerHTML = _renderFichaChofer(data, ticketId);
+        contenedor.style.display = 'block';
+        btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> OCULTAR FICHA';
+    } catch(e) {
+        Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
+        btn.innerHTML = '<i class="fa-solid fa-clipboard-list"></i> VER FICHA TÉCNICA';
+    }
+    btn.disabled = false;
+}
+
+function _renderFichaChofer(d, ticketId) {
+    const moneda   = 'S/';
+    const saldoCol = d.saldo > 0 ? '#dc2626' : '#16a34a';
+    const saldoTxt = d.saldo > 0 ? `⚠️ Falta cobrar ${moneda} ${d.saldo.toFixed(2)}` : '✅ Pagado completo';
+
+    // Fotos de evidencia por área
+    const fotosHTML = d.evidencias && d.evidencias.length > 0
+        ? `<div style="padding:14px 16px;border-top:1px solid #e2e8f0;">
+               <div style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">
+                   📷 Evidencias de producción (${d.evidencias.length} área${d.evidencias.length>1?'s':''})
+               </div>
+               <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                   ${d.evidencias.map(e => `
+                   <div style="text-align:center;flex:0 0 auto;">
+                       <div style="font-size:9px;font-weight:700;color:#475569;margin-bottom:4px;max-width:90px;line-height:1.3;">${e.area}</div>
+                       <img src="${e.foto}"
+                           style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:2px solid #22c55e;cursor:pointer;"
+                           onclick="window.open('${e.foto}','_blank')"
+                           onerror="this.parentElement.style.display='none'">
+                       <div style="font-size:9px;color:#64748b;margin-top:3px;">${e.operario}</div>
+                   </div>`).join('')}
+               </div>
+           </div>`
+        : `<div style="padding:12px 16px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;text-align:center;">
+               Sin fotos de evidencia registradas aún.
+           </div>`;
+
+    return `
+    <div style="border-top:1px solid #e2e8f0;">
+        <!-- Datos del cliente -->
+        <div style="padding:14px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+            <div style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">
+                👤 Datos del cliente
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;justify-content:space-between;font-size:13px;">
+                    <span style="color:#64748b;">Cliente</span>
+                    <span style="font-weight:700;color:#0f172a;">${d.cliente}</span>
+                </div>
+                ${d.telefono ? `
+                <div style="display:flex;justify-content:space-between;font-size:13px;">
+                    <span style="color:#64748b;">Teléfono</span>
+                    <a href="tel:${d.telefono}" style="font-weight:700;color:#0369a1;text-decoration:none;">📞 ${d.telefono}</a>
+                </div>` : ''}
+                ${d.direccion ? `
+                <div style="display:flex;justify-content:space-between;font-size:13px;gap:16px;">
+                    <span style="color:#64748b;flex-shrink:0;">Dirección</span>
+                    <span style="font-weight:700;color:#0f172a;text-align:right;">${d.direccion}</span>
+                </div>` : ''}
+                <div style="display:flex;justify-content:space-between;font-size:13px;">
+                    <span style="color:#64748b;">Fecha entrega</span>
+                    <span style="font-weight:700;color:#0f172a;">${d.fecha_entrega}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Financiero -->
+        <div style="padding:14px 16px;background:#fff;border-bottom:1px solid #e2e8f0;">
+            <div style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">
+                💰 Situación de pago
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;justify-content:space-between;font-size:13px;">
+                    <span style="color:#64748b;">Total del pedido</span>
+                    <span style="font-weight:700;">${moneda} ${d.total.toFixed(2)}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;">
+                    <span style="color:#64748b;">Adelanto pagado</span>
+                    <span style="font-weight:700;color:#16a34a;">${moneda} ${d.adelanto.toFixed(2)}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;padding-top:6px;border-top:1px dashed #e2e8f0;">
+                    <span style="color:#64748b;font-weight:700;">Saldo a cobrar</span>
+                    <span style="font-weight:900;font-size:15px;color:${saldoCol};">${moneda} ${d.saldo.toFixed(2)}</span>
+                </div>
+                <div style="background:${d.saldo>0?'#fef2f2':'#f0fdf4'};border:1px solid ${d.saldo>0?'#fca5a5':'#86efac'};border-radius:8px;padding:8px 12px;font-size:11px;font-weight:700;color:${saldoCol};text-align:center;margin-top:4px;">
+                    ${saldoTxt}
+                </div>
+            </div>
+        </div>
+
+        <!-- Fotos de evidencia de producción -->
+        ${fotosHTML}
+    </div>`;
 }

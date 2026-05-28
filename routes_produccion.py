@@ -93,7 +93,6 @@ def finalizar_ticket(id):
                     desbloqueados += cursor.rowcount
 
         venta_actualizada = False
-        despacho_desbloqueado = False
         if row:
             cursor.execute("SELECT venta_id FROM items_venta WHERE id = %s", (item_id,))
             venta_row = cursor.fetchone()
@@ -111,35 +110,13 @@ def finalizar_ticket(id):
                     """, (venta_id_check,))
                     venta_actualizada = cursor.rowcount > 0
 
-            # ── Desbloquear DESPACHO_CENTRAL si ya no quedan áreas pendientes ──
-            # Se verifica a nivel de item_id (no de venta) para que cada ítem
-            # se desbloquee en el momento exacto en que sus propias áreas terminan,
-            # sin esperar a que los demás ítems de la misma venta también terminen.
-            cursor.execute("""
-                SELECT COUNT(*) FROM tickets_produccion
-                WHERE item_id = %s
-                  AND area_trabajo != 'DESPACHO_CENTRAL'
-                  AND estado_ticket != 'Terminado'
-            """, (item_id,))
-            if cursor.fetchone()[0] == 0:
-                cursor.execute("""
-                    UPDATE tickets_produccion
-                    SET estado_ticket = 'Pendiente'
-                    WHERE item_id = %s
-                      AND area_trabajo = 'DESPACHO_CENTRAL'
-                      AND estado_ticket = 'Bloqueado'
-                """, (item_id,))
-                despacho_desbloqueado = cursor.rowcount > 0
-
         conexion.commit()
         msg = 'Ticket finalizado correctamente'
         if desbloqueados > 0:
             msg += f'. {desbloqueados} ticket(s) de tapicería desbloqueado(s) automáticamente.'
-        if despacho_desbloqueado:
-            msg += '. 📦 ¡Producción del ítem completa! Despacho habilitado para asignar chofer.'
         if venta_actualizada:
             msg += '. ✅ ¡Producción completa! La venta pasó a estado Listo.'
-        return jsonify({'exito': True, 'mensaje': msg, 'desbloqueados': desbloqueados, 'venta_lista': venta_actualizada, 'despacho_desbloqueado': despacho_desbloqueado}), 200
+        return jsonify({'exito': True, 'mensaje': msg, 'desbloqueados': desbloqueados, 'venta_lista': venta_actualizada}), 200
 
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
@@ -933,6 +910,108 @@ def progreso_despacho(item_id):
         terminados = sum(1 for p in partes if p['estado'] == 'Terminado')
         return jsonify({"partes": partes, "total": total, "terminados": terminados, "listo": total > 0 and terminados == total}), 200
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/despacho/ficha-chofer/<int:item_id>', methods=['GET'])
+def ficha_chofer(item_id):
+    """
+    Devuelve todo lo que el chofer necesita ver antes de hacer la entrega:
+    - Datos del cliente (nombre, dirección, teléfono)
+    - Financiero (total, adelanto, saldo)
+    - Producto y especificaciones
+    - Fotos de evidencia de TODAS las áreas de producción terminadas
+    """
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        # Datos de la venta y del ítem
+        cursor.execute("""
+            SELECT
+                i.producto,
+                COALESCE(
+                    (SELECT ticket_details_override FROM tickets_produccion
+                     WHERE item_id = i.id AND area_trabajo = 'DESPACHO_CENTRAL' LIMIT 1),
+                    i.color_tela, i.detalles, ''
+                ) AS especificaciones,
+                i.foto_url,
+                v.nombre_cliente,
+                COALESCE(v.telefono_cliente, '') AS telefono,
+                COALESCE(v.direccion_cliente, '') AS direccion,
+                COALESCE(v.monto_total, 0)    AS total,
+                COALESCE(v.monto_adelanto, 0) AS adelanto,
+                v.codigo_venta,
+                v.sede,
+                TO_CHAR(v.fecha_entrega, 'DD/MM/YYYY') AS fecha_entrega
+            FROM items_venta i
+            JOIN ventas v ON i.venta_id = v.id
+            WHERE i.id = %s;
+        """, (item_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Ítem no encontrado'}), 404
+
+        total    = float(row[6])
+        adelanto = float(row[7])
+
+        # Fotos de evidencia de todas las áreas terminadas (excepto DESPACHO_CENTRAL)
+        cursor.execute("""
+            SELECT
+                t.area_trabajo,
+                t.foto_evidencia,
+                COALESCE(u.nombre, 'Sin asignar') AS operario,
+                TO_CHAR(t.fecha_fin, 'DD/MM HH24:MI') AS fecha_fin
+            FROM tickets_produccion t
+            LEFT JOIN usuarios u ON t.trabajador_asignado_id = u.id
+            WHERE t.item_id = %s
+              AND t.area_trabajo != 'DESPACHO_CENTRAL'
+              AND t.estado_ticket = 'Terminado'
+              AND t.foto_evidencia IS NOT NULL
+            ORDER BY t.fecha_fin ASC;
+        """, (item_id,))
+
+        NOMBRES_AREA = {
+            'CORTE_Y_CONTROL_TELAS':    'Corte de Telas',
+            'TAPICERIA_SOFAS':          'Tapicería Sofás',
+            'TAPICERIA_SILLAS':         'Tapicería Sillas',
+            'ESTRUCTURAS_MUEBLES':      'Carpintería (Sofás)',
+            'ESTRUCTURAS_SILLAS':       'Carpintería (Sillas)',
+            'ARMADO_COJINES':           'Cojines',
+            'PREPARACION_PATAS_ZOCALO': 'Patas y Zócalo',
+            'TABLEROS_Y_PIEDRAS':       'Tableros',
+        }
+
+        evidencias = []
+        for r in cursor.fetchall():
+            evidencias.append({
+                'area':       NOMBRES_AREA.get(r[0], r[0].replace('_', ' ').title()),
+                'foto':       r[1],
+                'operario':   r[2],
+                'fecha_fin':  r[3] or '',
+            })
+
+        return jsonify({
+            'producto':        row[0],
+            'especificaciones': row[1],
+            'foto_producto':   limpiar_foto(row[2]),
+            'cliente':         row[3],
+            'telefono':        row[4],
+            'direccion':       row[5],
+            'total':           total,
+            'adelanto':        adelanto,
+            'saldo':           max(0, total - adelanto),
+            'codigo_venta':    row[8],
+            'sede':            row[9] or '',
+            'fecha_entrega':   row[10] or 'Por coordinar',
+            'evidencias':      evidencias,
+        }), 200
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
