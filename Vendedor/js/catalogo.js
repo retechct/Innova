@@ -536,7 +536,8 @@ async function confirmarComedor() {
         'tela-silla': skuTelaSilla
     };
 
-    addToCart(nombreProducto, precio, imagenUrl, specs, componentes);
+    const imagenFinal = await subirFotosReferencia('comedor-fotos', imagenUrl);
+    addToCart(nombreProducto, precio, imagenFinal, specs, componentes);
 
     document.getElementById('modal-config-comedor').style.display = 'none';
     
@@ -771,8 +772,8 @@ async function confirmarButaca() {
         'tela-butaca': skuTela
     };
     
-    const imagenFinal = await subirFotosReferencia('comedor-fotos', imagenUrl);
-    addToCart(nombreProducto, precio, imagenFinal, specs, componentes);
+    const imagenFinal = await subirFotosReferencia('butaca-fotos', imagenUrl);
+    addToCart(tituloCarrito, precio, imagenFinal, specs, componentes);
 
     document.getElementById('modal-config-butaca').style.display = 'none';
     
@@ -789,3 +790,38 @@ async function confirmarButaca() {
 }
 // NOTA: El manejo de 'gestor-aprobacion' en changeView se hace en app.js,
 // donde changeView ya está definida. No hacerlo aquí para evitar ReferenceError.
+
+/* ================================================================= */
+/* --- HELPER: SUBIR FOTOS DE REFERENCIA AL SERVIDOR             --- */
+/* ================================================================= */
+async function subirFotosReferencia(inputId, fallbackUrl) {
+    const input = document.getElementById(inputId);
+    if (!input || !input.files || input.files.length === 0) {
+        return fallbackUrl;
+    }
+
+    let urls = [];
+    Swal.fire({ title: 'Subiendo foto(s)...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        for (let i = 0; i < input.files.length; i++) {
+            const formData = new FormData();
+            formData.append('foto', input.files[i]); 
+
+            const res = await apiFetch(`${API_URL}/api/upload-foto`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.url) {
+                urls.push(data.url);
+            }
+        }
+        Swal.close();
+        return urls.length > 0 ? urls.join('|') : fallbackUrl;
+    } catch (e) {
+        console.error("Error al subir fotos:", e);
+        Swal.close();
+        return fallbackUrl;
+    }
+}

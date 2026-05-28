@@ -117,3 +117,20 @@ def upload_voucher():
     except Exception as e:
         print(f"Error al subir voucher: {e}")
         return jsonify({'error': str(e)}), 500
+
+# ==========================================
+# UPLOAD DE FOTOS GENÉRICO
+# ==========================================
+
+@catalogo_bp.route('/api/upload-foto', methods=['POST'])
+def upload_foto():
+    if 'foto' not in request.files or request.files['foto'].filename == '':
+        return jsonify({'error': 'No se recibió ningún archivo'}), 400
+    try:
+        archivo = request.files['foto']
+        respuesta_nube = cloudinary.uploader.upload(archivo, folder="referencias")
+        url = respuesta_nube.get('secure_url')
+        return jsonify({'url': url}), 200
+    except Exception as e:
+        print(f"Error al subir foto: {e}")
+        return jsonify({'error': str(e)}), 500
