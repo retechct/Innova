@@ -158,7 +158,8 @@ async function imEntrarAlSistema() {
 
       const esOperario = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
       const esChofer   = usuarioActivo.rol === 'Chofer';
-      changeView(esChofer ? 'taller' : esOperario ? 'taller' : 'catalogo');
+      const esAlmacen  = usuarioActivo.rol === 'ALMACEN';
+      changeView(esChofer ? 'taller' : esOperario ? 'taller' : esAlmacen ? 'inventario' : 'catalogo');
 
       Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
         title:`¡Hola, ${usuarioActivo.nombre.split(' ')[0]}!`,
@@ -291,8 +292,9 @@ function imMostrarBotonTrabajador() {
       (document.getElementById('pantalla-login').style.display = 'none');
     configurarInterfazPorRol();
     mostrarUsuarioEnHeader();
-    const esOp = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
-    changeView(esOp ? 'taller' : 'catalogo');
+    const esOp  = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
+    const esAlm = usuarioActivo.rol === 'ALMACEN';
+    changeView(esOp ? 'taller' : esAlm ? 'inventario' : 'catalogo');
   };
 
   const slot = document.getElementById('header-worker-slot');

@@ -61,48 +61,68 @@ async function init() {
 function configurarInterfazPorRol() {
     if (!usuarioActivo) return;
     
-    const btnTaller = document.getElementById('btn-menu-taller');
-    const btnInventario = document.getElementById('btn-menu-inventario');
-    const btnInvTienda = document.getElementById('btn-menu-inv-tienda');
-    const btnGestor = document.getElementById('btn-menu-gestor');
-    const btnAddProd = document.getElementById('btn-add-producto');
-    const btnLogistica = document.getElementById('btn-menu-logistica');
-    const btnUsuarios = document.getElementById('btn-menu-usuarios');
-    const btnProv = document.getElementById('btn-menu-proveedores');
-    const btnContratos = document.getElementById('btn-menu-contratos'); // NUEVO ACCESO
+    const btnTaller      = document.getElementById('btn-menu-taller');
+    const btnInventario  = document.getElementById('btn-menu-inventario');
+    const btnInvTienda   = document.getElementById('btn-menu-inv-tienda');
+    const btnGestor      = document.getElementById('btn-menu-gestor');
+    const btnAddProd     = document.getElementById('btn-add-producto');
+    const btnLogistica   = document.getElementById('btn-menu-logistica');
+    const btnUsuarios    = document.getElementById('btn-menu-usuarios');
+    const btnProv        = document.getElementById('btn-menu-proveedores');
+    const btnContratos   = document.getElementById('btn-menu-contratos');
 
-    // Ocultar todos los botones por defecto
-    if (btnTaller) btnTaller.style.display = 'none';
-    if (btnInventario) btnInventario.style.display = 'none';
-    if (btnInvTienda) btnInvTienda.style.display = 'none';
-    if (btnGestor) btnGestor.style.display = 'none';
-    if (btnAddProd) btnAddProd.style.display = 'none';
-    if (btnLogistica) btnLogistica.style.display = 'none';
-    if (btnUsuarios) btnUsuarios.style.display = 'none';
-    if (btnProv) btnProv.style.display = 'none';
-    if (btnContratos) btnContratos.style.display = 'none'; // NUEVO ACCESO
+    // Ítems exclusivos de Vendedor / Admin
+    const btnStock       = document.getElementById('btn-menu-stock');
+    const btnCatalogo    = document.getElementById('btn-menu-catalogo');
+    const btnContrato    = document.getElementById('btn-menu-contrato');
+    const btnPedidos     = document.getElementById('btn-menu-pedidos');
+    const btnCreaciones  = document.getElementById('btn-menu-creaciones');
 
-    // Mostrar botones según el rol
+    // Ocultar todo por defecto
+    [btnTaller, btnInventario, btnInvTienda, btnGestor, btnAddProd,
+     btnLogistica, btnUsuarios, btnProv, btnContratos,
+     btnStock, btnCatalogo, btnContrato, btnPedidos, btnCreaciones
+    ].forEach(b => { if (b) b.style.display = 'none'; });
 
+    const rol = usuarioActivo.rol;
+    const esAdmin       = rol === 'Admin';
+    const esVendedor    = rol === 'Vendedor';
+    const esJefeTaller  = ['Jefe_Taller', 'JEFE_TALLER'].includes(rol);
+    const esOperario    = rol === 'Operario';
+    const esChofer      = rol === 'Chofer';
+    const esAlmacen     = rol === 'ALMACEN';
 
-    if (['Admin','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol)) {
-    if (btnInvTienda) btnInvTienda.style.display = 'flex';
+    // ── Ítems solo para Vendedor y Admin ────────────────────────────
+    if (esAdmin || esVendedor) {
+        if (btnStock)      btnStock.style.display      = 'flex';
+        if (btnCatalogo)   btnCatalogo.style.display   = 'flex';
+        if (btnContrato)   btnContrato.style.display   = 'flex';
+        if (btnPedidos)    btnPedidos.style.display    = 'flex';
+        if (btnCreaciones) btnCreaciones.style.display = 'flex';
     }
-    if (['Admin', 'Jefe_Taller', 'JEFE_TALLER', 'Operario', 'Chofer'].includes(usuarioActivo.rol)) {
-        if (btnTaller) btnTaller.style.display = 'flex'; // GESTIÓN DE TALLER
+
+    // ── Gestión de taller: Admin, Jefe, Operario, Chofer ────────────
+    if (esAdmin || esJefeTaller || esOperario || esChofer) {
+        if (btnTaller) btnTaller.style.display = 'flex';
     }
-    if (['Admin', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN'].includes(usuarioActivo.rol)) {
-        if (btnInventario) btnInventario.style.display = 'flex'; // CONTROL DE INSUMOS
+
+    // ── Control de insumos: Admin, Jefe, Almacén ────────────────────
+    if (esAdmin || esJefeTaller || esAlmacen) {
+        if (btnInventario) btnInventario.style.display = 'flex';
     }
-    if (usuarioActivo.rol === 'Admin') {
+
+    // ── Inventario por tienda: Admin, Jefe ──────────────────────────
+    if (esAdmin || esJefeTaller) {
+        if (btnInvTienda) btnInvTienda.style.display = 'flex';
+    }
+
+    // ── Solo Admin ───────────────────────────────────────────────────
+    if (esAdmin) {
         if (btnGestor)    btnGestor.style.display    = 'flex';
-        // ↓ btnAddProd NO se muestra aquí; changeView lo controla según la vista activa
         if (btnLogistica) btnLogistica.style.display = 'flex';
         if (btnUsuarios)  btnUsuarios.style.display  = 'flex';
         if (btnProv)      btnProv.style.display      = 'flex';
-    }
-    if (usuarioActivo.rol === 'Admin') {
-        if (btnContratos) btnContratos.style.display = 'block'; // Solo Admin ve reportes globales
+        if (btnContratos) btnContratos.style.display = 'block';
     }
 }
 
