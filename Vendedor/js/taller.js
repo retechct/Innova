@@ -910,9 +910,14 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
     // ── Construir HTML de las líneas de texto ──
     const specsHtml = seccionesFiltradas
         .map(l => {
+            // 1. Limpiamos cualquier tag HTML sucio que haya quedado (<b>, <span>, <i>, etc.)
+            let fLine = l.replace(/<[^>]+>/g, '').trim();
+            if (!fLine) return '';
+
+            // 2. Convertimos enlaces en imágenes si existen
             const urlRegex = /(https?:\/\/[^\s"<]+)/g;
-            let fLine = l.replace(urlRegex, function(url) {
-                return `<br><img src="${url}" style="width:120px; height:120px; object-fit:cover; border-radius:6px; border:2px solid #cbd5e1; margin-top:4px;" onclick="ampliarImagen('${url}')">`;
+            fLine = fLine.replace(urlRegex, function(url) {
+                return `<br><img src="${url}" style="width:120px; height:120px; object-fit:cover; border-radius:6px; border:2px solid #cbd5e1; margin-top:4px; cursor:pointer;" onclick="ampliarImagen('${url}')">`;
             });
             
             if (fLine.includes(':') && !fLine.startsWith('http') && !fLine.includes('<img')) {

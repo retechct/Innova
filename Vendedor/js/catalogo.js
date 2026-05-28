@@ -818,7 +818,11 @@ async function subirFotosReferencia(inputId, fallbackUrl) {
             }
         }
         Swal.close();
-        return urls.length > 0 ? urls.join('|') : fallbackUrl;
+        if (urls.length > 0) {
+            return [fallbackUrl, ...urls].join('|');
+        } else {
+            return fallbackUrl;
+        }
     } catch (e) {
         console.error("Error al subir fotos:", e);
         Swal.close();
