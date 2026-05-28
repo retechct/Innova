@@ -278,58 +278,69 @@ function _entRenderUI(contenedor, choferId) {
         `<option value="${c}">${c}</option>`
     ).join('');
 
+    // ── IMPORTANTE: el contenedor padre es un grid multi-columna.
+    // Envolvemos todo en un div con grid-column:1/-1 para que ocupe el ancho
+    // completo y se comporte como una columna única internamente.
     contenedor.innerHTML = `
-        <!-- Barra de herramientas -->
-        <div id="ent-toolbar" style="
-            display:flex; flex-wrap:wrap; gap:10px; align-items:center;
-            padding:14px 16px; background:#f0fdf4;
-            border:1px solid #86efac; border-radius:12px; margin-bottom:20px;">
+        <div style="
+            grid-column: 1 / -1;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            min-width: 0;">
 
-            <!-- Buscador -->
-            <div style="position:relative; flex:2; min-width:180px;">
-                <i class="fa-solid fa-magnifying-glass" style="
-                    position:absolute; left:10px; top:50%; transform:translateY(-50%);
-                    color:#94a3b8; font-size:12px; pointer-events:none;"></i>
-                <input id="ent-buscar" type="text"
-                    placeholder="Buscar por contrato o cliente…"
-                    oninput="_entFiltrar()"
-                    style="width:100%; padding:9px 12px 9px 32px; box-sizing:border-box;
-                        border:1px solid #bbf7d0; border-radius:8px; font-size:12px;
-                        font-family:'Jost',sans-serif; outline:none; background:#fff;
-                        color:#0f172a; transition:border-color .2s;"
-                    onfocus="this.style.borderColor='#22c55e'"
-                    onblur="this.style.borderColor='#bbf7d0'">
+            <!-- Barra de herramientas -->
+            <div id="ent-toolbar" style="
+                display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+                padding:14px 16px; background:#f0fdf4;
+                border:1px solid #86efac; border-radius:12px; margin-bottom:20px;">
+
+                <!-- Buscador -->
+                <div style="position:relative; flex:2; min-width:180px;">
+                    <i class="fa-solid fa-magnifying-glass" style="
+                        position:absolute; left:10px; top:50%; transform:translateY(-50%);
+                        color:#94a3b8; font-size:12px; pointer-events:none;"></i>
+                    <input id="ent-buscar" type="text"
+                        placeholder="Buscar por contrato o cliente…"
+                        oninput="_entFiltrar()"
+                        style="width:100%; padding:9px 12px 9px 32px; box-sizing:border-box;
+                            border:1px solid #bbf7d0; border-radius:8px; font-size:12px;
+                            font-family:'Jost',sans-serif; outline:none; background:#fff;
+                            color:#0f172a; transition:border-color .2s;"
+                        onfocus="this.style.borderColor='#22c55e'"
+                        onblur="this.style.borderColor='#bbf7d0'">
+                </div>
+
+                <!-- Filtro sede -->
+                ${sedes.length > 1 ? `
+                <select id="ent-sede" onchange="_entFiltrar()"
+                    style="padding:9px 12px; border:1px solid #bbf7d0; border-radius:8px;
+                        font-size:12px; font-family:'Jost',sans-serif; outline:none;
+                        background:#fff; color:#0f172a; cursor:pointer; min-width:140px;">
+                    <option value="">Todas las sedes</option>
+                    ${opsSede}
+                </select>` : '<span id="ent-sede" style="display:none;"></span>'}
+
+                <!-- Filtro chofer (solo Admin) -->
+                ${choferes.length > 1 ? `
+                <select id="ent-chofer" onchange="_entFiltrar()"
+                    style="padding:9px 12px; border:1px solid #bbf7d0; border-radius:8px;
+                        font-size:12px; font-family:'Jost',sans-serif; outline:none;
+                        background:#fff; color:#0f172a; cursor:pointer; min-width:140px;">
+                    <option value="">Todos los choferes</option>
+                    ${opsChofer}
+                </select>` : '<span id="ent-chofer" style="display:none;"></span>'}
+
+                <!-- Contador -->
+                <span id="ent-contador" style="
+                    font-size:11px; color:#166534; font-family:'Jost',sans-serif;
+                    font-weight:700; white-space:nowrap; margin-left:auto;">
+                </span>
             </div>
 
-            <!-- Filtro sede -->
-            ${sedes.length > 1 ? `
-            <select id="ent-sede" onchange="_entFiltrar()"
-                style="padding:9px 12px; border:1px solid #bbf7d0; border-radius:8px;
-                    font-size:12px; font-family:'Jost',sans-serif; outline:none;
-                    background:#fff; color:#0f172a; cursor:pointer; min-width:140px;">
-                <option value="">Todas las sedes</option>
-                ${opsSede}
-            </select>` : '<span id="ent-sede" style="display:none;"></span>'}
-
-            <!-- Filtro chofer (solo Admin) -->
-            ${choferes.length > 1 ? `
-            <select id="ent-chofer" onchange="_entFiltrar()"
-                style="padding:9px 12px; border:1px solid #bbf7d0; border-radius:8px;
-                    font-size:12px; font-family:'Jost',sans-serif; outline:none;
-                    background:#fff; color:#0f172a; cursor:pointer; min-width:140px;">
-                <option value="">Todos los choferes</option>
-                ${opsChofer}
-            </select>` : '<span id="ent-chofer" style="display:none;"></span>'}
-
-            <!-- Contador -->
-            <span id="ent-contador" style="
-                font-size:11px; color:#166534; font-family:'Jost',sans-serif;
-                font-weight:700; white-space:nowrap; margin-left:auto;">
-            </span>
-        </div>
-
-        <!-- Lista filtrada -->
-        <div id="ent-lista"></div>`;
+            <!-- Lista filtrada -->
+            <div id="ent-lista"></div>
+        </div>`;
 
     _entFiltrar(); // render inicial
 }
@@ -485,45 +496,53 @@ function _opRenderUI(contenedor) {
     ).join('');
 
     contenedor.innerHTML = `
-        <!-- Barra de herramientas -->
-        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;
-            padding:14px 16px; background:#eff6ff; border:1px solid #93c5fd;
-            border-radius:12px; margin-bottom:20px;">
+        <div style="
+            grid-column: 1 / -1;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            min-width: 0;">
 
-            <!-- Buscador -->
-            <div style="position:relative; flex:2; min-width:180px;">
-                <i class="fa-solid fa-magnifying-glass" style="
-                    position:absolute; left:10px; top:50%; transform:translateY(-50%);
-                    color:#94a3b8; font-size:12px; pointer-events:none;"></i>
-                <input id="op-buscar" type="text"
-                    placeholder="Buscar por contrato o cliente…"
-                    oninput="_opFiltrar()"
-                    style="width:100%; padding:9px 12px 9px 32px; box-sizing:border-box;
-                        border:1px solid #93c5fd; border-radius:8px; font-size:12px;
-                        font-family:'Jost',sans-serif; outline:none; background:#fff;
-                        color:#0f172a; transition:border-color .2s;"
-                    onfocus="this.style.borderColor='#2563eb'"
-                    onblur="this.style.borderColor='#93c5fd'">
+            <!-- Barra de herramientas -->
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+                padding:14px 16px; background:#eff6ff; border:1px solid #93c5fd;
+                border-radius:12px; margin-bottom:20px;">
+
+                <!-- Buscador -->
+                <div style="position:relative; flex:2; min-width:180px;">
+                    <i class="fa-solid fa-magnifying-glass" style="
+                        position:absolute; left:10px; top:50%; transform:translateY(-50%);
+                        color:#94a3b8; font-size:12px; pointer-events:none;"></i>
+                    <input id="op-buscar" type="text"
+                        placeholder="Buscar por contrato o cliente…"
+                        oninput="_opFiltrar()"
+                        style="width:100%; padding:9px 12px 9px 32px; box-sizing:border-box;
+                            border:1px solid #93c5fd; border-radius:8px; font-size:12px;
+                            font-family:'Jost',sans-serif; outline:none; background:#fff;
+                            color:#0f172a; transition:border-color .2s;"
+                        onfocus="this.style.borderColor='#2563eb'"
+                        onblur="this.style.borderColor='#93c5fd'">
+                </div>
+
+                <!-- Filtro estado -->
+                <select id="op-estado" onchange="_opFiltrar()"
+                    style="padding:9px 12px; border:1px solid #93c5fd; border-radius:8px;
+                        font-size:12px; font-family:'Jost',sans-serif; outline:none;
+                        background:#fff; color:#0f172a; cursor:pointer; min-width:160px;">
+                    <option value="">Todos los estados</option>
+                    ${opsEstado}
+                </select>
+
+                <!-- Contador -->
+                <span id="op-contador" style="
+                    font-size:11px; color:#1e40af; font-family:'Jost',sans-serif;
+                    font-weight:700; white-space:nowrap; margin-left:auto;">
+                </span>
             </div>
 
-            <!-- Filtro estado -->
-            <select id="op-estado" onchange="_opFiltrar()"
-                style="padding:9px 12px; border:1px solid #93c5fd; border-radius:8px;
-                    font-size:12px; font-family:'Jost',sans-serif; outline:none;
-                    background:#fff; color:#0f172a; cursor:pointer; min-width:160px;">
-                <option value="">Todos los estados</option>
-                ${opsEstado}
-            </select>
-
-            <!-- Contador -->
-            <span id="op-contador" style="
-                font-size:11px; color:#1e40af; font-family:'Jost',sans-serif;
-                font-weight:700; white-space:nowrap; margin-left:auto;">
-            </span>
-        </div>
-
-        <!-- Lista filtrada -->
-        <div id="op-lista"></div>`;
+            <!-- Lista filtrada -->
+            <div id="op-lista"></div>
+        </div>`;
 
     _opFiltrar();
 }
