@@ -18,6 +18,7 @@ dentro de cada elemento del array muebles.
 """
 
 import io
+import traceback
 import openpyxl
 from datetime import datetime
 from io import BytesIO, StringIO
@@ -144,7 +145,9 @@ def _reservar_unidad(cursor, venta_id, codigo_venta,
         cursor.execute("RELEASE SAVEPOINT reservar_unidad")
 
     except Exception as e:
-        print(f"⚠️ _reservar_unidad: {e}")
+        print(f"⚠️  _reservar_unidad ERROR — tabla={tabla if 'tabla' in dir() else '?'} reg_id={reg_id if 'reg_id' in dir() else '?'}")
+        print(f"⚠️  Excepción: {type(e).__name__}: {e}")
+        print(f"⚠️  Traceback:\n{traceback.format_exc()}")
         cursor.execute("ROLLBACK TO SAVEPOINT reservar_unidad")
         cursor.execute("RELEASE SAVEPOINT reservar_unidad")
 
@@ -197,7 +200,13 @@ def guardar_venta():
     _asegurar_columnas_inventario()   # ← migración segura al primer uso
 
     datos = request.json
+    _paso_actual = "inicio"
     try:
+        print(f"\n{'='*60}")
+        print(f"[VENTA] Iniciando registro — código: {datos.get('codigo')}")
+        print(f"[VENTA] Payload recibido: {datos}")
+        print(f"{'='*60}\n")
+
         conexion = get_db_connection()
         conexion.autocommit = False
         cursor   = conexion.cursor()
@@ -205,6 +214,8 @@ def guardar_venta():
         lista_pagos_raw = datos.get('pagos', [])
         empresa_pago_resumen = lista_pagos_raw[0].get('empresa', '') if lista_pagos_raw else ''
 
+        _paso_actual = "INSERT ventas"
+        print(f"[PASO 1] {_paso_actual}")
         cursor.execute("""
             INSERT INTO ventas (
                 codigo_venta, nombre_cliente, dni_cliente, celular_cliente,
@@ -228,7 +239,10 @@ def guardar_venta():
             datos.get('empresa_cliente', 'Particular')
         ))
         venta_id = cursor.fetchone()[0]
+        print(f"[PASO 1] OK — venta_id={venta_id}")
 
+        _paso_actual = "crear_tabla_historial_precios"
+        print(f"[PASO 2] {_paso_actual}")
         _crear_tabla_historial_precios(cursor)
         cursor.execute("""
             INSERT INTO historial_precios (
@@ -243,12 +257,16 @@ def guardar_venta():
             datos.get('vendedor_id'),
             datos.get('vendedor_nombre')
         ))
+        print(f"[PASO 2] OK")
 
         # Pagos múltiples
+        _paso_actual = "INSERT pagos"
+        print(f"[PASO 3] {_paso_actual} — {len(lista_pagos_raw)} pago(s)")
         total_adelanto = 0
-        for p in lista_pagos_raw:
+        for idx_p, p in enumerate(lista_pagos_raw):
             monto_bruto = p.get('monto', 0)
             total_adelanto += monto_bruto
+            print(f"[PASO 3.{idx_p+1}] Pago: {p}")
             cursor.execute("""
                 INSERT INTO pagos (
                     venta_id, tipo_pago, entidad, numero_operacion,
@@ -260,12 +278,15 @@ def guardar_venta():
                 monto_bruto, p.get('comision', 0), p.get('monto_neto', 0),
                 p.get('empresa'), p.get('comprobante_url', 'Sin imagen')
             ))
+        print(f"[PASO 3] OK — total_adelanto={total_adelanto}")
 
         if total_adelanto > 0:
+            _paso_actual = "UPDATE ventas monto_adelanto"
             cursor.execute(
                 "UPDATE ventas SET monto_adelanto = %s WHERE id = %s",
                 (total_adelanto, venta_id)
             )
+            print(f"[PASO 3b] UPDATE monto_adelanto OK")
 
         # ── Motor Make-vs-Buy ─────────────────────────────────────────────────
         SUFIJO_TELA = {
@@ -292,12 +313,17 @@ def guardar_venta():
             'base-centro':       ('maestro_bases_comedor',  'TABLEROS_Y_PIEDRAS'),
         }
 
-        for m in datos['muebles']:
+        _paso_actual = "loop muebles"
+        print(f"[PASO 4] Procesando {len(datos.get('muebles', []))} mueble(s)")
+        for idx_m, m in enumerate(datos['muebles']):
+            _paso_actual = f"mueble[{idx_m}] INSERT items_venta"
+            print(f"[PASO 4.{idx_m+1}] Mueble: {m}")
             cursor.execute("""
                 INSERT INTO items_venta (venta_id, producto, color_tela, foto_url, precio_unitario)
                 VALUES (%s, %s, %s, %s, %s) RETURNING id;
             """, (venta_id, m.get('tipo'), m.get('tela'), m.get('foto'), m.get('precio')))
             item_id = cursor.fetchone()[0]
+            print(f"[PASO 4.{idx_m+1}] item_id={item_id}")
 
             componentes = m.get('componentes', {})
             areas_internas_creadas = set()
@@ -310,6 +336,8 @@ def guardar_venta():
                 area_estructura = 'ESTRUCTURAS_SILLAS'
 
             if area_estructura:
+                _paso_actual = f"mueble[{idx_m}] INSERT ticket {area_estructura}"
+                print(f"[PASO 4.{idx_m+1}.a] Ticket area_estructura={area_estructura}")
                 cursor.execute("""
                     INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa)
                     VALUES (%s, %s, 'Pendiente', 1)
@@ -364,6 +392,8 @@ def guardar_venta():
                 if not sku or key not in mapeo_erp:
                     continue
                 tabla, area_destino = mapeo_erp[key]
+                _paso_actual = f"mueble[{idx_m}] componente key={key} sku={sku} tabla={tabla}"
+                print(f"[PASO 4.{idx_m+1}.c] Componente key={key}, sku={sku}, tabla={tabla}, area={area_destino}")
 
                 if key == 'silla':
                     cursor.execute("SELECT material, origen_produccion FROM maestro_sillas WHERE sku = %s", (sku,))
@@ -407,7 +437,8 @@ def guardar_venta():
                     )
 
             # Ticket de Despacho
-            estado_despacho = 'Bloqueado' if areas_internas_creadas else 'Pendiente'
+            _paso_actual = f"mueble[{idx_m}] INSERT ticket DESPACHO_CENTRAL"
+            print(f"[PASO 4.{idx_m+1}.d] Ticket DESPACHO_CENTRAL estado={estado_despacho}")
             cursor.execute("""
                 INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa)
                 VALUES (%s, 'DESPACHO_CENTRAL', %s, 99)
@@ -415,6 +446,8 @@ def guardar_venta():
 
             # Descuento genérico de stock (contador en catálogo)
             if m.get('es_stock') and m.get('catalogo_id'):
+                _paso_actual = f"mueble[{idx_m}] UPDATE catalogo_productos stock"
+                print(f"[PASO 4.{idx_m+1}.e] UPDATE stock catalogo_id={m['catalogo_id']}")
                 cursor.execute("""
                     UPDATE catalogo_productos
                     SET stock_cantidad = GREATEST(0, stock_cantidad - 1),
@@ -423,8 +456,8 @@ def guardar_venta():
                 """, (m['catalogo_id'],))
 
             # ── PUENTE INVENTARIO REAL ────────────────────────────────────────
-            # Si el vendedor escaneó / seleccionó una unidad física específica,
-            # la marcamos como Reservado y guardamos la referencia.
+            _paso_actual = f"mueble[{idx_m}] _reservar_unidad stock_producto_id={m.get('stock_producto_id')} stock_pieza_id={m.get('stock_pieza_id')}"
+            print(f"[PASO 4.{idx_m+1}.f] _reservar_unidad: {_paso_actual}")
             _reservar_unidad(
                 cursor, venta_id, datos['codigo'],
                 m.get('stock_producto_id'),
@@ -433,15 +466,18 @@ def guardar_venta():
                 datos.get('vendedor_nombre', ''),
                 item_id
             )
+            print(f"[PASO 4.{idx_m+1}.f] _reservar_unidad OK")
             # ─────────────────────────────────────────────────────────────────
 
             # Descuento de insumos por receta (solo productos fabricados)
+            _paso_actual = f"mueble[{idx_m}] descuento insumos receta"
             cursor.execute(
                 "SELECT cp.id FROM catalogo_productos cp WHERE cp.nombre_modelo = %s LIMIT 1;",
                 (m['tipo'],)
             )
             prod_row = cursor.fetchone()
             if prod_row and not m.get('es_stock'):
+                print(f"[PASO 4.{idx_m+1}.g] UPDATE insumos receta prod_id={prod_row[0]}")
                 cursor.execute("""
                     UPDATE inventario_insumos i
                     SET cantidad_actual = GREATEST(0, i.cantidad_actual - r.cantidad_necesaria)
@@ -449,6 +485,7 @@ def guardar_venta():
                     WHERE r.insumo_id = i.id AND r.producto_id = %s;
                 """, (prod_row[0],))
 
+        print(f"[PASO 5] COMMIT")
         conexion.commit()
 
         cursor.execute("SELECT email FROM usuarios WHERE id = %s", (datos['vendedor_id'],))
@@ -456,15 +493,25 @@ def guardar_venta():
         if v_correo:
             enviar_notificacion_venta(v_correo[0], datos['codigo'], datos['cliente'])
 
+        print(f"[VENTA] ✅ Venta registrada exitosamente — venta_id={venta_id}\n")
         return jsonify({"mensaje": "Venta procesada exitosamente", "id": venta_id}), 201
 
     except Exception as ex:
         if 'conexion' in locals() and conexion: conexion.rollback()
-        print(f"ERROR SQL EXACTO: {str(ex)}")
+        tb = traceback.format_exc()
+        print(f"\n{'!'*60}")
+        print(f"[ERROR] PASO QUE FALLÓ: {_paso_actual}")
+        print(f"[ERROR] EXCEPCIÓN: {type(ex).__name__}: {str(ex)}")
+        print(f"[ERROR] TRACEBACK COMPLETO:\n{tb}")
+        print(f"{'!'*60}\n")
         error_msg = str(ex)
         if "llave duplicada" in error_msg or "UniqueViolation" in error_msg:
             return jsonify({"error": "El N° de Contrato ya fue registrado."}), 400
-        return jsonify({"error": error_msg}), 500
+        return jsonify({
+            "error": error_msg,
+            "paso": _paso_actual,
+            "detalle": tb
+        }), 500
     finally:
         if 'conexion' in locals() and conexion:
             if 'cursor' in locals() and cursor: cursor.close()
