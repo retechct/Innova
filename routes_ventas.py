@@ -36,26 +36,31 @@ _schema_listo = False
 def _asegurar_columnas_inventario():
     """
     Añade stock_producto_id / stock_pieza_id a items_venta si aún no existen.
-    ADD COLUMN IF NOT EXISTS no falla si ya existen.
+    Se ejecuta con autocommit=True para que un ALTER TABLE no envenene
+    ninguna transacción abierta en caso de error.
     """
     global _schema_listo
     if _schema_listo:
         return
     conn = None
+    cur  = None
     try:
         conn = get_db_connection()
+        conn.autocommit = True          # DDL fuera de cualquier transacción
         cur  = conn.cursor()
         cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS stock_producto_id INTEGER;")
         cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS stock_pieza_id INTEGER;")
-        conn.commit()
         _schema_listo = True
     except Exception as e:
-        if conn:
-            conn.rollback()
         print(f"⚠️ _asegurar_columnas_inventario: {e}")
+        # Aunque falle el ALTER (columna ya existe en versiones <9.6), marcamos
+        # igual como listo para no reintentar en cada request.
+        _schema_listo = True
     finally:
-        if conn:
+        if cur:
             cur.close()
+        if conn:
+            conn.autocommit = False     # Restaurar antes de devolver al pool
             release_db_connection(conn)
 
 
@@ -91,6 +96,7 @@ def _reservar_unidad(cursor, venta_id, codigo_venta,
     """
     Marca una unidad física como 'Reservado' y deja huella en
     historial_inventario. Vincula el id al ítem de venta.
+    Usa SAVEPOINT para no abortar la transacción padre si algo falla.
     """
     if stock_prod_id:
         tabla, col, tipo = 'stock_productos', 'stock_producto_id', 'producto'
@@ -101,35 +107,46 @@ def _reservar_unidad(cursor, venta_id, codigo_venta,
     else:
         return
 
-    cursor.execute(
-        f"SELECT estado, sede_id, codigo_barra FROM {tabla} WHERE id = %s",
-        (reg_id,)
-    )
-    fila = cursor.fetchone()
-    if not fila:
-        return  # La unidad ya no existe; continuar sin romper la transacción
+    try:
+        cursor.execute("SAVEPOINT reservar_unidad")
 
-    estado_ant, sede_id, barcode = fila
+        cursor.execute(
+            f"SELECT estado, sede_id, codigo_barra FROM {tabla} WHERE id = %s",
+            (reg_id,)
+        )
+        fila = cursor.fetchone()
+        if not fila:
+            cursor.execute("RELEASE SAVEPOINT reservar_unidad")
+            return  # La unidad ya no existe; continuar sin romper la transacción
 
-    # Cambiar a Reservado
-    cursor.execute(
-        f"UPDATE {tabla} SET estado = 'Reservado', actualizado_en = NOW() WHERE id = %s",
-        (reg_id,)
-    )
+        estado_ant, sede_id, barcode = fila
 
-    # Historial
-    cursor.execute("""
-        INSERT INTO historial_inventario
-            (tipo_registro, registro_id, codigo_barra, tipo_evento,
-             sede_origen_id, sede_destino_id, estado_anterior, estado_nuevo,
-             usuario_id, usuario_nombre, venta_id, codigo_venta, notas)
-        VALUES (%s,%s,%s,'Reserva',%s,NULL,%s,'Reservado',%s,%s,%s,%s,%s);
-    """, (tipo, reg_id, barcode, sede_id, estado_ant,
-          usuario_id, usuario_nombre, venta_id, codigo_venta,
-          f"Reservado al registrar venta {codigo_venta}"))
+        # Cambiar a Reservado
+        cursor.execute(
+            f"UPDATE {tabla} SET estado = 'Reservado', actualizado_en = NOW() WHERE id = %s",
+            (reg_id,)
+        )
 
-    # Vincular al ítem de venta
-    cursor.execute(f"UPDATE items_venta SET {col} = %s WHERE id = %s", (reg_id, item_id))
+        # Historial
+        cursor.execute("""
+            INSERT INTO historial_inventario
+                (tipo_registro, registro_id, codigo_barra, tipo_evento,
+                 sede_origen_id, sede_destino_id, estado_anterior, estado_nuevo,
+                 usuario_id, usuario_nombre, venta_id, codigo_venta, notas)
+            VALUES (%s,%s,%s,'Reserva',%s,NULL,%s,'Reservado',%s,%s,%s,%s,%s);
+        """, (tipo, reg_id, barcode, sede_id, estado_ant,
+              usuario_id, usuario_nombre, venta_id, codigo_venta,
+              f"Reservado al registrar venta {codigo_venta}"))
+
+        # Vincular al ítem de venta
+        cursor.execute(f"UPDATE items_venta SET {col} = %s WHERE id = %s", (reg_id, item_id))
+
+        cursor.execute("RELEASE SAVEPOINT reservar_unidad")
+
+    except Exception as e:
+        print(f"⚠️ _reservar_unidad: {e}")
+        cursor.execute("ROLLBACK TO SAVEPOINT reservar_unidad")
+        cursor.execute("RELEASE SAVEPOINT reservar_unidad")
 
 
 def _liberar_unidades(cursor, venta_id, estado_destino, evento_nombre):
@@ -162,7 +179,7 @@ def _liberar_unidades(cursor, venta_id, estado_destino, evento_nombre):
                     (tipo_registro, registro_id, codigo_barra, tipo_evento,
                      sede_origen_id, sede_destino_id, estado_anterior, estado_nuevo,
                      usuario_id, usuario_nombre, venta_id, codigo_venta, notas)
-                VALUES (%s,%s,%s,%s,%s,0,'Sistema',%s,%s,%s,NULL,%s)
+                VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, NULL, 'Sistema', %s, NULL, %s)
             """, (tipo, reg_id, barcode, evento_nombre,
                   sede_id, estado_ant, estado_destino,
                   venta_id, f"Cambio automático — {evento_nombre}"))
