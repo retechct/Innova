@@ -920,8 +920,22 @@ async function cargarTicketsTaller() {
                 const productoSafe = (t.producto || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
                 const fotoBtoa    = (t.foto||'').replace(/"/g,'&quot;');
 
+                // Foto del mueble — primera si hay varias separadas por |
+                const fotoCardSrc = t.foto && !t.foto.includes('sin_foto')
+                    ? t.foto.split('|')[0]
+                    : null;
+                const fotoCardHTML = fotoCardSrc
+                    ? `<div style="margin:-15px -15px 12px -15px; border-radius:8px 8px 0 0; overflow:hidden; height:160px; background:#f1f5f9;">
+                           <img src="${fotoCardSrc}" alt="${productoSafe}"
+                               style="width:100%; height:160px; object-fit:cover; display:block; cursor:pointer;"
+                               onclick="ampliarImagen('${fotoCardSrc}')"
+                               onerror="this.parentElement.style.display='none'">
+                       </div>`
+                    : '';
+
                 html += `
-                <div style="background:${bgCard}; border-left:5px solid ${colorBorde}; border-radius:8px; padding:15px; opacity:${opacidad}; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:0.2s;">
+                <div style="background:${bgCard}; border-left:5px solid ${colorBorde}; border-radius:8px; padding:15px; opacity:${opacidad}; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:0.2s; overflow:hidden;">
+                    ${fotoCardHTML}
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <span style="font-size:10px; font-weight:900; padding:4px 8px; border-radius:4px; background:${badgeBg}; color:${badgeCol};">${badgeTxt}</span>
                         <span style="font-size:10px; font-weight:bold; color:#94a3b8;">#${t.id}</span>
@@ -934,7 +948,7 @@ async function cargarTicketsTaller() {
                         data-foto="${fotoBtoa}"
                         data-ticket-id="${t.id}" data-area="${t.area}"
                         style="width:100%; background:#e0f2fe; color:#0369a1; border:none; padding:7px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-bottom:8px;">
-                        <i class="fa-solid fa-eye"></i> Ver Ficha
+                        <i class="fa-solid fa-eye"></i> Ver Ficha Técnica Completa
                     </button>
                     ${renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin)}
                 </div>`;
