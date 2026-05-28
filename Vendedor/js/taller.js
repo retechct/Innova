@@ -684,6 +684,13 @@ async function cargarTicketsTaller() {
                     border:2px solid #f97316;">
                     <i class="fa-solid fa-truck-fast"></i> COLA DE RECOJO
                 </button>
+                <button onclick="filtroAdminTaller='entregados'; cargarTicketsTaller()"
+                    style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
+                    background:${filtroAdminTaller==='entregados' ? '#15803d' : '#f0fdf4'};
+                    color:${filtroAdminTaller==='entregados' ? 'white' : '#15803d'};
+                    border:2px solid #86efac;">
+                    <i class="fa-solid fa-circle-check"></i> ENTREGADOS
+                </button>
                 <button onclick="cargarTicketsTaller()"
                     style="padding:10px 16px; border-radius:10px; border:none; font-size:11px; font-weight:800; cursor:pointer; background:#f1f5f9; color:#475569;">
                     <i class="fa-solid fa-rotate"></i> Actualizar
@@ -697,6 +704,13 @@ async function cargarTicketsTaller() {
             return;
         }
 
+        // Si está en vista ENTREGADOS, mostrar historial y salir
+        if (filtroAdminTaller === 'entregados') {
+            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando historial de entregas...</p>';
+            await cargarVistaEntregados(contenedor, null);
+            return;
+        }
+
         // Si está en vista ÓRDENES POR PEDIDO, mostrar esa sección y salir
         if (filtroAdminTaller === 'ordenes') {
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando órdenes de producción...</p>';
@@ -705,16 +719,35 @@ async function cargarTicketsTaller() {
         }
     } else if (esChofer) {
         // ── CHOFER: vista propia con fichas de entrega ──────────────────────
+        const filtroChofer = (typeof filtroAdminTaller !== 'undefined' && filtroAdminTaller === 'entregados_chofer') ? 'entregados_chofer' : 'activas';
         tabsHeader.innerHTML = `
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; width:100%;">
-                <span style="font-size:13px; font-weight:800; color:#1e40af; padding:10px 16px; background:#eff6ff; border-radius:10px; border:2px solid #93c5fd;">
+                <button onclick="filtroAdminTaller='activas'; cargarTicketsTaller()"
+                    style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
+                    background:${filtroChofer==='activas' ? '#1e40af' : '#eff6ff'};
+                    color:${filtroChofer==='activas' ? 'white' : '#1e40af'};
+                    border:2px solid #93c5fd;">
                     <i class="fa-solid fa-truck"></i> MIS ENTREGAS ASIGNADAS
-                </span>
+                </button>
+                <button onclick="filtroAdminTaller='entregados_chofer'; cargarTicketsTaller()"
+                    style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
+                    background:${filtroChofer==='entregados_chofer' ? '#15803d' : '#f0fdf4'};
+                    color:${filtroChofer==='entregados_chofer' ? 'white' : '#15803d'};
+                    border:2px solid #86efac;">
+                    <i class="fa-solid fa-circle-check"></i> MIS ENTREGADOS
+                </button>
                 <button onclick="cargarTicketsTaller()"
                     style="padding:10px 16px; border-radius:10px; border:none; font-size:11px; font-weight:800; cursor:pointer; background:#f1f5f9; color:#475569; margin-left:auto;">
                     <i class="fa-solid fa-rotate"></i> Actualizar
                 </button>
             </div>`;
+
+        // ── Tab "Mis Entregados" del chofer ──────────────────────────────────
+        if (filtroChofer === 'entregados_chofer') {
+            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:30px;">Cargando historial...</p>';
+            await cargarVistaEntregados(contenedor, usuarioActivo.id);
+            return;
+        }
 
         contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:30px;">Cargando tus entregas...</p>';
 
@@ -1450,7 +1483,16 @@ async function finalizarTicketTaller(ticketId, inputFile, area, producto) {
         const data = await res.json();
 
         if (data.exito) {
-            Swal.fire('¡Trabajo Completado!', 'El ticket fue marcado como Terminado.', 'success');
+            if (data.es_entrega) {
+                await Swal.fire({
+                    icon: 'success',
+                    title: '🎉 ¡Entrega Confirmada!',
+                    text: 'La entrega fue registrada. Puedes verla en "Mis Entregados".',
+                    confirmButtonColor: '#15803d'
+                });
+            } else {
+                Swal.fire('¡Trabajo Completado!', 'El ticket fue marcado como Terminado.', 'success');
+            }
             cargarTicketsTaller();
         } else {
             Swal.fire('Error', data.error || 'No se pudo finalizar el ticket.', 'error');
@@ -2054,4 +2096,90 @@ function _renderFichaChofer(d, ticketId) {
         <!-- Fotos de evidencia de producción -->
         ${fotosHTML}
     </div>`;
+}
+
+/* ================================================================= */
+/* --- VISTA HISTORIAL DE ENTREGADOS                              --- */
+/* ================================================================= */
+
+async function cargarVistaEntregados(contenedor, choferId) {
+    try {
+        const url = choferId
+            ? `${API_URL}/api/despacho/entregados?chofer_id=${choferId}`
+            : `${API_URL}/api/despacho/entregados`;
+
+        const res  = await apiFetch(url);
+        const data = await res.json();
+
+        if (!Array.isArray(data) || data.length === 0) {
+            contenedor.innerHTML = `
+                <div style="text-align:center;padding:60px 20px;color:#64748b;">
+                    <div style="font-size:48px;margin-bottom:16px;">✅</div>
+                    <p style="font-weight:700;font-size:15px;color:#374151;margin:0 0 8px;">Sin entregas registradas aún</p>
+                    <p style="font-size:13px;margin:0;">Cuando confirmes una entrega aparecerá aquí.</p>
+                </div>`;
+            return;
+        }
+
+        let html = `
+            <div style="margin-bottom:16px;padding:12px 16px;background:#f0fdf4;border-radius:10px;border:1px solid #86efac;display:flex;align-items:center;gap:10px;">
+                <i class="fa-solid fa-circle-check" style="color:#15803d;font-size:18px;"></i>
+                <div>
+                    <div style="font-weight:800;color:#15803d;font-size:13px;">${data.length} entrega${data.length!==1?'s':''} completada${data.length!==1?'s':''}</div>
+                    <div style="font-size:11px;color:#166534;">Historial de despachos confirmados</div>
+                </div>
+            </div>`;
+
+        for (const e of data) {
+            const saldoCobrado = e.saldo === 0
+                ? `<span style="color:#15803d;font-weight:800;">✓ Pagado</span>`
+                : `<span style="color:#dc2626;font-weight:800;">S/ ${e.saldo.toFixed(2)} pendiente</span>`;
+
+            html += `
+            <div style="background:#fff;border:2px solid #86efac;border-radius:14px;margin-bottom:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <!-- Cabecera verde -->
+                <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:12px 16px;border-bottom:1px solid #86efac;display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-size:10px;font-weight:900;color:#166534;text-transform:uppercase;letter-spacing:1px;">Entregado</div>
+                        <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${e.producto}</div>
+                        <div style="font-size:11px;color:#475569;margin-top:1px;">${e.codigo_venta} · ${e.cliente}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="background:#15803d;color:white;font-size:10px;font-weight:800;padding:4px 10px;border-radius:20px;margin-bottom:4px;">🎉 ENTREGADO</div>
+                        <div style="font-size:10px;color:#64748b;">${e.fecha_entrega_real}</div>
+                    </div>
+                </div>
+                <!-- Detalle -->
+                <div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+                    <div>
+                        <div style="color:#64748b;font-size:10px;font-weight:700;text-transform:uppercase;">Chofer</div>
+                        <div style="font-weight:700;color:#0f172a;">${e.chofer}</div>
+                    </div>
+                    <div>
+                        <div style="color:#64748b;font-size:10px;font-weight:700;text-transform:uppercase;">Sede</div>
+                        <div style="font-weight:700;color:#0f172a;">${e.sede || '—'}</div>
+                    </div>
+                    <div>
+                        <div style="color:#64748b;font-size:10px;font-weight:700;text-transform:uppercase;">Dirección</div>
+                        <div style="font-weight:600;color:#374151;">${e.direccion || '—'}</div>
+                    </div>
+                    <div>
+                        <div style="color:#64748b;font-size:10px;font-weight:700;text-transform:uppercase;">Saldo</div>
+                        <div>${saldoCobrado}</div>
+                    </div>
+                </div>
+                ${e.foto_evidencia ? `
+                <div style="padding:0 16px 12px;">
+                    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:6px;">📷 Foto de entrega</div>
+                    <img src="${e.foto_evidencia}" alt="Evidencia" style="width:100%;max-width:280px;border-radius:8px;border:1px solid #e2e8f0;cursor:pointer;"
+                        onclick="window.open('${e.foto_evidencia}','_blank')">
+                </div>` : ''}
+            </div>`;
+        }
+
+        contenedor.innerHTML = html;
+    } catch(e) {
+        console.error('Error cargando entregados:', e);
+        contenedor.innerHTML = `<p style="color:red;text-align:center;padding:30px;">Error al cargar el historial. Intenta de nuevo.</p>`;
+    }
 }

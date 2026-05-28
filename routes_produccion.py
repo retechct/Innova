@@ -98,25 +98,35 @@ def finalizar_ticket(id):
             venta_row = cursor.fetchone()
             if venta_row:
                 venta_id_check = venta_row[0]
-                cursor.execute("""
-                    SELECT COUNT(*) FROM tickets_produccion t
-                    JOIN items_venta i ON t.item_id = i.id
-                    WHERE i.venta_id = %s AND t.area_trabajo != 'DESPACHO_CENTRAL' AND t.estado_ticket != 'Terminado'
-                """, (venta_id_check,))
-                if cursor.fetchone()[0] == 0:
+
+                # Si el ticket finalizado es DESPACHO_CENTRAL → marcar venta como Entregado
+                if area_term == 'DESPACHO_CENTRAL':
                     cursor.execute("""
-                        UPDATE ventas SET estado_general = 'Listo'
-                        WHERE id = %s AND COALESCE(estado_general,'') NOT IN ('Entregado','Cancelado')
+                        UPDATE ventas SET estado_general = 'Entregado'
+                        WHERE id = %s AND COALESCE(estado_general,'') != 'Cancelado'
                     """, (venta_id_check,))
                     venta_actualizada = cursor.rowcount > 0
+                else:
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM tickets_produccion t
+                        JOIN items_venta i ON t.item_id = i.id
+                        WHERE i.venta_id = %s AND t.area_trabajo != 'DESPACHO_CENTRAL' AND t.estado_ticket != 'Terminado'
+                    """, (venta_id_check,))
+                    if cursor.fetchone()[0] == 0:
+                        cursor.execute("""
+                            UPDATE ventas SET estado_general = 'Listo'
+                            WHERE id = %s AND COALESCE(estado_general,'') NOT IN ('Entregado','Cancelado')
+                        """, (venta_id_check,))
+                        venta_actualizada = cursor.rowcount > 0
 
         conexion.commit()
-        msg = 'Ticket finalizado correctamente'
-        if desbloqueados > 0:
+        es_despacho = row and row[1] == 'DESPACHO_CENTRAL'
+        msg = '🎉 ¡Entrega confirmada! La venta fue marcada como Entregado.' if es_despacho else 'Ticket finalizado correctamente'
+        if not es_despacho and desbloqueados > 0:
             msg += f'. {desbloqueados} ticket(s) de tapicería desbloqueado(s) automáticamente.'
-        if venta_actualizada:
+        if not es_despacho and venta_actualizada:
             msg += '. ✅ ¡Producción completa! La venta pasó a estado Listo.'
-        return jsonify({'exito': True, 'mensaje': msg, 'desbloqueados': desbloqueados, 'venta_lista': venta_actualizada}), 200
+        return jsonify({'exito': True, 'mensaje': msg, 'desbloqueados': desbloqueados, 'venta_lista': venta_actualizada, 'es_entrega': es_despacho}), 200
 
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
@@ -1012,6 +1022,81 @@ def ficha_chofer(item_id):
 
     except Exception as e:
         import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+# ==========================================
+# DESPACHO — HISTORIAL DE ENTREGADOS
+# ==========================================
+
+@produccion_bp.route('/api/despacho/entregados', methods=['GET'])
+def despacho_entregados():
+    """
+    Devuelve todos los tickets DESPACHO_CENTRAL ya Terminados (= entregados).
+    Opcional: ?chofer_id=X para filtrar por chofer (usado por el chofer para su historial).
+    """
+    chofer_id = request.args.get('chofer_id')
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        params = []
+        filtro_chofer = ''
+        if chofer_id:
+            filtro_chofer = ' AND t.trabajador_asignado_id = %s'
+            params.append(int(chofer_id))
+
+        cursor.execute(f"""
+            SELECT
+                t.id, i.producto, v.codigo_venta, v.nombre_cliente,
+                COALESCE(u.nombre, 'Sin asignar') AS chofer,
+                t.fecha_fin,
+                COALESCE(i.foto_url, '') AS foto_url,
+                COALESCE(t.ticket_details_override, i.color_tela, '') AS especificaciones,
+                t.foto_evidencia,
+                v.direccion_cliente, v.fecha_entrega,
+                t.item_id,
+                COALESCE(v.monto_total, 0)    AS total,
+                COALESCE(v.monto_adelanto, 0) AS adelanto,
+                v.sede
+            FROM tickets_produccion t
+            JOIN items_venta i    ON t.item_id  = i.id
+            JOIN ventas v         ON i.venta_id = v.id
+            LEFT JOIN usuarios u  ON t.trabajador_asignado_id = u.id
+            WHERE t.area_trabajo = 'DESPACHO_CENTRAL'
+              AND t.estado_ticket = 'Terminado'
+              {filtro_chofer}
+            ORDER BY t.fecha_fin DESC
+            LIMIT 200;
+        """, params)
+
+        resultado = []
+        for r in cursor.fetchall():
+            total    = float(r[12])
+            adelanto = float(r[13])
+            resultado.append({
+                'ticket_id':      r[0],
+                'producto':       r[1],
+                'codigo_venta':   r[2],
+                'cliente':        r[3],
+                'chofer':         r[4],
+                'fecha_entrega_real': r[5].strftime('%d/%m/%Y %H:%M') if r[5] else '—',
+                'foto_url':       limpiar_foto(r[6]),
+                'especificaciones': r[7] or '',
+                'foto_evidencia': r[8] if r[8] else '',
+                'direccion':      r[9] or '',
+                'fecha_entrega_pactada': r[10].strftime('%d/%m/%Y') if r[10] else '—',
+                'item_id':        r[11],
+                'total':          total,
+                'adelanto':       adelanto,
+                'saldo':          max(0, total - adelanto),
+                'sede':           r[14] or '',
+            })
+
+        return jsonify(resultado), 200
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
