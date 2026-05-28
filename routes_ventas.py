@@ -437,6 +437,8 @@ def guardar_venta():
                     )
 
             # Ticket de Despacho
+            # Si es stock ya fabricado → Pendiente; si es producción → Bloqueado
+            estado_despacho = 'Pendiente' if m.get('es_stock') else 'Bloqueado'
             _paso_actual = f"mueble[{idx_m}] INSERT ticket DESPACHO_CENTRAL"
             print(f"[PASO 4.{idx_m+1}.d] Ticket DESPACHO_CENTRAL estado={estado_despacho}")
             cursor.execute("""
