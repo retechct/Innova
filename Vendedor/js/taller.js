@@ -650,6 +650,7 @@ async function cargarTicketsTaller() {
 
     const esAdmin      = ['Admin', 'Jefe_Taller', 'JEFE_TALLER'].includes(usuarioActivo.rol);
     const esOperario   = usuarioActivo.rol === 'Operario';
+    const esChofer     = usuarioActivo.rol === 'Chofer';
 
     // ── TABS: solo para Operario y Jefe viendo sus tareas ──
     let tabsHeader = document.getElementById('tabs-taller-header');
@@ -702,8 +703,73 @@ async function cargarTicketsTaller() {
             await cargarOrdenesProduccion(contenedor);
             return;
         }
+    } else if (esChofer) {
+        // Chofer: solo ve sus despachos asignados
+        tabsHeader.innerHTML = `
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; width:100%;">
+                <span style="font-size:13px; font-weight:800; color:#1e40af; padding:10px 16px; background:#eff6ff; border-radius:10px; border:2px solid #93c5fd;">
+                    <i class="fa-solid fa-truck"></i> MIS DESPACHOS ASIGNADOS
+                </span>
+                <button onclick="cargarTicketsTaller()"
+                    style="padding:10px 16px; border-radius:10px; border:none; font-size:11px; font-weight:800; cursor:pointer; background:#f1f5f9; color:#475569; margin-left:auto;">
+                    <i class="fa-solid fa-rotate"></i> Actualizar
+                </button>
+            </div>`;
+
+        contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando tus despachos...</p>';
+
+        try {
+            const res     = await apiFetch(`${API_URL}/api/taller/tickets?area=DESPACHO_CENTRAL`);
+            const tickets = await res.json();
+
+            if (!Array.isArray(tickets)) {
+                contenedor.innerHTML = `<p style="color:red; text-align:center;">Error: ${tickets.error || 'Respuesta inválida'}</p>`;
+                return;
+            }
+
+            // Solo los asignados a este chofer y no terminados
+            const misDespachos = tickets.filter(t =>
+                t.area === 'DESPACHO_CENTRAL' &&
+                Number(t.trabajador) === Number(usuarioActivo.id) &&
+                t.estado !== 'Terminado'
+            );
+
+            if (misDespachos.length === 0) {
+                contenedor.innerHTML = `
+                    <div style="text-align:center; padding:60px 20px; color:#64748b;">
+                        <div style="font-size:48px; margin-bottom:16px;">🚚</div>
+                        <p style="font-weight:700; font-size:15px; color:#374151; margin:0 0 8px;">Sin despachos pendientes</p>
+                        <p style="font-size:13px; margin:0;">Cuando el Admin te asigne una entrega aparecerá aquí.</p>
+                    </div>`;
+                return;
+            }
+
+            const CONFIG_AREAS_LOCAL = { 'DESPACHO_CENTRAL': { icono: '<i class="fa-solid fa-truck"></i>', nombre: 'Despacho Central' } };
+            let html = '';
+            for (const t of misDespachos) {
+                const isEnProceso = t.estado === 'En Proceso';
+                const isPendiente = t.estado === 'Pendiente';
+                html += `
+                <div style="background:#fff; border:2px solid #3b82f6; border-radius:12px; padding:18px; margin-bottom:16px; box-shadow:0 2px 8px rgba(59,130,246,0.12);">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                        <span style="font-size:20px;">🚚</span>
+                        <div>
+                            <div style="font-weight:800; font-size:13px; color:#0f172a;">${t.producto}</div>
+                            <div style="font-size:11px; color:#64748b; margin-top:2px;">${t.especificaciones || 'Sin notas adicionales'}</div>
+                        </div>
+                        <span style="margin-left:auto; background:#dbeafe; color:#1e40af; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px;">
+                            ${isEnProceso ? '🔵 EN RUTA' : '🟡 PENDIENTE'}
+                        </span>
+                    </div>
+                    ${renderBotonTicket(t, false, false, isEnProceso, false)}
+                </div>`;
+            }
+            contenedor.innerHTML = html;
+        } catch(e) {
+            contenedor.innerHTML = `<p style="color:red; text-align:center;">Error de conexión. Intenta de nuevo.</p>`;
+        }
+        return; // El chofer no sigue el flujo normal del taller
     } else {
-        // Operario / Jefe de área: tabs Pendientes / Terminados
         tabsHeader.innerHTML = `
             <button onclick="filtroTaller='Pendientes'; cargarTicketsTaller()" class="btn-filter-taller ${filtroTaller === 'Pendientes' ? 'active' : ''}" style="flex:1;">
                 <i class="fa-solid fa-clock"></i> MIS TAREAS

@@ -37,7 +37,7 @@ async function init() {
             usuarioActivo = JSON.parse(sesion);
 
             // SEGURIDAD: Clientes y roles no autorizados no pueden entrar al panel ERP
-            const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN'];
+            const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN', 'Chofer'];
             if (!ROLES_ERP.includes(usuarioActivo.rol)) {
                 return; // Se queda en el landing
             }
@@ -45,7 +45,7 @@ async function init() {
             configurarInterfazPorRol();
             mostrarUsuarioEnHeader();
             document.getElementById('pantalla-login').style.display = 'none';
-            if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER') {
+            if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER' || usuarioActivo.rol === 'Chofer') {
                 changeView('taller');
             } else {
                 changeView('catalogo');
@@ -88,7 +88,7 @@ function configurarInterfazPorRol() {
     if (['Admin','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol)) {
     if (btnInvTienda) btnInvTienda.style.display = 'flex';
     }
-    if (['Admin', 'Jefe_Taller', 'JEFE_TALLER', 'Operario'].includes(usuarioActivo.rol)) {
+    if (['Admin', 'Jefe_Taller', 'JEFE_TALLER', 'Operario', 'Chofer'].includes(usuarioActivo.rol)) {
         if (btnTaller) btnTaller.style.display = 'flex'; // GESTIÓN DE TALLER
     }
     if (['Admin', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN'].includes(usuarioActivo.rol)) {
@@ -485,7 +485,7 @@ async function cargarDatosInicialesLogin() {
     }
 }
 
-const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN'];
+const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN', 'Chofer'];
 
 function verificarSesionExistente() {
     const sesionGuardada = localStorage.getItem('usuarioInnova');
@@ -533,7 +533,7 @@ async function entrarAlSistema() {
             usuarioActivo = result.usuario;
             
             // SEGURIDAD: Clientes no pueden entrar al panel ERP
-            const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN'];
+            const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN', 'Chofer'];
             if (!ROLES_ERP.includes(usuarioActivo.rol)) {
                 return Swal.fire('Acceso Denegado', 'Tu cuenta no tiene acceso al panel interno.', 'warning');
             }
@@ -556,7 +556,7 @@ async function entrarAlSistema() {
             mostrarUsuarioEnHeader();
 
             // Lógica de ruteo inicial después del login
-            if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER') {
+            if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER' || usuarioActivo.rol === 'Chofer') {
                 changeView('taller');
             } else {
                 changeView('catalogo');

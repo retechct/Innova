@@ -143,7 +143,7 @@ async function imEntrarAlSistema() {
       }
 
       // Cualquier otro rol no reconocido: bloquear
-      const ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
+      const ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN','Chofer'];
       if (!ROLES_ERP.includes(usuarioActivo.rol)) {
         localStorage.removeItem('usuarioInnova');
         return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'warning',
@@ -157,7 +157,8 @@ async function imEntrarAlSistema() {
       mostrarUsuarioEnHeader();
 
       const esOperario = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
-      changeView(esOperario ? 'taller' : 'catalogo');
+      const esChofer   = usuarioActivo.rol === 'Chofer';
+      changeView(esChofer ? 'taller' : esOperario ? 'taller' : 'catalogo');
 
       Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
         title:`¡Hola, ${usuarioActivo.nombre.split(' ')[0]}!`,
@@ -254,7 +255,7 @@ async function imAceptarTerminosYRegistrar() {
 // ── Botón de acceso rápido al ERP en el header ───────────────────
 function imMostrarBotonTrabajador() {
   if (!usuarioActivo) return;
-  const rolesPermitidos = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
+  const rolesPermitidos = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN','Chofer'];
   if (!rolesPermitidos.includes(usuarioActivo.rol)) return;
 
   const header = document.querySelector('header');
@@ -284,7 +285,7 @@ function imMostrarBotonTrabajador() {
   btn.onmouseleave = () => { btn.style.background = 'transparent'; btn.style.color = '#c9a84c'; };
   btn.onclick = () => {
     if (!usuarioActivo) return;
-    const _R = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
+    const _R = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN','Chofer'];
     if (!_R.includes(usuarioActivo.rol)) return;
     document.getElementById('pantalla-login') &&
       (document.getElementById('pantalla-login').style.display = 'none');
@@ -305,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!sesion) return;
   try {
     const u = JSON.parse(sesion);
-    const _ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN'];
+    const _ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN','Chofer'];
     if (_ROLES_ERP.includes(u.rol)) {
       // Trabajador: init() en app.js lo maneja, nada que hacer aquí
     } else {
