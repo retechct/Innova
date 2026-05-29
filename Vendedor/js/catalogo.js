@@ -425,21 +425,20 @@ async function confirmarPersonalizadoSofa() {
     const nombreCojinEnt = document.getElementById('search-cojin-entero').value || '';
     const nombreCojinDis = document.getElementById('search-cojin-diseno').value || '';
     const tipoCojinDis = document.getElementById('tipo-tela-cojin-diseno')?.value || '';
-    const notaCojinEnt = document.getElementById('nota-cojin-entero')?.value || '';
-    const notaCojinDis = document.getElementById('nota-cojin-diseno')?.value || '';
 
     const skuBase = document.getElementById('sku-base').value;
     const nombreBase = document.getElementById('search-base').value;
-    const notaBase = document.getElementById('nota-base')?.value || '';
+
+    const notas = await procesarNotasConFotos(['tela', 'cojin-entero', 'cojin-diseno', 'base']);
 
     const specs = `
         <b>MOD:</b> ${modeloBase} ${medidasText}<br>
-        <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${notaTela ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTela}</span>` : ''}<br>
+        <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${notas['tela']}<br>
         <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>
-        - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${notaCojinEnt ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaCojinEnt}</span>` : ''}<br>
-        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${notaCojinDis ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaCojinDis}</span>` : ''}<br>
-        <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}${notaBase ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaBase}</span>` : ''}
+        - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${notas['cojin-entero']}<br>
+        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${notas['cojin-diseno']}<br>
+        <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}${notas['base']}
         ${banquetaText}
     `;
 
@@ -504,26 +503,24 @@ async function confirmarComedor() {
     const nombreTablero = document.getElementById('search-tablero').value;
     const corte = document.getElementById('tablero-corte').value;
     const canto = document.getElementById('tablero-canto').value;
-    const notaTablero = document.getElementById('nota-tablero')?.value || '';
 
     const nombreBaseMesa = document.getElementById('search-base-mesa').value;
     const alturaBase = document.getElementById('base-altura').value || "0";
     const anchoBase = document.getElementById('base-ancho').value || "0";
-    const notaBaseMesa = document.getElementById('nota-base-mesa')?.value || '';
 
     const nombreSilla = document.getElementById('search-silla').value;
     const nombreTelaSilla = document.getElementById('search-tela-silla').value;
     const skuTelaSilla = document.getElementById('sku-tela-silla').value;
-    const notaSilla = document.getElementById('nota-silla')?.value || '';
-    const notaTelaSilla = document.getElementById('nota-tela-silla')?.value || '';
+
+    const notas = await procesarNotasConFotos(['tablero', 'base-mesa', 'silla', 'tela-silla']);
 
     const specs = `
         <b>FORMATO:</b> ${formatoTexto} para ${cantidadSillas} personas<br>
         <b>MEDIDAS:</b> ${medidasTexto}<br>
-        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (Corte: ${corte}, Canto: ${canto})${notaTablero ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTablero}</span>` : ''}<br>
-        <b>BASE MESA:</b> [SKU: ${skuBaseMesa}] ${nombreBaseMesa} (Alto: ${alturaBase}cm, Ancho: ${anchoBase}cm)${notaBaseMesa ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaBaseMesa}</span>` : ''}<br>
-        <b>SILLERÍA:</b> ${cantidadSillas} Unds x [SKU: ${skuSilla}] ${nombreSilla}${notaSilla ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaSilla}</span>` : ''}<br>
-        <b>TAPIZ SILLAS:</b> ${skuTelaSilla ? `[SKU: ${skuTelaSilla}] ${nombreTelaSilla}` : "Sin tapiz específico"}${notaTelaSilla ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTelaSilla}</span>` : ''}
+        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (Corte: ${corte}, Canto: ${canto})${notas['tablero']}<br>
+        <b>BASE MESA:</b> [SKU: ${skuBaseMesa}] ${nombreBaseMesa} (Alto: ${alturaBase}cm, Ancho: ${anchoBase}cm)${notas['base-mesa']}<br>
+        <b>SILLERÍA:</b> ${cantidadSillas} Unds x [SKU: ${skuSilla}] ${nombreSilla}${notas['silla']}<br>
+        <b>TAPIZ SILLAS:</b> ${skuTelaSilla ? `[SKU: ${skuTelaSilla}] ${nombreTelaSilla}` : "Sin tapiz específico"}${notas['tela-silla']}
     `;
 
     const nombreProducto = `Comedor Pro ${formatoTexto} (${cantidadSillas} Sillas)`;
@@ -667,13 +664,13 @@ async function confirmarCentro() {
     const nombreTablero = document.getElementById('search-tablero-centro').value;
     const nombreBase = document.getElementById('search-base-centro').value;
     const notas = document.getElementById('centro-notas').value;
-    const notaTablero = document.getElementById('nota-tablero-centro')?.value || '';
-    const notaBase = document.getElementById('nota-base-centro')?.value || '';
+
+    const notas = await procesarNotasConFotos(['tablero-centro', 'base-centro']);
 
     const specs = `
         <b>FORMATO:</b> ${tipo}<br>
-        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (L${l}cm x A${a}cm x Espesor: ${e}cm)${notaTablero ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTablero}</span>` : ''}<br>
-        <b>BASE ESTRUCTURAL:</b> [SKU: ${skuBase}] ${nombreBase} (Alto: ${hBase}cm x Ancho: ${aBase}cm)${notaBase ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaBase}</span>` : ''}<br>
+        <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (L${l}cm x A${a}cm x Espesor: ${e}cm)${notas['tablero-centro']}<br>
+        <b>BASE ESTRUCTURAL:</b> [SKU: ${skuBase}] ${nombreBase} (Alto: ${hBase}cm x Ancho: ${aBase}cm)${notas['base-centro']}<br>
         ${notas ? `<b style="color:var(--accent);">NOTAS:</b> ${notas}` : ''}
     `;
 
@@ -754,13 +751,13 @@ async function confirmarButaca() {
     const nombreEstructura = document.getElementById('search-estructura-butaca').value;
     const nombreTela = document.getElementById('search-tela-butaca').value || "Sin tapiz específico";
     const notas = document.getElementById('butaca-notas').value;
-    const notaEstructura = document.getElementById('nota-estructura-butaca')?.value || '';
-    const notaTela = document.getElementById('nota-tela-butaca')?.value || '';
+
+    const notas = await procesarNotasConFotos(['estructura-butaca', 'tela-butaca']);
 
     const specs = `
         <b>PRODUCTO:</b> ${cantidad} Und(s) de ${tipo}<br>
-        <b>ESTRUCTURA/MODELO:</b> [SKU: ${skuEstructura}] ${nombreEstructura}${notaEstructura ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaEstructura}</span>` : ''}<br>
-        <b>TAPIZ:</b> ${skuTela ? `[SKU: ${skuTela}] ${nombreTela}` : nombreTela}${notaTela ? ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTela}</span>` : ''}<br>
+        <b>ESTRUCTURA/MODELO:</b> [SKU: ${skuEstructura}] ${nombreEstructura}${notas['estructura-butaca']}<br>
+        <b>TAPIZ:</b> ${skuTela ? `[SKU: ${skuTela}] ${nombreTela}` : nombreTela}${notas['tela-butaca']}<br>
         ${notas ? `<b style="color:var(--accent);">NOTAS:</b> ${notas}` : ''}
     `;
 
@@ -828,4 +825,51 @@ async function subirFotosReferencia(inputId, fallbackUrl) {
         Swal.close();
         return fallbackUrl;
     }
+}
+
+/* ================================================================= */
+/* --- HELPER: PROCESAR NOTAS CON FOTOS ADJUNTAS                 --- */
+/* ================================================================= */
+async function procesarNotasConFotos(tipos) {
+    let resultados = {};
+    let hayFotos = false;
+    for (let tipo of tipos) {
+        let input = document.getElementById(`foto-nota-${tipo}`);
+        if (input && input.files && input.files.length > 0) hayFotos = true;
+    }
+    
+    if (hayFotos) {
+        Swal.fire({ title: 'Subiendo imágenes adjuntas...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    }
+    
+    for (let tipo of tipos) {
+        let notaTexto = document.getElementById(`nota-${tipo}`)?.value || '';
+        let fotoUrl = '';
+        let input = document.getElementById(`foto-nota-${tipo}`);
+        
+        if (input && input.files && input.files.length > 0) {
+            const formData = new FormData();
+            formData.append('foto', input.files[0]);
+            try {
+                const res = await apiFetch(`${API_URL}/api/upload-foto`, { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.url) fotoUrl = data.url;
+            } catch(e) {
+                console.error("Error al subir foto de nota para", tipo, e);
+            }
+        }
+        
+        let notaHtml = '';
+        if (notaTexto || fotoUrl) {
+            notaHtml = ` <span style="color:#2563eb; font-size:11px;">↳ Nota: ${notaTexto}`;
+            if (fotoUrl) {
+                notaHtml += ` <a href="${fotoUrl}" target="_blank" style="color:#d97706; text-decoration:underline; font-weight:bold; margin-left:4px;">[Ver Foto]</a>`;
+            }
+            notaHtml += `</span>`;
+        }
+        resultados[tipo] = notaHtml;
+    }
+    
+    if (hayFotos) Swal.close();
+    return resultados;
 }

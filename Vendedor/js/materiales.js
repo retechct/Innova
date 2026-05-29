@@ -89,16 +89,31 @@ function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl) {
     // INYECTAMOS CAMPO DE NOTA DINÁMICO
     let searchInput = document.getElementById(`search-${tipoInput}`);
     let noteInputId = `nota-${tipoInput}`;
+    let fileInputId = `foto-nota-${tipoInput}`;
     let noteInput = document.getElementById(noteInputId);
     
     if (!noteInput && searchInput) {
+        let container = document.createElement('div');
+        container.style.cssText = 'display: flex; gap: 5px; margin-top: 6px; width: 100%;';
+
         noteInput = document.createElement('input');
         noteInput.type = 'text';
         noteInput.id = noteInputId;
         noteInput.className = 'form-input-sm';
         noteInput.placeholder = 'Añadir nota a esta pieza (opcional)';
-        noteInput.style.cssText = 'margin-top: 6px; width: 100%; font-size: 11px; border: 1px dashed #a78bfa; background-color: #fdf4ff; box-sizing: border-box;';
-        searchInput.parentNode.insertBefore(noteInput, searchInput.nextSibling);
+        noteInput.style.cssText = 'flex: 1; font-size: 11px; border: 1px dashed #a78bfa; background-color: #fdf4ff; box-sizing: border-box; margin: 0;';
+
+        let fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.id = fileInputId;
+        fileInput.accept = 'image/*';
+        fileInput.title = 'Adjuntar foto a esta pieza';
+        fileInput.style.cssText = 'width: 90px; font-size: 9px; padding: 4px; border: 1px dashed #a78bfa; background-color: #fdf4ff; border-radius: 4px; box-sizing: border-box; cursor: pointer;';
+
+        container.appendChild(noteInput);
+        container.appendChild(fileInput);
+        
+        searchInput.parentNode.insertBefore(container, searchInput.nextSibling);
     }
     
     if (noteInput) {
