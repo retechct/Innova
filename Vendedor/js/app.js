@@ -307,6 +307,7 @@ async function cargarLogisticaExterna() {
         }
 
         const coloresEstado = {
+            'POR_PEDIR':          { bg: '#fef9c3', color: '#854d0e' },
             'Pendiente':          { bg: '#fef9c3', color: '#854d0e' },
             'Cotizado':           { bg: '#dbeafe', color: '#1e40af' },
             'Cotizacion Enviada': { bg: '#e0f2fe', color: '#0369a1' },
@@ -324,7 +325,7 @@ async function cargarLogisticaExterna() {
             `<option value="${p.id}">${p.nombre} (${p.especialidad})</option>`
         ).join('');
 
-        const opcionesEstado = ['Pendiente','Cotizado','Cotizacion Enviada','Confirmado','Orden Enviada','En Tránsito','Pagado','Recibido','Cancelado']
+        const opcionesEstado = ['POR_PEDIR','Pendiente','Cotizado','Cotizacion Enviada','Confirmado','Orden Enviada','En Tránsito','Pagado','Recibido','Cancelado']
             .map(e => `<option value="${e}">${e}</option>`).join('');
 
         let html = `
@@ -395,7 +396,7 @@ async function _abrirEditarLogistica(item, proveedores) {
     const opsProv = `<option value="">— Sin asignar —</option>` + proveedores.map(p =>
         `<option value="${p.id}">${p.nombre} (${p.especialidad})</option>`
     ).join('');
-    const opsEstado = ['Pendiente','Cotizado','Cotizacion Enviada','Confirmado','Orden Enviada','En Tránsito','Pagado','Recibido','Cancelado']
+    const opsEstado = ['POR_PEDIR','Pendiente','Cotizado','Cotizacion Enviada','Confirmado','Orden Enviada','En Tránsito','Pagado','Recibido','Cancelado']
         .map(e => `<option value="${e}" ${e === item.estado ? 'selected' : ''}>${e}</option>`).join('');
 
     const { value: datos, isConfirmed } = await Swal.fire({

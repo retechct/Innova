@@ -411,14 +411,15 @@ def guardar_venta():
                 print(f"[PASO 4.{idx_m+1}.c] Componente key={key}, sku={sku}, tabla={tabla}, area={area_destino}")
 
                 if key == 'silla':
-                    cursor.execute("SELECT material, origen_produccion FROM maestro_sillas WHERE sku = %s", (sku,))
+                    cursor.execute("SELECT material, modelo, origen_produccion FROM maestro_sillas WHERE sku = %s", (sku,))
                     res_silla = cursor.fetchone()
                     if res_silla:
                         mat = (res_silla[0] or '').lower()
-                        if any(w in mat for w in ['metal', 'acero', 'fierro', 'aluminio']) or res_silla[1] == 'Externo':
+                        nombre_insumo_silla = res_silla[1] or sku
+                        if any(w in mat for w in ['metal', 'acero', 'fierro', 'aluminio']) or res_silla[2] == 'Externo':
                             cursor.execute(
-                                "INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado) VALUES (%s, %s, %s, 'POR_PEDIR')",
-                                (venta_id, key, sku)
+                                "INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado) VALUES (%s, %s, %s, 'Pendiente')",
+                                (venta_id, nombre_insumo_silla, sku)
                             )
                             continue
 
@@ -446,9 +447,29 @@ def guardar_venta():
                         """, (item_id, area_destino, override_texto))
                         areas_internas_creadas.add(area_destino)
                 elif res is None or res[0] == 'Externo':
+                    # Obtener nombre real del insumo desde la tabla correspondiente
+                    try:
+                        cursor.execute("SAVEPOINT sp_nombre_insumo")
+                        col_nombre = {
+                            'maestro_telas':         "CONCAT(coleccion, ' - ', color)",
+                            'maestro_bases':         'modelo',
+                            'maestro_bases_comedor': 'modelo',
+                            'maestro_butacas':       'modelo',
+                            'maestro_sillas':        'modelo',
+                            'maestro_tableros':      'nombre_modelo',
+                            'maestro_disenos_cojin': 'nombre_diseno',
+                        }.get(tabla, 'sku')
+                        cursor.execute(f"SELECT {col_nombre} FROM {tabla} WHERE sku = %s", (sku,))
+                        row_nombre = cursor.fetchone()
+                        nombre_insumo_real = row_nombre[0] if row_nombre and row_nombre[0] else sku
+                        cursor.execute("RELEASE SAVEPOINT sp_nombre_insumo")
+                    except Exception:
+                        cursor.execute("ROLLBACK TO SAVEPOINT sp_nombre_insumo")
+                        cursor.execute("RELEASE SAVEPOINT sp_nombre_insumo")
+                        nombre_insumo_real = sku
                     cursor.execute(
-                        "INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado) VALUES (%s, %s, %s, 'POR_PEDIR')",
-                        (venta_id, key, sku)
+                        "INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado) VALUES (%s, %s, %s, 'Pendiente')",
+                        (venta_id, nombre_insumo_real, sku)
                     )
 
             # Ticket de Despacho
