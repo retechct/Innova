@@ -223,7 +223,7 @@ def detalle_pedido_cliente(codigo):
                 FROM items_venta i
                 JOIN tickets_produccion t ON i.id = t.item_id
                 LEFT JOIN usuarios u ON t.trabajador_asignado_id = u.id
-                WHERE i.venta_id = %s AND t.area_trabajo != 'DESPACHO_CENTRAL'
+                WHERE i.venta_id = %s
                 GROUP BY t.area_trabajo, t.estado_ticket, u.nombre
                 ORDER BY t.area_trabajo;
             """, (venta_id,))
