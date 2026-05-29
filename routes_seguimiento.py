@@ -219,23 +219,34 @@ def detalle_pedido_cliente(codigo):
         areas = []
         try:
             cursor.execute("""
-                SELECT t.area_trabajo, t.estado_ticket, COUNT(*) AS cnt
+                SELECT t.area_trabajo, t.estado_ticket, u.nombre, COUNT(*) AS cnt
                 FROM items_venta i
                 JOIN tickets_produccion t ON i.id = t.item_id
+                LEFT JOIN usuarios u ON t.trabajador_asignado_id = u.id
                 WHERE i.venta_id = %s AND t.area_trabajo != 'DESPACHO_CENTRAL'
-                GROUP BY t.area_trabajo, t.estado_ticket
+                GROUP BY t.area_trabajo, t.estado_ticket, u.nombre
                 ORDER BY t.area_trabajo;
             """, (venta_id,))
             areas_dict = {}
-            for area, est, cnt in cursor.fetchall():
+            for area, est, trabajador, cnt in cursor.fetchall():
                 if area not in areas_dict:
-                    areas_dict[area] = {'area': area, 'terminados': 0, 'total': 0}
+                    areas_dict[area] = {'area': area, 'terminados': 0, 'total': 0, 'trabajadores': set(), 'estados': set()}
                 areas_dict[area]['total'] += cnt
                 if est == 'Terminado':
                     areas_dict[area]['terminados'] += cnt
+                if trabajador:
+                    areas_dict[area]['trabajadores'].add(trabajador)
+                if est:
+                    areas_dict[area]['estados'].add(est)
             for a in areas_dict.values():
                 pct = round(a['terminados'] / a['total'] * 100) if a['total'] > 0 else 0
-                areas.append({**a, 'porcentaje': pct, 'listo': pct == 100})
+                areas.append({
+                    'area': a['area'], 
+                    'porcentaje': pct, 
+                    'listo': pct == 100,
+                    'trabajadores': list(a['trabajadores']),
+                    'estados': list(a['estados'])
+                })
         except Exception:
             pass
 
