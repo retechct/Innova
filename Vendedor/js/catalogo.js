@@ -663,15 +663,14 @@ async function confirmarCentro() {
     
     const nombreTablero = document.getElementById('search-tablero-centro').value;
     const nombreBase = document.getElementById('search-base-centro').value;
-    const notas = document.getElementById('centro-notas').value;
-
     const notas = await procesarNotasConFotos(['tablero-centro', 'base-centro']);
+    const notasTexto = document.getElementById('centro-notas').value;
 
     const specs = `
         <b>FORMATO:</b> ${tipo}<br>
         <b>TABLERO:</b> [SKU: ${skuTablero}] ${nombreTablero} (L${l}cm x A${a}cm x Espesor: ${e}cm)${notas['tablero-centro']}<br>
         <b>BASE ESTRUCTURAL:</b> [SKU: ${skuBase}] ${nombreBase} (Alto: ${hBase}cm x Ancho: ${aBase}cm)${notas['base-centro']}<br>
-        ${notas ? `<b style="color:var(--accent);">NOTAS:</b> ${notas}` : ''}
+        ${notasTexto ? `<b style="color:var(--accent);">NOTAS:</b> ${notasTexto}` : ''}
     `;
 
     const imagenUrl = document.getElementById('preview-centro').src;
@@ -750,15 +749,14 @@ async function confirmarButaca() {
     const tipo = document.getElementById('butaca-tipo').value;
     const nombreEstructura = document.getElementById('search-estructura-butaca').value;
     const nombreTela = document.getElementById('search-tela-butaca').value || "Sin tapiz específico";
-    const notas = document.getElementById('butaca-notas').value;
-
     const notas = await procesarNotasConFotos(['estructura-butaca', 'tela-butaca']);
+    const notasTexto = document.getElementById('butaca-notas').value;
 
     const specs = `
         <b>PRODUCTO:</b> ${cantidad} Und(s) de ${tipo}<br>
         <b>ESTRUCTURA/MODELO:</b> [SKU: ${skuEstructura}] ${nombreEstructura}${notas['estructura-butaca']}<br>
         <b>TAPIZ:</b> ${skuTela ? `[SKU: ${skuTela}] ${nombreTela}` : nombreTela}${notas['tela-butaca']}<br>
-        ${notas ? `<b style="color:var(--accent);">NOTAS:</b> ${notas}` : ''}
+        ${notasTexto ? `<b style="color:var(--accent);">NOTAS:</b> ${notasTexto}` : ''}
     `;
 
     const imagenUrl = document.getElementById('preview-butaca').src;
