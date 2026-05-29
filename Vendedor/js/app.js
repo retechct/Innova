@@ -393,42 +393,217 @@ async function cargarLogisticaExterna() {
 }
 
 async function _abrirEditarLogistica(item, proveedores) {
-    const opsProv = `<option value="">— Sin asignar —</option>` + proveedores.map(p =>
-        `<option value="${p.id}">${p.nombre} (${p.especialidad})</option>`
-    ).join('');
-    const opsEstado = ['POR_PEDIR','Pendiente','Cotizado','Cotizacion Enviada','Confirmado','Orden Enviada','En Tránsito','Pagado','Recibido','Cancelado']
-        .map(e => `<option value="${e}" ${e === item.estado ? 'selected' : ''}>${e}</option>`).join('');
+    // ── Determinar etapa del flujo para mostrar acciones correctas ──
+    const estado = item.estado;
+
+    // ETAPA 1 → Asignar proveedor y enviar solicitud de cotización
+    if (['POR_PEDIR', 'Pendiente'].includes(estado)) {
+        const opsProv = `<option value="">— Sin asignar —</option>` + proveedores.map(p =>
+            `<option value="${p.id}" ${item.proveedor_id == p.id ? 'selected' : ''}>${p.nombre} (${p.especialidad})</option>`
+        ).join('');
+
+        const { value: datos, isConfirmed } = await Swal.fire({
+            title: `📤 Solicitar Cotización`,
+            html: `
+                <div style="text-align:left;font-size:13px;">
+                    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#854d0e;">
+                        <b>Paso 1 de 3:</b> Asigna un proveedor. El sistema le enviará un email con un link para que él ingrese el precio y la fecha de entrega.
+                    </div>
+                    <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Insumo</div>
+                    <div style="font-weight:900;margin-bottom:12px;font-size:15px;">${item.insumo} <span style="color:#94a3b8;font-size:11px;">${item.sku || ''}</span></div>
+                    <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Cantidad requerida</div>
+                    <div style="font-weight:900;margin-bottom:12px;font-size:15px;">${item.cantidad || '—'} ${item.unidad || ''}</div>
+                    <label style="font-weight:700;display:block;margin-bottom:4px;">Seleccionar proveedor *</label>
+                    <select id="sl-prov" class="swal2-input" style="margin:0 0 12px;width:100%;">${opsProv}</select>
+                    <label style="font-weight:700;display:block;margin-bottom:4px;">Nota para el proveedor (opcional)</label>
+                    <textarea id="sl-nota" class="swal2-textarea" placeholder="Ej: Necesitamos entrega urgente, confirmar disponibilidad de stock..." style="margin:0;width:100%;font-size:13px;resize:vertical;min-height:70px;"></textarea>
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: '<i class="fa-solid fa-paper-plane"></i> Enviar solicitud de cotización',
+            cancelButtonText:  'Cancelar',
+            confirmButtonColor: '#0369a1',
+            preConfirm: () => {
+                const prov = document.getElementById('sl-prov').value;
+                if (!prov) { Swal.showValidationMessage('Debes seleccionar un proveedor'); return false; }
+                return {
+                    id:          item.id,
+                    proveedor_id: prov,
+                    nota:        document.getElementById('sl-nota').value.trim() || null,
+                    estado:      'Cotizacion Enviada',
+                };
+            }
+        });
+        if (!isConfirmed || !datos) return;
+
+        try {
+            const res = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datos)
+            });
+            const d = await res.json();
+            if (d.error) throw new Error(d.error);
+            Swal.fire({ icon:'success', title:'¡Solicitud enviada!', text:'Se notificó al proveedor por email para que ingrese su cotización.', timer:2500, showConfirmButton:false });
+            cargarLogisticaExterna();
+        } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        return;
+    }
+
+    // ETAPA 2 → Cotización Enviada: esperando respuesta del proveedor
+    if (estado === 'Cotizacion Enviada') {
+        const { isConfirmed } = await Swal.fire({
+            title: `⏳ Esperando cotización`,
+            html: `
+                <div style="text-align:left;font-size:13px;">
+                    <div style="background:#e0f2fe;border:1px solid #7dd3fc;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#0369a1;">
+                        <b>Paso 2 de 3:</b> La solicitud fue enviada al proveedor <b>${item.proveedor}</b>. Cuando él responda con precio y fecha, el estado cambiará a <b>Cotizado</b> automáticamente.
+                    </div>
+                    <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Insumo</div>
+                    <div style="font-weight:900;margin-bottom:10px;">${item.insumo}</div>
+                    <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Proveedor asignado</div>
+                    <div style="font-weight:700;margin-bottom:14px;color:#0369a1;">${item.proveedor}</div>
+                    <div style="color:#64748b;font-size:12px;">¿No llegó el email? Puedes reenviar la solicitud o cargar la cotización manualmente si el proveedor te la confirmó por otro medio.</div>
+                </div>`,
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: '📋 Ingresar cotización manual',
+            denyButtonText:    '📧 Reenviar email',
+            cancelButtonText:  'Cerrar',
+            confirmButtonColor: '#166534',
+            denyButtonColor:   '#0369a1',
+        });
+
+        if (isConfirmed) {
+            // Caer a flujo manual de cotización (ver ETAPA 3 manual abajo)
+            await _ingresarCotizacionManual(item);
+        }
+        // Si denyButton: reenviar email
+        else if (isConfirmed === false) {
+            // Swal retorna false en deny; verificamos con isDenied
+        }
+        return;
+    }
+
+    // ETAPA 3 → Cotizado: revisar y aprobar para emitir Orden de Compra
+    if (estado === 'Cotizado') {
+        const { isConfirmed, isDenied } = await Swal.fire({
+            title: `✅ Revisar Cotización`,
+            html: `
+                <div style="text-align:left;font-size:13px;">
+                    <div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#166534;">
+                        <b>Paso 3 de 3:</b> El proveedor ya respondió. Revisa los datos y aprueba para generar la Orden de Compra.
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+                        <div style="background:#f8fafc;border-radius:8px;padding:10px;">
+                            <div style="font-weight:700;color:#475569;font-size:10px;text-transform:uppercase;margin-bottom:4px;">Proveedor</div>
+                            <div style="font-weight:900;">${item.proveedor}</div>
+                        </div>
+                        <div style="background:#f8fafc;border-radius:8px;padding:10px;">
+                            <div style="font-weight:700;color:#475569;font-size:10px;text-transform:uppercase;margin-bottom:4px;">Insumo</div>
+                            <div style="font-weight:900;">${item.insumo}</div>
+                        </div>
+                        <div style="background:#fef9c3;border-radius:8px;padding:10px;">
+                            <div style="font-weight:700;color:#854d0e;font-size:10px;text-transform:uppercase;margin-bottom:4px;">Precio cotizado</div>
+                            <div style="font-weight:900;font-size:18px;color:#854d0e;">S/ ${item.precio_cotizado ? item.precio_cotizado.toFixed(2) : '—'}</div>
+                        </div>
+                        <div style="background:#fef9c3;border-radius:8px;padding:10px;">
+                            <div style="font-weight:700;color:#854d0e;font-size:10px;text-transform:uppercase;margin-bottom:4px;">Fecha de entrega</div>
+                            <div style="font-weight:900;font-size:14px;color:#854d0e;">${item.fecha_entrega_proveedor || '—'}</div>
+                        </div>
+                    </div>
+                    <div style="color:#64748b;font-size:12px;">Al aprobar, se genera la <b>Orden de Compra</b> y se notifica al proveedor.</div>
+                </div>`,
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: '🛒 Aprobar y generar Orden de Compra',
+            denyButtonText:    '✏️ Editar cotización',
+            cancelButtonText:  'Cerrar',
+            confirmButtonColor: '#166534',
+            denyButtonColor:   '#0369a1',
+        });
+
+        if (isConfirmed) {
+            try {
+                const res = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: item.id, estado: 'Orden Enviada' })
+                });
+                const d = await res.json();
+                if (d.error) throw new Error(d.error);
+                Swal.fire({ icon:'success', title:'¡Orden de Compra generada!', text:'El proveedor fue notificado.', timer:2000, showConfirmButton:false });
+                cargarLogisticaExterna();
+            } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        } else if (isDenied) {
+            await _ingresarCotizacionManual(item);
+        }
+        return;
+    }
+
+    // ETAPA 4 → Orden Enviada / En Tránsito: marcar recibido o actualizar estado
+    if (['Orden Enviada', 'En Tránsito', 'Confirmado', 'Pagado'].includes(estado)) {
+        const opsEstado = ['Orden Enviada','Confirmado','En Tránsito','Pagado','Recibido','Cancelado']
+            .map(e => `<option value="${e}" ${e === estado ? 'selected' : ''}>${e}</option>`).join('');
+
+        const { value: datos, isConfirmed } = await Swal.fire({
+            title: `📦 Actualizar estado`,
+            html: `
+                <div style="text-align:left;font-size:13px;">
+                    <div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7e22ce;">
+                        Orden enviada a <b>${item.proveedor}</b>. Actualiza el estado según el avance.
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                        <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Precio acordado</span><br><b style="font-size:16px;">S/ ${item.precio_cotizado ? item.precio_cotizado.toFixed(2) : '—'}</b></div>
+                        <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">F. entrega pactada</span><br><b>${item.fecha_entrega_proveedor || '—'}</b></div>
+                    </div>
+                    <label style="font-weight:700;display:block;margin-bottom:4px;">Nuevo estado</label>
+                    <select id="sl-estado" class="swal2-input" style="margin:0;width:100%;">${opsEstado}</select>
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar estado',
+            cancelButtonText:  'Cancelar',
+            confirmButtonColor: '#7e22ce',
+            preConfirm: () => ({
+                id:     item.id,
+                estado: document.getElementById('sl-estado').value,
+            })
+        });
+        if (!isConfirmed || !datos) return;
+
+        try {
+            const res = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datos)
+            });
+            const d = await res.json();
+            if (d.error) throw new Error(d.error);
+            const msg = datos.estado === 'Recibido' ? '¡Material recibido! Los tickets relacionados fueron desbloqueados.' : '¡Estado actualizado!';
+            Swal.fire({ icon:'success', title: msg, timer:2000, showConfirmButton:false });
+            cargarLogisticaExterna();
+        } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        return;
+    }
+
+    // ETAPA FINAL → Recibido / Cancelado: solo lectura con opción de cancelar
+    const opsEstadoFinal = ['Recibido','Cancelado']
+        .map(e => `<option value="${e}" ${e === estado ? 'selected' : ''}>${e}</option>`).join('');
 
     const { value: datos, isConfirmed } = await Swal.fire({
-        title: `Editar: ${item.insumo}`,
+        title: `${estado === 'Recibido' ? '✅' : '❌'} ${estado}`,
         html: `
             <div style="text-align:left;font-size:13px;">
-                <label style="font-weight:700;display:block;margin-bottom:4px;">Proveedor</label>
-                <select id="sl-prov" class="swal2-input" style="margin:0 0 12px;width:100%;">${opsProv}</select>
-                <label style="font-weight:700;display:block;margin-bottom:4px;">Precio cotizado (S/)</label>
-                <input id="sl-precio" class="swal2-input" type="number" step="0.01"
-                    placeholder="0.00" value="${item.precio_cotizado || ''}"
-                    style="margin:0 0 12px;width:100%;">
-                <label style="font-weight:700;display:block;margin-bottom:4px;">Fecha entrega proveedor</label>
-                <input id="sl-fecha" class="swal2-input" type="date"
-                    value="${item.fecha_entrega_proveedor
-                        ? item.fecha_entrega_proveedor.split('/').reverse().join('-')
-                        : ''}"
-                    style="margin:0 0 12px;width:100%;">
-                <label style="font-weight:700;display:block;margin-bottom:4px;">Estado</label>
-                <select id="sl-estado" class="swal2-input" style="margin:0;width:100%;">${opsEstado}</select>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Proveedor</span><br><b>${item.proveedor}</b></div>
+                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Insumo</span><br><b>${item.insumo}</b></div>
+                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Precio final</span><br><b>S/ ${item.precio_cotizado ? item.precio_cotizado.toFixed(2) : '—'}</b></div>
+                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Entrega</span><br><b>${item.fecha_entrega_proveedor || '—'}</b></div>
+                </div>
+                <label style="font-weight:700;display:block;margin-bottom:4px;">Cambiar estado</label>
+                <select id="sl-estado" class="swal2-input" style="margin:0;width:100%;">${opsEstadoFinal}</select>
             </div>`,
         showCancelButton: true,
-        confirmButtonText: 'Guardar cambios',
-        cancelButtonText:  'Cancelar',
+        confirmButtonText: 'Guardar',
+        cancelButtonText:  'Cerrar',
         confirmButtonColor: '#0f172a',
-        preConfirm: () => ({
-            id:                      item.id,
-            proveedor_id:            document.getElementById('sl-prov').value    || null,
-            precio_cotizado:         document.getElementById('sl-precio').value  || null,
-            fecha_entrega_proveedor: document.getElementById('sl-fecha').value   || null,
-            estado:                  document.getElementById('sl-estado').value,
-        })
+        preConfirm: () => ({ id: item.id, estado: document.getElementById('sl-estado').value })
     });
     if (!isConfirmed || !datos) return;
 
@@ -439,11 +614,58 @@ async function _abrirEditarLogistica(item, proveedores) {
         });
         const d = await res.json();
         if (d.error) throw new Error(d.error);
-        Swal.fire({ icon:'success', title:'¡Actualizado!', timer:1500, showConfirmButton:false });
+        Swal.fire({ icon:'success', title:'Actualizado', timer:1500, showConfirmButton:false });
         cargarLogisticaExterna();
-    } catch(e) {
-        Swal.fire('Error', e.message, 'error');
-    }
+    } catch(e) { Swal.fire('Error', e.message, 'error'); }
+}
+
+// Helper: ingresar cotización manualmente (cuando el proveedor confirma por teléfono/WhatsApp)
+async function _ingresarCotizacionManual(item) {
+    const { value: datos, isConfirmed } = await Swal.fire({
+        title: `📋 Ingresar cotización manual`,
+        html: `
+            <div style="text-align:left;font-size:13px;">
+                <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#854d0e;">
+                    Usa esto cuando el proveedor te confirmó el precio por teléfono o WhatsApp, sin usar el link de cotización.
+                </div>
+                <label style="font-weight:700;display:block;margin-bottom:4px;">Precio cotizado por el proveedor (S/) *</label>
+                <input id="sl-precio" class="swal2-input" type="number" step="0.01" min="0.01"
+                    placeholder="0.00" value="${item.precio_cotizado || ''}"
+                    style="margin:0 0 12px;width:100%;">
+                <label style="font-weight:700;display:block;margin-bottom:4px;">Fecha de entrega prometida *</label>
+                <input id="sl-fecha" class="swal2-input" type="date"
+                    value="${item.fecha_entrega_proveedor ? item.fecha_entrega_proveedor.split('/').reverse().join('-') : ''}"
+                    style="margin:0;width:100%;">
+            </div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Guardar cotización',
+        cancelButtonText:  'Cancelar',
+        confirmButtonColor: '#166534',
+        preConfirm: () => {
+            const precio = document.getElementById('sl-precio').value;
+            const fecha  = document.getElementById('sl-fecha').value;
+            if (!precio || parseFloat(precio) <= 0) { Swal.showValidationMessage('Ingresa un precio válido'); return false; }
+            if (!fecha) { Swal.showValidationMessage('Ingresa la fecha de entrega'); return false; }
+            return {
+                id:                      item.id,
+                precio_cotizado:         precio,
+                fecha_entrega_proveedor: fecha,
+                estado:                  'Cotizado',
+            };
+        }
+    });
+    if (!isConfirmed || !datos) return;
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos)
+        });
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+        Swal.fire({ icon:'success', title:'¡Cotización guardada!', text:'Ahora puedes revisar y aprobar la Orden de Compra.', timer:2000, showConfirmButton:false });
+        cargarLogisticaExterna();
+    } catch(e) { Swal.fire('Error', e.message, 'error'); }
 }
 
 function changeView(view) {
