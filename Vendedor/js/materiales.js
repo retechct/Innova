@@ -920,7 +920,7 @@ function abrirModalNuevo(tipo, destino) {
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Material de la Estructura</label>
-                ${mkSelect('nm-material', ['Madera','Madera MDF','Fierro','Aluminio','Polipropileno'])}
+                ${mkSelect('nm-material', ['Madera','Madera MDF','Acero','Fierro','Aluminio','Polipropileno'])}
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Color de Estructura / Barniz <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
@@ -938,7 +938,7 @@ function abrirModalNuevo(tipo, destino) {
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Material de la Estructura</label>
-                ${mkSelect('nm-material', ['Madera','Fierro','Aluminio'])}
+                ${mkSelect('nm-material', ['Madera','Acero','Fierro','Aluminio'])}
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Color de Estructura / Barniz <span style="font-weight:400;color:#64748b;">(texto libre)</span></label>
@@ -1292,8 +1292,8 @@ async function abrirEditorMaterial(sku, tipo) {
 
     } else if (tipo === 'silla' || tipo === 'butaca') {
         const matOpts = tipo === 'silla'
-            ? ['Madera','Madera MDF','Fierro','Aluminio','Polipropileno']
-            : ['Madera','Fierro','Aluminio'];
+            ? ['Madera','Madera MDF','Acero','Fierro','Aluminio','Polipropileno']
+            : ['Madera','Acero','Fierro','Aluminio'];
         campos = `
             <div class="form-group"><label style="${labelStyle}">Modelo / Diseño</label>
                 <input id="em-modelo" class="form-input" value="${item.modelo || ''}"></div>

@@ -499,11 +499,11 @@ def editar_tablero(sku):
 def editar_silla(sku):
     """
     B3: Actualiza una estructura de silla por SKU.
-    B1: 'material' solo acepta: Madera / Madera MDF / Fierro / Aluminio / Polipropileno
+    B1: 'material' solo acepta: Madera / Madera MDF / Acero / Fierro / Aluminio / Polipropileno
     """
     data     = request.get_json(silent=True) or {}
     material = data.get('material', '')
-    if material and material not in {'Madera', 'Madera MDF', 'Fierro', 'Aluminio', 'Polipropileno'}:
+    if material and material not in {'Madera', 'Madera MDF', 'Acero', 'Fierro', 'Aluminio', 'Polipropileno'}:
         return jsonify({"error": f"Material no válido para silla: '{material}'."}), 400
     resp, status = _actualizar_tabla(
         tabla='maestro_sillas', sku_columna='sku', sku=sku,
@@ -516,11 +516,11 @@ def editar_silla(sku):
 def editar_butaca(sku):
     """
     B3: Actualiza una estructura de butaca por SKU.
-    B1: 'material' solo acepta: Madera / Fierro / Aluminio
+    B1: 'material' solo acepta: Madera / Acero / Fierro / Aluminio
     """
     data     = request.get_json(silent=True) or {}
     material = data.get('material', '')
-    if material and material not in {'Madera', 'Fierro', 'Aluminio'}:
+    if material and material not in {'Madera', 'Acero', 'Fierro', 'Aluminio'}:
         return jsonify({"error": f"Material no válido para butaca: '{material}'."}), 400
     resp, status = _actualizar_tabla(
         tabla='maestro_butacas', sku_columna='sku', sku=sku,
