@@ -2193,3 +2193,154 @@ async function cargarVistaEntregados(contenedor, choferId) {
         contenedor.innerHTML = `<p style="color:red;text-align:center;padding:30px;">Error al cargar el historial. Intenta de nuevo.</p>`;
     }
 }
+
+// ================================================================
+// LOGÍSTICA EXTERNA — cargarLogisticaExterna() + helpers
+// ================================================================
+
+async function cargarLogisticaExterna() {
+    const contenedor = document.getElementById('contenedor-logistica');
+    if (!contenedor) return;
+    contenedor.innerHTML = '<p style="color:gray;text-align:center;padding:20px;">Cargando logística...</p>';
+
+    const ESTADO_BADGE = {
+        'Pendiente':          { bg: '#e2e8f0', color: '#475569' },
+        'Cotizacion Enviada': { bg: '#dbeafe', color: '#1e40af' },
+        'Cotizado':           { bg: '#fef9c3', color: '#854d0e' },
+        'Orden Enviada':      { bg: '#ffedd5', color: '#c2410c' },
+        'Pagado':             { bg: '#d1fae5', color: '#065f46' },
+        'Listo para Recoger': { bg: '#bbf7d0', color: '#14532d' },
+        'Recibido':           { bg: '#22c55e', color: '#ffffff' },
+    };
+
+    try {
+        const res  = await apiFetch(`${API_URL}/api/logistica`);
+        const data = await res.json();
+
+        if (!Array.isArray(data)) {
+            contenedor.innerHTML = `<p style="color:red;">${data.error || 'Error'}</p>`;
+            return;
+        }
+        if (data.length === 0) {
+            contenedor.innerHTML = '<p style="color:gray;text-align:center;padding:40px;">Sin ítems de logística externa.</p>';
+            return;
+        }
+
+        let html = '<div style="display:flex;flex-direction:column;gap:14px;">';
+
+        data.forEach(item => {
+            const badge        = ESTADO_BADGE[item.estado] || { bg: '#e2e8f0', color: '#475569' };
+            const tieneCorreo  = item.correo_proveedor && item.correo_proveedor.length > 0;
+
+            let botonesHTML = '';
+
+            if (item.estado === 'Pendiente') {
+                botonesHTML = tieneCorreo
+                    ? `<button onclick="enviarCotizacion(${item.id})"
+                          style="background:#1e40af;color:white;border:none;padding:8px 14px;
+                                 border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;">
+                          ✉️ Enviar Cotización al Proveedor</button>`
+                    : `<span style="color:#dc2626;font-size:11px;font-weight:700;">
+                          ⚠️ Proveedor sin correo — actualiza el proveedor primero</span>`;
+            }
+
+            if (item.estado === 'Cotizado') {
+                botonesHTML += `
+                    <div style="background:#fef9c3;border-radius:7px;padding:8px 12px;font-size:12px;margin-bottom:6px;">
+                        <b>💬 Proveedor respondió:</b><br>
+                        Precio: <b>S/ ${item.precio_cotizado || 'N/A'}</b> &nbsp;·&nbsp;
+                        Entrega: <b>${item.fecha_entrega_proveedor || 'N/A'}</b>
+                        ${item.notas_proveedor
+                            ? `<br><span style="color:#64748b;">Notas: ${item.notas_proveedor}</span>`
+                            : ''}
+                    </div>
+                    <button onclick="generarOrdenCompra(${item.id})"
+                        style="background:#c2410c;color:white;border:none;padding:8px 14px;
+                               border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;">
+                        📄 Generar Orden de Compra</button>`;
+            }
+
+            if (item.estado === 'Orden Enviada') {
+                botonesHTML += `<button onclick="registrarPago(${item.id})"
+                    style="background:#15803d;color:white;border:none;padding:8px 14px;
+                           border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;">
+                    💸 Registrar Pago al Proveedor</button>`;
+            }
+
+            if (item.estado === 'Pagado' || item.estado === 'Listo para Recoger') {
+                botonesHTML += `<button onclick="marcarRecibido(${item.id})"
+                    style="background:#0f172a;color:white;border:none;padding:8px 14px;
+                           border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;">
+                    ✅ Marcar como Recibido</button>`;
+            }
+
+            html += `
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;
+                         padding:16px;box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                             flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                    <div>
+                        <span style="font-size:13px;font-weight:900;color:#0f172a;">${item.insumo}</span>
+                        <span style="font-size:11px;color:#64748b;margin-left:8px;">${item.codigo_venta}</span>
+                    </div>
+                    <span style="background:${badge.bg};color:${badge.color};font-size:11px;
+                                  font-weight:800;padding:4px 10px;border-radius:20px;">${item.estado}</span>
+                </div>
+                <div style="font-size:12px;color:#475569;margin-bottom:10px;">
+                    <b>Proveedor:</b> ${item.proveedor} &nbsp;|&nbsp;
+                    <b>SKU:</b> ${item.sku || 'N/A'}
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">${botonesHTML}</div>
+            </div>`;
+        });
+
+        html += '</div>';
+        contenedor.innerHTML = html;
+
+    } catch(e) {
+        contenedor.innerHTML = '<p style="color:red;text-align:center;">Error de conexión.</p>';
+    }
+}
+
+// ── Helpers de acciones ──────────────────────────────────────────────────
+
+async function enviarCotizacion(id) {
+    if (!confirm('¿Enviar correo de cotización al proveedor?')) return;
+    const res  = await apiFetch(`${API_URL}/api/logistica/${id}/enviar-cotizacion`, { method: 'POST' });
+    const data = await res.json();
+    if (data.exito) { Swal.fire('Enviado', 'Correo de cotización enviado.', 'success'); cargarLogisticaExterna(); }
+    else Swal.fire('Error', data.error, 'error');
+}
+
+async function generarOrdenCompra(id) {
+    Swal.fire({ title: 'Generando PDF...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    const res  = await apiFetch(`${API_URL}/api/logistica/${id}/generar-orden`, { method: 'POST' });
+    const data = await res.json();
+    if (data.exito) { window.open(data.url_pdf, '_blank'); cargarLogisticaExterna(); Swal.close(); }
+    else Swal.fire('Error', data.error, 'error');
+}
+
+async function registrarPago(id) {
+    const { value: file } = await Swal.fire({
+        title: '💸 Subir voucher de pago',
+        html: '<input type="file" id="voucher-file" accept="image/*,application/pdf">',
+        preConfirm: () => document.getElementById('voucher-file').files[0]
+    });
+    if (!file) return;
+    const form = new FormData(); form.append('comprobante', file);
+    const res  = await apiFetch(`${API_URL}/api/logistica/${id}/registrar-pago`, { method: 'POST', body: form });
+    const data = await res.json();
+    if (data.exito) { Swal.fire('Pago registrado', 'El voucher quedó guardado.', 'success'); cargarLogisticaExterna(); }
+    else Swal.fire('Error', data.error, 'error');
+}
+
+async function marcarRecibido(id) {
+    if (!confirm('¿Confirmar recepción del material?')) return;
+    const res  = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, estado: 'Recibido' })
+    });
+    const data = await res.json();
+    if (data.exito) { Swal.fire('Recibido', 'Material marcado como Recibido. Tickets desbloqueados.', 'success'); cargarLogisticaExterna(); }
+    else Swal.fire('Error', data.error, 'error');
+}

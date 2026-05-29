@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cotización — Innova Möbili</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f1f5f9;
+           display: flex; justify-content: center; padding: 30px 16px; }
+    .card { background: #fff; border-radius: 16px; padding: 30px;
+            max-width: 480px; width: 100%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h1 { font-size: 20px; color: #0f172a; margin-bottom: 4px; }
+    .sub { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+    .field { margin-bottom: 18px; }
+    label { display: block; font-size: 11px; font-weight: 700;
+            color: #475569; text-transform: uppercase; margin-bottom: 5px; }
+    input, textarea { width: 100%; padding: 11px 14px; border: 1.5px solid #cbd5e1;
+                      border-radius: 8px; font-size: 14px; outline: none; }
+    input:focus, textarea:focus { border-color: #3b82f6; }
+    textarea { min-height: 80px; resize: vertical; }
+    button { width: 100%; padding: 14px; background: #0f172a; color: #fff;
+             border: none; border-radius: 10px; font-size: 15px;
+             font-weight: 800; cursor: pointer; margin-top: 8px; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    .info-box { background: #f8fafc; border-left: 4px solid #3b82f6;
+                border-radius: 0 8px 8px 0; padding: 12px 16px;
+                margin-bottom: 22px; font-size: 13px; color: #374151; }
+    .info-box b { color: #1e40af; }
+    .success { text-align: center; padding: 40px 20px; }
+    .success h2 { color: #15803d; font-size: 22px; margin-bottom: 10px; }
+    .success p  { color: #64748b; font-size: 14px; }
+    #loading { text-align: center; color: #64748b; padding: 60px 0; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div id="loading">Cargando pedido...</div>
+
+  <div id="form-container" style="display:none;">
+    <h1>Solicitud de Cotización</h1>
+    <p class="sub">Complete los datos para confirmar su propuesta</p>
+
+    <div class="info-box">
+      <b>Material:</b> <span id="txt-insumo"></span><br>
+      <b>SKU:</b> <span id="txt-sku"></span><br>
+      <b>Referencia:</b> <span id="txt-ref"></span>
+    </div>
+
+    <div class="field">
+      <label>Precio en S/ *</label>
+      <input type="number" id="precio" placeholder="Ej: 250.00" step="0.01" min="0">
+    </div>
+    <div class="field">
+      <label>Fecha de entrega disponible *</label>
+      <input type="date" id="fecha">
+    </div>
+    <div class="field">
+      <label>Observaciones (opcional)</label>
+      <textarea id="notas" placeholder="Tiempo de fabricación, condiciones, etc."></textarea>
+    </div>
+
+    <button id="btn-enviar" onclick="enviar()">Enviar Cotización</button>
+    <p id="error-msg" style="color:#dc2626;font-size:13px;margin-top:12px;display:none;"></p>
+  </div>
+
+  <div id="ya-respondido" class="success" style="display:none;">
+    <h2>✅ Ya enviaste tu cotización</h2>
+    <p>Gracias. Nuestro equipo revisará tu propuesta y te contactará pronto.</p>
+  </div>
+
+  <div id="exito" class="success" style="display:none;">
+    <h2>🎉 ¡Cotización enviada!</h2>
+    <p>Hemos recibido tu propuesta. Gracias por tu rápida respuesta.</p>
+  </div>
+
+  <div id="error-page" class="success" style="display:none;">
+    <h2 style="color:#dc2626;">Link inválido</h2>
+    <p>Este enlace no es válido o ya expiró. Contacta a Innova Möbili.</p>
+  </div>
+</div>
+
+<script>
+  const API   = '';  // mismo origen — Flask sirve este HTML
+  const token = new URLSearchParams(window.location.search).get('token');
+
+  async function init() {
+    if (!token) { show('error-page'); hide('loading'); return; }
+    try {
+      const r = await fetch(`${API}/api/cotizar/${token}`);
+      const d = await r.json();
+      hide('loading');
+      if (d.ya_respondido)    { show('ya-respondido'); return; }
+      if (!r.ok || d.error)   { show('error-page');    return; }
+      document.getElementById('txt-insumo').textContent = d.insumo;
+      document.getElementById('txt-sku').textContent    = d.sku || 'N/A';
+      document.getElementById('txt-ref').textContent    = d.codigo_venta;
+      show('form-container');
+    } catch(e) { hide('loading'); show('error-page'); }
+  }
+
+  async function enviar() {
+    const precio = document.getElementById('precio').value;
+    const fecha  = document.getElementById('fecha').value;
+    const notas  = document.getElementById('notas').value;
+    const errEl  = document.getElementById('error-msg');
+
+    if (!precio || !fecha) {
+      errEl.textContent = 'Precio y fecha son obligatorios.';
+      errEl.style.display = 'block'; return;
+    }
+    errEl.style.display = 'none';
+    document.getElementById('btn-enviar').disabled = true;
+
+    try {
+      const r = await fetch(`${API}/api/cotizar/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ precio: parseFloat(precio), fecha_entrega: fecha, notas })
+      });
+      const d = await r.json();
+      if (d.exito) { hide('form-container'); show('exito'); }
+      else { errEl.textContent = d.error || 'Error al enviar.'; errEl.style.display = 'block'; }
+    } catch(e) {
+      errEl.textContent = 'Error de conexión. Intenta de nuevo.';
+      errEl.style.display = 'block';
+    }
+    document.getElementById('btn-enviar').disabled = false;
+  }
+
+  function show(id) { document.getElementById(id).style.display = ''; }
+  function hide(id) { document.getElementById(id).style.display = 'none'; }
+
+  init();
+</script>
+</body>
+</html>

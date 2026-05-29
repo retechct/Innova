@@ -12,3 +12,4 @@ flask-jwt-extended
 werkzeug
 pytz
 pandas
+reportlab==4.2.2

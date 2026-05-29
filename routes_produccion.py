@@ -5,10 +5,16 @@ Blueprint: produccion_bp  (sin prefijo de URL)
 """
 
 import json
+import uuid
 from datetime import datetime
+from io import BytesIO
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto
+
+# pip install reportlab==4.2.2
+from reportlab.pdfgen import canvas as rl_canvas
+from reportlab.lib.pagesizes import A4
 
 produccion_bp = Blueprint('produccion', __name__)
 
@@ -639,7 +645,9 @@ def obtener_logistica():
         cursor.execute("""
             SELECT l.id, v.codigo_venta, l.insumo_nombre, l.sku,
                    COALESCE(p.nombre, 'Sin asignar') AS proveedor,
-                   l.precio_cotizado, l.fecha_entrega_proveedor, l.estado
+                   COALESCE(p.correo, '')            AS correo_proveedor,
+                   l.precio_cotizado, l.fecha_entrega_proveedor, l.estado,
+                   l.token_usado, l.notas_proveedor, l.url_comprobante_pago
             FROM logistica_externa l
             JOIN ventas v           ON l.venta_id    = v.id
             LEFT JOIN proveedores p ON l.proveedor_id = p.id
@@ -647,10 +655,12 @@ def obtener_logistica():
         """)
         items = [{
             "id": r[0], "codigo_venta": r[1], "insumo": r[2], "sku": r[3],
-            "proveedor": r[4],
-            "precio_cotizado": float(r[5]) if r[5] else None,
-            "fecha_entrega_proveedor": r[6].strftime('%d/%m/%Y') if r[6] else None,
-            "estado": r[7]
+            "proveedor": r[4], "correo_proveedor": r[5],
+            "precio_cotizado": float(r[6]) if r[6] else None,
+            "fecha_entrega_proveedor": r[7].strftime('%d/%m/%Y') if r[7] else None,
+            "estado": r[8],
+            "token_usado": r[9], "notas_proveedor": r[10],
+            "url_comprobante_pago": r[11]
         } for r in cursor.fetchall()]
         return jsonify(items), 200
     except Exception as e:
@@ -681,6 +691,24 @@ def actualizar_logistica():
                 estado = COALESCE(%s, estado)
             WHERE id = %s;
         """, (proveedor_id, precio_cotizado, fecha_entrega_proveedor, estado, logistica_id))
+
+        # Si se marca como Recibido → desbloquear tickets_produccion relacionados
+        if estado == 'Recibido':
+            cursor.execute("""
+                SELECT l.venta_id FROM logistica_externa l WHERE l.id = %s
+            """, (logistica_id,))
+            venta_row = cursor.fetchone()
+            if venta_row:
+                cursor.execute("""
+                    UPDATE tickets_produccion
+                    SET estado_ticket = 'En Proceso',
+                        fecha_inicio  = CURRENT_TIMESTAMP
+                    WHERE estado_ticket = 'Bloqueado'
+                      AND item_id IN (
+                          SELECT id FROM items_venta WHERE venta_id = %s
+                      )
+                """, (venta_row[0],))
+
         conexion.commit()
         return jsonify({'exito': True}), 200
     except Exception as e:
@@ -1097,6 +1125,217 @@ def despacho_entregados():
 
         return jsonify(resultado), 200
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+# ──────────────────────────────────────────────────────────
+# LOGÍSTICA EXTERNA — endpoints nuevos
+# ──────────────────────────────────────────────────────────
+
+@produccion_bp.route('/api/logistica/<int:id>/enviar-cotizacion', methods=['POST'])
+def enviar_cotizacion_proveedor(id):
+    """Genera token y manda correo al proveedor."""
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT l.insumo_nombre, l.sku, v.codigo_venta,
+                   p.correo, p.nombre
+            FROM logistica_externa l
+            JOIN ventas v           ON l.venta_id    = v.id
+            LEFT JOIN proveedores p ON l.proveedor_id = p.id
+            WHERE l.id = %s
+        """, (id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Registro no encontrado'}), 404
+
+        insumo, sku, codigo_venta, correo_proveedor, nombre_proveedor = row
+        if not correo_proveedor:
+            return jsonify({'error': 'El proveedor no tiene correo registrado'}), 400
+
+        from database import BACKEND_URL, enviar_solicitud_cotizacion
+        token = uuid.uuid4().hex
+        link  = f"{BACKEND_URL}/cotizar.html?token={token}"
+
+        cursor.execute("""
+            UPDATE logistica_externa
+            SET token_respuesta = %s,
+                token_usado     = FALSE,
+                fecha_envio_cotizacion = NOW(),
+                estado = 'Cotizacion Enviada'
+            WHERE id = %s
+        """, (token, id))
+        conexion.commit()
+
+        enviar_solicitud_cotizacion(
+            correo_proveedor, nombre_proveedor or 'Proveedor',
+            insumo, link, codigo_venta
+        )
+        return jsonify({'exito': True, 'link': link}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/cotizar/<string:token>', methods=['GET'])
+def ver_formulario_cotizacion(token):
+    """Endpoint PÚBLICO — el proveedor abre el link desde su celular."""
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT l.id, l.insumo_nombre, l.sku, l.token_usado,
+                   v.codigo_venta, COALESCE(p.nombre,'Sin nombre') AS proveedor
+            FROM logistica_externa l
+            JOIN ventas v           ON l.venta_id    = v.id
+            LEFT JOIN proveedores p ON l.proveedor_id = p.id
+            WHERE l.token_respuesta = %s
+        """, (token,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Token inválido o expirado'}), 404
+        if row[3]:   # token_usado
+            return jsonify({'ya_respondido': True}), 200
+        return jsonify({
+            'id': row[0], 'insumo': row[1], 'sku': row[2] or '',
+            'codigo_venta': row[4], 'proveedor': row[5]
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/cotizar/<string:token>', methods=['POST'])
+def responder_cotizacion(token):
+    """Endpoint PÚBLICO — el proveedor envía su precio y fecha."""
+    data   = request.json or {}
+    precio = data.get('precio')
+    fecha  = data.get('fecha_entrega')
+    notas  = data.get('notas', '')
+    if not precio or not fecha:
+        return jsonify({'error': 'precio y fecha_entrega son obligatorios'}), 400
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            UPDATE logistica_externa
+            SET precio_cotizado           = %s,
+                fecha_entrega_proveedor   = %s::date,
+                notas_proveedor           = %s,
+                token_usado               = TRUE,
+                fecha_respuesta_proveedor = NOW(),
+                estado = 'Cotizado'
+            WHERE token_respuesta = %s AND token_usado = FALSE
+        """, (precio, fecha, notas, token))
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Token ya fue usado o no existe'}), 409
+        conexion.commit()
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/logistica/<int:id>/generar-orden', methods=['POST'])
+def generar_orden_compra(id):
+    """Genera PDF de Orden de Compra y lo sube a Cloudinary."""
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT l.insumo_nombre, l.sku, l.precio_cotizado,
+                   l.fecha_entrega_proveedor, l.notas_proveedor,
+                   v.codigo_venta, COALESCE(p.nombre,'Sin proveedor') AS prov
+            FROM logistica_externa l
+            JOIN ventas v           ON l.venta_id    = v.id
+            LEFT JOIN proveedores p ON l.proveedor_id = p.id
+            WHERE l.id = %s
+        """, (id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Registro no encontrado'}), 404
+
+        insumo, sku, precio, fecha_entrega, notas, cod_venta, proveedor = row
+
+        # Generar PDF en memoria con ReportLab
+        buf = BytesIO()
+        c   = rl_canvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(60, h - 60, "ORDEN DE COMPRA — INNOVA MÖBILI")
+        c.setFont("Helvetica", 11)
+        c.drawString(60, h - 90,  f"Referencia: {cod_venta}")
+        c.drawString(60, h - 110, f"Proveedor:  {proveedor}")
+        c.drawString(60, h - 130, f"Material:   {insumo}  (SKU: {sku or 'N/A'})")
+        c.drawString(60, h - 150, f"Precio:     S/ {precio or 'Por confirmar'}")
+        if fecha_entrega:
+            c.drawString(60, h - 170,
+                f"Fecha entrega: {fecha_entrega.strftime('%d/%m/%Y')}")
+        if notas:
+            c.drawString(60, h - 200, f"Notas: {notas[:120]}")
+        c.save()
+        buf.seek(0)
+
+        # Subir a Cloudinary
+        resp = cloudinary.uploader.upload(
+            buf,
+            folder='ordenes_compra',
+            resource_type='raw',
+            public_id=f'OC-{id}-{cod_venta}'
+        )
+        url_pdf = resp.get('secure_url')
+
+        # Guardar en ordenes_compra_seq y cambiar estado
+        cursor.execute("""
+            INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, url_pdf)
+            VALUES (%s, generar_numero_oc(), %s)
+        """, (id, url_pdf))
+        cursor.execute("""
+            UPDATE logistica_externa SET estado = 'Orden Enviada' WHERE id = %s
+        """, (id,))
+        conexion.commit()
+        return jsonify({'exito': True, 'url_pdf': url_pdf}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/logistica/<int:id>/registrar-pago', methods=['POST'])
+def registrar_pago_proveedor(id):
+    """Sube voucher de pago a Cloudinary y actualiza estado."""
+    if 'comprobante' not in request.files:
+        return jsonify({'error': 'Campo comprobante es obligatorio'}), 400
+    archivo = request.files['comprobante']
+    try:
+        resp = cloudinary.uploader.upload(archivo, folder='pagos_proveedores')
+        url_voucher = resp.get('secure_url')
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            UPDATE logistica_externa
+            SET url_comprobante_pago = %s,
+                fecha_pago = NOW(),
+                estado     = 'Pagado'
+            WHERE id = %s
+        """, (url_voucher, id))
+        conexion.commit()
+        return jsonify({'exito': True, 'url': url_voucher}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:

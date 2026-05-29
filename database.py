@@ -69,3 +69,51 @@ def enviar_notificacion_venta(correo_destino, codigo_venta, cliente):
             server.send_message(mensaje)
     except Exception as e:
         print(f"Error al enviar correo de notificación: {e}")
+
+
+def enviar_solicitud_cotizacion(correo_proveedor, nombre_proveedor,
+                                insumo, link_formulario, codigo_venta):
+    """Envía el correo de solicitud de cotización al proveedor externo."""
+    try:
+        remitente   = os.getenv('EMAIL_USER')
+        password    = os.getenv('EMAIL_PASS')
+        smtp_server = os.getenv('EMAIL_SMTP', 'smtp.gmail.com')
+        smtp_port   = int(os.getenv('EMAIL_PORT', 587))
+
+        if not remitente or not password:
+            print('⚠️ Correo no configurado — no se envió cotización.')
+            return
+
+        cuerpo = f"""
+Estimado/a {nombre_proveedor},
+
+Le escribimos desde Innova Möbili para solicitar una cotización
+del siguiente material:
+
+  Material: {insumo}
+  Referencia de venta: {codigo_venta}
+
+Por favor ingrese al siguiente enlace para enviarnos su precio
+y fecha de entrega estimada:
+
+  {link_formulario}
+
+Tiene 3 días hábiles para responder. Gracias.
+
+Innova Möbili — Área de Compras
+"""
+        msg = MIMEText(cuerpo.strip())
+        msg['Subject'] = (
+            f"Solicitud de cotización — {insumo} (Ref. {codigo_venta})"
+        )
+        msg['From'] = remitente
+        msg['To']   = correo_proveedor
+
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(remitente, password)
+            server.send_message(msg)
+
+        print(f'✅ Cotización enviada a {correo_proveedor}')
+    except Exception as e:
+        print(f'Error al enviar cotización: {e}')
