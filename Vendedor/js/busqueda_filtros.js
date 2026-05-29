@@ -194,7 +194,13 @@ function _mpCardHTML(v) {
                     style="flex:1; background:#0f172a; color:#fff; border:none;
                         padding:9px; border-radius:8px; font-size:11px;
                         font-weight:800; cursor:pointer; font-family:'Jost',sans-serif;">
-                    <i class="fa-solid fa-eye"></i> Ver Ficha
+                    <i class="fa-solid fa-eye"></i> Ficha
+                </button>
+                <button onclick="event.stopPropagation(); verSeguimientoVendedor('${v.codigo}')"
+                    style="flex:1; background:#3b82f6; color:#fff; border:none;
+                        padding:9px; border-radius:8px; font-size:11px;
+                        font-weight:800; cursor:pointer; font-family:'Jost',sans-serif;">
+                    <i class="fa-solid fa-list-check"></i> Progreso
                 </button>
                 ${!esFinalizado ? `
                 <button onclick="event.stopPropagation(); abrirModalCambioPrecio('${v.codigo}', ${v.monto_total})"
@@ -202,7 +208,7 @@ function _mpCardHTML(v) {
                         border:1px solid #fde68a; padding:9px; border-radius:8px;
                         font-size:11px; font-weight:800; cursor:pointer;
                         font-family:'Jost',sans-serif;">
-                    <i class="fa-solid fa-tag"></i> Cambiar Precio
+                    <i class="fa-solid fa-tag"></i> Precio
                 </button>` : ''}
             </div>
         </div>
@@ -653,13 +659,22 @@ function _opRenderOrdenes(wrapper, ordenes) {
                 display:flex; justify-content:space-between; align-items:center;
                 font-size:11px; color:#64748b;">
                 <span>Entrega: <b style="color:#0f172a;">${orden.entrega || 'S/F'}</b></span>
-                <button onclick="abrirDetallePedido('${orden.codigo_venta || orden.codigo}')"
-                    style="background:#0f172a; color:#fff; border:none;
-                        padding:7px 14px; border-radius:8px; font-size:11px;
-                        font-weight:800; cursor:pointer;
-                        font-family:'Jost',sans-serif;">
-                    <i class="fa-solid fa-eye"></i> Ver Ficha
-                </button>
+                <div style="display:flex; gap:6px;">
+                    <button onclick="abrirDetallePedido('${orden.codigo_venta || orden.codigo}')"
+                        style="background:#0f172a; color:#fff; border:none;
+                            padding:7px 14px; border-radius:8px; font-size:11px;
+                            font-weight:800; cursor:pointer;
+                            font-family:'Jost',sans-serif;">
+                        <i class="fa-solid fa-eye"></i> Ficha
+                    </button>
+                    <button onclick="verSeguimientoVendedor('${orden.codigo_venta || orden.codigo}')"
+                        style="background:#3b82f6; color:#fff; border:none;
+                            padding:7px 14px; border-radius:8px; font-size:11px;
+                            font-weight:800; cursor:pointer;
+                            font-family:'Jost',sans-serif;">
+                        <i class="fa-solid fa-list-check"></i> Progreso
+                    </button>
+                </div>
             </div>
         </div>`;
     }
