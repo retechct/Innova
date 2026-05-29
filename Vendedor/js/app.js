@@ -307,12 +307,15 @@ async function cargarLogisticaExterna() {
         }
 
         const coloresEstado = {
-            'Pendiente':   { bg: '#fef9c3', color: '#854d0e' },
-            'Cotizado':    { bg: '#dbeafe', color: '#1e40af' },
-            'Confirmado':  { bg: '#dcfce7', color: '#166534' },
-            'En Tránsito': { bg: '#ede9fe', color: '#5b21b6' },
-            'Recibido':    { bg: '#f0fdf4', color: '#15803d' },
-            'Cancelado':   { bg: '#fee2e2', color: '#991b1b' },
+            'Pendiente':          { bg: '#fef9c3', color: '#854d0e' },
+            'Cotizado':           { bg: '#dbeafe', color: '#1e40af' },
+            'Cotizacion Enviada': { bg: '#e0f2fe', color: '#0369a1' },
+            'Confirmado':         { bg: '#dcfce7', color: '#166534' },
+            'Orden Enviada':      { bg: '#f3e8ff', color: '#7e22ce' },
+            'En Tránsito':        { bg: '#ede9fe', color: '#5b21b6' },
+            'Pagado':             { bg: '#fef3c7', color: '#92400e' },
+            'Recibido':           { bg: '#f0fdf4', color: '#15803d' },
+            'Cancelado':          { bg: '#fee2e2', color: '#991b1b' },
         };
 
         const esAdmin = usuarioActivo && usuarioActivo.rol === 'Admin';
@@ -321,7 +324,7 @@ async function cargarLogisticaExterna() {
             `<option value="${p.id}">${p.nombre} (${p.especialidad})</option>`
         ).join('');
 
-        const opcionesEstado = ['Pendiente','Cotizado','Confirmado','En Tránsito','Recibido','Cancelado']
+        const opcionesEstado = ['Pendiente','Cotizado','Cotizacion Enviada','Confirmado','Orden Enviada','En Tránsito','Pagado','Recibido','Cancelado']
             .map(e => `<option value="${e}">${e}</option>`).join('');
 
         let html = `
@@ -392,7 +395,7 @@ async function _abrirEditarLogistica(item, proveedores) {
     const opsProv = `<option value="">— Sin asignar —</option>` + proveedores.map(p =>
         `<option value="${p.id}">${p.nombre} (${p.especialidad})</option>`
     ).join('');
-    const opsEstado = ['Pendiente','Cotizado','Confirmado','En Tránsito','Recibido','Cancelado']
+    const opsEstado = ['Pendiente','Cotizado','Cotizacion Enviada','Confirmado','Orden Enviada','En Tránsito','Pagado','Recibido','Cancelado']
         .map(e => `<option value="${e}" ${e === item.estado ? 'selected' : ''}>${e}</option>`).join('');
 
     const { value: datos, isConfirmed } = await Swal.fire({
