@@ -1301,11 +1301,25 @@ async function abrirEditorMaterial(sku, tipo) {
                 <input id="em-color" class="form-input" value="${item.color || ''}"></div>`;
 
     } else if (tipo === 'cojin') {
+        try {
+            const resProv = await apiFetch(`${API_URL}/api/proveedores`);
+            if (resProv.ok) {
+                const provs = await resProv.json();
+                optionsProv = provs.map(p => `<option value="${p.id}" ${item.proveedor_id == p.id ? 'selected' : ''}>${p.nombre}</option>`).join('');
+            }
+        } catch(e) {}
+
         campos = `
             <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
                 <select id="em-origen-produccion" class="form-input">
                     <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
                     <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
+            <div class="form-group"><label style="${labelStyle}">Proveedor (Vinculado)</label>
+                <select id="em-proveedor-id" class="form-input">
+                    <option value="">-- Sin vincular --</option>
+                    ${optionsProv}
                 </select>
             </div>
             <div class="form-group"><label style="${labelStyle}">Nombre del Diseño / Patrón</label>
@@ -1314,11 +1328,25 @@ async function abrirEditorMaterial(sku, tipo) {
                 <input id="em-tipo-tela" class="form-input" value="${item.tipo_tela || ''}" placeholder="Ej. Jacquard, Lino bordado..."></div>`;
 
     } else if (tipo === 'base') {
+        try {
+            const resProv = await apiFetch(`${API_URL}/api/proveedores`);
+            if (resProv.ok) {
+                const provs = await resProv.json();
+                optionsProv = provs.map(p => `<option value="${p.id}" ${item.proveedor_id == p.id ? 'selected' : ''}>${p.nombre}</option>`).join('');
+            }
+        } catch(e) {}
+
         campos = `
             <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
                 <select id="em-origen-produccion" class="form-input">
                     <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
                     <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
+            <div class="form-group"><label style="${labelStyle}">Proveedor (Vinculado)</label>
+                <select id="em-proveedor-id" class="form-input">
+                    <option value="">-- Sin vincular --</option>
+                    ${optionsProv}
                 </select>
             </div>
             <div class="form-group"><label style="${labelStyle}">Nombre / Referencia</label>
@@ -1335,11 +1363,25 @@ async function abrirEditorMaterial(sku, tipo) {
                 <input id="em-medida-altura" class="form-input" value="${item.medida || ''}"></div>`;
 
     } else if (tipo === 'base-comedor') {
+        try {
+            const resProv = await apiFetch(`${API_URL}/api/proveedores`);
+            if (resProv.ok) {
+                const provs = await resProv.json();
+                optionsProv = provs.map(p => `<option value="${p.id}" ${item.proveedor_id == p.id ? 'selected' : ''}>${p.nombre}</option>`).join('');
+            }
+        } catch(e) {}
+
         campos = `
             <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
                 <select id="em-origen-produccion" class="form-input">
                     <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
                     <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
+            <div class="form-group"><label style="${labelStyle}">Proveedor (Vinculado)</label>
+                <select id="em-proveedor-id" class="form-input">
+                    <option value="">-- Sin vincular --</option>
+                    ${optionsProv}
                 </select>
             </div>
             <div class="form-group"><label style="${labelStyle}">Nombre / Referencia</label>
@@ -1352,11 +1394,25 @@ async function abrirEditorMaterial(sku, tipo) {
                 <input id="em-color" class="form-input" value="${item.color || ''}"></div>`;
 
     } else if (tipo === 'tablero') {
+        try {
+            const resProv = await apiFetch(`${API_URL}/api/proveedores`);
+            if (resProv.ok) {
+                const provs = await resProv.json();
+                optionsProv = provs.map(p => `<option value="${p.id}" ${item.proveedor_id == p.id ? 'selected' : ''}>${p.nombre}</option>`).join('');
+            }
+        } catch(e) {}
+
         campos = `
             <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
                 <select id="em-origen-produccion" class="form-input">
                     <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
                     <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
+            <div class="form-group"><label style="${labelStyle}">Proveedor (Vinculado)</label>
+                <select id="em-proveedor-id" class="form-input">
+                    <option value="">-- Sin vincular --</option>
+                    ${optionsProv}
                 </select>
             </div>
             <div class="form-group"><label style="${labelStyle}">Material Base</label>
@@ -1369,6 +1425,14 @@ async function abrirEditorMaterial(sku, tipo) {
                 ${mkSelect('acabado', ['Alto Brillo','Brillante y Mate','Texturizado','Pulido','Satinado', 'Mate'], item.acabado)}</div>`;
 
     } else if (tipo === 'silla' || tipo === 'butaca') {
+        try {
+            const resProv = await apiFetch(`${API_URL}/api/proveedores`);
+            if (resProv.ok) {
+                const provs = await resProv.json();
+                optionsProv = provs.map(p => `<option value="${p.id}" ${item.proveedor_id == p.id ? 'selected' : ''}>${p.nombre}</option>`).join('');
+            }
+        } catch(e) {}
+
         const matOpts = tipo === 'silla'
             ? ['Madera','Madera MDF','Acero','Fierro','Aluminio','Polipropileno']
             : ['Madera','Acero','Fierro','Aluminio'];
@@ -1377,6 +1441,12 @@ async function abrirEditorMaterial(sku, tipo) {
                 <select id="em-origen-produccion" class="form-input">
                     <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
                     <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
+            <div class="form-group"><label style="${labelStyle}">Proveedor (Vinculado)</label>
+                <select id="em-proveedor-id" class="form-input">
+                    <option value="">-- Sin vincular --</option>
+                    ${optionsProv}
                 </select>
             </div>
             <div class="form-group"><label style="${labelStyle}">Modelo / Diseño</label>
@@ -1432,24 +1502,26 @@ async function guardarCambiosMaterial() {
             color: get('em-color') 
         };
     } else if (tipo === 'cojin') {
-        payload = { origen_produccion: get('em-origen-produccion'), nombre_diseno: get('em-nombre-diseno'), tipo_tela: get('em-tipo-tela') };
+        payload = { origen_produccion: get('em-origen-produccion'), proveedor_id: get('em-proveedor-id') || null, nombre_diseno: get('em-nombre-diseno'), tipo_tela: get('em-tipo-tela') };
     } else if (tipo === 'base') {
         payload = {
             origen_produccion: get('em-origen-produccion'),
+            proveedor_id: get('em-proveedor-id') || null,
             modelo: get('em-modelo'), tipo: get('em-tipo-base'),
             material: get('em-material'), acabado: get('em-acabado'),
             color: get('em-color'), medida_altura: get('em-medida-altura')
         };
     } else if (tipo === 'base-comedor') {
-        payload = { origen_produccion: get('em-origen-produccion'), modelo: get('em-modelo'), material: get('em-material'), acabado: get('em-acabado'), color: get('em-color') };
+        payload = { origen_produccion: get('em-origen-produccion'), proveedor_id: get('em-proveedor-id') || null, modelo: get('em-modelo'), material: get('em-material'), acabado: get('em-acabado'), color: get('em-color') };
     } else if (tipo === 'tablero') {
         payload = {
             origen_produccion: get('em-origen-produccion'),
+            proveedor_id: get('em-proveedor-id') || null,
             material_base: get('em-material-base'), nombre_modelo: get('em-nombre-modelo'),
             color_veta: get('em-color-veta'), acabado: get('em-acabado')
         };
     } else if (tipo === 'silla' || tipo === 'butaca') {
-        payload = { origen_produccion: get('em-origen-produccion'), modelo: get('em-modelo'), material: get('em-material'), color_estructura: get('em-color-estructura') };
+        payload = { origen_produccion: get('em-origen-produccion'), proveedor_id: get('em-proveedor-id') || null, modelo: get('em-modelo'), material: get('em-material'), color_estructura: get('em-color-estructura') };
     }
 
     // ¿Hay nueva foto?
