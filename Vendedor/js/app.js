@@ -362,8 +362,17 @@ async function cargarLogisticaExterna() {
                 <td style="padding:12px 14px;">
                     <div style="font-weight:700;">${item.insumo}</div>
                     <div style="font-size:11px;color:#94a3b8;">${item.sku || '—'}</div>
+                    ${item.cantidad ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">${item.cantidad} ${item.unidad || ''}</div>` : ''}
                 </td>
-                <td style="padding:12px 14px;color:#475569;">${item.proveedor}</td>
+                <td style="padding:12px 14px;">
+                    <div style="color:#475569;">${item.proveedor}</div>
+                    ${item.tipo_gestion && item.tipo_gestion !== 'Externo' ? `
+                    <span style="background:${item.tipo_gestion === 'Informal' ? '#fef9c3' : '#dcfce7'};
+                        color:${item.tipo_gestion === 'Informal' ? '#854d0e' : '#166534'};
+                        padding:2px 7px;border-radius:10px;font-size:10px;font-weight:800;">
+                        ${item.tipo_gestion === 'Informal' ? '📞 Informal' : '🔨 Interno'}
+                    </span>` : ''}
+                </td>
                 <td style="padding:12px 10px;text-align:center;font-weight:800;color:#0f172a;">
                     ${item.precio_cotizado ? `S/ ${item.precio_cotizado.toFixed(2)}` : '<span style="color:#cbd5e1;">—</span>'}
                 </td>
@@ -402,85 +411,197 @@ async function _abrirEditarLogistica(item, proveedores) {
     // ── Determinar etapa del flujo para mostrar acciones correctas ──
     const estado = item.estado;
 
-    // ETAPA 1 → Asignar proveedor y enviar solicitud de cotización
+    // ETAPA 1 → Editar gestión del insumo (Externo / Informal / Interno)
     if (['POR_PEDIR', 'Pendiente'].includes(estado)) {
+        const tipoActual = item.tipo_gestion || 'Externo';
         const opsProv = `<option value="">— Sin asignar —</option>` + proveedores.map(p =>
             `<option value="${p.id}" ${item.proveedor_id == p.id ? 'selected' : ''}>${p.nombre} (${p.especialidad})</option>`
         ).join('');
 
         const { value: datos, isConfirmed } = await Swal.fire({
-            title: `📤 Solicitar Cotización`,
+            title: `✏️ Editar insumo`,
+            width: 520,
             html: `
                 <div style="text-align:left;font-size:13px;">
-                    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#854d0e;">
-                        <b>Paso 1 de 3:</b> Asigna un proveedor. Se abrirá WhatsApp con un mensaje prellenado que incluye la foto del material y un link para que él ingrese el precio y fecha de entrega.
+                    <!-- Info del insumo -->
+                    <div style="background:#f8fafc;border-radius:8px;padding:10px 14px;margin-bottom:16px;">
+                        <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:2px;">Insumo</div>
+                        <div style="font-weight:900;font-size:15px;">${item.insumo} <span style="color:#94a3b8;font-size:11px;font-weight:400;">${item.sku || ''}</span></div>
+                        <div style="font-size:11px;color:#64748b;margin-top:2px;">Pedido: <b>#${item.codigo_venta}</b></div>
                     </div>
-                    <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Insumo</div>
-                    <div style="font-weight:900;margin-bottom:12px;font-size:15px;">${item.insumo} <span style="color:#94a3b8;font-size:11px;">${item.sku || ''}</span></div>
-                    <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Cantidad requerida</div>
-                    <div style="font-weight:900;margin-bottom:12px;font-size:15px;">${item.cantidad || '—'} ${item.unidad || ''}</div>
-                    <label style="font-weight:700;display:block;margin-bottom:4px;">Seleccionar proveedor *</label>
-                    <select id="sl-prov" class="swal2-input" style="margin:0 0 12px;width:100%;">${opsProv}</select>
-                    <label style="font-weight:700;display:block;margin-bottom:4px;">Nota para el proveedor (opcional)</label>
-                    <textarea id="sl-nota" class="swal2-textarea" placeholder="Ej: Necesitamos entrega urgente, confirmar disponibilidad de stock..." style="margin:0;width:100%;font-size:13px;resize:vertical;min-height:70px;"></textarea>
+
+                    <!-- Cantidad y unidad -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                        <div>
+                            <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Cantidad</label>
+                            <input id="sl-cantidad" class="swal2-input" type="number" step="0.01" min="0"
+                                value="${item.cantidad || ''}" placeholder="Ej: 3.5"
+                                style="margin:0;width:100%;">
+                        </div>
+                        <div>
+                            <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Unidad</label>
+                            <select id="sl-unidad" class="swal2-input" style="margin:0;width:100%;">
+                                <option value="">—</option>
+                                ${['mts','und','planchas','kg','rollos','piezas','juegos'].map(u =>
+                                    `<option value="${u}" ${item.unidad === u ? 'selected' : ''}>${u}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tipo de gestión -->
+                    <label style="font-weight:700;display:block;margin-bottom:6px;font-size:11px;text-transform:uppercase;color:#475569;">¿Cómo se gestiona este insumo?</label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;" id="sl-tipo-btns">
+                        ${[
+                            { val:'Externo',  icon:'🏭', label:'Externo',  desc:'Proveedor formal con cotización' },
+                            { val:'Informal', icon:'📞', label:'Informal', desc:'Jefe consigue por su cuenta' },
+                            { val:'Interno',  icon:'🔨', label:'Interno',  desc:'Lo fabrica el taller' },
+                        ].map(t => `
+                            <label style="cursor:pointer;">
+                                <input type="radio" name="tipo_gestion" value="${t.val}" ${tipoActual === t.val ? 'checked' : ''}
+                                    style="display:none;" onchange="
+                                        document.querySelectorAll('.tipo-btn').forEach(b => b.style.borderColor='#e2e8f0');
+                                        this.closest('label').querySelector('.tipo-btn').style.borderColor='#3b82f6';
+                                        document.getElementById('sl-prov-wrap').style.display = this.value === 'Externo' ? 'block' : 'none';
+                                        document.getElementById('sl-nota-wrap').style.display = this.value === 'Externo' ? 'block' : 'none';
+                                        document.getElementById('sl-informal-info').style.display = this.value === 'Informal' ? 'block' : 'none';
+                                        document.getElementById('sl-interno-info').style.display = this.value === 'Interno' ? 'block' : 'none';
+                                    ">
+                                <div class="tipo-btn" style="border:2px solid ${tipoActual === t.val ? '#3b82f6' : '#e2e8f0'};
+                                    border-radius:8px;padding:10px 8px;text-align:center;transition:border-color .15s;">
+                                    <div style="font-size:20px;">${t.icon}</div>
+                                    <div style="font-weight:800;font-size:12px;margin-top:2px;">${t.label}</div>
+                                    <div style="font-size:10px;color:#94a3b8;margin-top:2px;line-height:1.3;">${t.desc}</div>
+                                </div>
+                            </label>`
+                        ).join('')}
+                    </div>
+
+                    <!-- Proveedor (solo Externo) -->
+                    <div id="sl-prov-wrap" style="display:${tipoActual === 'Externo' ? 'block' : 'none'};">
+                        <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Proveedor (opcional)</label>
+                        <select id="sl-prov" class="swal2-input" style="margin:0 0 12px;width:100%;">${opsProv}</select>
+                    </div>
+
+                    <!-- Nota (solo Externo) -->
+                    <div id="sl-nota-wrap" style="display:${tipoActual === 'Externo' ? 'block' : 'none'};">
+                        <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Nota para el proveedor (opcional)</label>
+                        <textarea id="sl-nota" class="swal2-textarea" placeholder="Ej: Necesitamos entrega urgente..." style="margin:0;width:100%;font-size:13px;resize:vertical;min-height:60px;"></textarea>
+                    </div>
+
+                    <!-- Info Informal -->
+                    <div id="sl-informal-info" style="display:${tipoActual === 'Informal' ? 'block' : 'none'};
+                        background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;font-size:12px;color:#854d0e;">
+                        <b>Flujo informal:</b> Guarda los cambios y luego usa el botón
+                        <b>"📦 Enviar al taller"</b> cuando el material ya esté disponible.
+                        Eso desbloqueará los tickets de producción automáticamente.
+                    </div>
+
+                    <!-- Info Interno -->
+                    <div id="sl-interno-info" style="display:${tipoActual === 'Interno' ? 'block' : 'none'};
+                        background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:10px 12px;font-size:12px;color:#166534;">
+                        <b>Fabricación interna:</b> El taller produce este insumo. Puedes
+                        marcar como <b>"Recibido"</b> cuando esté listo para usar.
+                    </div>
                 </div>`,
             showCancelButton: true,
-            confirmButtonText: '<i class="fa-brands fa-whatsapp"></i> Abrir WhatsApp con el proveedor',
+            confirmButtonText: 'Guardar y continuar →',
             cancelButtonText:  'Cancelar',
-            confirmButtonColor: '#25D366',
+            confirmButtonColor: '#0f172a',
             preConfirm: () => {
-                const prov = document.getElementById('sl-prov').value;
-                if (!prov) { Swal.showValidationMessage('Debes seleccionar un proveedor'); return false; }
+                const tipo = document.querySelector('input[name="tipo_gestion"]:checked')?.value || 'Externo';
                 return {
-                    id:          item.id,
-                    proveedor_id: prov,
-                    nota:        document.getElementById('sl-nota').value.trim() || null,
-                    estado:      'Cotizacion Enviada',
+                    id:           item.id,
+                    tipo_gestion: tipo,
+                    proveedor_id: tipo === 'Externo' ? (document.getElementById('sl-prov')?.value || null) : null,
+                    cantidad:     document.getElementById('sl-cantidad')?.value || null,
+                    unidad:       document.getElementById('sl-unidad')?.value || null,
+                    nota:         document.getElementById('sl-nota')?.value?.trim() || null,
                 };
             }
         });
         if (!isConfirmed || !datos) return;
 
-try {
-            // 1. Guardar el proveedor seleccionado en la BD
+        try {
+            // Guardar tipo_gestion, proveedor, cantidad, unidad
             const resSave = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: item.id, proveedor_id: datos.proveedor_id })
+                body: JSON.stringify({
+                    id:           datos.id,
+                    tipo_gestion: datos.tipo_gestion,
+                    proveedor_id: datos.proveedor_id || null,
+                    cantidad:     datos.cantidad || null,
+                    unidad:       datos.unidad || null,
+                })
             });
             const dSave = await resSave.json();
             if (dSave.error) throw new Error(dSave.error);
 
-            // 2. Generar el token y obtener los datos para WhatsApp
-            const resWsp = await apiFetch(`${API_URL}/api/logistica/${item.id}/enviar-cotizacion`, {
-                method: 'POST'
-            });
-            const dWsp = await resWsp.json();
-            if (!resWsp.ok || !dWsp.exito) throw new Error(dWsp.error || 'No se pudo generar el link');
+            // ── EXTERNO: flujo de cotización por WhatsApp ──────────────────
+            if (datos.tipo_gestion === 'Externo' && datos.proveedor_id) {
+                const resWsp = await apiFetch(`${API_URL}/api/logistica/${item.id}/enviar-cotizacion`, {
+                    method: 'POST'
+                });
+                const dWsp = await resWsp.json();
+                if (!resWsp.ok || !dWsp.exito) throw new Error(dWsp.error || 'No se pudo generar el link');
 
-            // 3. Limpiar el número y armar el link de WhatsApp
-            let tel = (dWsp.telefono || '').replace(/[\s\-\(\)]/g, '');
-            if (!tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
+                let tel = (dWsp.telefono || '').replace(/[\s\-\(\)]/g, '');
+                if (!tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
 
-            const msgWsp = [
-                `Hola ${dWsp.nombre_proveedor} 👋, somos *Innova Möbili*.`,
-                ``,
-                `Le solicitamos cotización del siguiente material:`,
-                ``,
-                `📦 *Material:* ${dWsp.insumo}`,
-                ...(dWsp.sku      ? [`🔖 *SKU:* ${dWsp.sku}`]                      : []),
-                ...(dWsp.foto_url ? [`🖼️ *Foto de referencia:* ${dWsp.foto_url}`]   : []),
-                `📋 *Ref. Venta:* ${dWsp.codigo_venta}`,
-                ...(datos.nota    ? [`📝 *Nota:* ${datos.nota}`]                    : []),
-                ``,
-                `Por favor ingrese al siguiente link para enviarnos su precio y fecha de entrega:`,
-                `👉 ${dWsp.link}`,
-                ``,
-                `Tiene 3 días hábiles para responder. Gracias 🙏`
-            ].join('\n');
+                const msgWsp = [
+                    `Hola ${dWsp.nombre_proveedor} 👋, somos *Innova Möbili*.`,
+                    ``,
+                    `Le solicitamos cotización del siguiente material:`,
+                    ``,
+                    `📦 *Material:* ${dWsp.insumo}`,
+                    ...(dWsp.sku      ? [`🔖 *SKU:* ${dWsp.sku}`]                      : []),
+                    ...(dWsp.foto_url ? [`🖼️ *Foto de referencia:* ${dWsp.foto_url}`]   : []),
+                    `📋 *Ref. Venta:* ${dWsp.codigo_venta}`,
+                    ...(datos.nota    ? [`📝 *Nota:* ${datos.nota}`]                    : []),
+                    ``,
+                    `Por favor ingrese al siguiente link para enviarnos su precio y fecha de entrega:`,
+                    `👉 ${dWsp.link}`,
+                    ``,
+                    `Tiene 3 días hábiles para responder. Gracias 🙏`
+                ].join('\n');
 
-            const urlWsp = `https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`;
-            window.open(urlWsp, '_blank');
+                window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`, '_blank');
+                cargarLogisticaExterna();
+                return;
+            }
 
+            // ── EXTERNO sin proveedor aún: solo guardar ────────────────────
+            if (datos.tipo_gestion === 'Externo' && !datos.proveedor_id) {
+                Swal.fire({ icon:'success', title:'Guardado', text:'Asigna un proveedor más tarde para enviar la cotización.', timer:2200, showConfirmButton:false });
+                cargarLogisticaExterna();
+                return;
+            }
+
+            // ── INFORMAL: mostrar botón "Enviar al taller" ─────────────────
+            if (datos.tipo_gestion === 'Informal') {
+                const { isConfirmed: confirmarTaller } = await Swal.fire({
+                    icon: 'info',
+                    title: '📞 Insumo informal guardado',
+                    html: `Cuando ya tengas el material listo, presiona <b>"Enviar al taller"</b> para desbloquear los tickets de producción.`,
+                    confirmButtonText: '📦 Enviar al taller ahora',
+                    showCancelButton: true,
+                    cancelButtonText: 'Lo haré después',
+                    confirmButtonColor: '#0f172a',
+                });
+                if (confirmarTaller) {
+                    const resTaller = await apiFetch(`${API_URL}/api/logistica/${item.id}/enviar-al-taller`, { method: 'POST' });
+                    const dTaller = await resTaller.json();
+                    if (!resTaller.ok || !dTaller.exito) throw new Error(dTaller.error || 'Error al enviar al taller');
+                    Swal.fire({ icon:'success', title:'¡Enviado al taller!', text: dTaller.mensaje, timer:2500, showConfirmButton:false });
+                } else {
+                    Swal.fire({ icon:'success', title:'Guardado', timer:1500, showConfirmButton:false });
+                }
+                cargarLogisticaExterna();
+                return;
+            }
+
+            // ── INTERNO ────────────────────────────────────────────────────
+            Swal.fire({ icon:'success', title:'Guardado como interno', text:'El taller fabricará este insumo.', timer:2000, showConfirmButton:false });
             cargarLogisticaExterna();
 
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
