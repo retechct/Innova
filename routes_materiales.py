@@ -152,7 +152,7 @@ def obtener_listas_materiales():
         cur_telas = conexion.cursor()
         cur_telas.execute("""
             SELECT id, sku, proveedor, coleccion, color,
-                   foto_url, COALESCE(estado,'Disponible')
+                   foto_url, COALESCE(estado,'Disponible'), proveedor_id
             FROM maestro_telas
             ORDER BY id DESC
         """)
@@ -209,7 +209,8 @@ def obtener_listas_materiales():
 
         telas = [{
             "id": r[0], "sku": r[1], "proveedor": r[2], "coleccion": r[3],
-            "color": r[4], "foto_url": limpiar_foto(r[5]), "estado": r[6]
+            "color": r[4], "foto_url": limpiar_foto(r[5]), "estado": r[6],
+            "proveedor_id": r[7]
         } for r in cur_telas.fetchall()]
 
         cojines = [{
@@ -434,10 +435,10 @@ def _actualizar_tabla(tabla: str, sku_columna: str, sku: str, campos_permitidos:
 
 @materiales_bp.route('/api/materiales/telas/<string:sku>', methods=['PUT'])
 def editar_tela(sku):
-    """B3: Actualiza una tela por SKU. Campos: proveedor, coleccion, color, foto_url, estado"""
+    """B3: Actualiza una tela por SKU. Campos: proveedor, coleccion, color, foto_url, estado, proveedor_id"""
     resp, status = _actualizar_tabla(
         tabla='maestro_telas', sku_columna='sku', sku=sku,
-        campos_permitidos=['proveedor', 'coleccion', 'color', 'foto_url', 'estado']
+        campos_permitidos=['proveedor', 'coleccion', 'color', 'foto_url', 'estado', 'proveedor_id']
     )
     return jsonify(resp), status
 

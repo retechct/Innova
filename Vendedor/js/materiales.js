@@ -1269,11 +1269,26 @@ async function abrirEditorMaterial(sku, tipo) {
         </select>`;
 
     let campos = '';
+    let optionsProv = '';
 
     if (tipo === 'tela') {
+        try {
+            const resProv = await apiFetch(`${API_URL}/api/proveedores`);
+            if (resProv.ok) {
+                const provs = await resProv.json();
+                optionsProv = provs.map(p => `<option value="${p.id}" ${item.proveedor_id == p.id ? 'selected' : ''}>${p.nombre}</option>`).join('');
+            }
+        } catch(e) {}
+
         campos = `
-            <div class="form-group"><label style="${labelStyle}">Proveedor</label>
+            <div class="form-group"><label style="${labelStyle}">Proveedor (Texto - Legacy)</label>
                 <input id="em-proveedor" class="form-input" value="${item.proveedor || ''}"></div>
+            <div class="form-group"><label style="${labelStyle}">Proveedor (Vinculado)</label>
+                <select id="em-proveedor-id" class="form-input">
+                    <option value="">-- Sin vincular --</option>
+                    ${optionsProv}
+                </select>
+            </div>
             <div class="form-group"><label style="${labelStyle}">Colección</label>
                 <input id="em-coleccion" class="form-input" value="${item.coleccion || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Color</label>
@@ -1373,7 +1388,12 @@ async function guardarCambiosMaterial() {
     let payload = {};
 
     if (tipo === 'tela') {
-        payload = { proveedor: get('em-proveedor'), coleccion: get('em-coleccion'), color: get('em-color') };
+        payload = { 
+            proveedor: get('em-proveedor'), 
+            proveedor_id: get('em-proveedor-id') || null, 
+            coleccion: get('em-coleccion'), 
+            color: get('em-color') 
+        };
     } else if (tipo === 'cojin') {
         payload = { nombre_diseno: get('em-nombre-diseno'), tipo_tela: get('em-tipo-tela') };
     } else if (tipo === 'base') {
