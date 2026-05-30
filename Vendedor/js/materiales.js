@@ -54,15 +54,20 @@ function filtrarMaterial(tipoInput) {
 
         let safeTitulo = titulo.replace(/'/g, "\\'"); 
         
-        const isAgotado = item.estado === 'Agotado';
-        const styleAgotado = isAgotado ? 'filter: grayscale(1); opacity: 0.5; cursor: not-allowed; background: #f1f5f9;' : '';
-        const action = isAgotado ? '' : `onclick="seleccionarMaterial('${tipoInput}', '${item.sku}', '${safeTitulo}', '${item.foto_url}')"`;
+        const isAgotado       = item.estado === 'Agotado';
+        const isDescontinuado = item.estado === 'Descontinuado';
+        const noDisponible    = isAgotado || isDescontinuado;
+        const styleAgotado    = noDisponible ? 'filter: grayscale(1); opacity: 0.5; cursor: not-allowed; background: #f1f5f9;' : '';
+        const action          = noDisponible ? '' : `onclick="seleccionarMaterial('${tipoInput}', '${item.sku}', '${safeTitulo}', '${item.foto_url}')"`;
+        const badge           = isAgotado       ? '<b style="color:red;">(AGOTADO)</b>'
+                              : isDescontinuado ? '<b style="color:#6b7280;">(DESCONTINUADO)</b>'
+                              : '';
 
         return `
             <div class="custom-option-item" ${action} style="${styleAgotado}">
                 <img src="${item.foto_url}" class="custom-option-img" onerror="this.src='imagenes/sin_foto.jpg'">
                 <div style="flex-grow:1;">
-                    <span class="custom-option-sku">${item.sku} ${isAgotado ? '<b style="color:red;">(AGOTADO)</b>' : ''}</span>
+                    <span class="custom-option-sku">${item.sku} ${badge}</span>
                     <div class="custom-option-text"><strong>${titulo}</strong><br>${subtitulo}</div>
                 </div>
             </div>`;
@@ -778,6 +783,18 @@ async function actualizarEstadoInsumo(itemId, categoria, nuevoEstado) {
             return Swal.fire('Error', data.error || 'No se pudo actualizar el estado.', 'error');
         }
         item.estado = nuevoEstado;
+
+        // Actualizar color del select en la tarjeta sin recargar
+        const colorEstado = { 'Disponible': '#dcfce7', 'Agotado': '#fee2e2', 'Descontinuado': '#f3f4f6' };
+        const selectEl = document.querySelector(`select[data-item-id='${itemId}']`);
+        if (selectEl) selectEl.style.background = colorEstado[nuevoEstado] || '#f3f4f6';
+
+        // Toast de confirmación
+        const iconos = { 'Disponible': '🟢', 'Agotado': '🔴', 'Descontinuado': '⚫' };
+        Swal.fire({ icon: 'success', title: `${iconos[nuevoEstado] || ''} Estado actualizado`,
+            text: `${item.sku} ahora está como ${nuevoEstado}.`,
+            timer: 1800, showConfirmButton: false, toast: true,
+            position: 'top-end' });
     } catch (e) {
         Swal.fire('Error', 'Fallo de conexión al actualizar estado.', 'error');
     }
@@ -1195,7 +1212,7 @@ function dibujarTarjetaMaterial(item, tipo) {
 
             <!-- Selector de estado -->
             <select
-                
+                data-item-id="${item.id}"
                 onchange="actualizarEstadoInsumo(${item.id}, '${item.categoria}', this.value)"
                 style="
                     width:100%; padding:6px 8px; border-radius:6px;
