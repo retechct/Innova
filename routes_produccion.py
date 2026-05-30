@@ -656,6 +656,7 @@ def obtener_logistica():
                    COALESCE(l.tipo_gestion, 'Externo') AS tipo_gestion,
                    l.proveedor_id,
                    COALESCE(l.proveedor_informal, '') AS proveedor_informal,
+                   l.url_cotizacion_adjunta,
                    -- Foto del insumo desde los maestros por SKU
                    COALESCE(
                        (SELECT foto_url FROM maestro_telas        WHERE sku = l.sku LIMIT 1),
@@ -688,14 +689,15 @@ def obtener_logistica():
             "fecha_entrega_proveedor": r[7].strftime('%d/%m/%Y') if r[7] else None,
             "estado": r[8],
             "token_usado": r[9], "notas_proveedor": r[10],
-            "url_comprobante_pago": r[11],
-            "cantidad": float(r[12]) if r[12] else 1,
-            "unidad": r[13],
-            "tipo_gestion": r[14],
-            "proveedor_id": r[15],
-            "proveedor_informal": r[16] or "",
-            "foto_url": limpiar_foto(r[17]) if r[17] else "",
-            "detalle_insumo": r[18] or "",
+            "url_comprobante_pago":    r[11],
+            "cantidad":                float(r[12]) if r[12] else 1,
+            "unidad":                  r[13],
+            "tipo_gestion":            r[14],
+            "proveedor_id":            r[15],
+            "proveedor_informal":      r[16] or "",
+            "foto_url":                limpiar_foto(r[17]) if r[17] else "",
+            "detalle_insumo":          r[18] or "",
+            "url_cotizacion_adjunta":  r[19] if len(r) > 19 else None,
         } for r in cursor.fetchall()]
         return jsonify(items), 200
     except Exception as e:
@@ -713,10 +715,12 @@ def actualizar_logistica():
     precio_cotizado         = data.get('precio_cotizado')
     fecha_entrega_proveedor = data.get('fecha_entrega_proveedor')
     estado                  = data.get('estado')
-    tipo_gestion            = data.get('tipo_gestion')   # ← nuevo
-    cantidad                = data.get('cantidad')        # ← nuevo
-    unidad                  = data.get('unidad')          # ← nuevo
-    proveedor_informal      = data.get('proveedor_informal')  # ← nuevo: nombre + celular libre
+    tipo_gestion              = data.get('tipo_gestion')
+    cantidad                  = data.get('cantidad')
+    unidad                    = data.get('unidad')
+    proveedor_informal        = data.get('proveedor_informal')
+    notas_proveedor           = data.get('notas_proveedor')           # ← respuesta WA
+    url_cotizacion_adjunta    = data.get('url_cotizacion_adjunta')    # ← foto/PDF del proveedor
     if not logistica_id:
         return jsonify({'error': 'id es obligatorio'}), 400
     try:
@@ -731,10 +735,13 @@ def actualizar_logistica():
                 tipo_gestion             = COALESCE(%s, tipo_gestion),
                 cantidad                 = COALESCE(%s, cantidad),
                 unidad                   = COALESCE(%s, unidad),
-                proveedor_informal       = COALESCE(%s, proveedor_informal)
+                proveedor_informal       = COALESCE(%s, proveedor_informal),
+                notas_proveedor          = COALESCE(%s, notas_proveedor),
+                url_cotizacion_adjunta   = COALESCE(%s, url_cotizacion_adjunta)
             WHERE id = %s;
         """, (proveedor_id, precio_cotizado, fecha_entrega_proveedor,
-              estado, tipo_gestion, cantidad, unidad, proveedor_informal, logistica_id))
+              estado, tipo_gestion, cantidad, unidad, proveedor_informal,
+              notas_proveedor, url_cotizacion_adjunta, logistica_id))
 
         # Si se marca como Recibido → desbloquear tickets_produccion relacionados
         if estado == 'Recibido':

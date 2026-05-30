@@ -310,7 +310,8 @@ async function cargarLogisticaExterna() {
             'POR_PEDIR':          { bg: '#fef9c3', color: '#854d0e' },
             'Pendiente':          { bg: '#fef9c3', color: '#854d0e' },
             'Cotizado':           { bg: '#dbeafe', color: '#1e40af' },
-            'Cotizacion Enviada': { bg: '#e0f2fe', color: '#0369a1' },
+            'Cotizacion Enviada':  { bg: '#e0f2fe', color: '#0369a1' },
+            'Cotizacion Recibida': { bg: '#fef3c7', color: '#b45309' },
             'Confirmado':         { bg: '#dcfce7', color: '#166534' },
             'Orden Enviada':      { bg: '#f3e8ff', color: '#7e22ce' },
             'En Tránsito':        { bg: '#ede9fe', color: '#5b21b6' },
@@ -586,35 +587,49 @@ async function _abrirEditarLogistica(item, proveedores) {
             const dSave = await resSave.json();
             if (dSave.error) throw new Error(dSave.error);
 
-            // ── EXTERNO: flujo de cotización por WhatsApp ──────────────────
+            // ── EXTERNO con proveedor: WhatsApp directo sin formulario online ──
             if (datos.tipo_gestion === 'Externo' && datos.proveedor_id) {
-                const resWsp = await apiFetch(`${API_URL}/api/logistica/${item.id}/enviar-cotizacion`, {
-                    method: 'POST'
+                // Marcar como Cotizacion Enviada
+                await apiFetch(`${API_URL}/api/logistica/actualizar`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: item.id, estado: 'Cotizacion Enviada' })
                 });
-                const dWsp = await resWsp.json();
-                if (!resWsp.ok || !dWsp.exito) throw new Error(dWsp.error || 'No se pudo generar el link');
 
-                let tel = (dWsp.telefono || '').replace(/[\s\-\(\)]/g, '');
-                if (!tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
+                const provData = proveedores.find(p => p.id == datos.proveedor_id) || {};
+                let tel = (provData.telefono || '').replace(/[\s\-\(\)]/g, '');
+                if (tel && !tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
 
+                const esTela = (item.unidad || '').toLowerCase() === 'mts' ||
+                               (item.insumo  || '').toLowerCase().includes('tela');
                 const msgWsp = [
-                    `Hola ${dWsp.nombre_proveedor} 👋, somos *Innova Möbili*.`,
+                    `Hola *${provData.nombre || 'Proveedor'}* 👋, somos *Innova Möbili*.`,
                     ``,
-                    `Le solicitamos cotización del siguiente material:`,
+                    `Necesitamos cotización del siguiente material:`,
                     ``,
-                    `📦 *Material:* ${dWsp.insumo}`,
-                    ...(dWsp.sku      ? [`🔖 *SKU:* ${dWsp.sku}`]                      : []),
-                    ...(dWsp.foto_url ? [`🖼️ *Foto de referencia:* ${dWsp.foto_url}`]   : []),
-                    `📋 *Ref. Venta:* ${dWsp.codigo_venta}`,
-                    ...(datos.nota    ? [`📝 *Nota:* ${datos.nota}`]                    : []),
+                    `📦 *Material:* ${item.insumo}`,
+                    ...(item.sku            ? [`🔖 *SKU:* ${item.sku}`]                                    : []),
+                    ...(item.detalle_insumo ? [`🎨 *Detalle:* ${item.detalle_insumo}`]                     : []),
+                    ...(esTela && datos.cantidad
+                                            ? [`📐 *Metros requeridos:* ${datos.cantidad} mts`]            : []),
+                    ...(!esTela && datos.cantidad
+                                            ? [`🔢 *Cantidad:* ${datos.cantidad} ${datos.unidad || ''}`]   : []),
+                    ...(item.foto_url       ? [`🖼️ *Ref. visual:* ${item.foto_url}`]                       : []),
+                    `📋 *Pedido:* #${item.codigo_venta}`,
+                    ...(datos.nota          ? [`📝 *Nota:* ${datos.nota}`]                                 : []),
                     ``,
-                    `Por favor ingrese al siguiente link para enviarnos su precio y fecha de entrega:`,
-                    `👉 ${dWsp.link}`,
-                    ``,
-                    `Tiene 3 días hábiles para responder. Gracias 🙏`
+                    `Por favor respóndenos con el *precio por ${esTela ? 'metro' : 'unidad'}* y la *fecha de entrega*. Gracias 🙏`,
                 ].join('\n');
 
-                window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`, '_blank');
+                if (tel) {
+                    window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`, '_blank');
+                } else {
+                    await Swal.fire({
+                        icon: 'warning', title: 'Sin teléfono registrado',
+                        html: `El proveedor <b>${provData.nombre || ''}</b> no tiene WhatsApp registrado.<br>
+                               Agrégalo en la sección Proveedores para poder abrir WA automáticamente.`,
+                        confirmButtonColor: '#0f172a',
+                    });
+                }
                 cargarLogisticaExterna();
                 return;
             }
@@ -657,63 +672,76 @@ async function _abrirEditarLogistica(item, proveedores) {
         return;
     }
 
-    // ETAPA 2 → Cotización Enviada: esperando respuesta del proveedor
-    if (estado === 'Cotizacion Enviada') {
+    // ETAPA 2 → Cotización Enviada: el proveedor respondió por WA — registrar manualmente
+    if (estado === 'Cotizacion Enviada' || estado === 'Cotizacion Recibida') {
         const { isConfirmed, isDenied } = await Swal.fire({
             title: `⏳ Esperando cotización`,
             html: `
                 <div style="text-align:left;font-size:13px;">
-                    <div style="background:#e0f2fe;border:1px solid #7dd3fc;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#0369a1;">
-                        <b>Paso 2 de 3:</b> La solicitud fue enviada al proveedor <b>${item.proveedor}</b>. Cuando él responda con precio y fecha, el estado cambiará a <b>Cotizado</b> automáticamente.
+                    <div style="background:#e0f2fe;border:1px solid #7dd3fc;border-radius:8px;
+                                padding:10px 12px;margin-bottom:14px;font-size:12px;color:#0369a1;">
+                        Solicitud enviada a <b>${item.proveedor}</b> por WhatsApp.
+                        Cuando responda con el precio, regístralo aquí.
                     </div>
-                    <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Insumo</div>
-                    <div style="font-weight:900;margin-bottom:10px;">${item.insumo}</div>
-                    <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Proveedor asignado</div>
-                    <div style="font-weight:700;margin-bottom:14px;color:#0369a1;">${item.proveedor}</div>
-                    <div style="color:#64748b;font-size:12px;">¿No vio el mensaje? Puedes reenviar por WhatsApp o cargar la cotización manualmente si el proveedor ya te confirmó el precio.</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                        <div>
+                            <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:2px;">Insumo</div>
+                            <div style="font-weight:800;">${item.insumo}</div>
+                            ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;">${item.detalle_insumo}</div>` : ''}
+                        </div>
+                        <div>
+                            <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:2px;">Pedido</div>
+                            <div style="font-weight:800;color:#d97706;">#${item.codigo_venta}</div>
+                        </div>
+                        ${item.cantidad ? `
+                        <div>
+                            <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:2px;">Cantidad solicitada</div>
+                            <div style="font-weight:700;">${item.cantidad} ${item.unidad || ''}</div>
+                        </div>` : ''}
+                    </div>
+                    <div style="color:#64748b;font-size:12px;padding:8px 10px;background:#f8fafc;border-radius:6px;">
+                        💬 Cuando el proveedor te confirme el precio por WhatsApp, usa
+                        <b>"Registrar respuesta"</b> para ingresarlo. Si no ha visto el mensaje,
+                        puedes reenviar el pedido por WhatsApp.
+                    </div>
                 </div>`,
             showCancelButton: true,
             showDenyButton: true,
-            confirmButtonText: '📋 Ingresar cotización manual',
-            denyButtonText:    '📲 Reenviar por WhatsApp',
+            confirmButtonText: '✅ Registrar respuesta del proveedor',
+            denyButtonText:    '📲 Reenviar pedido por WhatsApp',
             cancelButtonText:  'Cerrar',
             confirmButtonColor: '#166534',
             denyButtonColor:   '#0369a1',
         });
 
         if (isConfirmed) {
-            // Caer a flujo manual de cotización (ver ETAPA 3 manual abajo)
-            await _ingresarCotizacionManual(item);
-        }
-        else if (isDenied) {
-            // Reenviar por WhatsApp — volvemos a llamar al endpoint de cotización
-            try {
-                const resWsp = await apiFetch(`${API_URL}/api/logistica/${item.id}/enviar-cotizacion`, { method: 'POST' });
-                const dWsp = await resWsp.json();
-                if (!resWsp.ok || !dWsp.exito) throw new Error(dWsp.error || 'No se pudo generar el link');
+            await _registrarRespuestaProveedor(item);
+        } else if (isDenied) {
+            // Reenviar WhatsApp con el mismo mensaje limpio (sin link de formulario)
+            const provTel = (item.correo_proveedor || '').replace(/[\s\-\(\)]/g, '');
+            let tel = provTel && !provTel.startsWith('+') ? '51' + provTel.replace(/^0+/, '') : provTel;
+            const esTela = (item.unidad || '').toLowerCase() === 'mts' ||
+                           (item.insumo  || '').toLowerCase().includes('tela');
+            const msgWsp = [
+                `Hola *${item.proveedor}* 👋, somos *Innova Möbili*.`,
+                ``,
+                `Te reenviamos nuestra solicitud de cotización:`,
+                ``,
+                `📦 *Material:* ${item.insumo}`,
+                ...(item.sku            ? [`🔖 *SKU:* ${item.sku}`]                                   : []),
+                ...(item.detalle_insumo ? [`🎨 *Detalle:* ${item.detalle_insumo}`]                    : []),
+                ...(item.cantidad       ? [`📐 *Cantidad:* ${item.cantidad} ${item.unidad || ''}`]     : []),
+                ...(item.foto_url       ? [`🖼️ *Ref. visual:* ${item.foto_url}`]                      : []),
+                `📋 *Pedido:* #${item.codigo_venta}`,
+                ``,
+                `Por favor dinos el *precio por ${esTela ? 'metro' : 'unidad'}* y la *fecha de entrega*. Gracias 🙏`,
+            ].join('\n');
 
-                let tel = (dWsp.telefono || '').replace(/[\s\-\(\)]/g, '');
-                if (!tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
-
-                const msgWsp = [
-                    `Hola ${dWsp.nombre_proveedor} 👋, somos *Innova Möbili*.`,
-                    ``,
-                    `Le solicitamos cotización del siguiente material:`,
-                    ``,
-                    `📦 *Material:* ${dWsp.insumo}`,
-                    ...(dWsp.sku      ? [`🔖 *SKU:* ${dWsp.sku}`]                    : []),
-                    ...(dWsp.foto_url ? [`🖼️ *Foto de referencia:* ${dWsp.foto_url}`] : []),
-                    `📋 *Ref. Venta:* ${dWsp.codigo_venta}`,
-                    ``,
-                    `Por favor ingrese al siguiente link para enviarnos su precio y fecha de entrega:`,
-                    `👉 ${dWsp.link}`,
-                    ``,
-                    `Tiene 3 días hábiles para responder. Gracias 🙏`
-                ].join('\n');
-
+            if (tel) {
                 window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`, '_blank');
-                cargarLogisticaExterna();
-            } catch(e) { Swal.fire('Error', e.message, 'error'); }
+            } else {
+                Swal.fire({ icon:'warning', title:'Sin teléfono', text:'El proveedor no tiene teléfono registrado.', confirmButtonColor:'#0f172a' });
+            }
         }
         return;
     }
@@ -993,52 +1021,152 @@ async function _abrirEditarLogistica(item, proveedores) {
 }
 
 // Helper: ingresar cotización manualmente (cuando el proveedor confirma por teléfono/WhatsApp)
-async function _ingresarCotizacionManual(item) {
+// Renombrado y mejorado: registrar respuesta del proveedor (precio + fecha + foto opcional)
+async function _registrarRespuestaProveedor(item) {
     const { value: datos, isConfirmed } = await Swal.fire({
-        title: `📋 Ingresar cotización manual`,
+        title: `✅ Registrar respuesta del proveedor`,
+        width: 500,
         html: `
             <div style="text-align:left;font-size:13px;">
-                <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#854d0e;">
-                    Usa esto cuando el proveedor te confirmó el precio por teléfono o WhatsApp, sin usar el link de cotización.
+                <!-- Resumen del insumo -->
+                <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:14px;
+                            display:flex;gap:10px;align-items:center;">
+                    ${item.foto_url
+                        ? `<img src="${item.foto_url}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;flex-shrink:0;">`
+                        : `<div style="width:52px;height:52px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📦</div>`}
+                    <div>
+                        <div style="font-weight:800;font-size:14px;">${item.insumo}</div>
+                        ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;">${item.detalle_insumo}</div>` : ''}
+                        <div style="font-size:11px;color:#d97706;font-weight:700;">Proveedor: ${item.proveedor}</div>
+                    </div>
                 </div>
-                <label style="font-weight:700;display:block;margin-bottom:4px;">Precio cotizado por el proveedor (S/) *</label>
-                <input id="sl-precio" class="swal2-input" type="number" step="0.01" min="0.01"
-                    placeholder="0.00" value="${item.precio_cotizado || ''}"
-                    style="margin:0 0 12px;width:100%;">
-                <label style="font-weight:700;display:block;margin-bottom:4px;">Fecha de entrega prometida *</label>
-                <input id="sl-fecha" class="swal2-input" type="date"
-                    value="${item.fecha_entrega_proveedor ? item.fecha_entrega_proveedor.split('/').reverse().join('-') : ''}"
-                    style="margin:0;width:100%;">
+
+                <!-- Precio y fecha -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                    <div>
+                        <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;
+                                      text-transform:uppercase;color:#475569;">Precio total (S/) *</label>
+                        <input id="sl-precio" class="swal2-input" type="number" step="0.01" min="0.01"
+                            placeholder="0.00" value="${item.precio_cotizado || ''}"
+                            style="margin:0;width:100%;">
+                    </div>
+                    <div>
+                        <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;
+                                      text-transform:uppercase;color:#475569;">Fecha de entrega *</label>
+                        <input id="sl-fecha" class="swal2-input" type="date"
+                            value="${item.fecha_entrega_proveedor
+                                ? item.fecha_entrega_proveedor.split('/').reverse().join('-') : ''}"
+                            style="margin:0;width:100%;">
+                    </div>
+                </div>
+
+                <!-- Notas del proveedor -->
+                <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;
+                              text-transform:uppercase;color:#475569;">Notas / condiciones (opcional)</label>
+                <textarea id="sl-notas" class="swal2-textarea"
+                    placeholder="Ej: precio por metro, incluye flete, etc."
+                    style="margin:0 0 12px;width:100%;font-size:12px;min-height:55px;resize:vertical;"
+                >${item.notas_proveedor || ''}</textarea>
+
+                <!-- Adjuntar cotización (foto o PDF del WA) -->
+                <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;
+                              text-transform:uppercase;color:#475569;">
+                    Adjuntar cotización (foto o PDF del WhatsApp, opcional)
+                </label>
+                <input type="file" id="inp-cotizacion" accept="image/*,application/pdf"
+                       style="width:100%;font-size:12px;padding:6px;border:1.5px dashed #cbd5e1;
+                              border-radius:8px;background:#f8fafc;cursor:pointer;">
+                <div id="cot-preview" style="margin-top:6px;display:none;">
+                    <img id="cot-img" src="" alt="preview"
+                         style="max-height:100px;border-radius:6px;border:1px solid #e2e8f0;">
+                </div>
+                ${item.url_cotizacion_adjunta
+                    ? `<div style="margin-top:6px;font-size:11px;">
+                           📎 Ya hay una cotización adjunta:
+                           <a href="${item.url_cotizacion_adjunta}" target="_blank"
+                              style="color:#1d4ed8;font-weight:700;">Ver archivo</a>
+                       </div>`
+                    : ''}
             </div>`,
         showCancelButton: true,
-        confirmButtonText: 'Guardar cotización',
+        confirmButtonText: '💾 Guardar cotización',
         cancelButtonText:  'Cancelar',
         confirmButtonColor: '#166534',
+        didOpen: () => {
+            const inp = document.getElementById('inp-cotizacion');
+            if (inp) inp.addEventListener('change', () => {
+                const file = inp.files[0];
+                if (!file || !file.type.startsWith('image/')) return;
+                const reader = new FileReader();
+                reader.onload = e => {
+                    document.getElementById('cot-img').src = e.target.result;
+                    document.getElementById('cot-preview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            });
+        },
         preConfirm: () => {
             const precio = document.getElementById('sl-precio').value;
             const fecha  = document.getElementById('sl-fecha').value;
             if (!precio || parseFloat(precio) <= 0) { Swal.showValidationMessage('Ingresa un precio válido'); return false; }
             if (!fecha) { Swal.showValidationMessage('Ingresa la fecha de entrega'); return false; }
             return {
-                id:                      item.id,
-                precio_cotizado:         precio,
-                fecha_entrega_proveedor: fecha,
-                estado:                  'Cotizado',
+                precio,
+                fecha,
+                notas:   document.getElementById('sl-notas').value.trim(),
+                archivo: document.getElementById('inp-cotizacion')?.files[0] || null,
             };
         }
     });
     if (!isConfirmed || !datos) return;
 
     try {
+        Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        // Si hay archivo adjunto → subirlo primero como voucher de cotización
+        let url_cotizacion = null;
+        if (datos.archivo) {
+            const fd = new FormData();
+            fd.append('archivo', datos.archivo);
+            const resUp = await apiFetch(`${API_URL}/api/upload-voucher`, { method: 'POST', body: fd });
+            const dUp = await resUp.json();
+            if (dUp.url) url_cotizacion = dUp.url;
+        }
+
+        // Guardar precio, fecha, notas y marcar como Cotizado
+        const payload = {
+            id:                      item.id,
+            precio_cotizado:         datos.precio,
+            fecha_entrega_proveedor: datos.fecha,
+            estado:                  'Cotizado',
+        };
+        if (datos.notas)       payload.notas_proveedor       = datos.notas;
+        if (url_cotizacion)    payload.url_cotizacion_adjunta = url_cotizacion;
+
         const res = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(datos)
+            body: JSON.stringify(payload)
         });
         const d = await res.json();
+        Swal.close();
         if (d.error) throw new Error(d.error);
-        Swal.fire({ icon:'success', title:'¡Cotización guardada!', text:'Ahora puedes revisar y aprobar la Orden de Compra.', timer:2000, showConfirmButton:false });
+
+        Swal.fire({
+            icon: 'success',
+            title: '¡Cotización registrada!',
+            html: `Precio: <b>S/ ${parseFloat(datos.precio).toFixed(2)}</b><br>
+                   ${url_cotizacion ? `📎 <a href="${url_cotizacion}" target="_blank" style="color:#1d4ed8;">Ver cotización adjunta</a><br>` : ''}
+                   Ahora puedes revisar y aprobar la Orden de Compra.`,
+            timer: 3000,
+            showConfirmButton: false,
+        });
         cargarLogisticaExterna();
-    } catch(e) { Swal.fire('Error', e.message, 'error'); }
+    } catch(e) { Swal.close(); Swal.fire('Error', e.message, 'error'); }
+}
+
+// Alias para compatibilidad con ETAPA 3 que aún lo referencia
+async function _ingresarCotizacionManual(item) {
+    return _registrarRespuestaProveedor(item);
 }
 
 function changeView(view) {
