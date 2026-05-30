@@ -781,7 +781,7 @@ async function actualizarEstadoInsumo(itemId, categoria, nuevoEstado) {
     }
 }
 
-function abrirModalNuevo(tipo, destino) {
+async function abrirModalNuevo(tipo, destino) {
     tipoActual    = tipo;
     destinoActual = destino;
 
@@ -820,13 +820,30 @@ function abrirModalNuevo(tipo, destino) {
         </select>`;
 
     let htmlCampos = '';
+    let optionsProv = '';
+    if (tipo === 'tela') {
+        try {
+            const resProv = await apiFetch(`${API_URL}/api/proveedores`);
+            if (resProv.ok) {
+                const provs = await resProv.json();
+                optionsProv = provs.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+            }
+        } catch(e) {}
+    }
 
     // ── TELA ──────────────────────────────────────────────────────────────
     if (tipo === 'tela') {
         htmlCampos = `
             <div class="form-group">
-                <label style="${labelStyle}">Proveedor</label>
+                <label style="${labelStyle}">Proveedor (Texto - Opcional / Legacy)</label>
                 <input type="text" id="nm-proveedor" ${inputStyle} placeholder="Ej. Textil San Jacinto" required>
+            </div>
+            <div class="form-group">
+                <label style="${labelStyle}">Proveedor (Vinculado) *Nuevo</label>
+                <select id="nm-proveedor-id" class="form-input">
+                    <option value="">-- Sin vincular --</option>
+                    ${optionsProv}
+                </select>
             </div>
             <div class="form-group">
                 <label style="${labelStyle}">Colección / Línea</label>
@@ -989,6 +1006,7 @@ async function guardarNuevoMaterial() {
     try {
         if (tipoActual === 'tela') {
             datosObj.proveedor = document.getElementById('nm-proveedor').value;
+            datosObj.proveedor_id = document.getElementById('nm-proveedor-id')?.value || null;
             datosObj.coleccion = document.getElementById('nm-coleccion').value;
             datosObj.color     = document.getElementById('nm-color').value;
             nombreInsumoCalculado = `Tela ${datosObj.coleccion} — ${datosObj.color}`;

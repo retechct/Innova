@@ -329,6 +329,12 @@ async function cargarLogisticaExterna() {
             .map(e => `<option value="${e}">${e}</option>`).join('');
 
         let html = `
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
+            <h3 style="margin:0; font-size:16px;">Requerimientos</h3>
+            <button onclick="abrirModalLote()" style="background:#25D366; color:white; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; cursor:pointer;">
+                <i class="fa-solid fa-list-check"></i> Cotizar por lote
+            </button>
+        </div>
         <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px;">
             <thead>
@@ -1502,6 +1508,80 @@ async function gestionarEstadoVenta(ventaId, estadoActual) {
     } catch (e) {
         Swal.fire('Error', e.message, 'error');
     }
+}
+
+async function abrirModalLote() {
+    try {
+        const res = await apiFetch(`${API_URL}/api/logistica/pendientes-por-proveedor`);
+        const proveedores = await res.json();
+
+        if (!proveedores || proveedores.length === 0) {
+            return Swal.fire('Sin pendientes', 'No hay materiales pendientes asignados a un proveedor.', 'info');
+        }
+
+        const opcionesProv = proveedores.map(p => `<option value="${p.proveedor_id}">${p.proveedor_nombre} (${p.items.length} items)</option>`).join('');
+
+        const { value: provId } = await Swal.fire({
+            title: 'Cotización por lote',
+            html: `
+                <label style="font-weight:bold;display:block;margin-bottom:8px;text-align:left;">Selecciona el proveedor:</label>
+                <select id="swal-prov-lote" class="swal2-input" style="width:100%; margin:0;">
+                    ${opcionesProv}
+                </select>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Siguiente',
+            preConfirm: () => document.getElementById('swal-prov-lote').value
+        });
+
+        if (!provId) return;
+        const proveedorSelec = proveedores.find(p => p.proveedor_id == provId);
+
+        let itemsHtml = proveedorSelec.items.map((item, idx) => `
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; text-align:left; background:#f8fafc; padding:8px; border-radius:6px;">
+                <input type="checkbox" id="chk-lote-${idx}" class="chk-lote-item" value="${idx}" checked style="width:18px;height:18px;">
+                <img src="${item.foto_url || 'imagenes/sin_foto.jpg'}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;">
+                <div style="line-height:1.2;">
+                    <strong style="font-size:13px;">${item.insumo_nombre}</strong><br>
+                    <span style="font-size:11px;color:#64748b;">SKU: ${item.sku || 'N/A'} | Cant: ${item.cantidad || 0} ${item.unidad || ''}</span>
+                </div>
+            </div>
+        `).join('');
+
+        const { value: confirmLote } = await Swal.fire({
+            title: 'Seleccionar Materiales',
+            html: `<div style="max-height:300px; overflow-y:auto; margin-bottom:10px;">${itemsHtml}</div>`,
+            showCancelButton: true,
+            confirmButtonText: '<i class="fa-brands fa-whatsapp"></i> Crear Lote y Enviar',
+            confirmButtonColor: '#25D366',
+            preConfirm: () => {
+                const checkboxes = document.querySelectorAll('.chk-lote-item:checked');
+                if (checkboxes.length === 0) { Swal.showValidationMessage('Debes seleccionar al menos un material'); return false; }
+                return Array.from(checkboxes).map(chk => proveedorSelec.items[chk.value]);
+            }
+        });
+        if (!confirmLote) return;
+
+        Swal.fire({ title: 'Generando link...', didOpen: () => Swal.showLoading() });
+        const resLote = await apiFetch(`${API_URL}/api/logistica/crear-lote-cotizacion`, {
+            method: 'POST', body: JSON.stringify({ proveedor_id: provId, items: confirmLote })
+        });
+        const dLote = await resLote.json();
+        if (!resLote.ok || !dLote.exito) throw new Error(dLote.error || 'Error al generar el lote');
+
+        let tel = (dLote.telefono || '').replace(/[\s\-\(\)]/g, '');
+        if (!tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
+
+        let msgItems = dLote.items.map((it, i) => `${i+1}. 📦 *${it.sku ? it.sku + ' — ' : ''}${it.insumo_nombre}* | Cant: ${it.cantidad || 0} ${it.unidad || ''}`).join('\n');
+
+        const msgWsp = [
+            `Hola ${dLote.nombre_proveedor} 👋, somos *Innova Möbili*.`,``,`Le solicitamos cotización de los siguientes materiales:`,``,msgItems,``,
+            `Por favor ingrese al siguiente link para enviarnos sus precios y fechas:`,`👉 ${dLote.link}`,``,`Tiene 3 días hábiles para responder. Gracias 🙏`
+        ].join('\n');
+
+        window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`, '_blank');
+        cargarLogisticaExterna();
+    } catch (error) { Swal.fire('Error', error.message, 'error'); }
 }
 
 // ==========================================

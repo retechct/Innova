@@ -845,7 +845,7 @@ def aprobar_sugerencia_insumo():
         datos = json.loads(datos_raw) if datos_raw else {}
         nuevo_sku = ""
         inserts = {
-            'tela':        ("maestro_telas", "TEL", "(sku, proveedor, coleccion, color, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('proveedor'), datos.get('coleccion'), datos.get('color'), foto_ruta, origen)),
+            'tela':        ("maestro_telas", "TEL", "(sku, proveedor, coleccion, color, foto_url, origen_produccion, estado, proveedor_id) VALUES (%s,%s,%s,%s,%s,%s,'Disponible',%s)", lambda d: (datos.get('proveedor'), datos.get('coleccion'), datos.get('color'), foto_ruta, origen, datos.get('proveedor_id'))),
             'cojin':       ("maestro_disenos_cojin", "COJ", "(sku, nombre_diseno, tipo_tela, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('nombre_diseno'), datos.get('tipo_tela'), foto_ruta, origen)),
             'base':        ("maestro_bases", "BAS", "(sku, tipo, material, modelo, color, medida_altura, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('tipo'), datos.get('material'), datos.get('modelo'), datos.get('color'), datos.get('medida_altura'), foto_ruta, origen)),
             'tablero':     ("maestro_tableros", "TAB", "(sku, material_base, nombre_modelo, color_veta, acabado, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('material_base'), datos.get('nombre_modelo'), datos.get('color_veta'), datos.get('acabado'), foto_ruta, origen)),
@@ -928,6 +928,156 @@ def asignar_chofer_despacho():
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/logistica/pendientes-por-proveedor', methods=['GET'])
+def logistica_pendientes_por_proveedor():
+    """Agrupa filas pendientes de logística externa por proveedor."""
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        cursor.execute("""
+            SELECT
+                p.id AS proveedor_id,
+                p.nombre AS proveedor_nombre,
+                p.telefono,
+                l.id, l.insumo_nombre, l.sku, l.cantidad, l.unidad,
+                COALESCE(
+                    (SELECT foto_url FROM maestro_telas        WHERE sku = l.sku LIMIT 1),
+                    (SELECT foto_url FROM maestro_bases         WHERE sku = l.sku LIMIT 1),
+                    (SELECT foto_url FROM maestro_tableros      WHERE sku = l.sku LIMIT 1),
+                    (SELECT foto_url FROM maestro_bases_comedor WHERE sku = l.sku LIMIT 1),
+                    (SELECT foto_url FROM maestro_sillas        WHERE sku = l.sku LIMIT 1),
+                    (SELECT foto_url FROM maestro_butacas       WHERE sku = l.sku LIMIT 1),
+                    (SELECT foto_url FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1)
+                ) AS foto_url,
+                v.codigo_venta
+            FROM logistica_externa l
+            JOIN ventas v ON l.venta_id = v.id
+            LEFT JOIN proveedores p ON l.proveedor_id = p.id
+            WHERE l.estado IN ('Pendiente', 'Por Pedir')
+              AND l.proveedor_id IS NOT NULL
+            ORDER BY p.id, l.id
+        """)
+        rows = cursor.fetchall()
+
+        grupos = {}
+        for r in rows:
+            pid = r[0]
+            if pid not in grupos:
+                grupos[pid] = {
+                    'proveedor_id': pid,
+                    'proveedor_nombre': r[1],
+                    'telefono': r[2],
+                    'items': []
+                }
+            grupos[pid]['items'].append({
+                'logistica_id': r[3],
+                'insumo_nombre': r[4],
+                'sku': r[5] or '',
+                'cantidad': float(r[6]) if r[6] else None,
+                'unidad': r[7] or '',
+                'foto_url': r[8] or '',
+                'codigo_venta': r[9]
+            })
+        return jsonify(list(grupos.values())), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/logistica/crear-lote-cotizacion', methods=['POST'])
+def crear_lote_cotizacion():
+    try:
+        datos = request.get_json()
+        proveedor_id = datos['proveedor_id']
+        items = datos['items']
+
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+
+        cursor.execute("SELECT nombre, telefono FROM proveedores WHERE id = %s", (proveedor_id,))
+        prov = cursor.fetchone()
+        if not prov:
+            return jsonify({'error': 'Proveedor no encontrado'}), 404
+        nombre_proveedor, telefono = prov
+        if not telefono:
+            return jsonify({'error': 'El proveedor no tiene teléfono/WhatsApp registrado'}), 400
+
+        from database import BACKEND_URL
+        token = uuid.uuid4().hex
+
+        cursor.execute("""
+            INSERT INTO cotizaciones_lote (token, proveedor_id, estado, fecha_envio)
+            VALUES (%s, %s, 'Pendiente', NOW()) RETURNING id
+        """, (token, proveedor_id))
+        lote_id = cursor.fetchone()[0]
+
+        for item in items:
+            cursor.execute("""
+                INSERT INTO cotizacion_lote_items
+                    (lote_id, logistica_externa_id, sku, insumo_nombre, cantidad, unidad, foto_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (lote_id, item.get('logistica_id'), item.get('sku'), item.get('insumo_nombre'),
+                  item.get('cantidad'), item.get('unidad'), item.get('foto_url')))
+
+            if item.get('logistica_id'):
+                cursor.execute("""
+                    UPDATE logistica_externa
+                    SET estado = 'Cotizacion Enviada', fecha_envio_cotizacion = NOW()
+                    WHERE id = %s
+                """, (item['logistica_id'],))
+
+        conexion.commit()
+
+        link = f"{BACKEND_URL}/cotizar.html?lote={token}"
+        return jsonify({
+            'exito': True, 'token': token, 'link': link,
+            'telefono': telefono, 'nombre_proveedor': nombre_proveedor or 'Proveedor',
+            'items': items
+        }), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/cotizar-lote/<token>', methods=['GET', 'POST'])
+def cotizar_lote(token):
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+
+        cursor.execute("SELECT id, proveedor_id, token_usado, estado FROM cotizaciones_lote WHERE token = %s", (token,))
+        lote = cursor.fetchone()
+        if not lote:
+            return jsonify({'error': 'Token inválido'}), 404
+        lote_id, proveedor_id, token_usado, estado = lote
+
+        if request.method == 'GET':
+            if token_usado: return jsonify({'ya_respondido': True}), 200
+            cursor.execute("SELECT nombre FROM proveedores WHERE id = %s", (proveedor_id,))
+            prov = cursor.fetchone()
+            cursor.execute("SELECT id, sku, insumo_nombre, cantidad, unidad, foto_url, logistica_externa_id FROM cotizacion_lote_items WHERE lote_id = %s", (lote_id,))
+            items = [{'id': r[0], 'sku': r[1], 'insumo_nombre': r[2], 'cantidad': float(r[3]) if r[3] else None, 'unidad': r[4], 'foto_url': r[5] or ''} for r in cursor.fetchall()]
+            return jsonify({'proveedor': prov[0] if prov else '', 'items': items}), 200
+
+        body = request.get_json()
+        for resp in body.get('respuestas', []):
+            cursor.execute("UPDATE cotizacion_lote_items SET precio_cotizado = %s, fecha_entrega_proveedor = %s, notas_item = %s, respondido = TRUE WHERE id = %s AND lote_id = %s", (resp['precio'], resp['fecha_entrega'], resp.get('notas'), resp['item_id'], lote_id))
+            cursor.execute("UPDATE logistica_externa SET precio_cotizado = %s, fecha_entrega_proveedor = %s, estado = 'Cotizacion Recibida', fecha_respuesta_proveedor = NOW() WHERE id = (SELECT logistica_externa_id FROM cotizacion_lote_items WHERE id = %s)", (resp['precio'], resp['fecha_entrega'], resp['item_id']))
+        cursor.execute("UPDATE cotizaciones_lote SET token_usado = TRUE, estado = 'Respondido', fecha_respuesta = NOW() WHERE id = %s", (lote_id,))
+        conexion.commit()
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 
 @produccion_bp.route('/api/despacho/progreso/<int:item_id>', methods=['GET'])

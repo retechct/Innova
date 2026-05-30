@@ -90,6 +90,11 @@ class MaestroTela(db.Model):
     fecha_registro   = db.Column(db.DateTime, default=lambda: datetime.now(tz_peru))
     estado           = db.Column(db.String(50), nullable=True)
     origen_produccion = db.Column(db.Text, nullable=True)
+    proveedor_id     = db.Column(db.Integer, db.ForeignKey('proveedores.id'), nullable=True)
+
+    # SQL de migración a ejecutar:
+    # ALTER TABLE maestro_telas ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES proveedores(id);
+    # Las tablas 'cotizaciones_lote' y 'cotizacion_lote_items' se crean manualmente en BD.
 
 
 class MaestroBase(db.Model):
@@ -497,3 +502,32 @@ class SugerenciaERP(db.Model):
     estado           = db.Column(db.String(50), default='Pendiente')
     tipo_origen      = db.Column(db.String(50), nullable=True)
     fecha_sugerencia = db.Column(db.DateTime, default=lambda: datetime.now(tz_peru))
+
+
+class CotizacionLote(db.Model):
+    __tablename__ = 'cotizaciones_lote'
+    id               = db.Column(db.Integer, primary_key=True)
+    token            = db.Column(db.String(100), unique=True, nullable=False)
+    proveedor_id     = db.Column(db.Integer, db.ForeignKey('proveedores.id'), nullable=True)
+    estado           = db.Column(db.String(50), default='Pendiente')
+    notas_internas   = db.Column(db.Text, nullable=True)
+    fecha_creacion   = db.Column(db.DateTime, default=lambda: datetime.now(tz_peru))
+    fecha_envio      = db.Column(db.DateTime, nullable=True)
+    fecha_respuesta  = db.Column(db.DateTime, nullable=True)
+    token_usado      = db.Column(db.Boolean, default=False)
+    items = db.relationship('CotizacionLoteItem', backref='lote', lazy=True)
+
+class CotizacionLoteItem(db.Model):
+    __tablename__ = 'cotizacion_lote_items'
+    id                      = db.Column(db.Integer, primary_key=True)
+    lote_id                 = db.Column(db.Integer, db.ForeignKey('cotizaciones_lote.id'), nullable=False)
+    logistica_externa_id    = db.Column(db.Integer, db.ForeignKey('logistica_externa.id'), nullable=True)
+    sku                     = db.Column(db.String(50), nullable=True)
+    insumo_nombre           = db.Column(db.String(150), nullable=True)
+    cantidad                = db.Column(db.Numeric(10,3), nullable=True)
+    unidad                  = db.Column(db.String(50), nullable=True)
+    foto_url                = db.Column(db.Text, nullable=True)
+    precio_cotizado         = db.Column(db.Numeric(10,2), nullable=True)
+    fecha_entrega_proveedor = db.Column(db.Date, nullable=True)
+    notas_item              = db.Column(db.Text, nullable=True)
+    respondido              = db.Column(db.Boolean, default=False)
