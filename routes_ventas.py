@@ -418,7 +418,9 @@ def guardar_venta():
                         nombre_insumo_silla = res_silla[1] or sku
                         if any(w in mat for w in ['metal', 'acero', 'fierro', 'aluminio']) or res_silla[2] == 'Externo':
                             cursor.execute(
-                                "INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado) VALUES (%s, %s, %s, 'Pendiente')",
+                                """INSERT INTO logistica_externa
+                                       (venta_id, insumo_nombre, sku, estado, tipo_gestion)
+                                   VALUES (%s, %s, %s, 'Pendiente', 'Externo')""",
                                 (venta_id, nombre_insumo_silla, sku)
                             )
                             continue
@@ -467,9 +469,25 @@ def guardar_venta():
                         cursor.execute("ROLLBACK TO SAVEPOINT sp_nombre_insumo")
                         cursor.execute("RELEASE SAVEPOINT sp_nombre_insumo")
                         nombre_insumo_real = sku
+
+                    # Intentar obtener proveedor_id desde maestro_telas (única tabla que lo tiene)
+                    prov_id_logistica = None
+                    if tabla == 'maestro_telas':
+                        try:
+                            cursor.execute("SELECT proveedor_id FROM maestro_telas WHERE sku = %s", (sku,))
+                            row_prov = cursor.fetchone()
+                            prov_id_logistica = row_prov[0] if row_prov else None
+                        except Exception:
+                            pass
+
+                    # tipo_gestion: si tiene proveedor_id es Externo formal,
+                    # si no tiene proveedor asignado aún se deja como Externo
+                    # (el jefe puede cambiarlo a Informal desde la interfaz)
                     cursor.execute(
-                        "INSERT INTO logistica_externa (venta_id, insumo_nombre, sku, estado) VALUES (%s, %s, %s, 'Pendiente')",
-                        (venta_id, nombre_insumo_real, sku)
+                        """INSERT INTO logistica_externa
+                               (venta_id, insumo_nombre, sku, estado, proveedor_id, tipo_gestion)
+                           VALUES (%s, %s, %s, 'Pendiente', %s, 'Externo')""",
+                        (venta_id, nombre_insumo_real, sku, prov_id_logistica)
                     )
 
             # Ticket de Despacho

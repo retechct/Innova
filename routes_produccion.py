@@ -647,7 +647,11 @@ def obtener_logistica():
                    COALESCE(p.nombre, 'Sin asignar') AS proveedor,
                    COALESCE(p.correo, '')            AS correo_proveedor,
                    l.precio_cotizado, l.fecha_entrega_proveedor, l.estado,
-                   l.token_usado, l.notas_proveedor, l.url_comprobante_pago
+                   l.token_usado, l.notas_proveedor, l.url_comprobante_pago,
+                   COALESCE(l.cantidad, 1)           AS cantidad,
+                   COALESCE(l.unidad, '')            AS unidad,
+                   COALESCE(l.tipo_gestion, 'Externo') AS tipo_gestion,
+                   l.proveedor_id
             FROM logistica_externa l
             JOIN ventas v           ON l.venta_id    = v.id
             LEFT JOIN proveedores p ON l.proveedor_id = p.id
@@ -660,7 +664,11 @@ def obtener_logistica():
             "fecha_entrega_proveedor": r[7].strftime('%d/%m/%Y') if r[7] else None,
             "estado": r[8],
             "token_usado": r[9], "notas_proveedor": r[10],
-            "url_comprobante_pago": r[11]
+            "url_comprobante_pago": r[11],
+            "cantidad": float(r[12]) if r[12] else 1,
+            "unidad": r[13],
+            "tipo_gestion": r[14],
+            "proveedor_id": r[15],
         } for r in cursor.fetchall()]
         return jsonify(items), 200
     except Exception as e:
@@ -678,6 +686,9 @@ def actualizar_logistica():
     precio_cotizado         = data.get('precio_cotizado')
     fecha_entrega_proveedor = data.get('fecha_entrega_proveedor')
     estado                  = data.get('estado')
+    tipo_gestion            = data.get('tipo_gestion')   # ← nuevo
+    cantidad                = data.get('cantidad')        # ← nuevo
+    unidad                  = data.get('unidad')          # ← nuevo
     if not logistica_id:
         return jsonify({'error': 'id es obligatorio'}), 400
     try:
@@ -685,12 +696,16 @@ def actualizar_logistica():
         cursor   = conexion.cursor()
         cursor.execute("""
             UPDATE logistica_externa
-            SET proveedor_id = COALESCE(%s, proveedor_id),
-                precio_cotizado = COALESCE(%s, precio_cotizado),
-                fecha_entrega_proveedor = COALESCE(%s::date, fecha_entrega_proveedor),
-                estado = COALESCE(%s, estado)
+            SET proveedor_id             = COALESCE(%s, proveedor_id),
+                precio_cotizado          = COALESCE(%s, precio_cotizado),
+                fecha_entrega_proveedor  = COALESCE(%s::date, fecha_entrega_proveedor),
+                estado                   = COALESCE(%s, estado),
+                tipo_gestion             = COALESCE(%s, tipo_gestion),
+                cantidad                 = COALESCE(%s, cantidad),
+                unidad                   = COALESCE(%s, unidad)
             WHERE id = %s;
-        """, (proveedor_id, precio_cotizado, fecha_entrega_proveedor, estado, logistica_id))
+        """, (proveedor_id, precio_cotizado, fecha_entrega_proveedor,
+              estado, tipo_gestion, cantidad, unidad, logistica_id))
 
         # Si se marca como Recibido → desbloquear tickets_produccion relacionados
         if estado == 'Recibido':
@@ -711,6 +726,70 @@ def actualizar_logistica():
 
         conexion.commit()
         return jsonify({'exito': True}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/logistica/<int:logistica_id>/enviar-al-taller', methods=['POST'])
+def enviar_al_taller(logistica_id):
+    """
+    Flujo 'Informal': el jefe de taller consiguió el material por su cuenta
+    y quiere notificar al área de despacho que ya puede armar el pedido.
+
+    Marca la fila de logistica_externa como 'Recibido' (tipo_gestion = 'Informal')
+    y desbloquea los tickets_produccion relacionados, igual que cuando llega
+    un material externo formal.
+    """
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        # Verificar que existe
+        cursor.execute(
+            "SELECT id, venta_id, insumo_nombre FROM logistica_externa WHERE id = %s;",
+            (logistica_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Ítem de logística no encontrado'}), 404
+
+        venta_id      = row[1]
+        insumo_nombre = row[2]
+
+        # Marcar como recibido/informal
+        cursor.execute("""
+            UPDATE logistica_externa
+            SET estado       = 'Recibido',
+                tipo_gestion = 'Informal'
+            WHERE id = %s;
+        """, (logistica_id,))
+
+        # Desbloquear tickets relacionados al pedido
+        desbloqueados = 0
+        if venta_id:
+            cursor.execute("""
+                UPDATE tickets_produccion
+                SET estado_ticket = 'En Proceso',
+                    fecha_inicio  = CURRENT_TIMESTAMP
+                WHERE estado_ticket = 'Bloqueado'
+                  AND item_id IN (
+                      SELECT id FROM items_venta WHERE venta_id = %s
+                  )
+                RETURNING id;
+            """, (venta_id,))
+            desbloqueados = len(cursor.fetchall())
+
+        conexion.commit()
+        return jsonify({
+            'exito':        True,
+            'mensaje':      f'"{insumo_nombre}" marcado como recibido. {desbloqueados} ticket(s) desbloqueado(s).',
+            'desbloqueados': desbloqueados,
+        }), 200
+
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500

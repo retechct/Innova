@@ -305,6 +305,11 @@ class LogisticaExterna(db.Model):
     insumo_nombre             = db.Column(db.String(150), nullable=True)
     sku                       = db.Column(db.String(50),  nullable=True)
     proveedor_id              = db.Column(db.Integer, db.ForeignKey('proveedores.id'), nullable=True)
+    cantidad                  = db.Column(db.Numeric(10, 3), nullable=True)
+    unidad                    = db.Column(db.String(50),  nullable=True)
+    # tipo_gestion: 'Externo' (proveedor formal), 'Interno' (lo fabrica el taller),
+    #               'Informal' (proveedor sin sistema, jefe pide aparte y marca "Enviar al taller")
+    tipo_gestion              = db.Column(db.String(20), default='Externo', nullable=True)
     precio_cotizado           = db.Column(db.Numeric(10, 2), nullable=True)
     fecha_entrega_proveedor   = db.Column(db.Date, nullable=True)
     estado                    = db.Column(db.String(50), nullable=True)
