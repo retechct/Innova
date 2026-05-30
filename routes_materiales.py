@@ -47,11 +47,15 @@ def agregar_nuevo_material():
         if tipo_material == 'tela':
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_telas")
             nuevo_sku = f"TEL-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            
+            prov_id_str = request.form.get('proveedor_id')
+            prov_id = int(prov_id_str) if prov_id_str and prov_id_str.strip() and prov_id_str != "null" else None
+
             cursor.execute("""
-                INSERT INTO maestro_telas (sku, proveedor, coleccion, color, foto_url, origen_produccion, estado)
-                VALUES (%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
+                INSERT INTO maestro_telas (sku, proveedor, coleccion, color, foto_url, origen_produccion, estado, proveedor_id)
+                VALUES (%s,%s,%s,%s,%s,%s,'Disponible', %s) RETURNING id;
             """, (nuevo_sku, request.form.get('proveedor'), request.form.get('coleccion'),
-                  request.form.get('color'), foto_ruta, origen))
+                  request.form.get('color'), foto_ruta, origen, prov_id))
 
         elif tipo_material == 'cojin':
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_disenos_cojin")
@@ -405,7 +409,7 @@ def rechazar_creacion():
 
 def _actualizar_tabla(tabla: str, sku_columna: str, sku: str, campos_permitidos: list) -> tuple:
     data = request.get_json(silent=True) or {}
-    updates = {k: v for k, v in data.items() if k in campos_permitidos and v is not None}
+    updates = {k: v for k, v in data.items() if k in campos_permitidos}
 
     if not updates:
         return {"error": "No se enviaron campos válidos para actualizar."}, 400
