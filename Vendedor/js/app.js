@@ -631,7 +631,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                                             ? [`📐 *Metros requeridos:* ${datos.cantidad} mts`]            : []),
                     ...(!esTela && datos.cantidad
                                             ? [`🔢 *Cantidad:* ${datos.cantidad} ${datos.unidad || ''}`]   : []),
-                    ...(item.foto_url       ? [`🖼️ *Ref. visual:* ${item.foto_url}`]                       : []),
+                    ...(item.foto_url       ? [`🔗 *Ref. visual:* ${item.foto_url}`]                       : []),
                     `📋 *Pedido:* #${item.codigo_venta}`,
                     ...(datos.nota          ? [`📝 *Nota:* ${datos.nota}`]                                 : []),
                     ``,
@@ -750,7 +750,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                 ...(item.sku            ? [`🔖 *SKU:* ${item.sku}`]                                   : []),
                 ...(item.detalle_insumo ? [`🎨 *Detalle:* ${item.detalle_insumo}`]                    : []),
                 ...(item.cantidad       ? [`📐 *Cantidad:* ${item.cantidad} ${item.unidad || ''}`]     : []),
-                ...(item.foto_url       ? [`🖼️ *Ref. visual:* ${item.foto_url}`]                      : []),
+                ...(item.foto_url       ? [`🔗 *Ref. visual:* ${item.foto_url}`]                      : []),
                 `📋 *Pedido:* #${item.codigo_venta}`,
                 ``,
                 `Por favor dinos el *precio por ${esTela ? 'metro' : 'unidad'}* y la *fecha de entrega*. Gracias 🙏`,
