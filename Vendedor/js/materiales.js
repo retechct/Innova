@@ -1281,6 +1281,12 @@ async function abrirEditorMaterial(sku, tipo) {
         } catch(e) {}
 
         campos = `
+            <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
+                <select id="em-origen-produccion" class="form-input">
+                    <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
+                    <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
             <div class="form-group"><label style="${labelStyle}">Proveedor (Texto - Legacy)</label>
                 <input id="em-proveedor" class="form-input" value="${item.proveedor || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Proveedor (Vinculado)</label>
@@ -1296,6 +1302,12 @@ async function abrirEditorMaterial(sku, tipo) {
 
     } else if (tipo === 'cojin') {
         campos = `
+            <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
+                <select id="em-origen-produccion" class="form-input">
+                    <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
+                    <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
             <div class="form-group"><label style="${labelStyle}">Nombre del Diseño / Patrón</label>
                 <input id="em-nombre-diseno" class="form-input" value="${item.nombre_diseno || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Material / Composición</label>
@@ -1303,6 +1315,12 @@ async function abrirEditorMaterial(sku, tipo) {
 
     } else if (tipo === 'base') {
         campos = `
+            <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
+                <select id="em-origen-produccion" class="form-input">
+                    <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
+                    <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
             <div class="form-group"><label style="${labelStyle}">Nombre / Referencia</label>
                 <input id="em-modelo" class="form-input" value="${item.modelo || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Tipo Estructural</label>
@@ -1318,6 +1336,12 @@ async function abrirEditorMaterial(sku, tipo) {
 
     } else if (tipo === 'base-comedor') {
         campos = `
+            <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
+                <select id="em-origen-produccion" class="form-input">
+                    <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
+                    <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
             <div class="form-group"><label style="${labelStyle}">Nombre / Referencia</label>
                 <input id="em-modelo" class="form-input" value="${item.modelo || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Material</label>
@@ -1329,6 +1353,12 @@ async function abrirEditorMaterial(sku, tipo) {
 
     } else if (tipo === 'tablero') {
         campos = `
+            <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
+                <select id="em-origen-produccion" class="form-input">
+                    <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
+                    <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
             <div class="form-group"><label style="${labelStyle}">Material Base</label>
                 ${mkSelect('material-base', ['MDF','Madera','Vidrio Templado','Cuarzo','Mármol','Porcelanato','Piedra Sinterizada'], item.material_base)}</div>
             <div class="form-group"><label style="${labelStyle}">Nombre del Modelo</label>
@@ -1343,6 +1373,12 @@ async function abrirEditorMaterial(sku, tipo) {
             ? ['Madera','Madera MDF','Acero','Fierro','Aluminio','Polipropileno']
             : ['Madera','Acero','Fierro','Aluminio'];
         campos = `
+            <div class="form-group"><label style="${labelStyle}">Origen de Producción</label>
+                <select id="em-origen-produccion" class="form-input">
+                    <option value="Externo" ${(item.origen_produccion||'Externo')==='Externo'?'selected':''}>Externo</option>
+                    <option value="Interno" ${item.origen_produccion==='Interno'?'selected':''}>Interno</option>
+                </select>
+            </div>
             <div class="form-group"><label style="${labelStyle}">Modelo / Diseño</label>
                 <input id="em-modelo" class="form-input" value="${item.modelo || ''}"></div>
             <div class="form-group"><label style="${labelStyle}">Material</label>
@@ -1389,28 +1425,31 @@ async function guardarCambiosMaterial() {
 
     if (tipo === 'tela') {
         payload = { 
+            origen_produccion: get('em-origen-produccion'),
             proveedor: get('em-proveedor'), 
             proveedor_id: get('em-proveedor-id') || null, 
             coleccion: get('em-coleccion'), 
             color: get('em-color') 
         };
     } else if (tipo === 'cojin') {
-        payload = { nombre_diseno: get('em-nombre-diseno'), tipo_tela: get('em-tipo-tela') };
+        payload = { origen_produccion: get('em-origen-produccion'), nombre_diseno: get('em-nombre-diseno'), tipo_tela: get('em-tipo-tela') };
     } else if (tipo === 'base') {
         payload = {
+            origen_produccion: get('em-origen-produccion'),
             modelo: get('em-modelo'), tipo: get('em-tipo-base'),
             material: get('em-material'), acabado: get('em-acabado'),
             color: get('em-color'), medida_altura: get('em-medida-altura')
         };
     } else if (tipo === 'base-comedor') {
-        payload = { modelo: get('em-modelo'), material: get('em-material'), acabado: get('em-acabado'), color: get('em-color') };
+        payload = { origen_produccion: get('em-origen-produccion'), modelo: get('em-modelo'), material: get('em-material'), acabado: get('em-acabado'), color: get('em-color') };
     } else if (tipo === 'tablero') {
         payload = {
+            origen_produccion: get('em-origen-produccion'),
             material_base: get('em-material-base'), nombre_modelo: get('em-nombre-modelo'),
             color_veta: get('em-color-veta'), acabado: get('em-acabado')
         };
     } else if (tipo === 'silla' || tipo === 'butaca') {
-        payload = { modelo: get('em-modelo'), material: get('em-material'), color_estructura: get('em-color-estructura') };
+        payload = { origen_produccion: get('em-origen-produccion'), modelo: get('em-modelo'), material: get('em-material'), color_estructura: get('em-color-estructura') };
     }
 
     // ¿Hay nueva foto?

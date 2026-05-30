@@ -442,7 +442,7 @@ def editar_tela(sku):
     """B3: Actualiza una tela por SKU. Campos: proveedor, coleccion, color, foto_url, estado, proveedor_id"""
     resp, status = _actualizar_tabla(
         tabla='maestro_telas', sku_columna='sku', sku=sku,
-        campos_permitidos=['proveedor', 'coleccion', 'color', 'foto_url', 'estado', 'proveedor_id']
+        campos_permitidos=['proveedor', 'coleccion', 'color', 'foto_url', 'estado', 'proveedor_id', 'origen_produccion']
     )
     return jsonify(resp), status
 
@@ -452,7 +452,7 @@ def editar_cojin(sku):
     """B3: Actualiza un diseño de cojín por SKU. Campos: nombre_diseno, tipo_tela, foto_url, estado"""
     resp, status = _actualizar_tabla(
         tabla='maestro_disenos_cojin', sku_columna='sku', sku=sku,
-        campos_permitidos=['nombre_diseno', 'tipo_tela', 'foto_url', 'estado']
+        campos_permitidos=['nombre_diseno', 'tipo_tela', 'foto_url', 'estado', 'origen_produccion']
     )
     return jsonify(resp), status
 
@@ -471,7 +471,7 @@ def editar_base(sku):
     resp, status = _actualizar_tabla(
         tabla='maestro_bases', sku_columna='sku', sku=sku,
         campos_permitidos=['tipo', 'material', 'modelo', 'color',
-                           'medida_altura', 'acabado', 'foto_url', 'estado']
+                           'medida_altura', 'acabado', 'foto_url', 'estado', 'origen_produccion']
     )
     return jsonify(resp), status
 
@@ -484,7 +484,7 @@ def editar_base_comedor(sku):
     """
     resp, status = _actualizar_tabla(
         tabla='maestro_bases_comedor', sku_columna='sku', sku=sku,
-        campos_permitidos=['material', 'modelo', 'color', 'acabado', 'foto_url', 'estado']
+        campos_permitidos=['material', 'modelo', 'color', 'acabado', 'foto_url', 'estado', 'origen_produccion']
     )
     return jsonify(resp), status
 
@@ -495,7 +495,7 @@ def editar_tablero(sku):
     resp, status = _actualizar_tabla(
         tabla='maestro_tableros', sku_columna='sku', sku=sku,
         campos_permitidos=['material_base', 'nombre_modelo', 'color_veta',
-                           'acabado', 'foto_url', 'estado']
+                           'acabado', 'foto_url', 'estado', 'origen_produccion']
     )
     return jsonify(resp), status
 
@@ -512,7 +512,7 @@ def editar_silla(sku):
         return jsonify({"error": f"Material no válido para silla: '{material}'."}), 400
     resp, status = _actualizar_tabla(
         tabla='maestro_sillas', sku_columna='sku', sku=sku,
-        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado']
+        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado', 'origen_produccion']
     )
     return jsonify(resp), status
 
@@ -529,6 +529,6 @@ def editar_butaca(sku):
         return jsonify({"error": f"Material no válido para butaca: '{material}'."}), 400
     resp, status = _actualizar_tabla(
         tabla='maestro_butacas', sku_columna='sku', sku=sku,
-        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado']
+        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado', 'origen_produccion']
     )
     return jsonify(resp), status
