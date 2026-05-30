@@ -15,6 +15,9 @@ from database import get_db_connection, release_db_connection, limpiar_foto
 # pip install reportlab==4.2.2
 from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors as rl_colors
+from reportlab.platypus import Table, TableStyle
+from reportlab.lib.units import mm
 
 produccion_bp = Blueprint('produccion', __name__)
 
@@ -651,7 +654,28 @@ def obtener_logistica():
                    COALESCE(l.cantidad, 1)           AS cantidad,
                    COALESCE(l.unidad, '')            AS unidad,
                    COALESCE(l.tipo_gestion, 'Externo') AS tipo_gestion,
-                   l.proveedor_id
+                   l.proveedor_id,
+                   COALESCE(l.proveedor_informal, '') AS proveedor_informal,
+                   -- Foto del insumo desde los maestros por SKU
+                   COALESCE(
+                       (SELECT foto_url FROM maestro_telas        WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_tableros      WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_bases         WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_bases_comedor WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_sillas        WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_butacas       WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1)
+                   ) AS foto_url,
+                   -- Detalles descriptivos del insumo según su tipo
+                   COALESCE(
+                       (SELECT CONCAT(coleccion, ' · ', color) FROM maestro_telas WHERE sku = l.sku LIMIT 1),
+                       (SELECT CONCAT(nombre_modelo, ' · ', color_veta, CASE WHEN acabado != '' THEN CONCAT(' · ', acabado) ELSE '' END) FROM maestro_tableros WHERE sku = l.sku LIMIT 1),
+                       (SELECT CONCAT(modelo, ' · ', color) FROM maestro_bases WHERE sku = l.sku LIMIT 1),
+                       (SELECT CONCAT(modelo, ' · ', color) FROM maestro_bases_comedor WHERE sku = l.sku LIMIT 1),
+                       (SELECT CONCAT(modelo, ' · ', color_estructura) FROM maestro_sillas WHERE sku = l.sku LIMIT 1),
+                       (SELECT CONCAT(modelo, ' · ', color_estructura) FROM maestro_butacas WHERE sku = l.sku LIMIT 1),
+                       (SELECT nombre_diseno FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1)
+                   ) AS detalle_insumo
             FROM logistica_externa l
             JOIN ventas v           ON l.venta_id    = v.id
             LEFT JOIN proveedores p ON l.proveedor_id = p.id
@@ -669,6 +693,9 @@ def obtener_logistica():
             "unidad": r[13],
             "tipo_gestion": r[14],
             "proveedor_id": r[15],
+            "proveedor_informal": r[16] or "",
+            "foto_url": limpiar_foto(r[17]) if r[17] else "",
+            "detalle_insumo": r[18] or "",
         } for r in cursor.fetchall()]
         return jsonify(items), 200
     except Exception as e:
@@ -689,6 +716,7 @@ def actualizar_logistica():
     tipo_gestion            = data.get('tipo_gestion')   # ← nuevo
     cantidad                = data.get('cantidad')        # ← nuevo
     unidad                  = data.get('unidad')          # ← nuevo
+    proveedor_informal      = data.get('proveedor_informal')  # ← nuevo: nombre + celular libre
     if not logistica_id:
         return jsonify({'error': 'id es obligatorio'}), 400
     try:
@@ -702,10 +730,11 @@ def actualizar_logistica():
                 estado                   = COALESCE(%s, estado),
                 tipo_gestion             = COALESCE(%s, tipo_gestion),
                 cantidad                 = COALESCE(%s, cantidad),
-                unidad                   = COALESCE(%s, unidad)
+                unidad                   = COALESCE(%s, unidad),
+                proveedor_informal       = COALESCE(%s, proveedor_informal)
             WHERE id = %s;
         """, (proveedor_id, precio_cotizado, fecha_entrega_proveedor,
-              estado, tipo_gestion, cantidad, unidad, logistica_id))
+              estado, tipo_gestion, cantidad, unidad, proveedor_informal, logistica_id))
 
         # Si se marca como Recibido → desbloquear tickets_produccion relacionados
         if estado == 'Recibido':
@@ -1525,14 +1554,19 @@ def responder_cotizacion(token):
 
 @produccion_bp.route('/api/logistica/<int:id>/generar-orden', methods=['POST'])
 def generar_orden_compra(id):
-    """Genera PDF de Orden de Compra y lo sube a Cloudinary."""
+    """Genera PDF de Orden de Compra con diseño corporativo y lo sube a Cloudinary."""
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("""
             SELECT l.insumo_nombre, l.sku, l.precio_cotizado,
                    l.fecha_entrega_proveedor, l.notas_proveedor,
-                   v.codigo_venta, COALESCE(p.nombre,'Sin proveedor') AS prov
+                   v.codigo_venta, COALESCE(p.nombre,'Sin proveedor') AS prov,
+                   COALESCE(p.telefono,'') AS tel_prov,
+                   COALESCE(p.correo,'')  AS correo_prov,
+                   COALESCE(l.cantidad, 1) AS cantidad,
+                   COALESCE(l.unidad, 'und') AS unidad,
+                   COALESCE(l.proveedor_informal,'') AS prov_informal
             FROM logistica_externa l
             JOIN ventas v           ON l.venta_id    = v.id
             LEFT JOIN proveedores p ON l.proveedor_id = p.id
@@ -1542,48 +1576,213 @@ def generar_orden_compra(id):
         if not row:
             return jsonify({'error': 'Registro no encontrado'}), 404
 
-        insumo, sku, precio, fecha_entrega, notas, cod_venta, proveedor = row
+        (insumo, sku, precio, fecha_entrega, notas,
+         cod_venta, proveedor, tel_prov, correo_prov,
+         cantidad, unidad, prov_informal) = row
 
-        # Generar PDF en memoria con ReportLab
-        buf = BytesIO()
-        c   = rl_canvas.Canvas(buf, pagesize=A4)
+        # Número de OC — intentar obtener el próximo de la secuencia
+        try:
+            cursor.execute("SELECT generar_numero_oc()")
+            numero_oc = cursor.fetchone()[0]
+        except Exception:
+            numero_oc = f"OC-{id:04d}"
+
+        fecha_emision = datetime.now().strftime('%d/%m/%Y')
+        fecha_entrega_str = fecha_entrega.strftime('%d/%m/%Y') if fecha_entrega else 'Por confirmar'
+        precio_unit  = float(precio) if precio else 0.0
+        subtotal     = precio_unit * float(cantidad)
+        igv          = round(subtotal * 0.18, 2)
+        total        = round(subtotal + igv, 2)
+        nombre_prov_display = prov_informal if prov_informal else proveedor
+
+        # ── Colores corporativos ────────────────────────────────────────
+        COLOR_OSCURO = rl_colors.HexColor('#0f172a')
+        COLOR_DORADO = rl_colors.HexColor('#c9a84c')
+        COLOR_GRIS   = rl_colors.HexColor('#f8fafc')
+        COLOR_BORDE  = rl_colors.HexColor('#e2e8f0')
+        COLOR_TEXTO  = rl_colors.HexColor('#374151')
+
+        # ── Canvas ─────────────────────────────────────────────────────
+        buf  = BytesIO()
+        c    = rl_canvas.Canvas(buf, pagesize=A4)
         w, h = A4
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(60, h - 60, "ORDEN DE COMPRA — INNOVA MÖBILI")
-        c.setFont("Helvetica", 11)
-        c.drawString(60, h - 90,  f"Referencia: {cod_venta}")
-        c.drawString(60, h - 110, f"Proveedor:  {proveedor}")
-        c.drawString(60, h - 130, f"Material:   {insumo}  (SKU: {sku or 'N/A'})")
-        c.drawString(60, h - 150, f"Precio:     S/ {precio or 'Por confirmar'}")
-        if fecha_entrega:
-            c.drawString(60, h - 170,
-                f"Fecha entrega: {fecha_entrega.strftime('%d/%m/%Y')}")
+        margin_x = 40 * mm
+
+        def draw_text(text, x, y, font='Helvetica', size=10, color=COLOR_TEXTO):
+            c.setFont(font, size)
+            c.setFillColor(color)
+            c.drawString(x, y, str(text))
+
+        def draw_rect(x, y, width, height, fill=None, stroke=None, radius=4):
+            c.setLineWidth(0.5)
+            if fill:
+                c.setFillColor(fill)
+            if stroke:
+                c.setStrokeColor(stroke)
+            else:
+                c.setStrokeColor(rl_colors.white)
+            c.roundRect(x, y, width, height, radius, fill=1 if fill else 0, stroke=1 if stroke else 0)
+
+        # ── HEADER: banda oscura ───────────────────────────────────────
+        draw_rect(0, h - 52*mm, w, 52*mm, fill=COLOR_OSCURO)
+
+        # Nombre empresa
+        c.setFont('Helvetica-Bold', 22)
+        c.setFillColor(rl_colors.white)
+        c.drawString(margin_x, h - 18*mm, 'INNOVA')
+        c.setFillColor(COLOR_DORADO)
+        c.drawString(margin_x + 68, h - 18*mm, 'MÖBILI')
+
+        # Subtítulo empresa
+        c.setFont('Helvetica', 8)
+        c.setFillColor(rl_colors.HexColor('#94a3b8'))
+        c.drawString(margin_x, h - 24*mm, 'Muebles de diseño a medida')
+
+        # Título OC (derecha)
+        c.setFont('Helvetica-Bold', 18)
+        c.setFillColor(COLOR_DORADO)
+        c.drawRightString(w - margin_x, h - 18*mm, 'ORDEN DE COMPRA')
+
+        # Número OC
+        c.setFont('Helvetica', 10)
+        c.setFillColor(rl_colors.white)
+        c.drawRightString(w - margin_x, h - 24*mm, f'N° {numero_oc}')
+
+        # Fecha y ref (segunda línea header)
+        c.setFont('Helvetica', 9)
+        c.setFillColor(rl_colors.HexColor('#cbd5e1'))
+        c.drawString(margin_x, h - 32*mm, f'Fecha de emisión: {fecha_emision}')
+        c.drawRightString(w - margin_x, h - 32*mm, f'Ref. pedido: {cod_venta}')
+
+        # Línea separadora dorada
+        c.setStrokeColor(COLOR_DORADO)
+        c.setLineWidth(1.5)
+        c.line(margin_x, h - 38*mm, w - margin_x, h - 38*mm)
+
+        # ── BLOQUE: Proveedor + Condiciones ───────────────────────────
+        y_bloque = h - 64*mm
+        col_w    = (w - 2 * margin_x - 8*mm) / 2
+
+        # Caja Proveedor
+        draw_rect(margin_x, y_bloque - 28*mm, col_w, 32*mm, fill=COLOR_GRIS, stroke=COLOR_BORDE)
+        draw_text('PROVEEDOR', margin_x + 4*mm, y_bloque + 1*mm, 'Helvetica-Bold', 8, COLOR_DORADO)
+        draw_text(nombre_prov_display[:40], margin_x + 4*mm, y_bloque - 6*mm, 'Helvetica-Bold', 11, COLOR_OSCURO)
+        if tel_prov:
+            draw_text(f'Tel: {tel_prov}', margin_x + 4*mm, y_bloque - 12*mm, 'Helvetica', 9, COLOR_TEXTO)
+        if correo_prov:
+            draw_text(correo_prov[:38], margin_x + 4*mm, y_bloque - 18*mm, 'Helvetica', 9, COLOR_TEXTO)
+
+        # Caja Condiciones
+        x_cond = margin_x + col_w + 8*mm
+        draw_rect(x_cond, y_bloque - 28*mm, col_w, 32*mm, fill=COLOR_GRIS, stroke=COLOR_BORDE)
+        draw_text('CONDICIONES', x_cond + 4*mm, y_bloque + 1*mm, 'Helvetica-Bold', 8, COLOR_DORADO)
+        draw_text(f'Entrega pactada: {fecha_entrega_str}', x_cond + 4*mm, y_bloque - 6*mm, 'Helvetica', 9, COLOR_TEXTO)
+        draw_text('Moneda: Soles (PEN)', x_cond + 4*mm, y_bloque - 12*mm, 'Helvetica', 9, COLOR_TEXTO)
+        draw_text('Pago: Contra entrega', x_cond + 4*mm, y_bloque - 18*mm, 'Helvetica', 9, COLOR_TEXTO)
+
+        # ── TABLA DE ÍTEMS ────────────────────────────────────────────
+        y_tabla = y_bloque - 36*mm
+
+        # Encabezado tabla
+        draw_rect(margin_x, y_tabla - 8*mm, w - 2*margin_x, 8*mm, fill=COLOR_OSCURO)
+        headers = [('DESCRIPCIÓN', margin_x + 3*mm),
+                   ('SKU',         margin_x + 90*mm),
+                   ('CANT.',       margin_x + 115*mm),
+                   ('P. UNIT.',    margin_x + 132*mm),
+                   ('SUBTOTAL',    margin_x + 152*mm)]
+        for txt, xh in headers:
+            draw_text(txt, xh, y_tabla - 5*mm, 'Helvetica-Bold', 8, rl_colors.white)
+
+        # Fila de datos
+        y_fila = y_tabla - 18*mm
+        draw_rect(margin_x, y_fila, w - 2*margin_x, 12*mm, fill=COLOR_GRIS, stroke=COLOR_BORDE)
+        # Nombre truncado si es muy largo
+        nombre_corto = insumo[:48] if insumo else '—'
+        draw_text(nombre_corto, margin_x + 3*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
+        draw_text(sku or '—',   margin_x + 90*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
+        draw_text(f'{float(cantidad):.0f} {unidad}', margin_x + 115*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
+        draw_text(f'S/ {precio_unit:.2f}', margin_x + 132*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
+        draw_text(f'S/ {subtotal:.2f}',    margin_x + 152*mm, y_fila + 4*mm, 'Helvetica-Bold', 9, COLOR_OSCURO)
+
+        # ── TOTALES ───────────────────────────────────────────────────
+        y_tot = y_fila - 6*mm
+        x_tot = margin_x + 120*mm
+        tot_w = w - margin_x - x_tot
+
+        def fila_total(label, valor, y, bold=False, highlight=False):
+            if highlight:
+                draw_rect(x_tot - 2*mm, y - 2*mm, tot_w + 2*mm, 8*mm, fill=COLOR_OSCURO)
+                draw_text(label, x_tot, y + 2*mm, 'Helvetica-Bold', 9, rl_colors.white)
+                draw_text(valor, x_tot + tot_w - 3*mm, y + 2*mm, 'Helvetica-Bold', 10, COLOR_DORADO)
+            else:
+                c.setStrokeColor(COLOR_BORDE)
+                c.setLineWidth(0.3)
+                c.line(x_tot, y - 1*mm, x_tot + tot_w, y - 1*mm)
+                draw_text(label, x_tot, y + 2*mm, 'Helvetica-Bold' if bold else 'Helvetica', 9, COLOR_TEXTO)
+                draw_text(valor, x_tot + tot_w - 3*mm, y + 2*mm, 'Helvetica-Bold' if bold else 'Helvetica', 9, COLOR_TEXTO)
+
+        fila_total('Subtotal:',  f'S/ {subtotal:.2f}', y_tot)
+        fila_total('IGV (18%):', f'S/ {igv:.2f}',      y_tot - 9*mm)
+        fila_total('TOTAL:',     f'S/ {total:.2f}',    y_tot - 20*mm, bold=True, highlight=True)
+
+        # ── NOTAS ─────────────────────────────────────────────────────
         if notas:
-            c.drawString(60, h - 200, f"Notas: {notas[:120]}")
+            y_notas = y_fila - 42*mm
+            draw_rect(margin_x, y_notas - 14*mm, w - 2*margin_x, 18*mm, fill=rl_colors.HexColor('#fffbeb'), stroke=rl_colors.HexColor('#fde047'))
+            draw_text('OBSERVACIONES', margin_x + 4*mm, y_notas + 1*mm, 'Helvetica-Bold', 8, rl_colors.HexColor('#854d0e'))
+            # Truncar notas a 2 líneas de ~90 chars
+            linea1 = notas[:90]
+            linea2 = notas[90:180] if len(notas) > 90 else ''
+            draw_text(linea1, margin_x + 4*mm, y_notas - 6*mm, 'Helvetica', 8, COLOR_TEXTO)
+            if linea2:
+                draw_text(linea2, margin_x + 4*mm, y_notas - 12*mm, 'Helvetica', 8, COLOR_TEXTO)
+
+        # ── PIE DE PÁGINA ─────────────────────────────────────────────
+        draw_rect(0, 0, w, 14*mm, fill=COLOR_OSCURO)
+        c.setFont('Helvetica', 7)
+        c.setFillColor(rl_colors.HexColor('#64748b'))
+        c.drawCentredString(w / 2, 6*mm, 'Innova Möbili — Este documento es una orden de compra oficial.')
+        c.drawCentredString(w / 2, 3*mm, f'Generado el {fecha_emision} · Ref. {cod_venta} · OC {numero_oc}')
+
         c.save()
         buf.seek(0)
 
-        # Subir a Cloudinary
+        # ── Subir a Cloudinary ────────────────────────────────────────
         resp = cloudinary.uploader.upload(
             buf,
             folder='ordenes_compra',
             resource_type='raw',
-            public_id=f'OC-{id}-{cod_venta}'
+            public_id=f'OC-{id}-{cod_venta}',
+            overwrite=True,
         )
         url_pdf = resp.get('secure_url')
 
-        # Guardar en ordenes_compra_seq y cambiar estado
-        cursor.execute("""
-            INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, url_pdf)
-            VALUES (%s, generar_numero_oc(), %s)
-        """, (id, url_pdf))
+        # ── Guardar registro y cambiar estado ─────────────────────────
+        try:
+            cursor.execute("""
+                INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, url_pdf)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (logistica_id) DO UPDATE SET url_pdf = EXCLUDED.url_pdf
+            """, (id, numero_oc, url_pdf))
+        except Exception:
+            pass  # tabla puede no tener la constraint; el UPDATE de estado es lo crítico
+
         cursor.execute("""
             UPDATE logistica_externa SET estado = 'Orden Enviada' WHERE id = %s
         """, (id,))
         conexion.commit()
-        return jsonify({'exito': True, 'url_pdf': url_pdf}), 200
+
+        return jsonify({
+            'exito':      True,
+            'url_pdf':    url_pdf,
+            'numero_oc':  numero_oc,
+            'proveedor':  nombre_prov_display,
+            'telefono':   tel_prov,
+        }), 200
+
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
+        import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
