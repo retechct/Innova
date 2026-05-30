@@ -156,7 +156,8 @@ def obtener_listas_materiales():
         cur_telas = conexion.cursor()
         cur_telas.execute("""
             SELECT id, sku, proveedor, coleccion, color,
-                   foto_url, COALESCE(estado,'Disponible'), proveedor_id
+                   foto_url, COALESCE(estado,'Disponible'), proveedor_id,
+                   COALESCE(origen_produccion,'Externo')
             FROM maestro_telas
             ORDER BY id DESC
         """)
@@ -164,7 +165,8 @@ def obtener_listas_materiales():
         cur_cojines = conexion.cursor()
         cur_cojines.execute("""
             SELECT id, sku, nombre_diseno, tipo_tela,
-                   foto_url, COALESCE(estado,'Disponible')
+                   foto_url, COALESCE(estado,'Disponible'),
+                   COALESCE(origen_produccion,'Externo')
             FROM maestro_disenos_cojin
             ORDER BY id DESC
         """)
@@ -173,7 +175,8 @@ def obtener_listas_materiales():
         cur_bases.execute("""
             SELECT id, sku, tipo, material, modelo, color,
                    medida_altura, COALESCE(acabado,'') AS acabado,
-                   foto_url, COALESCE(estado,'Disponible')
+                   foto_url, COALESCE(estado,'Disponible'),
+                   COALESCE(origen_produccion,'Externo')
             FROM maestro_bases
             ORDER BY id DESC
         """)
@@ -181,7 +184,8 @@ def obtener_listas_materiales():
         cur_tableros = conexion.cursor()
         cur_tableros.execute("""
             SELECT id, sku, material_base, nombre_modelo, color_veta,
-                   acabado, foto_url, COALESCE(estado,'Disponible')
+                   acabado, foto_url, COALESCE(estado,'Disponible'),
+                   COALESCE(origen_produccion,'Externo')
             FROM maestro_tableros
             ORDER BY id DESC
         """)
@@ -190,7 +194,8 @@ def obtener_listas_materiales():
         cur_bcom.execute("""
             SELECT id, sku, material, modelo, color,
                    COALESCE(acabado,'') AS acabado,
-                   foto_url, COALESCE(estado,'Disponible')
+                   foto_url, COALESCE(estado,'Disponible'),
+                   COALESCE(origen_produccion,'Externo')
             FROM maestro_bases_comedor
             ORDER BY id DESC
         """)
@@ -198,7 +203,8 @@ def obtener_listas_materiales():
         cur_sillas = conexion.cursor()
         cur_sillas.execute("""
             SELECT id, sku, material, modelo, color_estructura,
-                   foto_url, COALESCE(estado,'Disponible')
+                   foto_url, COALESCE(estado,'Disponible'),
+                   COALESCE(origen_produccion,'Externo')
             FROM maestro_sillas
             ORDER BY id DESC
         """)
@@ -206,7 +212,8 @@ def obtener_listas_materiales():
         cur_butacas = conexion.cursor()
         cur_butacas.execute("""
             SELECT id, sku, material, modelo, color_estructura,
-                   foto_url, COALESCE(estado,'Disponible')
+                   foto_url, COALESCE(estado,'Disponible'),
+                   COALESCE(origen_produccion,'Externo')
             FROM maestro_butacas
             ORDER BY id DESC
         """)
@@ -214,44 +221,44 @@ def obtener_listas_materiales():
         telas = [{
             "id": r[0], "sku": r[1], "proveedor": r[2], "coleccion": r[3],
             "color": r[4], "foto_url": limpiar_foto(r[5]), "estado": r[6],
-            "proveedor_id": r[7]
+            "proveedor_id": r[7], "origen_produccion": r[8]
         } for r in cur_telas.fetchall()]
 
         cojines = [{
             "id": r[0], "sku": r[1], "nombre_diseno": r[2], "tipo_tela": r[3],
-            "foto_url": limpiar_foto(r[4]), "estado": r[5]
+            "foto_url": limpiar_foto(r[4]), "estado": r[5], "origen_produccion": r[6]
         } for r in cur_cojines.fetchall()]
 
         bases = [{
             "id": r[0], "sku": r[1], "tipo": r[2], "material": r[3],
             "modelo": r[4], "color": r[5], "medida": r[6], "acabado": r[7],
             "foto_url": limpiar_foto(r[8]), "estado": r[9],
-            "categoria": "BASE"
+            "origen_produccion": r[10], "categoria": "BASE"
         } for r in cur_bases.fetchall()]
 
         tableros = [{
             "id": r[0], "sku": r[1], "material_base": r[2], 
-            "nombre": r[3], "nombre_modelo": r[3],   # ← mismo valor, dos claves
+            "nombre": r[3], "nombre_modelo": r[3],
             "color": r[4], "acabado": r[5], "foto_url": limpiar_foto(r[6]),
-            "estado": r[7], "categoria": "TABLERO"
+            "estado": r[7], "origen_produccion": r[8], "categoria": "TABLERO"
         } for r in cur_tableros.fetchall()]
 
         bases_comedor = [{
             "id": r[0], "sku": r[1], "material": r[2], "modelo": r[3],
             "color": r[4], "acabado": r[5], "foto_url": limpiar_foto(r[6]),
-            "estado": r[7], "categoria": "BASE-COMEDOR"
+            "estado": r[7], "origen_produccion": r[8], "categoria": "BASE-COMEDOR"
         } for r in cur_bcom.fetchall()]
 
         sillas = [{
             "id": r[0], "sku": r[1], "material": r[2], "modelo": r[3],
             "color": r[4], "foto_url": limpiar_foto(r[5]),
-            "estado": r[6], "categoria": "SILLA"
+            "estado": r[6], "origen_produccion": r[7], "categoria": "SILLA"
         } for r in cur_sillas.fetchall()]
 
         butacas = [{
             "id": r[0], "sku": r[1], "material": r[2], "modelo": r[3],
             "color": r[4], "foto_url": limpiar_foto(r[5]),
-            "estado": r[6], "categoria": "BUTACA"
+            "estado": r[6], "origen_produccion": r[7], "categoria": "BUTACA"
         } for r in cur_butacas.fetchall()]
 
         for c in (cur_telas, cur_cojines, cur_bases, cur_tableros, cur_bcom, cur_sillas, cur_butacas):
@@ -442,7 +449,7 @@ def editar_tela(sku):
     """B3: Actualiza una tela por SKU. Campos: proveedor, coleccion, color, foto_url, estado, proveedor_id"""
     resp, status = _actualizar_tabla(
         tabla='maestro_telas', sku_columna='sku', sku=sku,
-        campos_permitidos=['proveedor', 'coleccion', 'color', 'foto_url', 'estado', 'proveedor_id', 'origen_produccion']
+        campos_permitidos=['proveedor', 'coleccion', 'color', 'foto_url', 'estado', 'proveedor_id']
     )
     return jsonify(resp), status
 
@@ -452,7 +459,7 @@ def editar_cojin(sku):
     """B3: Actualiza un diseño de cojín por SKU. Campos: nombre_diseno, tipo_tela, foto_url, estado"""
     resp, status = _actualizar_tabla(
         tabla='maestro_disenos_cojin', sku_columna='sku', sku=sku,
-        campos_permitidos=['nombre_diseno', 'tipo_tela', 'foto_url', 'estado', 'origen_produccion']
+        campos_permitidos=['nombre_diseno', 'tipo_tela', 'foto_url', 'estado']
     )
     return jsonify(resp), status
 
@@ -471,7 +478,7 @@ def editar_base(sku):
     resp, status = _actualizar_tabla(
         tabla='maestro_bases', sku_columna='sku', sku=sku,
         campos_permitidos=['tipo', 'material', 'modelo', 'color',
-                           'medida_altura', 'acabado', 'foto_url', 'estado', 'origen_produccion']
+                           'medida_altura', 'acabado', 'foto_url', 'estado']
     )
     return jsonify(resp), status
 
@@ -484,7 +491,7 @@ def editar_base_comedor(sku):
     """
     resp, status = _actualizar_tabla(
         tabla='maestro_bases_comedor', sku_columna='sku', sku=sku,
-        campos_permitidos=['material', 'modelo', 'color', 'acabado', 'foto_url', 'estado', 'origen_produccion']
+        campos_permitidos=['material', 'modelo', 'color', 'acabado', 'foto_url', 'estado']
     )
     return jsonify(resp), status
 
@@ -495,7 +502,7 @@ def editar_tablero(sku):
     resp, status = _actualizar_tabla(
         tabla='maestro_tableros', sku_columna='sku', sku=sku,
         campos_permitidos=['material_base', 'nombre_modelo', 'color_veta',
-                           'acabado', 'foto_url', 'estado', 'origen_produccion']
+                           'acabado', 'foto_url', 'estado']
     )
     return jsonify(resp), status
 
@@ -512,7 +519,7 @@ def editar_silla(sku):
         return jsonify({"error": f"Material no válido para silla: '{material}'."}), 400
     resp, status = _actualizar_tabla(
         tabla='maestro_sillas', sku_columna='sku', sku=sku,
-        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado', 'origen_produccion']
+        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado']
     )
     return jsonify(resp), status
 
@@ -529,6 +536,6 @@ def editar_butaca(sku):
         return jsonify({"error": f"Material no válido para butaca: '{material}'."}), 400
     resp, status = _actualizar_tabla(
         tabla='maestro_butacas', sku_columna='sku', sku=sku,
-        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado', 'origen_produccion']
+        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado']
     )
     return jsonify(resp), status
