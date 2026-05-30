@@ -281,6 +281,24 @@ async function verSeguimientoVendedor(codigo) {
 /* ================================================================= */
 /* --- LOGÍSTICA EXTERNA (PROCURA) --- */
 /* ================================================================= */
+// ── Helper: normalizar número peruano para wa.me ──────────────────────────────
+function _normalizarTelWA(raw) {
+    if (!raw) return '';
+    // Quitar espacios, guiones, paréntesis, puntos
+    let tel = String(raw).replace(/[\s\-\(\)\.]/g, '');
+    // Quitar el + inicial si lo tiene
+    if (tel.startsWith('+')) tel = tel.slice(1);
+    // Si ya empieza con 51 y tiene 11 dígitos → correcto
+    if (/^51\d{9}$/.test(tel)) return tel;
+    // Si empieza con 51 y tiene más o menos → limpiar el prefijo y volver a agregar
+    if (tel.startsWith('51')) tel = tel.slice(2);
+    // Quitar ceros al inicio que sobren
+    tel = tel.replace(/^0+/, '');
+    // Solo números peruanos de 9 dígitos son válidos
+    if (!/^\d{9}$/.test(tel)) return '';
+    return '51' + tel;
+}
+
 async function cargarLogisticaExterna() {
     const tabla = document.getElementById('tabla-logistica-externa');
     if (!tabla) return;
@@ -363,7 +381,8 @@ async function cargarLogisticaExterna() {
                 <td style="padding:10px 14px;">
                     <div style="display:flex;align-items:center;gap:10px;">
                         ${item.foto_url
-                            ? `<img src="${item.foto_url}" onerror="this.style.display='none'"
+                            ? `<img src="${item.foto_url}"
+                                   onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
                                    style="width:42px;height:42px;object-fit:cover;border-radius:6px;
                                           border:1px solid #e2e8f0;flex-shrink:0;">`
                             : `<div style="width:42px;height:42px;border-radius:6px;background:#f1f5f9;
@@ -596,8 +615,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                 });
 
                 const provData = proveedores.find(p => p.id == datos.proveedor_id) || {};
-                let tel = (provData.telefono || '').replace(/[\s\-\(\)]/g, '');
-                if (tel && !tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
+                let tel = _normalizarTelWA(provData.telefono || '');
 
                 const esTela = (item.unidad || '').toLowerCase() === 'mts' ||
                                (item.insumo  || '').toLowerCase().includes('tela');
@@ -718,8 +736,9 @@ async function _abrirEditarLogistica(item, proveedores) {
             await _registrarRespuestaProveedor(item);
         } else if (isDenied) {
             // Reenviar WhatsApp con el mismo mensaje limpio (sin link de formulario)
-            const provTel = (item.correo_proveedor || '').replace(/[\s\-\(\)]/g, '');
-            let tel = provTel && !provTel.startsWith('+') ? '51' + provTel.replace(/^0+/, '') : provTel;
+            // item.telefono_proveedor viene del backend; fallback a correo_proveedor si fuera un número
+            const telRaw = item.telefono_proveedor || item.correo_proveedor || '';
+            let tel = _normalizarTelWA(telRaw);
             const esTela = (item.unidad || '').toLowerCase() === 'mts' ||
                            (item.insumo  || '').toLowerCase().includes('tela');
             const msgWsp = [
@@ -797,8 +816,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                 Swal.close();
 
                 // Construir número de WhatsApp
-                let tel = (dOC.telefono || item.correo_proveedor || '').replace(/[\s\-\(\)]/g, '');
-                if (tel && !tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
+                let tel = _normalizarTelWA(dOC.telefono || item.telefono_proveedor || '');
 
                 const msgOC = [
                     `Hola *${dOC.proveedor || item.proveedor}* 👋, somos *Innova Möbili*.`,
