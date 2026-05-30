@@ -737,6 +737,8 @@ async function guardarProveedor() {
 async function actualizarEstadoInsumo(itemId, categoria, nuevoEstado) {
     const catToEndpoint = {
         'TELA':         'telas',
+        'TELAS':        'telas',
+        'COJIN':        'cojines',
         'COJ':          'cojines',
         'BASE':         'bases',
         'BASE-COMEDOR': 'bases-comedor',

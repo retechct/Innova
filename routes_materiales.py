@@ -227,13 +227,13 @@ def obtener_listas_materiales():
         telas = [{
             "id": r[0], "sku": r[1], "proveedor": r[2], "coleccion": r[3],
             "color": r[4], "foto_url": limpiar_foto(r[5]), "estado": r[6],
-            "proveedor_id": r[7], "origen_produccion": r[8]
+            "proveedor_id": r[7], "origen_produccion": r[8], "categoria": "TELA"
         } for r in cur_telas.fetchall()]
 
         cojines = [{
             "id": r[0], "sku": r[1], "nombre_diseno": r[2], "tipo_tela": r[3],
             "foto_url": limpiar_foto(r[4]), "estado": r[5],
-            "origen_produccion": r[6], "proveedor_id": r[7]
+            "origen_produccion": r[6], "proveedor_id": r[7], "categoria": "COJIN"
         } for r in cur_cojines.fetchall()]
 
         bases = [{
