@@ -894,6 +894,9 @@ function changeView(view) {
 
     if (titles[view]) {
         document.getElementById('view-title').innerText = titles[view];
+        // Resetear ícono al cambiar de vista (por si venía de "Mis Creaciones")
+        const viewIcon = document.getElementById('view-icon');
+        if (viewIcon) viewIcon.className = 'fa-solid fa-book-open';
     }
 
     // ── Ocultar TODAS las secciones antes de mostrar la nueva ──

@@ -252,11 +252,15 @@ async function enviarCreacionBD() {
 }
 async function verMisCreaciones() {
     try {
-        // 1. Encendemos la caja de productos y apagamos las demás
+        // 1. Ocultar TODAS las secciones igual que changeView
+        ['view-productos','view-plantillas','view-pedidos','view-taller',
+         'view-inventario','view-gestor-aprobacion','view-logistica',
+         'view-usuarios-admin','view-proveedores','vista-contratos'
+        ].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+
+        // Mostrar solo view-productos
         document.getElementById('view-productos').style.display = 'block';
-        document.getElementById('view-plantillas').style.display = 'none';
-        document.getElementById('view-pedidos').style.display = 'none';
-        
+
         // 2. Cambiamos el Título Principal
         document.getElementById('view-title').innerText = 'MIS CREACIONES (PLANTILLAS)';
         document.getElementById('view-icon').className = 'fa-solid fa-wand-magic-sparkles';
