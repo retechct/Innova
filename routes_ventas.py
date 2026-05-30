@@ -342,7 +342,26 @@ def guardar_venta():
             elif any(p in nombre_lower for p in ['silla', 'butaca', 'sitial', 'puff']):
                 area_estructura = 'ESTRUCTURAS_SILLAS'
 
-            if area_estructura:
+            # Verificar si el componente principal (silla/butaca) es externo ANTES de crear tickets
+            # Si es externo va solo a logística, no al taller
+            componente_principal_externo = False
+            if area_estructura == 'ESTRUCTURAS_SILLAS':
+                sku_silla = componentes.get('silla') or componentes.get('butaca')
+                if sku_silla:
+                    for tabla_ext in ('maestro_sillas', 'maestro_butacas'):
+                        try:
+                            cursor.execute(
+                                f"SELECT origen_produccion FROM {tabla_ext} WHERE sku = %s LIMIT 1",
+                                (sku_silla,)
+                            )
+                            res_origen = cursor.fetchone()
+                            if res_origen and res_origen[0] == 'Externo':
+                                componente_principal_externo = True
+                                break
+                        except Exception:
+                            pass
+
+            if area_estructura and not componente_principal_externo:
                 _paso_actual = f"mueble[{idx_m}] INSERT ticket {area_estructura}"
                 print(f"[PASO 4.{idx_m+1}.a] Ticket area_estructura={area_estructura}")
                 cursor.execute("""

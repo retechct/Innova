@@ -202,7 +202,27 @@ def obtener_tickets_taller():
             JOIN items_venta i ON t.item_id  = i.id
             JOIN ventas v      ON i.venta_id = v.id
             LEFT JOIN usuarios u ON t.trabajador_asignado_id = u.id
-            WHERE 1=1
+            WHERE t.item_id NOT IN (
+                -- Excluir items que SOLO tienen tickets de ESTRUCTURAS_SILLAS/TAPICERIA_SILLAS
+                -- y ningún ticket de áreas internas reales (tela, cojines, etc.)
+                -- Esto indica que la silla/butaca es comprada externamente (logística externa)
+                SELECT DISTINCT t2.item_id
+                FROM tickets_produccion t2
+                WHERE t2.area_trabajo NOT IN ('DESPACHO_CENTRAL')
+                GROUP BY t2.item_id
+                HAVING
+                    -- Todos sus tickets son solo de estructura/tapicería silla
+                    bool_and(t2.area_trabajo IN ('ESTRUCTURAS_SILLAS', 'TAPICERIA_SILLAS'))
+                    -- Y existe al menos una fila en logística externa activa para esa venta
+                    AND EXISTS (
+                        SELECT 1
+                        FROM logistica_externa le
+                        JOIN items_venta i2 ON le.venta_id = i2.venta_id
+                        WHERE i2.id = t2.item_id
+                          AND le.tipo_gestion = 'Externo'
+                          AND le.estado NOT IN ('Recibido', 'Cancelado')
+                    )
+            )
         """
         params = []
         if area_filtro:
@@ -649,7 +669,6 @@ def obtener_logistica():
             SELECT l.id, v.codigo_venta, l.insumo_nombre, l.sku,
                    COALESCE(p.nombre, 'Sin asignar') AS proveedor,
                    COALESCE(p.correo, '')            AS correo_proveedor,
-                   COALESCE(p.telefono, '')          AS telefono_proveedor,
                    l.precio_cotizado, l.fecha_entrega_proveedor, l.estado,
                    l.token_usado, l.notas_proveedor, l.url_comprobante_pago,
                    COALESCE(l.cantidad, 1)           AS cantidad,
@@ -685,20 +704,20 @@ def obtener_logistica():
         """)
         items = [{
             "id": r[0], "codigo_venta": r[1], "insumo": r[2], "sku": r[3],
-            "proveedor": r[4], "correo_proveedor": r[5], "telefono_proveedor": r[6],
-            "precio_cotizado": float(r[7]) if r[7] else None,
-            "fecha_entrega_proveedor": r[8].strftime('%d/%m/%Y') if r[8] else None,
-            "estado": r[9],
-            "token_usado": r[10], "notas_proveedor": r[11],
-            "url_comprobante_pago":    r[12],
-            "cantidad":                float(r[13]) if r[13] else 1,
-            "unidad":                  r[14],
-            "tipo_gestion":            r[15],
-            "proveedor_id":            r[16],
-            "proveedor_informal":      r[17] or "",
-            "url_cotizacion_adjunta":  r[18],
-            "foto_url":                limpiar_foto(r[19]) if r[19] else "",
-            "detalle_insumo":          r[20] or "",
+            "proveedor": r[4], "correo_proveedor": r[5],
+            "precio_cotizado": float(r[6]) if r[6] else None,
+            "fecha_entrega_proveedor": r[7].strftime('%d/%m/%Y') if r[7] else None,
+            "estado": r[8],
+            "token_usado": r[9], "notas_proveedor": r[10],
+            "url_comprobante_pago":    r[11],
+            "cantidad":                float(r[12]) if r[12] else 1,
+            "unidad":                  r[13],
+            "tipo_gestion":            r[14],
+            "proveedor_id":            r[15],
+            "proveedor_informal":      r[16] or "",
+            "foto_url":                limpiar_foto(r[17]) if r[17] else "",
+            "detalle_insumo":          r[18] or "",
+            "url_cotizacion_adjunta":  r[19] if len(r) > 19 else None,
         } for r in cursor.fetchall()]
         return jsonify(items), 200
     except Exception as e:
