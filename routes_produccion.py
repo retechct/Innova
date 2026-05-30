@@ -1136,13 +1136,23 @@ def despacho_entregados():
 
 @produccion_bp.route('/api/logistica/<int:id>/enviar-cotizacion', methods=['POST'])
 def enviar_cotizacion_proveedor(id):
-    """Genera token y manda correo al proveedor."""
+    """Genera token y devuelve el link + datos para abrir WhatsApp desde el frontend."""
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("""
             SELECT l.insumo_nombre, l.sku, v.codigo_venta,
-                   p.correo, p.nombre
+                   p.nombre, p.telefono,
+                   -- busca foto del insumo en los maestros por SKU
+                   COALESCE(
+                       (SELECT foto_url FROM maestro_telas          WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_bases           WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_tableros        WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_bases_comedor   WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_sillas          WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_butacas         WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM maestro_disenos_cojin   WHERE sku = l.sku LIMIT 1)
+                   ) AS foto_url
             FROM logistica_externa l
             JOIN ventas v           ON l.venta_id    = v.id
             LEFT JOIN proveedores p ON l.proveedor_id = p.id
@@ -1152,29 +1162,36 @@ def enviar_cotizacion_proveedor(id):
         if not row:
             return jsonify({'error': 'Registro no encontrado'}), 404
 
-        insumo, sku, codigo_venta, correo_proveedor, nombre_proveedor = row
-        if not correo_proveedor:
-            return jsonify({'error': 'El proveedor no tiene correo registrado'}), 400
+        insumo, sku, codigo_venta, nombre_proveedor, telefono_proveedor, foto_url = row
 
-        from database import BACKEND_URL, enviar_solicitud_cotizacion
+        if not telefono_proveedor:
+            return jsonify({'error': 'El proveedor no tiene teléfono/WhatsApp registrado'}), 400
+
+        from database import BACKEND_URL
         token = uuid.uuid4().hex
         link  = f"{BACKEND_URL}/cotizar.html?token={token}"
 
         cursor.execute("""
             UPDATE logistica_externa
-            SET token_respuesta = %s,
-                token_usado     = FALSE,
-                fecha_envio_cotizacion = NOW(),
-                estado = 'Cotizacion Enviada'
+            SET token_respuesta            = %s,
+                token_usado                = FALSE,
+                fecha_envio_cotizacion     = NOW(),
+                estado                     = 'Cotizacion Enviada'
             WHERE id = %s
         """, (token, id))
         conexion.commit()
 
-        enviar_solicitud_cotizacion(
-            correo_proveedor, nombre_proveedor or 'Proveedor',
-            insumo, link, codigo_venta
-        )
-        return jsonify({'exito': True, 'link': link}), 200
+        return jsonify({
+            'exito':             True,
+            'link':              link,
+            'telefono':          telefono_proveedor,
+            'nombre_proveedor':  nombre_proveedor or 'Proveedor',
+            'insumo':            insumo,
+            'sku':               sku or '',
+            'codigo_venta':      codigo_venta,
+            'foto_url':          foto_url or '',
+        }), 200
+
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500

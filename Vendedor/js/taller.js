@@ -1938,7 +1938,7 @@ async function abrirNotaOrden(ticketId) {
             </div>
         `,
         showCancelButton: true,
-        confirmButtonColor: '#0f172a',
+        confirmButtonColor: '#25D366',
         cancelButtonText: 'Cancelar',
         confirmButtonText: '<i class="fa-solid fa-save"></i> Guardar nota',
         preConfirm: () => {

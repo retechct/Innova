@@ -407,7 +407,7 @@ async function _abrirEditarLogistica(item, proveedores) {
             html: `
                 <div style="text-align:left;font-size:13px;">
                     <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#854d0e;">
-                        <b>Paso 1 de 3:</b> Asigna un proveedor. El sistema le enviará un email con un link para que él ingrese el precio y la fecha de entrega.
+                        <b>Paso 1 de 3:</b> Asigna un proveedor. Se abrirá WhatsApp con un mensaje prellenado que incluye la foto del material y un link para que él ingrese el precio y fecha de entrega.
                     </div>
                     <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Insumo</div>
                     <div style="font-weight:900;margin-bottom:12px;font-size:15px;">${item.insumo} <span style="color:#94a3b8;font-size:11px;">${item.sku || ''}</span></div>
@@ -419,9 +419,9 @@ async function _abrirEditarLogistica(item, proveedores) {
                     <textarea id="sl-nota" class="swal2-textarea" placeholder="Ej: Necesitamos entrega urgente, confirmar disponibilidad de stock..." style="margin:0;width:100%;font-size:13px;resize:vertical;min-height:70px;"></textarea>
                 </div>`,
             showCancelButton: true,
-            confirmButtonText: '<i class="fa-solid fa-paper-plane"></i> Enviar solicitud de cotización',
+            confirmButtonText: '<i class="fa-brands fa-whatsapp"></i> Abrir WhatsApp con el proveedor',
             cancelButtonText:  'Cancelar',
-            confirmButtonColor: '#0369a1',
+            confirmButtonColor: '#25D366',
             preConfirm: () => {
                 const prov = document.getElementById('sl-prov').value;
                 if (!prov) { Swal.showValidationMessage('Debes seleccionar un proveedor'); return false; }
@@ -435,22 +435,55 @@ async function _abrirEditarLogistica(item, proveedores) {
         });
         if (!isConfirmed || !datos) return;
 
-        try {
-            const res = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
+try {
+            // 1. Guardar el proveedor seleccionado en la BD
+            const resSave = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(datos)
+                body: JSON.stringify({ id: item.id, proveedor_id: datos.proveedor_id })
             });
-            const d = await res.json();
-            if (d.error) throw new Error(d.error);
-            Swal.fire({ icon:'success', title:'¡Solicitud enviada!', text:'Se notificó al proveedor por email para que ingrese su cotización.', timer:2500, showConfirmButton:false });
+            const dSave = await resSave.json();
+            if (dSave.error) throw new Error(dSave.error);
+
+            // 2. Generar el token y obtener los datos para WhatsApp
+            const resWsp = await apiFetch(`${API_URL}/api/logistica/${item.id}/enviar-cotizacion`, {
+                method: 'POST'
+            });
+            const dWsp = await resWsp.json();
+            if (!resWsp.ok || !dWsp.exito) throw new Error(dWsp.error || 'No se pudo generar el link');
+
+            // 3. Limpiar el número y armar el link de WhatsApp
+            let tel = (dWsp.telefono || '').replace(/[\s\-\(\)]/g, '');
+            if (!tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
+
+            const msgWsp = [
+                `Hola ${dWsp.nombre_proveedor} 👋, somos *Innova Möbili*.`,
+                ``,
+                `Le solicitamos cotización del siguiente material:`,
+                ``,
+                `📦 *Material:* ${dWsp.insumo}`,
+                ...(dWsp.sku      ? [`🔖 *SKU:* ${dWsp.sku}`]                      : []),
+                ...(dWsp.foto_url ? [`🖼️ *Foto de referencia:* ${dWsp.foto_url}`]   : []),
+                `📋 *Ref. Venta:* ${dWsp.codigo_venta}`,
+                ...(datos.nota    ? [`📝 *Nota:* ${datos.nota}`]                    : []),
+                ``,
+                `Por favor ingrese al siguiente link para enviarnos su precio y fecha de entrega:`,
+                `👉 ${dWsp.link}`,
+                ``,
+                `Tiene 3 días hábiles para responder. Gracias 🙏`
+            ].join('\n');
+
+            const urlWsp = `https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`;
+            window.open(urlWsp, '_blank');
+
             cargarLogisticaExterna();
+
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
         return;
     }
 
     // ETAPA 2 → Cotización Enviada: esperando respuesta del proveedor
     if (estado === 'Cotizacion Enviada') {
-        const { isConfirmed } = await Swal.fire({
+        const { isConfirmed, isDenied } = await Swal.fire({
             title: `⏳ Esperando cotización`,
             html: `
                 <div style="text-align:left;font-size:13px;">
@@ -461,12 +494,12 @@ async function _abrirEditarLogistica(item, proveedores) {
                     <div style="font-weight:900;margin-bottom:10px;">${item.insumo}</div>
                     <div style="font-weight:700;margin-bottom:2px;color:#475569;font-size:11px;text-transform:uppercase;">Proveedor asignado</div>
                     <div style="font-weight:700;margin-bottom:14px;color:#0369a1;">${item.proveedor}</div>
-                    <div style="color:#64748b;font-size:12px;">¿No llegó el email? Puedes reenviar la solicitud o cargar la cotización manualmente si el proveedor te la confirmó por otro medio.</div>
+                    <div style="color:#64748b;font-size:12px;">¿No vio el mensaje? Puedes reenviar por WhatsApp o cargar la cotización manualmente si el proveedor ya te confirmó el precio.</div>
                 </div>`,
             showCancelButton: true,
             showDenyButton: true,
             confirmButtonText: '📋 Ingresar cotización manual',
-            denyButtonText:    '📧 Reenviar email',
+            denyButtonText:    '📲 Reenviar por WhatsApp',
             cancelButtonText:  'Cerrar',
             confirmButtonColor: '#166534',
             denyButtonColor:   '#0369a1',
@@ -476,9 +509,35 @@ async function _abrirEditarLogistica(item, proveedores) {
             // Caer a flujo manual de cotización (ver ETAPA 3 manual abajo)
             await _ingresarCotizacionManual(item);
         }
-        // Si denyButton: reenviar email
-        else if (isConfirmed === false) {
-            // Swal retorna false en deny; verificamos con isDenied
+        else if (isDenied) {
+            // Reenviar por WhatsApp — volvemos a llamar al endpoint de cotización
+            try {
+                const resWsp = await apiFetch(`${API_URL}/api/logistica/${item.id}/enviar-cotizacion`, { method: 'POST' });
+                const dWsp = await resWsp.json();
+                if (!resWsp.ok || !dWsp.exito) throw new Error(dWsp.error || 'No se pudo generar el link');
+
+                let tel = (dWsp.telefono || '').replace(/[\s\-\(\)]/g, '');
+                if (!tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
+
+                const msgWsp = [
+                    `Hola ${dWsp.nombre_proveedor} 👋, somos *Innova Möbili*.`,
+                    ``,
+                    `Le solicitamos cotización del siguiente material:`,
+                    ``,
+                    `📦 *Material:* ${dWsp.insumo}`,
+                    ...(dWsp.sku      ? [`🔖 *SKU:* ${dWsp.sku}`]                    : []),
+                    ...(dWsp.foto_url ? [`🖼️ *Foto de referencia:* ${dWsp.foto_url}`] : []),
+                    `📋 *Ref. Venta:* ${dWsp.codigo_venta}`,
+                    ``,
+                    `Por favor ingrese al siguiente link para enviarnos su precio y fecha de entrega:`,
+                    `👉 ${dWsp.link}`,
+                    ``,
+                    `Tiene 3 días hábiles para responder. Gracias 🙏`
+                ].join('\n');
+
+                window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`, '_blank');
+                cargarLogisticaExterna();
+            } catch(e) { Swal.fire('Error', e.message, 'error'); }
         }
         return;
     }
