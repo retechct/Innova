@@ -411,17 +411,18 @@ def guardar_venta():
                 print(f"[PASO 4.{idx_m+1}.c] Componente key={key}, sku={sku}, tabla={tabla}, area={area_destino}")
 
                 if key == 'silla':
-                    cursor.execute("SELECT material, modelo, origen_produccion FROM maestro_sillas WHERE sku = %s", (sku,))
+                    cursor.execute("SELECT material, modelo, origen_produccion, proveedor_id FROM maestro_sillas WHERE sku = %s", (sku,))
                     res_silla = cursor.fetchone()
                     if res_silla:
                         mat = (res_silla[0] or '').lower()
                         nombre_insumo_silla = res_silla[1] or sku
+                        prov_id_silla = res_silla[3]
                         if any(w in mat for w in ['metal', 'acero', 'fierro', 'aluminio']) or res_silla[2] == 'Externo':
                             cursor.execute(
                                 """INSERT INTO logistica_externa
-                                       (venta_id, insumo_nombre, sku, estado, tipo_gestion)
-                                   VALUES (%s, %s, %s, 'Pendiente', 'Externo')""",
-                                (venta_id, nombre_insumo_silla, sku)
+                                       (venta_id, insumo_nombre, sku, estado, tipo_gestion, proveedor_id)
+                                   VALUES (%s, %s, %s, 'Pendiente', 'Externo', %s)""",
+                                (venta_id, nombre_insumo_silla, sku, prov_id_silla)
                             )
                             continue
 
@@ -470,15 +471,15 @@ def guardar_venta():
                         cursor.execute("RELEASE SAVEPOINT sp_nombre_insumo")
                         nombre_insumo_real = sku
 
-                    # Intentar obtener proveedor_id desde maestro_telas (única tabla que lo tiene)
+                    # Intentar obtener proveedor_id desde la tabla del maestro correspondiente
                     prov_id_logistica = None
-                    if tabla == 'maestro_telas':
-                        try:
-                            cursor.execute("SELECT proveedor_id FROM maestro_telas WHERE sku = %s", (sku,))
-                            row_prov = cursor.fetchone()
-                            prov_id_logistica = row_prov[0] if row_prov else None
-                        except Exception:
-                            pass
+                    col_prov = 'proveedor_id'  # todas las tablas del maestro ahora tienen esta columna
+                    try:
+                        cursor.execute(f"SELECT proveedor_id FROM {tabla} WHERE sku = %s", (sku,))
+                        row_prov = cursor.fetchone()
+                        prov_id_logistica = row_prov[0] if row_prov else None
+                    except Exception:
+                        pass
 
                     # tipo_gestion: si tiene proveedor_id es Externo formal,
                     # si no tiene proveedor asignado aún se deja como Externo

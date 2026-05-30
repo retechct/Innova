@@ -60,19 +60,21 @@ def agregar_nuevo_material():
         elif tipo_material == 'cojin':
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_disenos_cojin")
             nuevo_sku = f"COJ-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            prov_id_cojin = request.form.get('proveedor_id') or None
             cursor.execute("""
-                INSERT INTO maestro_disenos_cojin (sku, nombre_diseno, tipo_tela, foto_url, origen_produccion, estado)
-                VALUES (%s,%s,%s,%s,%s,'Disponible') RETURNING id;
-            """, (nuevo_sku, request.form.get('nombre_diseno'), request.form.get('tipo_tela'), foto_ruta, origen))
+                INSERT INTO maestro_disenos_cojin (sku, nombre_diseno, tipo_tela, foto_url, origen_produccion, estado, proveedor_id)
+                VALUES (%s,%s,%s,%s,%s,'Disponible',%s) RETURNING id;
+            """, (nuevo_sku, request.form.get('nombre_diseno'), request.form.get('tipo_tela'), foto_ruta, origen, prov_id_cojin))
 
         elif tipo_material == 'base':
             # B2: incluye 'acabado' (nuevo campo). Ver nota de migración SQL arriba.
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_bases")
             nuevo_sku = f"BAS-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            prov_id_base = request.form.get('proveedor_id') or None
             cursor.execute("""
                 INSERT INTO maestro_bases
-                    (sku, tipo, material, modelo, color, medida_altura, acabado, foto_url, origen_produccion, estado)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
+                    (sku, tipo, material, modelo, color, medida_altura, acabado, foto_url, origen_produccion, estado, proveedor_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s) RETURNING id;
             """, (nuevo_sku,
                   request.form.get('tipo'),
                   request.form.get('material'),
@@ -80,49 +82,53 @@ def agregar_nuevo_material():
                   request.form.get('color'),
                   request.form.get('medida_altura', ''),
                   request.form.get('acabado', ''),
-                  foto_ruta, origen))
+                  foto_ruta, origen, prov_id_base))
 
         elif tipo_material == 'tablero':
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_tableros")
             nuevo_sku = f"TAB-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            prov_id_tab = request.form.get('proveedor_id') or None
             cursor.execute("""
-                INSERT INTO maestro_tableros (sku, material_base, nombre_modelo, color_veta, acabado, foto_url, origen_produccion, estado)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
+                INSERT INTO maestro_tableros (sku, material_base, nombre_modelo, color_veta, acabado, foto_url, origen_produccion, estado, proveedor_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'Disponible',%s) RETURNING id;
             """, (nuevo_sku, request.form.get('material_base'), request.form.get('nombre_modelo'),
-                  request.form.get('color_veta'), request.form.get('acabado'), foto_ruta, origen))
+                  request.form.get('color_veta'), request.form.get('acabado'), foto_ruta, origen, prov_id_tab))
 
         elif tipo_material == 'base-comedor':
             # B2: incluye 'acabado' (nuevo campo). Ver nota de migración SQL arriba.
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_bases_comedor")
             nuevo_sku = f"BAC-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            prov_id_bac = request.form.get('proveedor_id') or None
             cursor.execute("""
                 INSERT INTO maestro_bases_comedor
-                    (sku, material, modelo, color, acabado, foto_url, origen_produccion, estado)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
+                    (sku, material, modelo, color, acabado, foto_url, origen_produccion, estado, proveedor_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'Disponible',%s) RETURNING id;
             """, (nuevo_sku,
                   request.form.get('material'),
                   request.form.get('modelo'),
                   request.form.get('color'),
                   request.form.get('acabado', ''),
-                  foto_ruta, origen))
+                  foto_ruta, origen, prov_id_bac))
 
         elif tipo_material == 'silla':
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_sillas")
             nuevo_sku = f"SIL-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            prov_id_sil = request.form.get('proveedor_id') or None
             cursor.execute("""
-                INSERT INTO maestro_sillas (sku, material, modelo, color_estructura, foto_url, origen_produccion, estado)
-                VALUES (%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
+                INSERT INTO maestro_sillas (sku, material, modelo, color_estructura, foto_url, origen_produccion, estado, proveedor_id)
+                VALUES (%s,%s,%s,%s,%s,%s,'Disponible',%s) RETURNING id;
             """, (nuevo_sku, request.form.get('material'), request.form.get('modelo'),
-                  request.form.get('color_estructura'), foto_ruta, origen))
+                  request.form.get('color_estructura'), foto_ruta, origen, prov_id_sil))
 
         elif tipo_material == 'butaca':
             cursor.execute("SELECT COALESCE(MAX(id), 0) FROM maestro_butacas")
             nuevo_sku = f"BUT-{str(cursor.fetchone()[0]+1).zfill(4)}"
+            prov_id_but = request.form.get('proveedor_id') or None
             cursor.execute("""
-                INSERT INTO maestro_butacas (sku, material, modelo, color_estructura, foto_url, origen_produccion, estado)
-                VALUES (%s,%s,%s,%s,%s,%s,'Disponible') RETURNING id;
+                INSERT INTO maestro_butacas (sku, material, modelo, color_estructura, foto_url, origen_produccion, estado, proveedor_id)
+                VALUES (%s,%s,%s,%s,%s,%s,'Disponible',%s) RETURNING id;
             """, (nuevo_sku, request.form.get('material'), request.form.get('modelo'),
-                  request.form.get('color_estructura'), foto_ruta, origen))
+                  request.form.get('color_estructura'), foto_ruta, origen, prov_id_but))
 
         else:
             return jsonify({"error": "Tipo de material no válido"}), 400
@@ -166,7 +172,7 @@ def obtener_listas_materiales():
         cur_cojines.execute("""
             SELECT id, sku, nombre_diseno, tipo_tela,
                    foto_url, COALESCE(estado,'Disponible'),
-                   COALESCE(origen_produccion,'Externo')
+                   COALESCE(origen_produccion,'Externo'), proveedor_id
             FROM maestro_disenos_cojin
             ORDER BY id DESC
         """)
@@ -176,7 +182,7 @@ def obtener_listas_materiales():
             SELECT id, sku, tipo, material, modelo, color,
                    medida_altura, COALESCE(acabado,'') AS acabado,
                    foto_url, COALESCE(estado,'Disponible'),
-                   COALESCE(origen_produccion,'Externo')
+                   COALESCE(origen_produccion,'Externo'), proveedor_id
             FROM maestro_bases
             ORDER BY id DESC
         """)
@@ -185,7 +191,7 @@ def obtener_listas_materiales():
         cur_tableros.execute("""
             SELECT id, sku, material_base, nombre_modelo, color_veta,
                    acabado, foto_url, COALESCE(estado,'Disponible'),
-                   COALESCE(origen_produccion,'Externo')
+                   COALESCE(origen_produccion,'Externo'), proveedor_id
             FROM maestro_tableros
             ORDER BY id DESC
         """)
@@ -195,7 +201,7 @@ def obtener_listas_materiales():
             SELECT id, sku, material, modelo, color,
                    COALESCE(acabado,'') AS acabado,
                    foto_url, COALESCE(estado,'Disponible'),
-                   COALESCE(origen_produccion,'Externo')
+                   COALESCE(origen_produccion,'Externo'), proveedor_id
             FROM maestro_bases_comedor
             ORDER BY id DESC
         """)
@@ -204,7 +210,7 @@ def obtener_listas_materiales():
         cur_sillas.execute("""
             SELECT id, sku, material, modelo, color_estructura,
                    foto_url, COALESCE(estado,'Disponible'),
-                   COALESCE(origen_produccion,'Externo')
+                   COALESCE(origen_produccion,'Externo'), proveedor_id
             FROM maestro_sillas
             ORDER BY id DESC
         """)
@@ -213,7 +219,7 @@ def obtener_listas_materiales():
         cur_butacas.execute("""
             SELECT id, sku, material, modelo, color_estructura,
                    foto_url, COALESCE(estado,'Disponible'),
-                   COALESCE(origen_produccion,'Externo')
+                   COALESCE(origen_produccion,'Externo'), proveedor_id
             FROM maestro_butacas
             ORDER BY id DESC
         """)
@@ -226,39 +232,40 @@ def obtener_listas_materiales():
 
         cojines = [{
             "id": r[0], "sku": r[1], "nombre_diseno": r[2], "tipo_tela": r[3],
-            "foto_url": limpiar_foto(r[4]), "estado": r[5], "origen_produccion": r[6]
+            "foto_url": limpiar_foto(r[4]), "estado": r[5],
+            "origen_produccion": r[6], "proveedor_id": r[7]
         } for r in cur_cojines.fetchall()]
 
         bases = [{
             "id": r[0], "sku": r[1], "tipo": r[2], "material": r[3],
             "modelo": r[4], "color": r[5], "medida": r[6], "acabado": r[7],
             "foto_url": limpiar_foto(r[8]), "estado": r[9],
-            "origen_produccion": r[10], "categoria": "BASE"
+            "origen_produccion": r[10], "proveedor_id": r[11], "categoria": "BASE"
         } for r in cur_bases.fetchall()]
 
         tableros = [{
             "id": r[0], "sku": r[1], "material_base": r[2], 
-            "nombre": r[3], "nombre_modelo": r[3],
+            "nombre": r[3], "nombre_modelo": r[3],   # ← mismo valor, dos claves
             "color": r[4], "acabado": r[5], "foto_url": limpiar_foto(r[6]),
-            "estado": r[7], "origen_produccion": r[8], "categoria": "TABLERO"
+            "estado": r[7], "origen_produccion": r[8], "proveedor_id": r[9], "categoria": "TABLERO"
         } for r in cur_tableros.fetchall()]
 
         bases_comedor = [{
             "id": r[0], "sku": r[1], "material": r[2], "modelo": r[3],
             "color": r[4], "acabado": r[5], "foto_url": limpiar_foto(r[6]),
-            "estado": r[7], "origen_produccion": r[8], "categoria": "BASE-COMEDOR"
+            "estado": r[7], "origen_produccion": r[8], "proveedor_id": r[9], "categoria": "BASE-COMEDOR"
         } for r in cur_bcom.fetchall()]
 
         sillas = [{
             "id": r[0], "sku": r[1], "material": r[2], "modelo": r[3],
             "color": r[4], "foto_url": limpiar_foto(r[5]),
-            "estado": r[6], "origen_produccion": r[7], "categoria": "SILLA"
+            "estado": r[6], "origen_produccion": r[7], "proveedor_id": r[8], "categoria": "SILLA"
         } for r in cur_sillas.fetchall()]
 
         butacas = [{
             "id": r[0], "sku": r[1], "material": r[2], "modelo": r[3],
             "color": r[4], "foto_url": limpiar_foto(r[5]),
-            "estado": r[6], "origen_produccion": r[7], "categoria": "BUTACA"
+            "estado": r[6], "origen_produccion": r[7], "proveedor_id": r[8], "categoria": "BUTACA"
         } for r in cur_butacas.fetchall()]
 
         for c in (cur_telas, cur_cojines, cur_bases, cur_tableros, cur_bcom, cur_sillas, cur_butacas):
@@ -459,7 +466,7 @@ def editar_cojin(sku):
     """B3: Actualiza un diseño de cojín por SKU. Campos: nombre_diseno, tipo_tela, foto_url, estado"""
     resp, status = _actualizar_tabla(
         tabla='maestro_disenos_cojin', sku_columna='sku', sku=sku,
-        campos_permitidos=['nombre_diseno', 'tipo_tela', 'foto_url', 'estado']
+        campos_permitidos=['nombre_diseno', 'tipo_tela', 'foto_url', 'estado', 'origen_produccion', 'proveedor_id']
     )
     return jsonify(resp), status
 
@@ -478,7 +485,7 @@ def editar_base(sku):
     resp, status = _actualizar_tabla(
         tabla='maestro_bases', sku_columna='sku', sku=sku,
         campos_permitidos=['tipo', 'material', 'modelo', 'color',
-                           'medida_altura', 'acabado', 'foto_url', 'estado']
+                           'medida_altura', 'acabado', 'foto_url', 'estado', 'origen_produccion', 'proveedor_id']
     )
     return jsonify(resp), status
 
@@ -491,7 +498,7 @@ def editar_base_comedor(sku):
     """
     resp, status = _actualizar_tabla(
         tabla='maestro_bases_comedor', sku_columna='sku', sku=sku,
-        campos_permitidos=['material', 'modelo', 'color', 'acabado', 'foto_url', 'estado']
+        campos_permitidos=['material', 'modelo', 'color', 'acabado', 'foto_url', 'estado', 'origen_produccion', 'proveedor_id']
     )
     return jsonify(resp), status
 
@@ -502,7 +509,7 @@ def editar_tablero(sku):
     resp, status = _actualizar_tabla(
         tabla='maestro_tableros', sku_columna='sku', sku=sku,
         campos_permitidos=['material_base', 'nombre_modelo', 'color_veta',
-                           'acabado', 'foto_url', 'estado']
+                           'acabado', 'foto_url', 'estado', 'origen_produccion', 'proveedor_id']
     )
     return jsonify(resp), status
 
@@ -519,7 +526,7 @@ def editar_silla(sku):
         return jsonify({"error": f"Material no válido para silla: '{material}'."}), 400
     resp, status = _actualizar_tabla(
         tabla='maestro_sillas', sku_columna='sku', sku=sku,
-        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado']
+        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado', 'origen_produccion', 'proveedor_id']
     )
     return jsonify(resp), status
 
@@ -536,6 +543,6 @@ def editar_butaca(sku):
         return jsonify({"error": f"Material no válido para butaca: '{material}'."}), 400
     resp, status = _actualizar_tabla(
         tabla='maestro_butacas', sku_columna='sku', sku=sku,
-        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado']
+        campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado', 'origen_produccion', 'proveedor_id']
     )
     return jsonify(resp), status
