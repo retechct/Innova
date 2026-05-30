@@ -936,21 +936,38 @@ def logistica_pendientes_por_proveedor():
     try:
         conexion = get_db_connection()
         cursor = conexion.cursor()
+
+        # Detectar qué tablas maestro_* existen realmente en la BD
+        # para no reventar si alguna todavía no fue creada.
         cursor.execute("""
+            SELECT tablename FROM pg_tables
+            WHERE schemaname = 'public'
+              AND tablename LIKE 'maestro_%'
+              AND tablename IN (
+                  'maestro_telas','maestro_bases','maestro_tableros',
+                  'maestro_bases_comedor','maestro_sillas',
+                  'maestro_butacas','maestro_disenos_cojin'
+              );
+        """)
+        tablas_existentes = [r[0] for r in cursor.fetchall()]
+
+        # Construir el COALESCE dinámicamente solo con las tablas que existen
+        if tablas_existentes:
+            subqueries = "\n                    ".join(
+                f"(SELECT foto_url FROM {t} WHERE sku = l.sku LIMIT 1)"
+                for t in tablas_existentes
+            )
+            foto_expr = f"COALESCE(\n                    {subqueries}\n                )"
+        else:
+            foto_expr = "NULL"
+
+        cursor.execute(f"""
             SELECT
                 p.id AS proveedor_id,
                 p.nombre AS proveedor_nombre,
                 p.telefono,
                 l.id, l.insumo_nombre, l.sku, l.cantidad, l.unidad,
-                COALESCE(
-                    (SELECT foto_url FROM maestro_telas        WHERE sku = l.sku LIMIT 1),
-                    (SELECT foto_url FROM maestro_bases         WHERE sku = l.sku LIMIT 1),
-                    (SELECT foto_url FROM maestro_tableros      WHERE sku = l.sku LIMIT 1),
-                    (SELECT foto_url FROM maestro_bases_comedor WHERE sku = l.sku LIMIT 1),
-                    (SELECT foto_url FROM maestro_sillas        WHERE sku = l.sku LIMIT 1),
-                    (SELECT foto_url FROM maestro_butacas       WHERE sku = l.sku LIMIT 1),
-                    (SELECT foto_url FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1)
-                ) AS foto_url,
+                {foto_expr} AS foto_url,
                 v.codigo_venta
             FROM logistica_externa l
             JOIN ventas v ON l.venta_id = v.id
