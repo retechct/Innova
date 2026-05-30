@@ -592,89 +592,91 @@ function _opFiltrar() {
  * para poder reutilizarlo con datos filtrados.
  */
 function _opRenderOrdenes(wrapper, ordenes) {
+    const AREA_NOMBRES = {
+        'ESTRUCTURAS_MUEBLES':     'Carpintería (Sofás)',
+        'ESTRUCTURAS_SILLAS':      'Carpintería (Sillas)',
+        'CORTE_Y_CONTROL_TELAS':   'Corte y Telas',
+        'TELAS':                   'Corte y Telas',
+        'PREPARACION_PATAS_ZOCALO':'Patas y Zócalos',
+        'TABLEROS_Y_PIEDRAS':      'Tableros',
+        'TAPICERIA_SOFAS':         'Tapicería Sofás',
+        'TAPICERIA_SILLAS':        'Tapicería Sillas',
+        'ARMADO_COJINES':          'Armado de Cojines',
+        'DESPACHO_CENTRAL':        'Despacho',
+    };
+    const ESTADO_BADGE = {
+        'Pendiente':  { bg:'#fef3c7', color:'#b45309', icon:'🟡' },
+        'Bloqueado':  { bg:'#e2e8f0', color:'#64748b', icon:'🔒' },
+        'En Proceso': { bg:'#dbeafe', color:'#1e40af', icon:'🔵' },
+        'Terminado':  { bg:'#dcfce7', color:'#166534', icon:'✅' },
+    };
+
     let html = '';
     for (const orden of ordenes) {
         const pct         = orden.progreso || 0;
-        const colorBorde  = pct === 100 ? '#86efac' : pct > 0 ? '#93c5fd' : '#e2e8f0';
-        const colorProg   = pct === 100 ? '#22c55e' : '#3b82f6';
-        const estadoColor = {
-            'Entregado':      '#15803d',
-            'Listo':          '#10b981',
-            'En Producción':  '#d97706',
-            'En Despacho':    '#2563eb',
-            'Pendiente Pago': '#ea580c',
-            'Cancelado':      '#dc2626',
-        };
-        const badgeColor = estadoColor[orden.estado_general] || '#64748b';
+        const progresoColor = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#3b82f6' : '#f59e0b');
+        const estadoBadge = {
+            'Listo':         { bg:'#dcfce7', color:'#166534' },
+            'En Producción': { bg:'#dbeafe', color:'#1e40af' },
+            'Pendiente':     { bg:'#fef3c7', color:'#b45309' },
+        }[orden.estado_general] || { bg:'#f1f5f9', color:'#475569' };
+
+        let itemsHTML = '';
+        (orden.items || []).forEach(item => {
+            const ticketsHTML = (item.tickets || [])
+                .filter(t => t.area !== 'DESPACHO_CENTRAL')
+                .map(t => {
+                    const b = ESTADO_BADGE[t.estado] || { bg:'#f1f5f9', color:'#64748b', icon:'?' };
+                    const nombre = AREA_NOMBRES[t.area] || t.area.replace(/_/g,' ');
+                    return `<span style="font-size:10px; background:${b.bg}; color:${b.color}; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap;">
+                                ${b.icon} ${nombre}
+                                ${t.trabajador !== 'Sin asignar' ? `<span style="opacity:0.7">· ${t.trabajador}</span>` : ''}
+                            </span>`;
+                }).join('');
+
+            const hayTickets = item.tickets && item.tickets.filter(t => t.area !== 'DESPACHO_CENTRAL').length > 0;
+            itemsHTML += `
+                <div style="border-bottom:1px solid #f1f5f9; padding:8px 0; display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                    <img src="${item.foto}" alt="" style="width:40px; height:40px; border-radius:6px; object-fit:cover; border:1px solid #e2e8f0; flex-shrink:0;" onerror="this.src='imagenes/sin_foto.jpg'">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:12px; font-weight:800; color:#0f172a; margin-bottom:5px;">${item.producto}</div>
+                        ${hayTickets ? `<div style="display:flex; gap:5px; flex-wrap:wrap;">${ticketsHTML}</div>` : `<span style="font-size:11px; color:#94a3b8;">Sin tickets de producción</span>`}
+                    </div>
+                    <button onclick="abrirNotaOrden(${item.tickets && item.tickets[0] ? item.tickets[0].id : 0})"
+                        style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0;"
+                        title="Agregar nota/incidencia">
+                        <i class="fa-solid fa-note-sticky"></i>
+                    </button>
+                </div>`;
+        });
 
         html += `
-        <div style="background:#fff; border:2px solid ${colorBorde};
-            border-radius:14px; margin-bottom:16px; overflow:hidden;
-            box-shadow:0 2px 8px rgba(0,0,0,0.05);">
-            <!-- Cabecera -->
-            <div style="padding:12px 16px; border-bottom:1px solid ${colorBorde};
-                display:flex; justify-content:space-between; align-items:center;
-                background:#f8fafc;">
-                <div>
-                    <div style="font-size:11px; font-weight:900; color:#94a3b8;
-                        text-transform:uppercase; letter-spacing:1px;">Orden de producción</div>
-                    <div style="font-size:15px; font-weight:800; color:#0f172a;">
-                        #${orden.codigo_venta || orden.codigo}</div>
-                    <div style="font-size:12px; color:#64748b; margin-top:2px;">
-                        ${orden.cliente || '—'}
-                        ${orden.vendedor ? `&nbsp;·&nbsp;
-                            <i class="fa-solid fa-user" style="color:#94a3b8;"></i>
-                            ${orden.vendedor}` : ''}
-                        ${orden.sede    ? `&nbsp;·&nbsp;
-                            <i class="fa-solid fa-store" style="color:#94a3b8;"></i>
-                            ${orden.sede}` : ''}
+        <div style="background:white; border-radius:14px; border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,0.05); overflow:hidden; margin-bottom:16px;">
+            <div style="background:#f8fafc; padding:14px 18px; border-bottom:1px solid #e2e8f0; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+                        <span style="font-size:13px; font-weight:900; color:#0f172a;">${orden.codigo || orden.codigo_venta}</span>
+                        <span style="font-size:11px; background:${estadoBadge.bg}; color:${estadoBadge.color}; padding:2px 8px; border-radius:20px; font-weight:800;">${orden.estado_general || '—'}</span>
+                    </div>
+                    <div style="font-size:12px; color:#475569;">
+                        <b>${orden.cliente}</b> &nbsp;·&nbsp;
+                        <i class="fa-solid fa-calendar-days" style="color:#94a3b8;"></i> Entrega: <b>${orden.fecha_entrega || orden.entrega || 'S/F'}</b>
+                        ${orden.vendedor ? `&nbsp;·&nbsp; <i class="fa-solid fa-user" style="color:#94a3b8;"></i> ${orden.vendedor}` : ''}
+                        ${orden.sede ? `&nbsp;·&nbsp; <i class="fa-solid fa-store" style="color:#94a3b8;"></i> ${orden.sede}` : ''}
                     </div>
                 </div>
-                <span style="background:${badgeColor}; color:#fff; font-size:10px;
-                    font-weight:800; padding:5px 12px; border-radius:20px;
-                    text-transform:uppercase; letter-spacing:.5px; white-space:nowrap;">
-                    ${orden.estado_general || '—'}
-                </span>
-            </div>
-
-            <!-- Progreso -->
-            <div style="padding:10px 16px 6px;">
-                <div style="display:flex; justify-content:space-between;
-                    align-items:center; margin-bottom:4px;">
-                    <span style="font-size:10px; font-weight:700; color:#64748b;
-                        text-transform:uppercase;">Progreso de fabricación</span>
-                    <span style="font-size:11px; font-weight:800;
-                        color:${colorProg};">${pct}%</span>
-                </div>
-                <div style="width:100%; height:6px; background:#f1f5f9;
-                    border-radius:4px; overflow:hidden;">
-                    <div style="width:${pct}%; height:100%;
-                        background:${colorProg}; border-radius:4px;
-                        transition:width .6s ease;"></div>
+                <div style="min-width:160px; flex-shrink:0;">
+                    <div style="font-size:10px; font-weight:900; color:${progresoColor}; margin-bottom:4px; text-align:right;">
+                        ${pct}% completado
+                        (${orden.tickets_term || 0}/${orden.tickets_total || 0} áreas)
+                    </div>
+                    <div style="background:#e2e8f0; border-radius:6px; height:8px; overflow:hidden;">
+                        <div style="width:${pct}%; height:100%; background:${progresoColor}; border-radius:6px; transition:0.5s;"></div>
+                    </div>
                 </div>
             </div>
-
-            <!-- Meta -->
-            <div style="padding:10px 16px 14px;
-                display:flex; justify-content:space-between; align-items:center;
-                font-size:11px; color:#64748b;">
-                <span>Entrega: <b style="color:#0f172a;">${orden.entrega || 'S/F'}</b></span>
-                <div style="display:flex; gap:6px;">
-                    <button onclick="abrirDetallePedido('${orden.codigo_venta || orden.codigo}')"
-                        style="background:#0f172a; color:#fff; border:none;
-                            padding:7px 14px; border-radius:8px; font-size:11px;
-                            font-weight:800; cursor:pointer;
-                            font-family:'Jost',sans-serif;">
-                        <i class="fa-solid fa-eye"></i> Ficha
-                    </button>
-                    <button onclick="verSeguimientoVendedor('${orden.codigo_venta || orden.codigo}')"
-                        style="background:#3b82f6; color:#fff; border:none;
-                            padding:7px 14px; border-radius:8px; font-size:11px;
-                            font-weight:800; cursor:pointer;
-                            font-family:'Jost',sans-serif;">
-                        <i class="fa-solid fa-list-check"></i> Progreso
-                    </button>
-                </div>
+            <div style="padding:12px 18px;">
+                ${itemsHTML || '<p style="color:#94a3b8; font-size:12px; text-align:center; padding:10px;">Sin ítems de producción</p>'}
             </div>
         </div>`;
     }
