@@ -392,6 +392,14 @@ async function cargarLogisticaExterna() {
                 </td>
                 <td style="padding:12px 10px;text-align:center;font-weight:800;color:#0f172a;">
                     ${item.precio_cotizado ? `S/ ${item.precio_cotizado.toFixed(2)}` : '<span style="color:#cbd5e1;">—</span>'}
+                    ${item.url_comprobante_pago
+                        ? `<br><a href="${item.url_comprobante_pago}" target="_blank"
+                              title="Ver comprobante de pago"
+                              style="font-size:10px;font-weight:700;color:#1d4ed8;text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:3px;">
+                              <i class="fa-solid fa-receipt"></i> Comprobante
+                           </a>`
+                        : ''
+                    }
                 </td>
                 <td style="padding:12px 10px;text-align:center;font-size:12px;color:#64748b;">
                     ${item.fecha_entrega_proveedor || '<span style="color:#cbd5e1;">Sin fecha</span>'}
@@ -833,6 +841,8 @@ async function _abrirEditarLogistica(item, proveedores) {
         const opsEstado = ['Orden Enviada','Confirmado','En Tránsito','Pagado','Recibido','Cancelado']
             .map(e => `<option value="${e}" ${e === estado ? 'selected' : ''}>${e}</option>`).join('');
 
+        const tienePago = !!item.url_comprobante_pago;
+
         const { value: datos, isConfirmed } = await Swal.fire({
             title: `📦 Actualizar estado`,
             html: `
@@ -845,28 +855,101 @@ async function _abrirEditarLogistica(item, proveedores) {
                         <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">F. entrega pactada</span><br><b>${item.fecha_entrega_proveedor || '—'}</b></div>
                     </div>
                     <label style="font-weight:700;display:block;margin-bottom:4px;">Nuevo estado</label>
-                    <select id="sl-estado" class="swal2-input" style="margin:0;width:100%;">${opsEstado}</select>
+                    <select id="sl-estado" class="swal2-input" style="margin:0 0 14px;width:100%;"
+                        onchange="
+                            const v = this.value;
+                            document.getElementById('bloque-voucher').style.display = v === 'Pagado' ? 'block' : 'none';
+                        "
+                    >${opsEstado}</select>
+
+                    <!-- Bloque voucher: visible solo si se elige Pagado -->
+                    <div id="bloque-voucher" style="display:${estado === 'Pagado' ? 'block' : 'none'};">
+                        <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;
+                                    padding:10px 12px;margin-bottom:10px;font-size:12px;color:#854d0e;">
+                            <b>Registrar pago al proveedor</b> — Adjunta el comprobante (foto o PDF).
+                            ${tienePago ? `<br><a href="${item.url_comprobante_pago}" target="_blank"
+                                style="color:#1d4ed8;font-weight:700;">📄 Ver comprobante anterior</a>` : ''}
+                        </div>
+                        <label style="font-weight:700;display:block;margin-bottom:6px;font-size:11px;
+                                      text-transform:uppercase;color:#475569;">
+                            Comprobante de pago ${tienePago ? '(reemplazar)' : '*'}
+                        </label>
+                        <input type="file" id="inp-voucher" accept="image/*,application/pdf"
+                               style="width:100%;font-size:13px;padding:6px;border:1.5px dashed #cbd5e1;
+                                      border-radius:8px;background:#f8fafc;cursor:pointer;">
+                        <div id="voucher-preview" style="margin-top:8px;display:none;">
+                            <img id="voucher-img" src="" alt="preview"
+                                 style="max-height:120px;border-radius:6px;border:1px solid #e2e8f0;object-fit:contain;">
+                        </div>
+                    </div>
                 </div>`,
             showCancelButton: true,
-            confirmButtonText: 'Guardar estado',
+            confirmButtonText: 'Guardar',
             cancelButtonText:  'Cancelar',
             confirmButtonColor: '#7e22ce',
-            preConfirm: () => ({
-                id:     item.id,
-                estado: document.getElementById('sl-estado').value,
-            })
+            didOpen: () => {
+                // Preview de imagen al seleccionar archivo
+                const inp = document.getElementById('inp-voucher');
+                if (inp) inp.addEventListener('change', () => {
+                    const file = inp.files[0];
+                    if (!file || !file.type.startsWith('image/')) return;
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        document.getElementById('voucher-img').src = e.target.result;
+                        document.getElementById('voucher-preview').style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                });
+            },
+            preConfirm: () => {
+                const nuevoEstado = document.getElementById('sl-estado').value;
+                const archivo = document.getElementById('inp-voucher')?.files[0] || null;
+                if (nuevoEstado === 'Pagado' && !archivo && !tienePago) {
+                    Swal.showValidationMessage('Adjunta el comprobante de pago para continuar.');
+                    return false;
+                }
+                return { id: item.id, estado: nuevoEstado, archivo };
+            }
         });
         if (!isConfirmed || !datos) return;
 
         try {
+            // Si el estado es Pagado y hay archivo nuevo → subir voucher primero
+            if (datos.estado === 'Pagado' && datos.archivo) {
+                Swal.fire({ title: 'Subiendo comprobante...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const fd = new FormData();
+                fd.append('comprobante', datos.archivo);
+                const resPago = await apiFetch(`${API_URL}/api/logistica/${item.id}/registrar-pago`, {
+                    method: 'POST',
+                    body: fd,
+                });
+                const dPago = await resPago.json();
+                Swal.close();
+                if (!resPago.ok || !dPago.exito) throw new Error(dPago.error || 'Error al subir el comprobante');
+                Swal.fire({
+                    icon: 'success',
+                    title: '💳 Pago registrado',
+                    html: `El comprobante fue subido correctamente.<br>
+                           <a href="${dPago.url}" target="_blank"
+                              style="color:#1d4ed8;font-weight:700;font-size:13px;">📄 Ver comprobante</a>`,
+                    timer: 3000,
+                    showConfirmButton: false,
+                });
+                cargarLogisticaExterna();
+                return;
+            }
+
+            // Para cualquier otro estado → actualizar normalmente
             const res = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(datos)
+                body: JSON.stringify({ id: datos.id, estado: datos.estado })
             });
             const d = await res.json();
             if (d.error) throw new Error(d.error);
-            const msg = datos.estado === 'Recibido' ? '¡Material recibido! Los tickets relacionados fueron desbloqueados.' : '¡Estado actualizado!';
-            Swal.fire({ icon:'success', title: msg, timer:2000, showConfirmButton:false });
+            const msg = datos.estado === 'Recibido'
+                ? '¡Material recibido! Los tickets relacionados fueron desbloqueados.'
+                : '¡Estado actualizado!';
+            Swal.fire({ icon: 'success', title: msg, timer: 2000, showConfirmButton: false });
             cargarLogisticaExterna();
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
         return;
