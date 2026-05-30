@@ -1012,12 +1012,12 @@ def asignar_chofer_despacho():
 @produccion_bp.route('/api/logistica/pendientes-por-proveedor', methods=['GET'])
 def logistica_pendientes_por_proveedor():
     """Agrupa filas pendientes de logística externa por proveedor."""
+    conexion = None
     try:
         conexion = get_db_connection()
         cursor = conexion.cursor()
 
         # Detectar qué tablas maestro_* existen realmente en la BD
-        # para no reventar si alguna todavía no fue creada.
         cursor.execute("""
             SELECT tablename FROM pg_tables
             WHERE schemaname = 'public'
@@ -1030,9 +1030,8 @@ def logistica_pendientes_por_proveedor():
         """)
         tablas_existentes = [r[0] for r in cursor.fetchall()]
 
-        # Construir el COALESCE dinámicamente solo con las tablas que existen
         if tablas_existentes:
-            subqueries = "\n                    ".join(
+            subqueries = " ,\n                    ".join(
                 f"(SELECT foto_url FROM {t} WHERE sku = l.sku LIMIT 1)"
                 for t in tablas_existentes
             )
@@ -1040,13 +1039,25 @@ def logistica_pendientes_por_proveedor():
         else:
             foto_expr = "NULL"
 
+        # Detectar si las columnas cantidad/unidad ya existen (migración puede no haberse corrido)
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'logistica_externa'
+              AND column_name IN ('cantidad', 'unidad');
+        """)
+        cols_existentes = {r[0] for r in cursor.fetchall()}
+        cantidad_expr = "l.cantidad" if 'cantidad' in cols_existentes else "NULL"
+        unidad_expr   = "l.unidad"   if 'unidad'   in cols_existentes else "NULL"
+
         cursor.execute(f"""
             SELECT
                 p.id AS proveedor_id,
                 p.nombre AS proveedor_nombre,
                 p.telefono,
-                l.id, l.insumo_nombre, l.sku, l.cantidad, l.unidad,
-                {foto_expr} AS foto_url,
+                l.id, l.insumo_nombre, l.sku,
+                {cantidad_expr} AS cantidad,
+                {unidad_expr}   AS unidad,
+                {foto_expr}     AS foto_url,
                 v.codigo_venta
             FROM logistica_externa l
             JOIN ventas v ON l.venta_id = v.id
@@ -1062,25 +1073,27 @@ def logistica_pendientes_por_proveedor():
             pid = r[0]
             if pid not in grupos:
                 grupos[pid] = {
-                    'proveedor_id': pid,
+                    'proveedor_id':     pid,
                     'proveedor_nombre': r[1],
-                    'telefono': r[2],
+                    'telefono':         r[2],
                     'items': []
                 }
             grupos[pid]['items'].append({
-                'logistica_id': r[3],
+                'logistica_id':  r[3],
                 'insumo_nombre': r[4],
-                'sku': r[5] or '',
-                'cantidad': float(r[6]) if r[6] else None,
-                'unidad': r[7] or '',
-                'foto_url': r[8] or '',
-                'codigo_venta': r[9]
+                'sku':           r[5] or '',
+                'cantidad':      float(r[6]) if r[6] else None,
+                'unidad':        r[7] or '',
+                'foto_url':      r[8] or '',
+                'codigo_venta':  r[9],
             })
         return jsonify(list(grupos.values())), 200
+
     except Exception as e:
+        import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
-        if 'conexion' in locals() and conexion:
+        if conexion:
             cursor.close(); release_db_connection(conexion)
 
 
