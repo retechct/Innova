@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -615,15 +616,14 @@
                 <div class="modal-left">
                     <div class="form-group">
                         <label>Modelo Base</label>
-                        <select id="sofa-modelo" class="form-input" onchange="actualizarVistaSofa()">
-                            <option value="multi3">Multifuncional (3 Piezas)</option>
-                            <option value="multi4">Multifuncional (4 Piezas)</option>
-                            <option value="seccional">Seccional Normal</option>
-                            <option value="seccional_inv">Seccional Invertido</option>
-                            <option value="curvo">Curvo</option>
-                            <option value="u">En U</option>
-                            <option value="juego">Juego de Sala (3-2-1)</option>
-                        </select>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <select id="sofa-modelo" class="form-input" onchange="actualizarVistaSofa()" style="flex:1;"></select>
+                            <button onclick="abrirGestorModelos()" title="Gestionar modelos"
+                                style="background:var(--accent);color:#0d0b08;border:none;border-radius:7px;
+                                       padding:8px 10px;cursor:pointer;font-size:13px;flex-shrink:0;">
+                                ⚙️
+                            </button>
+                        </div>
                     </div>
                     <div class="img-preview-container">
                         <img id="preview-sofa" src="imagenes/sin_foto.jpg" alt="Vista Previa">
@@ -639,19 +639,19 @@
                         <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
                             <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
                         </label>
-                        <div style="display:flex;gap:7px;margin-bottom:6px;">
-                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
-                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                        <div style="display:flex;gap:7px;margin-top:5px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
+                                          border-radius:8px;font-size:12px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:5px;">
                                 📷 Tomar foto
                                 <input type="file" id="sofa-fotos-cam" accept="image/*" capture="environment" multiple
                                        style="display:none;" onchange="sincronizarFotos(this,'sofa')">
                             </label>
-                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
-                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
+                                          border-radius:8px;font-size:12px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:5px;">
                                 📁 Seleccionar
-                                <input type="file" id="sofa-fotos" class="form-input-sm" accept="image/*" multiple
+                                <input type="file" id="sofa-fotos" accept="image/*" multiple
                                        style="display:none;" onchange="sincronizarFotos(this,'sofa')">
                             </label>
                         </div>
@@ -793,14 +793,14 @@
                 <div class="modal-left">
                     <div class="form-group">
                         <label>Formato y Capacidad</label>
-                        <select id="comedor-formato" class="form-input" onchange="actualizarVistaComedor()">
-                            <option value="rect-6">Rectangular - 6 Sillas</option>
-                            <option value="rect-8">Rectangular - 8 Sillas</option>
-                            <option value="rect-10">Rectangular - 10 Sillas</option>
-                            <option value="rect-12">Rectangular - 12 Sillas</option>
-                            <option value="circ-4">Circular - 4 Sillas</option>
-                            <option value="circ-6">Circular - 6 Sillas</option>
-                        </select>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <select id="comedor-formato" class="form-input" onchange="actualizarVistaComedor()" style="flex:1;"></select>
+                            <button onclick="abrirGestorModelosComedor()" title="Gestionar modelos"
+                                style="background:var(--accent);color:#0d0b08;border:none;border-radius:7px;
+                                       padding:8px 10px;cursor:pointer;font-size:13px;flex-shrink:0;">
+                                ⚙️
+                            </button>
+                        </div>
                     </div>
                     
                     <div class="img-preview-container" style="background: var(--bg); border: 2px dashed #cbd5e1; padding: 10px;">
@@ -818,19 +818,19 @@
                         <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
                             <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
                         </label>
-<div style="display:flex;gap:7px;margin-bottom:6px;">
-                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
-                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                        <div style="display:flex;gap:7px;margin-top:5px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
+                                          border-radius:8px;font-size:12px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:5px;">
                                 📷 Tomar foto
                                 <input type="file" id="comedor-fotos-cam" accept="image/*" capture="environment" multiple
                                        style="display:none;" onchange="sincronizarFotos(this,'comedor')">
                             </label>
-                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
-                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
+                                          border-radius:8px;font-size:12px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:5px;">
                                 📁 Seleccionar
-                                <input type="file" id="comedor-fotos" class="form-input-sm" accept="image/*" multiple
+                                <input type="file" id="comedor-fotos" accept="image/*" multiple
                                        style="display:none;" onchange="sincronizarFotos(this,'comedor')">
                             </label>
                         </div>
@@ -941,11 +941,14 @@
                 <div class="modal-left">
                     <div class="form-group">
                         <label>Tipo de Mueble</label>
-                        <select id="centro-tipo" class="form-input" onchange="actualizarVistaCentro()">
-                            <option value="Mesa de Centro">Mesa de Centro</option>
-                            <option value="Consola">Consola / Recibidor</option>
-                            <option value="Mesa Lateral">Mesa Lateral (Esquinera)</option>
-                        </select>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <select id="centro-tipo" class="form-input" onchange="actualizarVistaCentro()" style="flex:1;"></select>
+                            <button onclick="abrirGestorModelosCentro()" title="Gestionar modelos"
+                                style="background:var(--accent);color:#0d0b08;border:none;border-radius:7px;
+                                       padding:8px 10px;cursor:pointer;font-size:13px;flex-shrink:0;">
+                                ⚙️
+                            </button>
+                        </div>
                     </div>
                     
                     <div class="img-preview-container" style="background: var(--bg); border: 2px dashed #cbd5e1; padding: 10px;">
@@ -970,19 +973,19 @@
                         <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
                             <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
                         </label>
-<div style="display:flex;gap:7px;margin-bottom:6px;">
-                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
-                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                        <div style="display:flex;gap:7px;margin-top:5px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
+                                          border-radius:8px;font-size:12px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:5px;">
                                 📷 Tomar foto
                                 <input type="file" id="centro-fotos-cam" accept="image/*" capture="environment" multiple
                                        style="display:none;" onchange="sincronizarFotos(this,'centro')">
                             </label>
-                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
-                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
+                                          border-radius:8px;font-size:12px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:5px;">
                                 📁 Seleccionar
-                                <input type="file" id="centro-fotos" class="form-input-sm" accept="image/*" multiple
+                                <input type="file" id="centro-fotos" accept="image/*" multiple
                                        style="display:none;" onchange="sincronizarFotos(this,'centro')">
                             </label>
                         </div>
@@ -1046,12 +1049,14 @@
                 <div class="modal-left">
                     <div class="form-group">
                         <label>Tipo de Asiento</label>
-                        <select id="butaca-tipo" class="form-input" onchange="actualizarVistaButaca()">
-                            <option value="Butaca">Butaca de Sala</option>
-                            <option value="Silla Suelta">Silla (Comedor/Escritorio)</option>
-                            <option value="Sitial">Sitial (Con brazos de madera)</option>
-                            <option value="Puff / Banqueta">Puff / Banqueta</option>
-                        </select>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <select id="butaca-tipo" class="form-input" onchange="actualizarVistaButaca()" style="flex:1;"></select>
+                            <button onclick="abrirGestorModelosButaca()" title="Gestionar modelos"
+                                style="background:var(--accent);color:#0d0b08;border:none;border-radius:7px;
+                                       padding:8px 10px;cursor:pointer;font-size:13px;flex-shrink:0;">
+                                ⚙️
+                            </button>
+                        </div>
                     </div>
                     
                     <div class="img-preview-container" style="background: var(--bg); border: 2px dashed #cbd5e1; padding: 10px;">
@@ -1072,19 +1077,19 @@
                         <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
                             <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
                         </label>
-<div style="display:flex;gap:7px;margin-bottom:6px;">
-                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
-                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                        <div style="display:flex;gap:7px;margin-top:5px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
+                                          border-radius:8px;font-size:12px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:5px;">
                                 📷 Tomar foto
                                 <input type="file" id="butaca-fotos-cam" accept="image/*" capture="environment" multiple
                                        style="display:none;" onchange="sincronizarFotos(this,'butaca')">
                             </label>
-                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
-                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
+                                          border-radius:8px;font-size:12px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:5px;">
                                 📁 Seleccionar
-                                <input type="file" id="butaca-fotos" class="form-input-sm" accept="image/*" multiple
+                                <input type="file" id="butaca-fotos" accept="image/*" multiple
                                        style="display:none;" onchange="sincronizarFotos(this,'butaca')">
                             </label>
                         </div>
@@ -1242,22 +1247,7 @@
     <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
         <div style="background: #fff; border: 1px dashed #cbd5e1; padding: 5px; border-radius: 5px;">
             <label style="font-size: 10px; color: gray; font-weight: bold;">FOTO DEL VOUCHER (OBLIGATORIO) <span style="color:red">*</span></label>
-<div style="display:flex;gap:7px;margin:4px 0 0;">
-                        <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
-                                      border-radius:7px;font-size:11px;font-weight:700;display:flex;
-                                      align-items:center;justify-content:center;gap:5px;">
-                            📷 Tomar foto
-                            <input type="file" id="pago-comprobante-cam" accept="image/*" capture="environment"
-                                   style="display:none;" onchange="sincronizarFotos(this,'pago')">
-                        </label>
-                        <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
-                                      border-radius:7px;font-size:11px;font-weight:700;display:flex;
-                                      align-items:center;justify-content:center;gap:5px;">
-                            📁 Seleccionar
-                            <input type="file" id="pago-comprobante" class="form-input-sm" accept="image/*,application/pdf"
-                                   style="display:none;" onchange="sincronizarFotos(this,'pago')">
-                        </label>
-                    </div>
+            <input type="file" id="pago-comprobante" class="form-input-sm" accept="image/*" capture="environment" style="width: 100%; font-size: 11px; border: none; background: transparent;">
         </div>
         <button type="button" class="btn-action btn-primary" onclick="agregarMetodoPago()" style="width: 100%; height: 42px; border-radius: 6px; font-weight: bold;">
             <i class="fa-solid fa-plus"></i> AGREGAR PAGO
@@ -1329,22 +1319,7 @@
             <div style="padding: 10px;">
                 <div class="form-group" style="background:var(--bg); padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
                     <label style="color:var(--accent);"><i class="fa-solid fa-camera"></i> Subir Foto del Producto</label>
-                    <div style="display:flex;gap:7px;margin-top:10px;">
-                        <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
-                                      border-radius:8px;font-size:12px;font-weight:700;display:flex;
-                                      align-items:center;justify-content:center;gap:5px;">
-                            📷 Tomar foto
-                            <input type="file" id="pd-foto-cam" accept="image/*" capture="environment"
-                                   style="display:none;" onchange="sincronizarFotos(this,'pd')">
-                        </label>
-                        <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
-                                      border-radius:8px;font-size:12px;font-weight:700;display:flex;
-                                      align-items:center;justify-content:center;gap:5px;">
-                            📁 Seleccionar
-                            <input type="file" id="pd-foto" class="form-input-sm" accept="image/*"
-                                   style="display:none;" onchange="sincronizarFotos(this,'pd')">
-                        </label>
-                    </div>
+                    <input type="file" id="pd-foto" class="form-input-sm" accept="image/*" style="margin-top:10px;">
                 </div>
 
                 <div class="form-group">
@@ -1559,24 +1534,14 @@
             <img id="em-foto-preview" src="" alt="Foto actual"
                  style="width:100%; height:160px; object-fit:cover; border-radius:10px; border:1px solid #e2e8f0; cursor:pointer;"
                  onclick="ampliarImagen(this.src)">
-            <div style="display:flex;gap:7px;margin-top:10px;">
-                <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
-                              border-radius:8px;font-size:12px;font-weight:700;display:flex;
-                              align-items:center;justify-content:center;gap:5px;">
-                    <i class="fa-solid fa-camera"></i> Tomar foto
-                    <input id="em-nueva-foto-cam" type="file" accept="image/*" capture="environment"
-                           style="display:none;"
-                           onchange="_syncEmFoto(this)">
-                </label>
-                <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
-                              border-radius:8px;font-size:12px;font-weight:700;display:flex;
-                              align-items:center;justify-content:center;gap:5px;">
-                    <i class="fa-solid fa-folder-open"></i> Cambiar imagen
-                    <input id="em-nueva-foto" type="file" accept="image/*"
-                           style="display:none;"
-                           onchange="_syncEmFoto(this)">
-                </label>
-            </div>
+            <label style="display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer;
+                          background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; padding:10px 14px;
+                          font-size:12px; color:#475569; font-weight:600;">
+                <i class="fa-solid fa-camera" style="color:var(--accent);"></i>
+                Cambiar imagen
+                <input id="em-nueva-foto" type="file" accept="image/*" style="display:none;"
+                       onchange="document.getElementById('em-foto-preview').src=URL.createObjectURL(this.files[0])">
+            </label>
         </div>
  
         <!-- Campos dinámicos -->
@@ -1609,94 +1574,477 @@
     <script src="js/landing.js"></script>
     <script src="js/seguimiento.js"></script>
     <script src="js/busqueda_filtros.js"></script>
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL — GESTIÓN DE MODELOS DE SOFÁ
+     ═══════════════════════════════════════════════════════════ -->
+<div id="modal-gestор-modelos" style="display:none;position:fixed;inset:0;z-index:99999;
+     background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:90vh;
+              overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
 
-    <script>
-    /**
-     * sincronizarFotos(inputOrigen, grupo)
-     * ─────────────────────────────────────
-     * Versión genérica del patrón "dos botones" (📷 Tomar foto / 📁 Seleccionar archivo).
-     * Cuando el usuario usa cualquiera de los dos inputs de un grupo, esta función:
-     *   1. Propaga los archivos al input "galería" (el que el JS de negocio ya lee por ID).
-     *   2. Muestra un preview si hay un contenedor preparado para ello.
-     *
-     * Grupos soportados y sus IDs de galería:
-     *   sofa    → sofa-fotos         (multiple, lee carrito.js)
-     *   comedor → comedor-fotos      (multiple, lee carrito.js)
-     *   centro  → centro-fotos       (multiple, lee carrito.js)
-     *   butaca  → butaca-fotos       (multiple, lee carrito.js)
-     *   pago    → pago-comprobante   (single,   lee carrito.js)
-     *   pd      → pd-foto            (single,   lee catalogo.js)
-     */
-    /**
-     * _syncEmFoto — sincroniza la foto de edición de material (em-nueva-foto).
-     * Propaga al otro input y actualiza el preview.
-     */
-    function _syncEmFoto(inputOrigen) {
-        const file = inputOrigen?.files[0];
-        if (!file) return;
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        const cam = document.getElementById('em-nueva-foto-cam');
-        const gal = document.getElementById('em-nueva-foto');
-        if (cam) cam.files = dt.files;
-        if (gal) gal.files = dt.files;
-        const preview = document.getElementById('em-foto-preview');
-        if (preview) preview.src = URL.createObjectURL(file);
-    }
+    <!-- Header -->
+    <div style="background:var(--primary,#2c3e2d);padding:18px 20px;border-radius:16px 16px 0 0;
+                display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h3 style="color:#fff;margin:0;font-size:16px;">⚙️ Gestionar Modelos de Sofá</h3>
+        <p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:12px;">
+          Agrega o elimina modelos del dropdown "Modelo Base"
+        </p>
+      </div>
+      <button onclick="cerrarGestorModelos()"
+              style="background:rgba(255,255,255,0.15);border:none;color:#fff;
+                     width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;">✕</button>
+    </div>
 
-    function sincronizarFotos(inputOrigen, grupo) {
-        if (!inputOrigen.files || inputOrigen.files.length === 0) return;
+    <div style="padding:20px;">
 
-        // Mapeo grupo → id del input "galería" que el JS de negocio ya lee
-        const mapaGaleria = {
-            sofa:    'sofa-fotos',
-            comedor: 'comedor-fotos',
-            centro:  'centro-fotos',
-            butaca:  'butaca-fotos',
-            pago:    'pago-comprobante',
-            pd:      'pd-foto',
-        };
-        const idGaleria = mapaGaleria[grupo];
-        if (!idGaleria) return;
+      <!-- Modelos base (no eliminables) -->
+      <p style="font-size:11px;font-weight:900;color:#475569;text-transform:uppercase;margin:0 0 10px;">
+        Modelos base del sistema
+      </p>
+      <div id="gm-lista-base" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;"></div>
 
-        // Propagar archivos al input de galería para que el backend lo lea sin cambios
-        const dt = new DataTransfer();
-        for (const file of inputOrigen.files) dt.items.add(file);
-        const inputGaleria = document.getElementById(idGaleria);
-        if (inputGaleria) inputGaleria.files = dt.files;
+      <!-- Modelos personalizados -->
+      <p style="font-size:11px;font-weight:900;color:#7c3aed;text-transform:uppercase;margin:0 0 10px;">
+        Modelos personalizados <span id="gm-count" style="background:#ede9fe;padding:1px 6px;border-radius:10px;"></span>
+      </p>
+      <div id="gm-lista-custom" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
 
-        // Preview visual (solo para imagen; para PDFs mostramos nombre)
-        const previewId = {
-            sofa:    null,   // el carrito tiene su propio preview
-            comedor: null,
-            centro:  null,
-            butaca:  null,
-            pago:    null,
-            pd:      'pd-foto-preview-box',
-        }[grupo];
+      <!-- Formulario agregar nuevo -->
+      <div style="background:#f8fafc;border-radius:12px;padding:16px;border:2px dashed #c4b5fd;">
+        <p style="font-size:12px;font-weight:800;color:#6d28d9;margin:0 0 12px;">
+          ➕ Agregar nuevo modelo
+        </p>
 
-        const file = inputOrigen.files[0];
-        if (previewId) {
-            let box = document.getElementById(previewId);
-            if (!box) {
-                // Crear preview inline si no existe
-                box = document.createElement('div');
-                box.id = previewId;
-                box.style.cssText = 'margin-top:8px;text-align:center;';
-                inputGaleria?.parentElement?.appendChild(box);
-            }
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = e => {
-                    box.innerHTML = `<img src="${e.target.result}"
-                        style="max-height:90px;border-radius:8px;border:1px solid #e2e8f0;">`;
-                };
-                reader.readAsDataURL(file);
-            } else {
-                box.innerHTML = `<div style="background:#f1f5f9;border-radius:6px;padding:8px 12px;
-                    font-size:12px;font-weight:700;color:#475569;">📄 ${file.name}</div>`;
-            }
-        }
-    }
-    </script>
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">
+          Nombre del modelo *
+        </label>
+        <input id="gm-nombre" type="text" placeholder="Ej: Seccional con Chaise Longue"
+               style="width:100%;padding:9px 12px;border:1.5px solid #ddd6fe;border-radius:8px;
+                      font-size:13px;box-sizing:border-box;margin-bottom:10px;">
+
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px;">
+          Foto de referencia del modelo *
+        </label>
+        <div style="display:flex;gap:7px;margin-bottom:10px;">
+          <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
+                        border-radius:8px;font-size:12px;font-weight:700;display:flex;
+                        align-items:center;justify-content:center;gap:5px;">
+            📷 Tomar foto
+            <input type="file" id="gm-foto-cam" accept="image/*" capture="environment"
+                   style="display:none;" onchange="_gmSyncFoto(this)">
+          </label>
+          <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
+                        border-radius:8px;font-size:12px;font-weight:700;display:flex;
+                        align-items:center;justify-content:center;gap:5px;">
+            📁 Seleccionar
+            <input type="file" id="gm-foto" accept="image/*"
+                   style="display:none;" onchange="_gmSyncFoto(this)">
+          </label>
+        </div>
+        <div id="gm-foto-preview" style="display:none;margin-bottom:10px;text-align:center;">
+          <img id="gm-foto-img" src="" style="max-height:110px;border-radius:8px;
+               border:2px solid #ddd6fe;object-fit:contain;">
+        </div>
+
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">
+          Tipo de medidas
+        </label>
+        <select id="gm-tipo-medidas"
+                style="width:100%;padding:9px 12px;border:1.5px solid #ddd6fe;border-radius:8px;
+                       font-size:13px;box-sizing:border-box;margin-bottom:14px;">
+          <option value="general">Medidas generales (L, A, F, H)</option>
+          <option value="multi3">Multi 3 piezas (Grande + Modular)</option>
+          <option value="multi4">Multi 4 piezas (2 Grandes + Modular)</option>
+          <option value="u">En U (Izq + Der + General)</option>
+          <option value="juego">Juego libre (añadir piezas)</option>
+        </select>
+
+        <button onclick="gmAgregarModelo()"
+                style="width:100%;padding:12px;background:var(--accent,#c9a84c);color:#0d0b08;
+                       border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">
+          💾 Guardar modelo
+        </button>
+        <p id="gm-error" style="color:#dc2626;font-size:12px;margin:8px 0 0;display:none;"></p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Modelos base del sistema (no eliminables) ─────────────────
+const GM_MODELOS_BASE = [
+  { key:'multi3',       label:'Multifuncional (3 Piezas)',  medidas:'multi3'  },
+  { key:'multi4',       label:'Multifuncional (4 Piezas)',  medidas:'multi4'  },
+  { key:'seccional',    label:'Seccional Normal',           medidas:'general' },
+  { key:'seccional_inv',label:'Seccional Invertido',        medidas:'general' },
+  { key:'curvo',        label:'Curvo',                      medidas:'general' },
+  { key:'u',            label:'En U',                       medidas:'u'       },
+  { key:'juego',        label:'Juego de Sala (3-2-1)',      medidas:'juego'   },
+];
+
+// ─── Storage helpers ───────────────────────────────────────────
+function gmGetCustom() {
+  try { return JSON.parse(localStorage.getItem('innova_modelos_sofa') || '[]'); }
+  catch(e) { return []; }
+}
+function gmSaveCustom(arr) {
+  localStorage.setItem('innova_modelos_sofa', JSON.stringify(arr));
+}
+
+// ─── Poblar el select #sofa-modelo con base + custom ──────────
+function gmPopularSelect() {
+  const sel = document.getElementById('sofa-modelo');
+  if (!sel) return;
+  const valAnterior = sel.value;
+  sel.innerHTML = '';
+  const custom = gmGetCustom();
+  [...GM_MODELOS_BASE, ...custom].forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.key;
+    opt.textContent = m.label;
+    sel.appendChild(opt);
+  });
+  // Restaurar selección previa si existe
+  if ([...sel.options].some(o => o.value === valAnterior)) sel.value = valAnterior;
+}
+
+// ─── Abrir/cerrar modal ────────────────────────────────────────
+function abrirGestorModelos() {
+  gmRenderListas();
+  document.getElementById('modal-gestор-modelos').style.display = 'flex';
+}
+function cerrarGestorModelos() {
+  document.getElementById('modal-gestор-modelos').style.display = 'none';
+}
+
+// ─── Renderizar listas dentro del modal ───────────────────────
+function gmRenderListas() {
+  // Base
+  const listaBase = document.getElementById('gm-lista-base');
+  listaBase.innerHTML = GM_MODELOS_BASE.map(m =>
+    `<span style="background:#e2e8f0;color:#374151;padding:4px 10px;border-radius:20px;
+                  font-size:11px;font-weight:700;">${m.label}</span>`
+  ).join('');
+
+  // Custom
+  const custom = gmGetCustom();
+  document.getElementById('gm-count').textContent = custom.length;
+  const listaCustom = document.getElementById('gm-lista-custom');
+
+  if (custom.length === 0) {
+    listaCustom.innerHTML = `<p style="color:#94a3b8;font-size:12px;text-align:center;padding:12px 0;">
+      Sin modelos personalizados aún.</p>`;
+    return;
+  }
+
+  listaCustom.innerHTML = custom.map((m, i) => `
+    <div style="display:flex;align-items:center;gap:10px;background:#faf5ff;border:1px solid #ddd6fe;
+                border-radius:10px;padding:10px 12px;">
+      <img src="${m.foto}" alt="${m.label}"
+           style="width:52px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #ddd6fe;"
+           onerror="this.style.opacity='0.3'">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:#1e1b4b;white-space:nowrap;
+                    overflow:hidden;text-overflow:ellipsis;">${m.label}</div>
+        <div style="font-size:10px;color:#7c3aed;">Medidas: ${_gmLabelTipo(m.medidas)}</div>
+      </div>
+      <button onclick="gmEliminarModelo(${i})"
+              style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;
+                     border-radius:7px;padding:5px 9px;cursor:pointer;font-size:13px;flex-shrink:0;"
+              title="Eliminar modelo">🗑</button>
+    </div>`
+  ).join('');
+}
+
+function _gmLabelTipo(tipo) {
+  return { general:'General', multi3:'Multi 3p', multi4:'Multi 4p', u:'En U', juego:'Juego libre' }[tipo] || tipo;
+}
+
+// ─── Preview foto ──────────────────────────────────────────────
+function _gmSyncFoto(inputEl) {
+  const file = inputEl?.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  // Sincronizar ambos inputs
+  const dt = new DataTransfer(); dt.items.add(file);
+  const cam = document.getElementById('gm-foto-cam');
+  const gal = document.getElementById('gm-foto');
+  if (cam) cam.files = dt.files;
+  if (gal) gal.files = dt.files;
+  // Preview
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('gm-foto-img').src = e.target.result;
+    document.getElementById('gm-foto-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── Guardar nuevo modelo ──────────────────────────────────────
+function gmAgregarModelo() {
+  const errEl = document.getElementById('gm-error');
+  errEl.style.display = 'none';
+
+  const nombre = (document.getElementById('gm-nombre').value || '').trim();
+  const tipo   = document.getElementById('gm-tipo-medidas').value;
+  const fileCam = document.getElementById('gm-foto-cam')?.files[0];
+  const fileGal = document.getElementById('gm-foto')?.files[0];
+  const file    = fileCam || fileGal;
+
+  if (!nombre) { errEl.textContent = 'El nombre es obligatorio.'; errEl.style.display='block'; return; }
+  if (!file)   { errEl.textContent = 'La foto del modelo es obligatoria.'; errEl.style.display='block'; return; }
+
+  // Leer como dataURL para guardar en localStorage
+  const reader = new FileReader();
+  reader.onload = e => {
+    const fotoData = e.target.result;
+    // Crear key único
+    const key = 'custom_' + Date.now();
+    const nuevo = { key, label: nombre, medidas: tipo, foto: fotoData };
+
+    // Registrar en imagenesSofa (en memoria)
+    if (typeof imagenesSofa !== 'undefined') imagenesSofa[key] = fotoData;
+
+    // Guardar en localStorage
+    const custom = gmGetCustom();
+    custom.push(nuevo);
+    gmSaveCustom(custom);
+
+    // Actualizar select
+    gmPopularSelect();
+
+    // Limpiar form
+    document.getElementById('gm-nombre').value = '';
+    document.getElementById('gm-foto-cam').value = '';
+    document.getElementById('gm-foto').value = '';
+    document.getElementById('gm-foto-img').src = '';
+    document.getElementById('gm-foto-preview').style.display = 'none';
+
+    // Re-renderizar lista
+    gmRenderListas();
+
+    // Seleccionar el nuevo modelo en el dropdown
+    const sel = document.getElementById('sofa-modelo');
+    if (sel) { sel.value = key; if (typeof actualizarVistaSofa === 'function') actualizarVistaSofa(); }
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── Eliminar modelo personalizado ───────────────────────────
+function gmEliminarModelo(index) {
+  if (!confirm('¿Eliminar este modelo?')) return;
+  const custom = gmGetCustom();
+  const eliminado = custom[index];
+  custom.splice(index, 1);
+  gmSaveCustom(custom);
+
+  // Eliminar de imagenesSofa en memoria
+  if (eliminado && typeof imagenesSofa !== 'undefined') delete imagenesSofa[eliminado.key];
+
+  // Si el select tenía ese valor, volver al primero
+  const sel = document.getElementById('sofa-modelo');
+  if (sel && sel.value === eliminado?.key) {
+    gmPopularSelect();
+    sel.selectedIndex = 0;
+    if (typeof actualizarVistaSofa === 'function') actualizarVistaSofa();
+  } else {
+    gmPopularSelect();
+  }
+  gmRenderListas();
+}
+
+// ─── Inicializar select al cargar la página ────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Cargar modelos custom en imagenesSofa (por si config.js cargó antes)
+  try {
+    const guardados = JSON.parse(localStorage.getItem('innova_modelos_sofa') || '[]');
+    guardados.forEach(m => {
+      if (typeof imagenesSofa !== 'undefined' && m.key && m.foto)
+        imagenesSofa[m.key] = m.foto;
+    });
+  } catch(e) {}
+  gmPopularSelect();
+});
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     GESTOR DE MODELOS — COMEDOR
+     ═══════════════════════════════════════════════════════════ -->
+<div id="modal-gestor-comedor" style="display:none;position:fixed;inset:0;z-index:99999;
+     background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:90vh;
+              overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+    <div style="background:var(--primary,#2c3e2d);padding:18px 20px;border-radius:16px 16px 0 0;
+                display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h3 style="color:#fff;margin:0;font-size:16px;">⚙️ Gestionar Modelos de Comedor</h3>
+        <p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:12px;">Agrega o elimina modelos del dropdown "Formato y Capacidad"</p>
+      </div>
+      <button onclick="cerrarGestorModelosComedor()"
+              style="background:rgba(255,255,255,0.15);border:none;color:#fff;
+                     width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <p style="font-size:11px;font-weight:900;color:#475569;text-transform:uppercase;margin:0 0 10px;">Modelos base del sistema</p>
+      <div id="gmc-lista-base" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;"></div>
+      <p style="font-size:11px;font-weight:900;color:#7c3aed;text-transform:uppercase;margin:0 0 10px;">
+        Modelos personalizados <span id="gmc-count" style="background:#ede9fe;padding:1px 6px;border-radius:10px;"></span>
+      </p>
+      <div id="gmc-lista-custom" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+      <div style="background:#f8fafc;border-radius:12px;padding:16px;border:2px dashed #c4b5fd;">
+        <p style="font-size:12px;font-weight:800;color:#6d28d9;margin:0 0 12px;">➕ Agregar nuevo modelo</p>
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">Nombre del modelo *</label>
+        <input id="gmc-nombre" type="text" placeholder="Ej: Rectangular 10 personas"
+               style="width:100%;padding:9px 12px;border:1.5px solid #ddd6fe;border-radius:8px;
+                      font-size:13px;box-sizing:border-box;margin-bottom:10px;">
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px;">Foto de referencia *</label>
+        <div style="display:flex;gap:7px;margin-bottom:10px;">
+          <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;border-radius:8px;
+                        font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+            📷 Tomar foto
+            <input type="file" id="gmc-foto-cam" accept="image/*" capture="environment"
+                   style="display:none;" onchange="_gmSyncFotoGestor(this,'gmc')">
+          </label>
+          <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;border-radius:8px;
+                        font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+            📁 Seleccionar
+            <input type="file" id="gmc-foto" accept="image/*"
+                   style="display:none;" onchange="_gmSyncFotoGestor(this,'gmc')">
+          </label>
+        </div>
+        <div id="gmc-foto-preview" style="display:none;margin-bottom:10px;text-align:center;">
+          <img id="gmc-foto-img" src="" style="max-height:110px;border-radius:8px;border:2px solid #ddd6fe;object-fit:contain;">
+        </div>
+        <button onclick="_gmGuardarModelo('comedor')"
+                style="width:100%;padding:12px;background:var(--accent,#c9a84c);color:#0d0b08;
+                       border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">
+          💾 Guardar modelo
+        </button>
+        <p id="gmc-error" style="color:#dc2626;font-size:12px;margin:8px 0 0;display:none;"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     GESTOR DE MODELOS — MESA DE CENTRO / CONSOLA
+     ═══════════════════════════════════════════════════════════ -->
+<div id="modal-gestor-centro" style="display:none;position:fixed;inset:0;z-index:99999;
+     background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:90vh;
+              overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+    <div style="background:var(--primary,#2c3e2d);padding:18px 20px;border-radius:16px 16px 0 0;
+                display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h3 style="color:#fff;margin:0;font-size:16px;">⚙️ Gestionar Modelos de Mesa Auxiliar</h3>
+        <p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:12px;">Agrega o elimina tipos del dropdown "Tipo de Mueble"</p>
+      </div>
+      <button onclick="cerrarGestorModelosCentro()"
+              style="background:rgba(255,255,255,0.15);border:none;color:#fff;
+                     width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <p style="font-size:11px;font-weight:900;color:#475569;text-transform:uppercase;margin:0 0 10px;">Tipos base del sistema</p>
+      <div id="gmce-lista-base" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;"></div>
+      <p style="font-size:11px;font-weight:900;color:#7c3aed;text-transform:uppercase;margin:0 0 10px;">
+        Tipos personalizados <span id="gmce-count" style="background:#ede9fe;padding:1px 6px;border-radius:10px;"></span>
+      </p>
+      <div id="gmce-lista-custom" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+      <div style="background:#f8fafc;border-radius:12px;padding:16px;border:2px dashed #c4b5fd;">
+        <p style="font-size:12px;font-weight:800;color:#6d28d9;margin:0 0 12px;">➕ Agregar nuevo tipo</p>
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">Nombre del tipo *</label>
+        <input id="gmce-nombre" type="text" placeholder="Ej: Aparador, Vitrina, Nochero..."
+               style="width:100%;padding:9px 12px;border:1.5px solid #ddd6fe;border-radius:8px;
+                      font-size:13px;box-sizing:border-box;margin-bottom:10px;">
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px;">Foto de referencia *</label>
+        <div style="display:flex;gap:7px;margin-bottom:10px;">
+          <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;border-radius:8px;
+                        font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+            📷 Tomar foto
+            <input type="file" id="gmce-foto-cam" accept="image/*" capture="environment"
+                   style="display:none;" onchange="_gmSyncFotoGestor(this,'gmce')">
+          </label>
+          <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;border-radius:8px;
+                        font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+            📁 Seleccionar
+            <input type="file" id="gmce-foto" accept="image/*"
+                   style="display:none;" onchange="_gmSyncFotoGestor(this,'gmce')">
+          </label>
+        </div>
+        <div id="gmce-foto-preview" style="display:none;margin-bottom:10px;text-align:center;">
+          <img id="gmce-foto-img" src="" style="max-height:110px;border-radius:8px;border:2px solid #ddd6fe;object-fit:contain;">
+        </div>
+        <button onclick="_gmGuardarModelo('centro')"
+                style="width:100%;padding:12px;background:var(--accent,#c9a84c);color:#0d0b08;
+                       border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">
+          💾 Guardar tipo
+        </button>
+        <p id="gmce-error" style="color:#dc2626;font-size:12px;margin:8px 0 0;display:none;"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     GESTOR DE MODELOS — BUTACA / SILLERÍA SUELTA
+     ═══════════════════════════════════════════════════════════ -->
+<div id="modal-gestor-butaca" style="display:none;position:fixed;inset:0;z-index:99999;
+     background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:90vh;
+              overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+    <div style="background:var(--primary,#2c3e2d);padding:18px 20px;border-radius:16px 16px 0 0;
+                display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h3 style="color:#fff;margin:0;font-size:16px;">⚙️ Gestionar Modelos de Sillería</h3>
+        <p style="color:rgba(255,255,255,0.6);margin:4px 0 0;font-size:12px;">Agrega o elimina tipos del dropdown "Tipo de Asiento"</p>
+      </div>
+      <button onclick="cerrarGestorModelosButaca()"
+              style="background:rgba(255,255,255,0.15);border:none;color:#fff;
+                     width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <p style="font-size:11px;font-weight:900;color:#475569;text-transform:uppercase;margin:0 0 10px;">Tipos base del sistema</p>
+      <div id="gmb-lista-base" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;"></div>
+      <p style="font-size:11px;font-weight:900;color:#7c3aed;text-transform:uppercase;margin:0 0 10px;">
+        Tipos personalizados <span id="gmb-count" style="background:#ede9fe;padding:1px 6px;border-radius:10px;"></span>
+      </p>
+      <div id="gmb-lista-custom" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+      <div style="background:#f8fafc;border-radius:12px;padding:16px;border:2px dashed #c4b5fd;">
+        <p style="font-size:12px;font-weight:800;color:#6d28d9;margin:0 0 12px;">➕ Agregar nuevo tipo</p>
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">Nombre del tipo *</label>
+        <input id="gmb-nombre" type="text" placeholder="Ej: Mecedora, Silla de Diseño..."
+               style="width:100%;padding:9px 12px;border:1.5px solid #ddd6fe;border-radius:8px;
+                      font-size:13px;box-sizing:border-box;margin-bottom:10px;">
+        <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px;">Foto de referencia *</label>
+        <div style="display:flex;gap:7px;margin-bottom:10px;">
+          <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;border-radius:8px;
+                        font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+            📷 Tomar foto
+            <input type="file" id="gmb-foto-cam" accept="image/*" capture="environment"
+                   style="display:none;" onchange="_gmSyncFotoGestor(this,'gmb')">
+          </label>
+          <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;border-radius:8px;
+                        font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+            📁 Seleccionar
+            <input type="file" id="gmb-foto" accept="image/*"
+                   style="display:none;" onchange="_gmSyncFotoGestor(this,'gmb')">
+          </label>
+        </div>
+        <div id="gmb-foto-preview" style="display:none;margin-bottom:10px;text-align:center;">
+          <img id="gmb-foto-img" src="" style="max-height:110px;border-radius:8px;border:2px solid #ddd6fe;object-fit:contain;">
+        </div>
+        <button onclick="_gmGuardarModelo('butaca')"
+                style="width:100%;padding:12px;background:var(--accent,#c9a84c);color:#0d0b08;
+                       border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;">
+          💾 Guardar tipo
+        </button>
+        <p id="gmb-error" style="color:#dc2626;font-size:12px;margin:8px 0 0;display:none;"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/gestores_modelos.js"></script>
+
 </body>

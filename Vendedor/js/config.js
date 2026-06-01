@@ -17,6 +17,16 @@ const imagenesSofa = {
     '1': 'imagenes/1.jpg'
 };
 
+// Cargar modelos personalizados guardados en localStorage
+(function _cargarModelosPersonalizados() {
+    try {
+        const guardados = JSON.parse(localStorage.getItem('innova_modelos_sofa') || '[]');
+        guardados.forEach(m => {
+            if (m.key && m.foto) imagenesSofa[m.key] = m.foto;
+        });
+    } catch(e) {}
+})();
+
 // Estado global de la aplicación
 let allProducts = [];
 let cart = [];

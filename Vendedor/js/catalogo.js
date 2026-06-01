@@ -429,12 +429,12 @@ async function confirmarPersonalizadoSofa() {
     const skuBase = document.getElementById('sku-base').value;
     const nombreBase = document.getElementById('search-base').value;
 
-    const notas = await procesarNotasConFotos(['tela', 'cojin-entero', 'cojin-diseno', 'base']);
+    const notas = await procesarNotasConFotos(['tela', 'espuma', 'cojin-entero', 'cojin-diseno', 'base']);
 
     const specs = `
         <b>MOD:</b> ${modeloBase} ${medidasText}<br>
         <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${notas['tela']}<br>
-        <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm<br>
+        <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm${notas['espuma']}<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>
         - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${notas['cojin-entero']}<br>
         - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${notas['cojin-diseno']}<br>
