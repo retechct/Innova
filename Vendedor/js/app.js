@@ -920,12 +920,29 @@ async function _abrirEditarLogistica(item, proveedores) {
                                       text-transform:uppercase;color:#475569;">
                             Comprobante de pago ${tienePago ? '(reemplazar)' : '*'}
                         </label>
-                        <input type="file" id="inp-voucher" accept="image/*,application/pdf"
-                               style="width:100%;font-size:13px;padding:6px;border:1.5px dashed #cbd5e1;
-                                      border-radius:8px;background:#f8fafc;cursor:pointer;">
+                        <div style="display:flex;gap:8px;margin-bottom:6px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
+                                          border-radius:8px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📷 Tomar foto
+                                <input type="file" id="inp-voucher-cam" accept="image/*" capture="environment"
+                                       style="display:none;" onchange="_previewVoucher(this)">
+                            </label>
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
+                                          border-radius:8px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📁 Seleccionar archivo
+                                <input type="file" id="inp-voucher" accept="image/*,application/pdf"
+                                       style="display:none;" onchange="_previewVoucher(this)">
+                            </label>
+                        </div>
                         <div id="voucher-preview" style="margin-top:8px;display:none;">
                             <img id="voucher-img" src="" alt="preview"
                                  style="max-height:120px;border-radius:6px;border:1px solid #e2e8f0;object-fit:contain;">
+                            <div id="voucher-pdf-label" style="display:none;background:#f1f5f9;border-radius:6px;
+                                 padding:8px 12px;font-size:12px;font-weight:700;color:#475569;">
+                                📄 <span id="voucher-pdf-nombre"></span>
+                            </div>
                         </div>
                     </div>
                 </div>`,
@@ -933,23 +950,11 @@ async function _abrirEditarLogistica(item, proveedores) {
             confirmButtonText: 'Guardar',
             cancelButtonText:  'Cancelar',
             confirmButtonColor: '#7e22ce',
-            didOpen: () => {
-                // Preview de imagen al seleccionar archivo
-                const inp = document.getElementById('inp-voucher');
-                if (inp) inp.addEventListener('change', () => {
-                    const file = inp.files[0];
-                    if (!file || !file.type.startsWith('image/')) return;
-                    const reader = new FileReader();
-                    reader.onload = e => {
-                        document.getElementById('voucher-img').src = e.target.result;
-                        document.getElementById('voucher-preview').style.display = 'block';
-                    };
-                    reader.readAsDataURL(file);
-                });
-            },
             preConfirm: () => {
                 const nuevoEstado = document.getElementById('sl-estado').value;
-                const archivo = document.getElementById('inp-voucher')?.files[0] || null;
+                const archivoCam = document.getElementById('inp-voucher-cam')?.files[0] || null;
+                const archivoGal = document.getElementById('inp-voucher')?.files[0] || null;
+                const archivo = archivoCam || archivoGal;
                 if (nuevoEstado === 'Pagado' && !archivo && !tienePago) {
                     Swal.showValidationMessage('Adjunta el comprobante de pago para continuar.');
                     return false;
@@ -1050,7 +1055,10 @@ async function _registrarRespuestaProveedor(item) {
                 <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:14px;
                             display:flex;gap:10px;align-items:center;">
                     ${item.foto_url
-                        ? `<img src="${item.foto_url}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;flex-shrink:0;">`
+                        ? `<img src="${item.foto_url}" id="img-insumo-header"
+                               style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;flex-shrink:0;"
+                               onerror="this.style.display='none';var fb=document.getElementById('icon-insumo-fb');if(fb)fb.style.display='flex';">
+                           <div id="icon-insumo-fb" style="display:none;width:52px;height:52px;border-radius:6px;background:#f1f5f9;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📦</div>`
                         : `<div style="width:52px;height:52px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📦</div>`}
                     <div>
                         <div style="font-weight:800;font-size:14px;">${item.insumo}</div>
@@ -1087,16 +1095,33 @@ async function _registrarRespuestaProveedor(item) {
                 >${item.notas_proveedor || ''}</textarea>
 
                 <!-- Adjuntar cotización (foto o PDF del WA) -->
-                <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;
+                <label style="font-weight:700;display:block;margin-bottom:6px;font-size:11px;
                               text-transform:uppercase;color:#475569;">
-                    Adjuntar cotización (foto o PDF del WhatsApp, opcional)
+                    Adjuntar cotización (foto o PDF, opcional)
                 </label>
-                <input type="file" id="inp-cotizacion" accept="image/*,application/pdf"
-                       style="width:100%;font-size:12px;padding:6px;border:1.5px dashed #cbd5e1;
-                              border-radius:8px;background:#f8fafc;cursor:pointer;">
+                <div style="display:flex;gap:8px;margin-bottom:6px;">
+                    <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
+                                  border-radius:8px;font-size:11px;font-weight:700;display:flex;
+                                  align-items:center;justify-content:center;gap:5px;">
+                        📷 Tomar foto
+                        <input type="file" id="inp-cotizacion-cam" accept="image/*" capture="environment"
+                               style="display:none;" onchange="_previewCotizacion(this)">
+                    </label>
+                    <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
+                                  border-radius:8px;font-size:11px;font-weight:700;display:flex;
+                                  align-items:center;justify-content:center;gap:5px;">
+                        📁 Seleccionar archivo
+                        <input type="file" id="inp-cotizacion" accept="image/*,application/pdf"
+                               style="display:none;" onchange="_previewCotizacion(this)">
+                    </label>
+                </div>
                 <div id="cot-preview" style="margin-top:6px;display:none;">
                     <img id="cot-img" src="" alt="preview"
                          style="max-height:100px;border-radius:6px;border:1px solid #e2e8f0;">
+                    <div id="cot-pdf-label" style="display:none;background:#f1f5f9;border-radius:6px;
+                         padding:8px 12px;font-size:12px;font-weight:700;color:#475569;">
+                        📄 <span id="cot-pdf-nombre"></span>
+                    </div>
                 </div>
                 ${item.url_cotizacion_adjunta
                     ? `<div style="margin-top:6px;font-size:11px;">
@@ -1110,29 +1135,19 @@ async function _registrarRespuestaProveedor(item) {
         confirmButtonText: '💾 Guardar cotización',
         cancelButtonText:  'Cancelar',
         confirmButtonColor: '#166534',
-        didOpen: () => {
-            const inp = document.getElementById('inp-cotizacion');
-            if (inp) inp.addEventListener('change', () => {
-                const file = inp.files[0];
-                if (!file || !file.type.startsWith('image/')) return;
-                const reader = new FileReader();
-                reader.onload = e => {
-                    document.getElementById('cot-img').src = e.target.result;
-                    document.getElementById('cot-preview').style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            });
-        },
         preConfirm: () => {
             const precio = document.getElementById('sl-precio').value;
             const fecha  = document.getElementById('sl-fecha').value;
             if (!precio || parseFloat(precio) <= 0) { Swal.showValidationMessage('Ingresa un precio válido'); return false; }
             if (!fecha) { Swal.showValidationMessage('Ingresa la fecha de entrega'); return false; }
+            // Tomar el archivo de whichever input fue usado (cámara o galería)
+            const archivoCam = document.getElementById('inp-cotizacion-cam')?.files[0] || null;
+            const archivoGal = document.getElementById('inp-cotizacion')?.files[0] || null;
             return {
                 precio,
                 fecha,
                 notas:   document.getElementById('sl-notas').value.trim(),
-                archivo: document.getElementById('inp-cotizacion')?.files[0] || null,
+                archivo: archivoCam || archivoGal,
             };
         }
     });
@@ -1185,6 +1200,68 @@ async function _registrarRespuestaProveedor(item) {
 // Alias para compatibilidad con ETAPA 3 que aún lo referencia
 async function _ingresarCotizacionManual(item) {
     return _registrarRespuestaProveedor(item);
+}
+
+/**
+ * _previewCotizacion — muestra preview inteligente al seleccionar foto o PDF.
+ * Funciona con ambos inputs (cámara y galería/archivo).
+ * Se llama con onchange="..." directamente en el HTML del Swal.
+ */
+/**
+ * _previewVoucher — igual que _previewCotizacion pero para el comprobante de pago.
+ */
+function _previewVoucher(inputEl) {
+    const file = inputEl?.files[0];
+    if (!file) return;
+    const previewDiv = document.getElementById('voucher-preview');
+    const imgEl      = document.getElementById('voucher-img');
+    const pdfLabel   = document.getElementById('voucher-pdf-label');
+    const pdfNombre  = document.getElementById('voucher-pdf-nombre');
+    if (!previewDiv) return;
+
+    if (file.type.startsWith('image/')) {
+        if (pdfLabel) pdfLabel.style.display = 'none';
+        if (imgEl)    imgEl.style.display = 'block';
+        const reader = new FileReader();
+        reader.onload = e => {
+            imgEl.src = e.target.result;
+            previewDiv.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        if (imgEl)    { imgEl.style.display = 'none'; imgEl.src = ''; }
+        if (pdfLabel) pdfLabel.style.display = 'block';
+        if (pdfNombre) pdfNombre.textContent = file.name;
+        previewDiv.style.display = 'block';
+    }
+}
+
+function _previewCotizacion(inputEl) {
+    const file = inputEl?.files[0];
+    if (!file) return;
+    const previewDiv  = document.getElementById('cot-preview');
+    const imgEl       = document.getElementById('cot-img');
+    const pdfLabel    = document.getElementById('cot-pdf-label');
+    const pdfNombre   = document.getElementById('cot-pdf-nombre');
+    if (!previewDiv) return;
+
+    if (file.type.startsWith('image/')) {
+        // Mostrar imagen, ocultar etiqueta PDF
+        if (pdfLabel) pdfLabel.style.display = 'none';
+        if (imgEl)    imgEl.style.display = 'block';
+        const reader = new FileReader();
+        reader.onload = e => {
+            imgEl.src = e.target.result;
+            previewDiv.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        // PDF u otro: mostrar nombre, ocultar img para no romper layout
+        if (imgEl)    { imgEl.style.display = 'none'; imgEl.src = ''; }
+        if (pdfLabel) pdfLabel.style.display = 'block';
+        if (pdfNombre) pdfNombre.textContent = file.name;
+        previewDiv.style.display = 'block';
+    }
 }
 
 function changeView(view) {

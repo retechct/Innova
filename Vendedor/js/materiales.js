@@ -108,15 +108,52 @@ function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl) {
         noteInput.placeholder = 'Añadir nota a esta pieza (opcional)';
         noteInput.style.cssText = 'flex: 1; font-size: 11px; border: 1px dashed #a78bfa; background-color: #fdf4ff; box-sizing: border-box; margin: 0;';
 
+        // Input oculto real (el que catalogo.js lee por ID)
         let fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.id = fileInputId;
-        fileInput.accept = 'image/*';
-        fileInput.title = 'Adjuntar foto a esta pieza';
-        fileInput.style.cssText = 'width: 90px; font-size: 9px; padding: 4px; border: 1px dashed #a78bfa; background-color: #fdf4ff; border-radius: 4px; box-sizing: border-box; cursor: pointer;';
+        fileInput.accept = 'image/*,application/pdf';
+        fileInput.style.cssText = 'display:none;';
+
+        // Botón 📷 Tomar foto
+        let lblCam = document.createElement('label');
+        lblCam.style.cssText = 'cursor:pointer;background:#0f172a;color:#fff;padding:5px 7px;border-radius:6px;font-size:10px;font-weight:700;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;';
+        lblCam.innerHTML = '📷';
+        lblCam.title = 'Tomar foto';
+        let inputCam = document.createElement('input');
+        inputCam.type = 'file';
+        inputCam.accept = 'image/*';
+        inputCam.setAttribute('capture', 'environment');
+        inputCam.style.cssText = 'display:none;';
+        inputCam.addEventListener('change', function() { _syncPiezaFoto(this, fileInputId); });
+        lblCam.appendChild(inputCam);
+
+        fileInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (!file) return;
+            const labelEl = document.getElementById(`foto-nota-label-${tipoInput}`);
+            if (labelEl) {
+                labelEl.textContent = file.type.startsWith('image/') ? '📷 ' + file.name : '📄 ' + file.name;
+                labelEl.style.display = 'inline';
+            }
+        });
+
+        // Botón 📁 Seleccionar
+        let lblGal = document.createElement('label');
+        lblGal.style.cssText = 'cursor:pointer;background:#e2e8f0;color:#0f172a;padding:5px 7px;border-radius:6px;font-size:10px;font-weight:700;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;';
+        lblGal.innerHTML = '📁';
+        lblGal.title = 'Seleccionar archivo';
+        lblGal.appendChild(fileInput);
+
+        // Indicador visual de archivo seleccionado
+        let fileLabel = document.createElement('span');
+        fileLabel.id = `foto-nota-label-${tipoInput}`;
+        fileLabel.style.cssText = 'font-size:9px;color:#7c3aed;display:none;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
 
         container.appendChild(noteInput);
-        container.appendChild(fileInput);
+        container.appendChild(lblCam);
+        container.appendChild(lblGal);
+        container.appendChild(fileLabel);
         
         searchInput.parentNode.insertBefore(container, searchInput.nextSibling);
     }
@@ -1624,3 +1661,23 @@ async function _refreshMaestro() {
 /* ================================================================= */
 /* --- INICIO DEL SISTEMA --- */
 /* ================================================================= */
+/**
+ * _syncPiezaFoto — sincroniza la foto de nota de pieza.
+ * Propaga el archivo al input real (foto-nota-${tipo}) que catalogo.js ya lee,
+ * y muestra el nombre del archivo como indicador visual.
+ */
+function _syncPiezaFoto(inputCam, targetId) {
+    const file = inputCam?.files[0];
+    if (!file) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const target = document.getElementById(targetId);
+    if (target) target.files = dt.files;
+    // Mostrar nombre/icono indicador
+    const tipoInput = targetId.replace('foto-nota-', '');
+    const labelEl = document.getElementById(`foto-nota-label-${tipoInput}`);
+    if (labelEl) {
+        labelEl.textContent = file.type.startsWith('image/') ? '📷 ' + file.name : '📄 ' + file.name;
+        labelEl.style.display = 'inline';
+    }
+}

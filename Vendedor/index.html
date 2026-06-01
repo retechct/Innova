@@ -639,7 +639,22 @@
                         <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
                             <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
                         </label>
-                        <input type="file" id="sofa-fotos" class="form-input-sm" accept="image/*" capture="environment" multiple style="background: #fff;">
+                        <div style="display:flex;gap:7px;margin-bottom:6px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
+                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📷 Tomar foto
+                                <input type="file" id="sofa-fotos-cam" accept="image/*" capture="environment" multiple
+                                       style="display:none;" onchange="sincronizarFotos(this,'sofa')">
+                            </label>
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
+                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📁 Seleccionar
+                                <input type="file" id="sofa-fotos" class="form-input-sm" accept="image/*" multiple
+                                       style="display:none;" onchange="sincronizarFotos(this,'sofa')">
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -803,7 +818,22 @@
                         <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
                             <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
                         </label>
-                        <input type="file" id="comedor-fotos" class="form-input-sm" accept="image/*" capture="environment" multiple style="background: #fff;">
+<div style="display:flex;gap:7px;margin-bottom:6px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
+                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📷 Tomar foto
+                                <input type="file" id="comedor-fotos-cam" accept="image/*" capture="environment" multiple
+                                       style="display:none;" onchange="sincronizarFotos(this,'comedor')">
+                            </label>
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
+                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📁 Seleccionar
+                                <input type="file" id="comedor-fotos" class="form-input-sm" accept="image/*" multiple
+                                       style="display:none;" onchange="sincronizarFotos(this,'comedor')">
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -940,7 +970,22 @@
                         <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
                             <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
                         </label>
-                        <input type="file" id="centro-fotos" class="form-input-sm" accept="image/*" capture="environment" multiple style="background: #fff;">
+<div style="display:flex;gap:7px;margin-bottom:6px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
+                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📷 Tomar foto
+                                <input type="file" id="centro-fotos-cam" accept="image/*" capture="environment" multiple
+                                       style="display:none;" onchange="sincronizarFotos(this,'centro')">
+                            </label>
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
+                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📁 Seleccionar
+                                <input type="file" id="centro-fotos" class="form-input-sm" accept="image/*" multiple
+                                       style="display:none;" onchange="sincronizarFotos(this,'centro')">
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -1027,7 +1072,22 @@
                         <label style="font-size:11px; font-weight:900; color:var(--accent); display:block; margin-top:10px; margin-bottom:5px;">
                             <i class="fa-solid fa-camera"></i> FOTOS DE REFERENCIA (Opcional)
                         </label>
-                        <input type="file" id="butaca-fotos" class="form-input-sm" accept="image/*" capture="environment" multiple style="background: #fff;">
+<div style="display:flex;gap:7px;margin-bottom:6px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
+                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📷 Tomar foto
+                                <input type="file" id="butaca-fotos-cam" accept="image/*" capture="environment" multiple
+                                       style="display:none;" onchange="sincronizarFotos(this,'butaca')">
+                            </label>
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
+                                          border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:5px;">
+                                📁 Seleccionar
+                                <input type="file" id="butaca-fotos" class="form-input-sm" accept="image/*" multiple
+                                       style="display:none;" onchange="sincronizarFotos(this,'butaca')">
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -1182,7 +1242,22 @@
     <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
         <div style="background: #fff; border: 1px dashed #cbd5e1; padding: 5px; border-radius: 5px;">
             <label style="font-size: 10px; color: gray; font-weight: bold;">FOTO DEL VOUCHER (OBLIGATORIO) <span style="color:red">*</span></label>
-            <input type="file" id="pago-comprobante" class="form-input-sm" accept="image/*" capture="environment" style="width: 100%; font-size: 11px; border: none; background: transparent;">
+<div style="display:flex;gap:7px;margin:4px 0 0;">
+                        <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px 5px;
+                                      border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                      align-items:center;justify-content:center;gap:5px;">
+                            📷 Tomar foto
+                            <input type="file" id="pago-comprobante-cam" accept="image/*" capture="environment"
+                                   style="display:none;" onchange="sincronizarFotos(this,'pago')">
+                        </label>
+                        <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px 5px;
+                                      border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                                      align-items:center;justify-content:center;gap:5px;">
+                            📁 Seleccionar
+                            <input type="file" id="pago-comprobante" class="form-input-sm" accept="image/*,application/pdf"
+                                   style="display:none;" onchange="sincronizarFotos(this,'pago')">
+                        </label>
+                    </div>
         </div>
         <button type="button" class="btn-action btn-primary" onclick="agregarMetodoPago()" style="width: 100%; height: 42px; border-radius: 6px; font-weight: bold;">
             <i class="fa-solid fa-plus"></i> AGREGAR PAGO
@@ -1254,7 +1329,22 @@
             <div style="padding: 10px;">
                 <div class="form-group" style="background:var(--bg); padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
                     <label style="color:var(--accent);"><i class="fa-solid fa-camera"></i> Subir Foto del Producto</label>
-                    <input type="file" id="pd-foto" class="form-input-sm" accept="image/*" style="margin-top:10px;">
+                    <div style="display:flex;gap:7px;margin-top:10px;">
+                        <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
+                                      border-radius:8px;font-size:12px;font-weight:700;display:flex;
+                                      align-items:center;justify-content:center;gap:5px;">
+                            📷 Tomar foto
+                            <input type="file" id="pd-foto-cam" accept="image/*" capture="environment"
+                                   style="display:none;" onchange="sincronizarFotos(this,'pd')">
+                        </label>
+                        <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
+                                      border-radius:8px;font-size:12px;font-weight:700;display:flex;
+                                      align-items:center;justify-content:center;gap:5px;">
+                            📁 Seleccionar
+                            <input type="file" id="pd-foto" class="form-input-sm" accept="image/*"
+                                   style="display:none;" onchange="sincronizarFotos(this,'pd')">
+                        </label>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -1469,14 +1559,24 @@
             <img id="em-foto-preview" src="" alt="Foto actual"
                  style="width:100%; height:160px; object-fit:cover; border-radius:10px; border:1px solid #e2e8f0; cursor:pointer;"
                  onclick="ampliarImagen(this.src)">
-            <label style="display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer;
-                          background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; padding:10px 14px;
-                          font-size:12px; color:#475569; font-weight:600;">
-                <i class="fa-solid fa-camera" style="color:var(--accent);"></i>
-                Cambiar imagen
-                <input id="em-nueva-foto" type="file" accept="image/*" style="display:none;"
-                       onchange="document.getElementById('em-foto-preview').src=URL.createObjectURL(this.files[0])">
-            </label>
+            <div style="display:flex;gap:7px;margin-top:10px;">
+                <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 6px;
+                              border-radius:8px;font-size:12px;font-weight:700;display:flex;
+                              align-items:center;justify-content:center;gap:5px;">
+                    <i class="fa-solid fa-camera"></i> Tomar foto
+                    <input id="em-nueva-foto-cam" type="file" accept="image/*" capture="environment"
+                           style="display:none;"
+                           onchange="_syncEmFoto(this)">
+                </label>
+                <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 6px;
+                              border-radius:8px;font-size:12px;font-weight:700;display:flex;
+                              align-items:center;justify-content:center;gap:5px;">
+                    <i class="fa-solid fa-folder-open"></i> Cambiar imagen
+                    <input id="em-nueva-foto" type="file" accept="image/*"
+                           style="display:none;"
+                           onchange="_syncEmFoto(this)">
+                </label>
+            </div>
         </div>
  
         <!-- Campos dinámicos -->
@@ -1509,4 +1609,94 @@
     <script src="js/landing.js"></script>
     <script src="js/seguimiento.js"></script>
     <script src="js/busqueda_filtros.js"></script>
+
+    <script>
+    /**
+     * sincronizarFotos(inputOrigen, grupo)
+     * ─────────────────────────────────────
+     * Versión genérica del patrón "dos botones" (📷 Tomar foto / 📁 Seleccionar archivo).
+     * Cuando el usuario usa cualquiera de los dos inputs de un grupo, esta función:
+     *   1. Propaga los archivos al input "galería" (el que el JS de negocio ya lee por ID).
+     *   2. Muestra un preview si hay un contenedor preparado para ello.
+     *
+     * Grupos soportados y sus IDs de galería:
+     *   sofa    → sofa-fotos         (multiple, lee carrito.js)
+     *   comedor → comedor-fotos      (multiple, lee carrito.js)
+     *   centro  → centro-fotos       (multiple, lee carrito.js)
+     *   butaca  → butaca-fotos       (multiple, lee carrito.js)
+     *   pago    → pago-comprobante   (single,   lee carrito.js)
+     *   pd      → pd-foto            (single,   lee catalogo.js)
+     */
+    /**
+     * _syncEmFoto — sincroniza la foto de edición de material (em-nueva-foto).
+     * Propaga al otro input y actualiza el preview.
+     */
+    function _syncEmFoto(inputOrigen) {
+        const file = inputOrigen?.files[0];
+        if (!file) return;
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        const cam = document.getElementById('em-nueva-foto-cam');
+        const gal = document.getElementById('em-nueva-foto');
+        if (cam) cam.files = dt.files;
+        if (gal) gal.files = dt.files;
+        const preview = document.getElementById('em-foto-preview');
+        if (preview) preview.src = URL.createObjectURL(file);
+    }
+
+    function sincronizarFotos(inputOrigen, grupo) {
+        if (!inputOrigen.files || inputOrigen.files.length === 0) return;
+
+        // Mapeo grupo → id del input "galería" que el JS de negocio ya lee
+        const mapaGaleria = {
+            sofa:    'sofa-fotos',
+            comedor: 'comedor-fotos',
+            centro:  'centro-fotos',
+            butaca:  'butaca-fotos',
+            pago:    'pago-comprobante',
+            pd:      'pd-foto',
+        };
+        const idGaleria = mapaGaleria[grupo];
+        if (!idGaleria) return;
+
+        // Propagar archivos al input de galería para que el backend lo lea sin cambios
+        const dt = new DataTransfer();
+        for (const file of inputOrigen.files) dt.items.add(file);
+        const inputGaleria = document.getElementById(idGaleria);
+        if (inputGaleria) inputGaleria.files = dt.files;
+
+        // Preview visual (solo para imagen; para PDFs mostramos nombre)
+        const previewId = {
+            sofa:    null,   // el carrito tiene su propio preview
+            comedor: null,
+            centro:  null,
+            butaca:  null,
+            pago:    null,
+            pd:      'pd-foto-preview-box',
+        }[grupo];
+
+        const file = inputOrigen.files[0];
+        if (previewId) {
+            let box = document.getElementById(previewId);
+            if (!box) {
+                // Crear preview inline si no existe
+                box = document.createElement('div');
+                box.id = previewId;
+                box.style.cssText = 'margin-top:8px;text-align:center;';
+                inputGaleria?.parentElement?.appendChild(box);
+            }
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    box.innerHTML = `<img src="${e.target.result}"
+                        style="max-height:90px;border-radius:8px;border:1px solid #e2e8f0;">`;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                box.innerHTML = `<div style="background:#f1f5f9;border-radius:6px;padding:8px 12px;
+                    font-size:12px;font-weight:700;color:#475569;">📄 ${file.name}</div>`;
+            }
+        }
+    }
+    </script>
 </body>

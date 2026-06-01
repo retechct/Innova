@@ -266,9 +266,27 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                         <p style="font-size:11px; font-weight:bold; color:#475569; margin:0 0 10px 0; text-align:center;">
                             <i class="fa-solid fa-truck"></i> Chofer: <b>${t.trabajador_nombre}</b>
                         </p>
-                        <label style="font-size:9px; font-weight:900; color:#475569; display:block; margin-bottom:5px;">📷 FOTO DE ENTREGA AL CLIENTE:</label>
-                        <input type="file" id="foto-evid-${t.id}" accept="image/*" style="font-size:10px; width:100%; margin-bottom:8px;">
-                        <button onclick="finalizarTicketTaller(${t.id}, document.getElementById('foto-evid-${t.id}'), '${t.area}', '${t.producto}')"
+                        <label style="font-size:9px; font-weight:900; color:#475569; display:block; margin-bottom:6px;">📷 FOTO DE ENTREGA AL CLIENTE:</label>
+                        <div style="display:flex;gap:6px;margin-bottom:8px;">
+                            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:7px 4px;
+                                          border-radius:7px;font-size:10px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:4px;text-align:center;">
+                                📷 Tomar foto
+                                <input type="file" id="foto-evid-cam-${t.id}" accept="image/*" capture="environment"
+                                       style="display:none;" onchange="_syncFotoEvid(this, '${t.id}')">
+                            </label>
+                            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:7px 4px;
+                                          border-radius:7px;font-size:10px;font-weight:700;display:flex;
+                                          align-items:center;justify-content:center;gap:4px;text-align:center;">
+                                📁 Archivo
+                                <input type="file" id="foto-evid-${t.id}" accept="image/*"
+                                       style="display:none;" onchange="_syncFotoEvid(this, '${t.id}')">
+                            </label>
+                        </div>
+                        <div id="foto-evid-preview-${t.id}" style="display:none;margin-bottom:6px;">
+                            <img id="foto-evid-img-${t.id}" src="" style="max-height:70px;border-radius:6px;border:1px solid #e2e8f0;">
+                        </div>
+                        <button onclick="finalizarTicketTaller(${t.id}, document.getElementById('foto-evid-cam-${t.id}')?.files[0] ? document.getElementById('foto-evid-cam-${t.id}') : document.getElementById('foto-evid-${t.id}'), '${t.area}', '${t.producto}')"
                             style="width:100%; background:#22c55e; color:white; border:none; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
                             <i class="fa-solid fa-check-double"></i> CONFIRMAR ENTREGA
                         </button>
@@ -291,9 +309,27 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
 
         // Cualquier otra área en proceso: evidencia + finalizar
         return `<div style="margin-top:10px; padding:10px; background:#f1f5f9; border-radius:8px; border:1px solid #cbd5e1;">
-                    <label style="font-size:9px; font-weight:900; color:#475569; display:block; margin-bottom:5px;">📷 FOTO DE TRABAJO TERMINADO:</label>
-                    <input type="file" id="foto-evid-${t.id}" accept="image/*" style="font-size:10px; width:100%; margin-bottom:8px;">
-                    <button onclick="finalizarTicketTaller(${t.id}, document.getElementById('foto-evid-${t.id}'), '${t.area}', '${t.producto}')"
+                    <label style="font-size:9px; font-weight:900; color:#475569; display:block; margin-bottom:6px;">📷 FOTO DE TRABAJO TERMINADO:</label>
+                    <div style="display:flex;gap:6px;margin-bottom:8px;">
+                        <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:7px 4px;
+                                      border-radius:7px;font-size:10px;font-weight:700;display:flex;
+                                      align-items:center;justify-content:center;gap:4px;text-align:center;">
+                            📷 Tomar foto
+                            <input type="file" id="foto-evid-cam-${t.id}" accept="image/*" capture="environment"
+                                   style="display:none;" onchange="_syncFotoEvid(this, '${t.id}')">
+                        </label>
+                        <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:7px 4px;
+                                      border-radius:7px;font-size:10px;font-weight:700;display:flex;
+                                      align-items:center;justify-content:center;gap:4px;text-align:center;">
+                            📁 Archivo
+                            <input type="file" id="foto-evid-${t.id}" accept="image/*"
+                                   style="display:none;" onchange="_syncFotoEvid(this, '${t.id}')">
+                        </label>
+                    </div>
+                    <div id="foto-evid-preview-${t.id}" style="display:none;margin-bottom:6px;">
+                        <img id="foto-evid-img-${t.id}" src="" style="max-height:70px;border-radius:6px;border:1px solid #e2e8f0;">
+                    </div>
+                    <button onclick="finalizarTicketTaller(${t.id}, document.getElementById('foto-evid-cam-${t.id}')?.files[0] ? document.getElementById('foto-evid-cam-${t.id}') : document.getElementById('foto-evid-${t.id}'), '${t.area}', '${t.producto}')"
                         style="width:100%; background:#22c55e; color:white; border:none; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
                         <i class="fa-solid fa-check-double"></i> MARCAR COMO TERMINADO
                     </button>
@@ -1275,9 +1311,27 @@ async function abrirModalDerivar(ticketId) {
                         ${tieneCojines ? ' <b style="color:#7c3aed;">Este pedido tiene cojines — el cojinero es obligatorio.</b>' : ''}
                     </div>
 
-                    <label style="font-size:10px; font-weight:900; color:#475569; display:block; margin-bottom:4px;">📷 FOTO DEL MATERIAL CORTADO *</label>
-                    <input type="file" id="foto-derivar" accept="image/*"
-                        style="width:100%; padding:8px; border:2px dashed #f97316; border-radius:8px; font-size:12px; margin-bottom:14px; box-sizing:border-box;">
+                    <label style="font-size:10px; font-weight:900; color:#475569; display:block; margin-bottom:6px;">📷 FOTO DEL MATERIAL CORTADO *</label>
+                    <div style="display:flex;gap:7px;margin-bottom:14px;">
+                        <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:9px 5px;
+                                      border-radius:8px;font-size:11px;font-weight:700;display:flex;
+                                      align-items:center;justify-content:center;gap:5px;">
+                            📷 Tomar foto
+                            <input type="file" id="foto-derivar-cam" accept="image/*" capture="environment"
+                                   style="display:none;" onchange="_syncDerivarFoto(this)">
+                        </label>
+                        <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:9px 5px;
+                                      border-radius:8px;font-size:11px;font-weight:700;display:flex;
+                                      align-items:center;justify-content:center;gap:5px;">
+                            📁 Seleccionar
+                            <input type="file" id="foto-derivar" accept="image/*"
+                                   style="display:none;" onchange="_syncDerivarFoto(this)">
+                        </label>
+                    </div>
+                    <div id="foto-derivar-preview" style="display:none;margin-bottom:10px;text-align:center;">
+                        <img id="foto-derivar-img" src=""
+                             style="max-height:80px;border-radius:8px;border:2px solid #f97316;">
+                    </div>
 
                     <div style="background:#eff6ff; border-radius:8px; padding:12px; border:2px solid #93c5fd;">
                         <label style="font-size:10px; font-weight:900; color:#1e40af; display:block; margin-bottom:6px;">
@@ -2192,4 +2246,44 @@ async function cargarVistaEntregados(contenedor, choferId) {
         console.error('Error cargando entregados:', e);
         contenedor.innerHTML = `<p style="color:red;text-align:center;padding:30px;">Error al cargar el historial. Intenta de nuevo.</p>`;
     }
+}
+/**
+ * _syncFotoEvid — preview al seleccionar foto de evidencia en tickets del taller.
+ * Muestra miniatura bajo los botones de selección.
+ */
+function _syncFotoEvid(inputEl, ticketId) {
+    const file = inputEl?.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const previewDiv = document.getElementById(`foto-evid-preview-${ticketId}`);
+    const imgEl      = document.getElementById(`foto-evid-img-${ticketId}`);
+    if (!previewDiv || !imgEl) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        imgEl.src = e.target.result;
+        previewDiv.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+/**
+ * _syncDerivarFoto — sincroniza foto del material cortado al derivar al tapicero.
+ */
+function _syncDerivarFoto(inputOrigen) {
+    const file = inputOrigen?.files[0];
+    if (!file) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const cam = document.getElementById('foto-derivar-cam');
+    const gal = document.getElementById('foto-derivar');
+    if (cam) cam.files = dt.files;
+    if (gal) gal.files = dt.files;
+    const previewDiv = document.getElementById('foto-derivar-preview');
+    const imgEl      = document.getElementById('foto-derivar-img');
+    if (!previewDiv || !imgEl || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        imgEl.src = e.target.result;
+        previewDiv.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
 }
