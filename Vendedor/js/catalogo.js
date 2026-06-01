@@ -362,6 +362,24 @@ function seleccionarPieza(elementoFila, tipoCuerpo) {
 }
 /* ----------------------------------------------- */
 
+// ─── Toggle: Cojines "Por confirmar al final" ──────────────────────────────
+function toggleCojinPendiente() {
+    const checked = document.getElementById('cojin-pendiente').checked;
+    const wrap = document.getElementById('cojin-detalle-wrap');
+    wrap.style.display = checked ? 'none' : 'block';
+    // Limpiar campos al marcar pendiente para no dejar datos viejos
+    if (checked) {
+        document.getElementById('c-enteros').value = '';
+        document.getElementById('c-diseno').value = '';
+        document.getElementById('search-cojin-entero').value = '';
+        document.getElementById('search-cojin-diseno').value = '';
+        document.getElementById('sku-cojin-entero').value = '';
+        document.getElementById('sku-cojin-diseno').value = '';
+        document.getElementById('img-preview-cojin-entero').style.display = 'none';
+        document.getElementById('img-preview-cojin-diseno').style.display = 'none';
+    }
+}
+
 /* --- REEMPLAZA LA FUNCIÓN confirmarPersonalizadoSofa COMPLETA --- */
 async function confirmarPersonalizadoSofa() {
     const precio = parseFloat(document.getElementById('conf-precio').value);
@@ -418,13 +436,14 @@ async function confirmarPersonalizadoSofa() {
     const respaldo = document.getElementById('c-respaldo').value;
     const brazo = document.getElementById('med-brazo').value || '0';
 
-    const cEnteros = document.getElementById('c-enteros').value || '0';
-    const cDiseno = document.getElementById('c-diseno').value || '0';
-    const skuCojinEnt = document.getElementById('sku-cojin-entero').value || 'N/A';
-    const skuCojinDis = document.getElementById('sku-cojin-diseno').value || 'N/A';
-    const nombreCojinEnt = document.getElementById('search-cojin-entero').value || '';
-    const nombreCojinDis = document.getElementById('search-cojin-diseno').value || '';
-    const tipoCojinDis = document.getElementById('tipo-tela-cojin-diseno')?.value || '';
+    const cojinPendiente = document.getElementById('cojin-pendiente')?.checked || false;
+    const cEnteros     = cojinPendiente ? '⏳ POR CONFIRMAR' : (document.getElementById('c-enteros').value || '0');
+    const cDiseno      = cojinPendiente ? '' : (document.getElementById('c-diseno').value || '0');
+    const skuCojinEnt  = cojinPendiente ? 'PENDIENTE' : (document.getElementById('sku-cojin-entero').value || 'N/A');
+    const skuCojinDis  = cojinPendiente ? 'PENDIENTE' : (document.getElementById('sku-cojin-diseno').value || 'N/A');
+    const nombreCojinEnt = cojinPendiente ? '' : (document.getElementById('search-cojin-entero').value || '');
+    const nombreCojinDis = cojinPendiente ? '' : (document.getElementById('search-cojin-diseno').value || '');
+    const tipoCojinDis   = cojinPendiente ? '' : (document.getElementById('tipo-tela-cojin-diseno')?.value || '');
 
     const skuBase = document.getElementById('sku-base').value;
     const nombreBase = document.getElementById('search-base').value;
@@ -436,8 +455,11 @@ async function confirmarPersonalizadoSofa() {
         <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${notas['tela']}<br>
         <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm${notas['espuma']}<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>
-        - ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${notas['cojin-entero']}<br>
-        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${notas['cojin-diseno']}<br>
+        ${cojinPendiente
+            ? `- ⏳ <b style="color:#7c3aed;">POR CONFIRMAR AL FINAL</b> (cliente decide después)<br>`
+            : `- ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${notas['cojin-entero']}<br>
+        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${notas['cojin-diseno']}<br>`
+        }
         <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}${notas['base']}
         ${banquetaText}
     `;

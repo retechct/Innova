@@ -735,31 +735,42 @@
                             onclick="ampliarImagen(this.src)">
 
                         <label style="font-size:10px; font-weight:800; color:var(--accent); margin-top:10px; display:block;">COJINES DECORATIVOS:</label>
-                        <div class="row">
-                            <input type="number" id="c-enteros" placeholder="Cant. Enteros" class="form-input-sm">
-                            <input type="number" id="c-diseno" placeholder="Cant. c/Diseño" class="form-input-sm">
-                        </div>
 
-                        <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
-                            <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-cojin-entero" class="form-input-sm" placeholder="🔍 Tela Cojines Enteros..." onkeyup="filtrarMaterial('cojin-entero')" onclick="filtrarMaterial('cojin-entero')">
-                                <div id="list-cojin-entero" class="custom-options"></div>
-                            </div>
-                            <img id="img-preview-cojin-entero" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
-                        </div>
-                        <input type="hidden" id="sku-cojin-entero">
-                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px; margin-bottom: 12px;" onclick="abrirModalNuevo('tela', 'cojin-entero')"><i class="fa-solid fa-plus"></i> Añadir Nueva Tela (Para Enteros)</button> -->
+                        <!-- Checkbox "Por confirmar al final" -->
+                        <label id="label-cojin-pendiente" style="display:flex; align-items:center; gap:6px; font-size:11px; color:#7c3aed; cursor:pointer; margin-bottom:6px;">
+                            <input type="checkbox" id="cojin-pendiente" onchange="toggleCojinPendiente()"
+                                   style="accent-color:#7c3aed; width:14px; height:14px;">
+                            ⏳ Por confirmar al final (el cliente decide después)
+                        </label>
 
-                        <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
-                            <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-cojin-diseno" class="form-input-sm" placeholder="🔍 Diseño Cojines c/Patrón..." onkeyup="filtrarMaterial('cojin-diseno')" onclick="filtrarMaterial('cojin-diseno')">
-                                <div id="list-cojin-diseno" class="custom-options"></div>
+                        <!-- Sección ocultable cuando está marcado "por confirmar" -->
+                        <div id="cojin-detalle-wrap">
+                            <div class="row">
+                                <input type="number" id="c-enteros" placeholder="Cant. Enteros" class="form-input-sm">
+                                <input type="number" id="c-diseno" placeholder="Cant. c/Diseño" class="form-input-sm">
                             </div>
-                            <img id="img-preview-cojin-diseno" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
+
+                            <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
+                                <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                    <input type="text" id="search-cojin-entero" class="form-input-sm" placeholder="🔍 Tela Cojines Enteros..." onkeyup="filtrarMaterial('cojin-entero')" onclick="filtrarMaterial('cojin-entero')">
+                                    <div id="list-cojin-entero" class="custom-options"></div>
+                                </div>
+                                <img id="img-preview-cojin-entero" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
+                            </div>
+                            <input type="hidden" id="sku-cojin-entero">
+                            <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px; margin-bottom: 12px;" onclick="abrirModalNuevo('tela', 'cojin-entero')"><i class="fa-solid fa-plus"></i> Añadir Nueva Tela (Para Enteros)</button> -->
+
+                            <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
+                                <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                    <input type="text" id="search-cojin-diseno" class="form-input-sm" placeholder="🔍 Diseño Cojines c/Patrón..." onkeyup="filtrarMaterial('cojin-diseno')" onclick="filtrarMaterial('cojin-diseno')">
+                                    <div id="list-cojin-diseno" class="custom-options"></div>
+                                </div>
+                                <img id="img-preview-cojin-diseno" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
+                            </div>
+                            <input type="hidden" id="sku-cojin-diseno">
+                            <input type="hidden" id="tipo-tela-cojin-diseno">
+                            <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('cojin', 'cojin-diseno')"><i class="fa-solid fa-plus"></i> Añadir Nuevo Diseño (Patrones)</button> -->
                         </div>
-                        <input type="hidden" id="sku-cojin-diseno">
-                        <input type="hidden" id="tipo-tela-cojin-diseno">
-                        <!-- <button type="button" class="btn-ghost" style="padding:5px; font-size:10px; margin-top:5px;" onclick="abrirModalNuevo('cojin', 'cojin-diseno')"><i class="fa-solid fa-plus"></i> Añadir Nuevo Diseño (Patrones)</button> -->
 
                     </div>
 
