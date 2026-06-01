@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -700,7 +699,41 @@
                             </select>
                             <input type="number" id="med-brazo" placeholder="Medida Brazo (Ej: 20cm)" class="form-input-sm" style="border-color:var(--accent);">
                         </div>
-                        
+
+                        <!-- NOTA + FOTO para Interior y Acabado (espuma) -->
+                        <div style="display:flex; gap:5px; margin-top:6px; width:100%; align-items:center;">
+                            <input type="text" id="nota-espuma" class="form-input-sm"
+                                placeholder="Añadir nota a esta pieza (opcional)"
+                                style="flex:1; font-size:11px; border:1px dashed #a78bfa; background-color:#fdf4ff; box-sizing:border-box; margin:0;">
+                            <!-- Input real que procesarNotasConFotos lee -->
+                            <input type="file" id="foto-nota-espuma" accept="image/*,application/pdf" style="display:none;"
+                                onchange="
+                                    const f=this.files[0]; if(!f) return;
+                                    const lbl=document.getElementById('foto-nota-espuma-label');
+                                    if(lbl){lbl.textContent=(f.type.startsWith('image/'))?'📷 '+f.name:'📄 '+f.name; lbl.style.display='inline';}
+                                    // preview zoom
+                                    if(f.type.startsWith('image/')){
+                                        const r=new FileReader();
+                                        r.onload=e=>{
+                                            let prev=document.getElementById('img-preview-espuma');
+                                            if(prev){prev.src=e.target.result; prev.style.display='block';}
+                                        };r.readAsDataURL(f);}
+                                ">
+                            <!-- Botón cámara -->
+                            <label style="cursor:pointer;background:#0f172a;color:#fff;padding:5px 7px;border-radius:6px;font-size:10px;font-weight:700;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Tomar foto">
+                                📷
+                                <input type="file" accept="image/*" capture="environment" style="display:none;"
+                                    onchange="_syncPiezaFoto(this,'foto-nota-espuma')">
+                            </label>
+                            <!-- Botón galería -->
+                            <label for="foto-nota-espuma" style="cursor:pointer;background:#e2e8f0;color:#0f172a;padding:5px 7px;border-radius:6px;font-size:10px;font-weight:700;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Seleccionar archivo">📁</label>
+                            <span id="foto-nota-espuma-label" style="font-size:9px;color:#7c3aed;display:none;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+                        </div>
+                        <!-- Miniatura preview con zoom para Interior y Acabado -->
+                        <img id="img-preview-espuma" src="" alt="preview interior"
+                            style="width:35px;height:35px;border-radius:5px;object-fit:cover;border:1px solid #a78bfa;display:none;margin-top:4px;cursor:zoom-in;"
+                            onclick="ampliarImagen(this.src)">
+
                         <label style="font-size:10px; font-weight:800; color:var(--accent); margin-top:10px; display:block;">COJINES DECORATIVOS:</label>
                         <div class="row">
                             <input type="number" id="c-enteros" placeholder="Cant. Enteros" class="form-input-sm">

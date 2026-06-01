@@ -136,6 +136,19 @@ function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl) {
                 labelEl.textContent = file.type.startsWith('image/') ? '📷 ' + file.name : '📄 ' + file.name;
                 labelEl.style.display = 'inline';
             }
+            // Mostrar miniatura con zoom para imágenes
+            if (file.type.startsWith('image/')) {
+                const imgPreviewNota = document.getElementById(`img-preview-${tipoInput}`);
+                if (imgPreviewNota) {
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        imgPreviewNota.src = e.target.result;
+                        imgPreviewNota.style.display = 'block';
+                        _activarZoomEnImagen(imgPreviewNota);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
         });
 
         // Botón 📁 Seleccionar
@@ -183,17 +196,112 @@ document.addEventListener('click', function(e) {
 /* --- LÓGICA PARA AMPLIAR IMAGEN (ZOOM) --- */
 function ampliarImagen(url) {
     if (!url || url === '') return;
-    
-    Swal.fire({
-        imageUrl: url,
-        imageAlt: 'Vista ampliada del material',
-        showConfirmButton: false,
-        showCloseButton: true,
-        width: 'auto',
-        padding: '1em',
-        background: '#fff',
-        backdrop: `rgba(15, 23, 42, 0.85)` // Fondo oscuro elegante
-    });
+
+    // Crear overlay de zoom interactivo (mejor que Swal para imágenes)
+    let overlay = document.getElementById('_innova_zoom_overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = '_innova_zoom_overlay';
+        overlay.style.cssText = `
+            display:none; position:fixed; inset:0; z-index:99999;
+            background:rgba(10,8,5,0.92); cursor:zoom-out;
+            align-items:center; justify-content:center;
+            touch-action:none;
+        `;
+        // Botón cerrar
+        const btnClose = document.createElement('button');
+        btnClose.innerHTML = '✕';
+        btnClose.style.cssText = `
+            position:absolute; top:14px; right:18px; background:transparent;
+            border:none; color:#fff; font-size:26px; cursor:pointer;
+            z-index:2; line-height:1; opacity:0.8;
+        `;
+        btnClose.onclick = () => _cerrarZoom();
+
+        const imgEl = document.createElement('img');
+        imgEl.id = '_innova_zoom_img';
+        imgEl.style.cssText = `
+            max-width:90vw; max-height:88vh; border-radius:8px;
+            object-fit:contain; user-select:none; transition:transform 0.15s ease;
+            transform-origin:center center;
+        `;
+        // Hint de zoom
+        const hint = document.createElement('div');
+        hint.style.cssText = `
+            position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+            color:rgba(255,255,255,0.45); font-size:11px; font-family:sans-serif;
+            pointer-events:none; white-space:nowrap;
+        `;
+        hint.textContent = 'Pinch para zoom · Rueda para zoom · Click para cerrar';
+
+        overlay.appendChild(btnClose);
+        overlay.appendChild(imgEl);
+        overlay.appendChild(hint);
+        document.body.appendChild(overlay);
+
+        // Cerrar al click en el fondo
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay || e.target === imgEl) _cerrarZoom();
+        });
+
+        // Zoom con rueda del ratón (desktop)
+        let _scale = 1;
+        imgEl.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            _scale = Math.min(Math.max(_scale + (e.deltaY < 0 ? 0.15 : -0.15), 1), 5);
+            imgEl.style.transform = `scale(${_scale})`;
+        }, { passive: false });
+
+        // Pinch-to-zoom (móvil)
+        let _touches = [], _lastDist = 0;
+        overlay.addEventListener('touchstart', (e) => {
+            _touches = Array.from(e.touches);
+            if (_touches.length === 2) {
+                _lastDist = Math.hypot(
+                    _touches[0].clientX - _touches[1].clientX,
+                    _touches[0].clientY - _touches[1].clientY
+                );
+            }
+        }, { passive: true });
+        overlay.addEventListener('touchmove', (e) => {
+            if (e.touches.length !== 2) return;
+            e.preventDefault();
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            if (_lastDist > 0) {
+                _scale = Math.min(Math.max(_scale * (dist / _lastDist), 1), 5);
+                imgEl.style.transform = `scale(${_scale})`;
+            }
+            _lastDist = dist;
+        }, { passive: false });
+        overlay.addEventListener('touchend', () => { _lastDist = 0; }, { passive: true });
+
+        // Cerrar con Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') _cerrarZoom();
+        });
+
+        function _cerrarZoom() {
+            overlay.style.display = 'none';
+            imgEl.style.transform = 'scale(1)';
+            _scale = 1;
+        }
+        overlay._cerrar = _cerrarZoom;
+    }
+
+    const imgEl = document.getElementById('_innova_zoom_img');
+    imgEl.src = url;
+    imgEl.style.transform = 'scale(1)';
+    overlay.style.display = 'flex';
+}
+
+// Helper: aplicar zoom a imágenes de nota subidas dinámicamente
+function _activarZoomEnImagen(imgEl) {
+    if (!imgEl) return;
+    imgEl.style.cursor = 'zoom-in';
+    imgEl.onclick = () => ampliarImagen(imgEl.src);
 }
 
 /* ================================================================= */
@@ -1679,5 +1787,18 @@ function _syncPiezaFoto(inputCam, targetId) {
     if (labelEl) {
         labelEl.textContent = file.type.startsWith('image/') ? '📷 ' + file.name : '📄 ' + file.name;
         labelEl.style.display = 'inline';
+    }
+    // Mostrar miniatura con zoom
+    if (file.type.startsWith('image/')) {
+        const imgPreviewNota = document.getElementById(`img-preview-${tipoInput}`);
+        if (imgPreviewNota) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                imgPreviewNota.src = e.target.result;
+                imgPreviewNota.style.display = 'block';
+                _activarZoomEnImagen(imgPreviewNota);
+            };
+            reader.readAsDataURL(file);
+        }
     }
 }
