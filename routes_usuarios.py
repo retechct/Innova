@@ -283,14 +283,17 @@ def verificar_email_pin():
             }), 200
 
         # ── 2. Buscar en clientes (registrados desde el landing) ───────────
+        from werkzeug.security import check_password_hash
         cursor.execute("""
-            SELECT id, nombre, email, telefono
+            SELECT id, nombre, email, telefono, contrasena
             FROM clientes
-            WHERE LOWER(email) = %s
-              AND contrasena = %s;
-        """, (email, pin))
-        cliente = cursor.fetchone()
+            WHERE LOWER(email) = %s;
+        """, (email,))
+        cliente_row = cursor.fetchone()
         cursor.close(); release_db_connection(conexion)
+
+        # Verificar hash — los clientes siempre usan contraseña propia
+        cliente = cliente_row if (cliente_row and check_password_hash(cliente_row[4], pin)) else None
 
         if cliente:
             token = generar_token({
@@ -338,9 +341,13 @@ def registrar_usuario_web():
     email      = (data.get('email')      or '').strip().lower()
     telefono   = (data.get('telefono')   or '').strip()
     contrasena = (data.get('contrasena') or '').strip()
+    dni        = (data.get('dni')        or '').strip()  # FIX: antes se ignoraba
 
     if not nombre or not email or not contrasena:
         return jsonify({'error': 'Nombre, correo y contraseña son obligatorios'}), 400
+
+    from werkzeug.security import generate_password_hash
+    contrasena_hash = generate_password_hash(contrasena)  # nunca guardar texto plano
 
     try:
         conexion = get_db_connection()
@@ -365,10 +372,10 @@ def registrar_usuario_web():
             return jsonify({'error': 'Este correo ya está registrado'}), 409
 
         cursor.execute("""
-            INSERT INTO clientes (nombre, email, telefono, contrasena)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO clientes (nombre, email, telefono, dni, contrasena)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id;
-        """, (nombre, email, telefono or None, contrasena))
+        """, (nombre, email, telefono or None, dni or None, contrasena_hash))
         conexion.commit()
         cursor.close(); release_db_connection(conexion)
         return jsonify({

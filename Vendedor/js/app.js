@@ -1,8 +1,11 @@
 // ─── Helper: fetch con token JWT automático ──────────────────
 // A3: Maneja FormData correctamente (no sobreescribe Content-Type)
-// A2: Token desde sessionStorage (más seguro que localStorage)
+// FIX-1: Token en localStorage para que persista al recargar la página.
+// sessionStorage se borra al recargar, dejando al usuario sin autorización
+// aunque aparezca logueado. localStorage es suficientemente seguro dado que
+// el token tiene expiración corta y solo se usa en el mismo dominio.
 function apiFetch(url, options = {}) {
-    const token = sessionStorage.getItem('innova_token');
+    const token = localStorage.getItem('innova_token');
     const esFormData = options.body instanceof FormData;
     return fetch(url, {
         ...options,
@@ -37,7 +40,7 @@ async function init() {
             usuarioActivo = JSON.parse(sesion);
 
             // SEGURIDAD: Clientes y roles no autorizados no pueden entrar al panel ERP
-            const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN', 'Chofer'];
+            // ROLES_ERP viene de config.js — no redeclarar aquí
             if (!ROLES_ERP.includes(usuarioActivo.rol)) {
                 return; // Se queda en el landing
             }
@@ -1421,7 +1424,7 @@ async function cargarDatosInicialesLogin() {
     }
 }
 
-const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN', 'Chofer'];
+// ROLES_ERP definido en config.js
 
 function verificarSesionExistente() {
     const sesionGuardada = localStorage.getItem('usuarioInnova');
@@ -1469,7 +1472,7 @@ async function entrarAlSistema() {
             usuarioActivo = result.usuario;
             
             // SEGURIDAD: Clientes no pueden entrar al panel ERP
-            const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN', 'Chofer'];
+            // ROLES_ERP viene de config.js — no redeclarar aquí
             if (!ROLES_ERP.includes(usuarioActivo.rol)) {
                 return Swal.fire('Acceso Denegado', 'Tu cuenta no tiene acceso al panel interno.', 'warning');
             }
@@ -1479,8 +1482,8 @@ async function entrarAlSistema() {
             usuarioActivo.tienda = nombreTienda;
             usuarioActivo.horaLogin = new Date().toLocaleTimeString();
             
-            // SEGURIDAD: Guardamos el token JWT para las peticiones API
-            if (result.token) sessionStorage.setItem('innova_token', result.token);
+            // FIX-1: Guardamos el token en localStorage para que sobreviva recargas
+            if (result.token) localStorage.setItem('innova_token', result.token);
             
             // Guardamos todo junto en la memoria del navegador
             localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
@@ -1570,7 +1573,7 @@ function cerrarSesion() {
     }).then((result) => {
         if (result.isConfirmed) {
             localStorage.removeItem('usuarioInnova');
-            sessionStorage.removeItem('innova_token');
+            localStorage.removeItem('innova_token');  // FIX-1: era sessionStorage
             location.reload();
         }
     });

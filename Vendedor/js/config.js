@@ -40,3 +40,8 @@ var usuarioActivo = null;
 let listaPagos = [];
 let destinoActual = "";
 let tipoActual = "";
+
+// ─── Roles con acceso al panel ERP ────────────────────────────────────────────
+// Definido UNA sola vez aquí. Importar desde este archivo en vez de redeclarar.
+// Si agregas un rol nuevo, cámbialo solo en esta línea.
+const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'JEFE_TALLER', 'ALMACEN', 'Chofer'];

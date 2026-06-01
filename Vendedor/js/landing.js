@@ -41,6 +41,7 @@ function imCerrarSesionCliente() {
   }).then(r => {
     if (r.isConfirmed) {
       localStorage.removeItem('usuarioInnova');
+      localStorage.removeItem('innova_token');
       location.reload();
     }
   });
@@ -130,9 +131,16 @@ async function imEntrarAlSistema() {
     if (data.exito) {
       usuarioActivo = data.usuario;
       usuarioActivo.horaLogin = new Date().toLocaleTimeString();
+      // FIX-2: trabajadores que entran por el landing no pasan por el dropdown
+      // de sede. Usamos area_asignada como valor de tienda para que carrito.js
+      // no envíe siempre 'Sede Central' en las ventas.
+      if (!usuarioActivo.tienda && usuarioActivo.area_asignada) {
+        usuarioActivo.tienda = usuarioActivo.area_asignada;
+      }
       localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
       // Guardar token JWT para las peticiones al API
-      if (data.token) sessionStorage.setItem('innova_token', data.token);
+      // FIX-1: localStorage persiste al recargar; sessionStorage se borraría
+      if (data.token) localStorage.setItem('innova_token', data.token);
 
       // Cliente: se queda en el landing, no entra al panel
       if (usuarioActivo.rol === 'Cliente') {
@@ -143,7 +151,7 @@ async function imEntrarAlSistema() {
       }
 
       // Cualquier otro rol no reconocido: bloquear
-      const ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN','Chofer'];
+      // ROLES_ERP viene de config.js — no redeclarar aquí
       if (!ROLES_ERP.includes(usuarioActivo.rol)) {
         localStorage.removeItem('usuarioInnova');
         return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'warning',
@@ -308,8 +316,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!sesion) return;
   try {
     const u = JSON.parse(sesion);
-    const _ROLES_ERP = ['Admin','Vendedor','Operario','Jefe_Taller','JEFE_TALLER','ALMACEN','Chofer'];
-    if (_ROLES_ERP.includes(u.rol)) {
+    // ROLES_ERP viene de config.js — no redeclarar aquí
+    if (ROLES_ERP.includes(u.rol)) {
       // Trabajador: init() en app.js lo maneja, nada que hacer aquí
     } else {
       // Cliente: restaurar navbar con saludo y botón cerrar sesión
