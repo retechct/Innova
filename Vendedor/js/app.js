@@ -1,20 +1,62 @@
 // ─── Helper: fetch con token JWT automático ──────────────────
 // A3: Maneja FormData correctamente (no sobreescribe Content-Type)
 // FIX-1: Token en localStorage para que persista al recargar la página.
-// sessionStorage se borra al recargar, dejando al usuario sin autorización
-// aunque aparezca logueado. localStorage es suficientemente seguro dado que
-// el token tiene expiración corta y solo se usa en el mismo dominio.
+// FIX-JWT: Intercepta 401 → intenta refresh automático → si falla, avisa.
+let _refreshEnCurso = false;   // evita bucles si el refresh también da 401
+
+async function _intentarRefresh() {
+    const refreshToken = localStorage.getItem('innova_refresh_token');
+    if (!refreshToken) return false;
+    try {
+        const res = await fetch(`${API_URL}/api/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${refreshToken}` }
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (data.access) {
+            localStorage.setItem('innova_token', data.access);
+            return true;
+        }
+    } catch(e) {}
+    return false;
+}
+
 function apiFetch(url, options = {}) {
     const token = localStorage.getItem('innova_token');
     const esFormData = options.body instanceof FormData;
-    return fetch(url, {
+    const fetchConToken = (tk) => fetch(url, {
         ...options,
         headers: {
             // Si es FormData, NO poner Content-Type: el browser lo pone con el boundary correcto
             ...(esFormData ? {} : { 'Content-Type': 'application/json' }),
             ...(options.headers || {}),
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            ...(tk ? { 'Authorization': `Bearer ${tk}` } : {})
         }
+    });
+
+    return fetchConToken(token).then(async res => {
+        if (res.status !== 401 || _refreshEnCurso) return res;
+
+        _refreshEnCurso = true;
+        const renovado = await _intentarRefresh();
+        _refreshEnCurso = false;
+
+        if (renovado) {
+            return fetchConToken(localStorage.getItem('innova_token'));
+        }
+
+        // Refresh fallido → sesión expirada, forzar re-login
+        localStorage.removeItem('innova_token');
+        localStorage.removeItem('innova_refresh_token');
+        Swal.fire({
+            background: '#14100a', color: '#f5f0e8', icon: 'warning',
+            title: 'Sesión expirada',
+            text: 'Tu sesión ha caducado. Por favor vuelve a iniciar sesión.',
+            confirmButtonColor: '#c9a84c', confirmButtonText: 'Entendido'
+        }).then(() => location.reload());
+
+        return res;
     });
 }
 // ─────────────────────────────────────────────────────────────// === MÓDULO: App principal, init, vistas, sesión ===
@@ -1483,7 +1525,8 @@ async function entrarAlSistema() {
             usuarioActivo.horaLogin = new Date().toLocaleTimeString();
             
             // FIX-1: Guardamos el token en localStorage para que sobreviva recargas
-            if (result.token) localStorage.setItem('innova_token', result.token);
+            if (result.token)         localStorage.setItem('innova_token', result.token);
+            if (result.refresh_token) localStorage.setItem('innova_refresh_token', result.refresh_token);
             
             // Guardamos todo junto en la memoria del navegador
             localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
@@ -1573,7 +1616,8 @@ function cerrarSesion() {
     }).then((result) => {
         if (result.isConfirmed) {
             localStorage.removeItem('usuarioInnova');
-            localStorage.removeItem('innova_token');  // FIX-1: era sessionStorage
+            localStorage.removeItem('innova_token');
+            localStorage.removeItem('innova_refresh_token');
             location.reload();
         }
     });

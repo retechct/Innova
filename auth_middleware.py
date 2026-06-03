@@ -26,6 +26,7 @@ from functools import wraps
 from flask import request, jsonify
 from flask_jwt_extended import (
     create_access_token,
+    create_refresh_token,
     verify_jwt_in_request,
     get_jwt_identity,
     get_jwt,
@@ -34,10 +35,10 @@ from flask_jwt_extended import (
 
 # ─── Generar token tras login exitoso ────────────────────────────────────────
 
-def generar_token(usuario: dict) -> str:
+def generar_token(usuario: dict) -> dict:
     """
     Llama esto en el endpoint de login una vez que validaste el PIN/contraseña.
-    Retorna el token JWT como string.
+    Retorna un dict con 'access' y 'refresh'.
 
     usuario = {
         "id": 5,
@@ -52,7 +53,9 @@ def generar_token(usuario: dict) -> str:
         "rol":           usuario.get("rol", ""),
         "area_asignada": usuario.get("area_asignada", ""),
     }
-    return create_access_token(identity=identity, additional_claims=additional_claims)
+    access  = create_access_token(identity=identity, additional_claims=additional_claims)
+    refresh = create_refresh_token(identity=identity, additional_claims=additional_claims)
+    return {"access": access, "refresh": refresh}
 
 
 # ─── Decorador: solo requiere estar logueado ─────────────────────────────────
@@ -218,3 +221,33 @@ ORDEN RECOMENDADO DE MIGRACIÓN:
   4. Proteger /api/usuarios/nuevo y /api/ventas/exportar (Paso 3)
   5. Con tiempo: proteger GETs sensibles (listar ventas, exportar)
 """
+
+
+# ─── Endpoint de renovación de token ─────────────────────────────────────────
+# Registrar en app.py: app.register_blueprint(auth_bp)
+from flask import Blueprint, jsonify
+
+auth_bp = Blueprint('auth', __name__)
+
+@auth_bp.route('/api/auth/refresh', methods=['POST'])
+def refresh_token():
+    """
+    Renueva el access token usando el refresh token.
+    El cliente envía: Authorization: Bearer <refresh_token>
+    Devuelve: { "access": "<nuevo_access_token>" }
+    """
+    try:
+        verify_jwt_in_request(refresh=True)
+        identity = get_jwt_identity()
+        claims   = get_jwt()
+        new_access = create_access_token(
+            identity=identity,
+            additional_claims={
+                "nombre":        claims.get("nombre", ""),
+                "rol":           claims.get("rol", ""),
+                "area_asignada": claims.get("area_asignada", ""),
+            }
+        )
+        return jsonify({"access": new_access}), 200
+    except Exception:
+        return jsonify({"error": "Refresh token inválido o expirado. Vuelve a iniciar sesión."}), 401

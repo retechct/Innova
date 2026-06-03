@@ -746,6 +746,13 @@ def actualizar_logistica():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+
+        # Leer estado anterior ANTES del UPDATE para evitar doble desbloqueo
+        # si el frontend llama dos veces con estado='Recibido' (bug conocido A1)
+        cursor.execute("SELECT estado FROM logistica_externa WHERE id = %s", (logistica_id,))
+        row_prev = cursor.fetchone()
+        estado_anterior = row_prev[0] if row_prev else None
+
         cursor.execute("""
             UPDATE logistica_externa
             SET proveedor_id             = COALESCE(%s, proveedor_id),
@@ -763,8 +770,9 @@ def actualizar_logistica():
               estado, tipo_gestion, cantidad, unidad, proveedor_informal,
               notas_proveedor, url_cotizacion_adjunta, logistica_id))
 
-        # Si se marca como Recibido → desbloquear tickets_produccion relacionados
-        if estado == 'Recibido':
+        # Solo desbloquear si la transición ES NUEVA: estado anterior != 'Recibido'
+        # Esto evita el conflicto con el trigger de "Listo para recojo" (bug A1)
+        if estado == 'Recibido' and estado_anterior != 'Recibido':
             cursor.execute("""
                 SELECT l.venta_id FROM logistica_externa l WHERE l.id = %s
             """, (logistica_id,))
@@ -1784,7 +1792,8 @@ def generar_orden_compra(id):
             buf,
             folder='ordenes_compra',
             resource_type='raw',
-            public_id=f'OC-{id}-{cod_venta}',
+            format='pdf',                          # fuerza extensión .pdf en la URL
+            public_id=f'OC-{id}-{cod_venta}.pdf', # nombre explícito con .pdf
             overwrite=True,
         )
         url_pdf = resp.get('secure_url')

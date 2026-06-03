@@ -30,6 +30,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_jwt_extended import JWTManager
+from datetime import timedelta
 from flask_migrate import Migrate
 from dotenv import load_dotenv
 
@@ -52,6 +53,8 @@ CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI']        = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY']                 = os.getenv('JWT_SECRET_KEY', 'clave-secreta-de-innova-mobili')
+app.config['JWT_ACCESS_TOKEN_EXPIRES']       = timedelta(hours=8)   # jornada laboral completa
+app.config['JWT_REFRESH_TOKEN_EXPIRES']      = timedelta(days=30)   # renovar sin re-login
 
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -72,6 +75,8 @@ from routes_materiales import materiales_bp
 from routes_usuarios   import usuarios_bp
 from routes_produccion import produccion_bp
 from routes_seguimiento import seguimiento_bp
+from auth_middleware   import auth_bp          # ← refresh token endpoint
+app.register_blueprint(auth_bp)
 app.register_blueprint(seguimiento_bp)
 
 app.register_blueprint(catalogo_bp)

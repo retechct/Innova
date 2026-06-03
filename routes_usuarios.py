@@ -159,7 +159,7 @@ def verificar_pin():
         usuario = cursor.fetchone()
 
         if usuario:
-            token = generar_token({
+            tokens = generar_token({
                 "id":            usuario[0],
                 "nombre":        usuario[1],
                 "rol":           usuario[2],
@@ -167,7 +167,8 @@ def verificar_pin():
             })
             res = jsonify({
                 "exito": True,
-                "token": token,
+                "token":         tokens["access"],
+                "refresh_token": tokens["refresh"],
                 "usuario": {
                     "id":            usuario[0],
                     "nombre":        usuario[1],
@@ -261,7 +262,7 @@ def verificar_email_pin():
         usuario = cursor.fetchone()
 
         if usuario:
-            token = generar_token({
+            tokens = generar_token({
                 "id":            usuario[0],
                 "nombre":        usuario[1],
                 "rol":           usuario[2],
@@ -270,7 +271,8 @@ def verificar_email_pin():
             cursor.close(); release_db_connection(conexion)
             return jsonify({
                 "exito": True,
-                "token": token,
+                "token":         tokens["access"],
+                "refresh_token": tokens["refresh"],
                 "usuario": {
                     "id":            usuario[0],
                     "nombre":        usuario[1],
@@ -296,7 +298,7 @@ def verificar_email_pin():
         cliente = cliente_row if (cliente_row and check_password_hash(cliente_row[4], pin)) else None
 
         if cliente:
-            token = generar_token({
+            tokens = generar_token({
                 "id":            cliente[0],
                 "nombre":        cliente[1],
                 "rol":           "Cliente",
@@ -304,7 +306,8 @@ def verificar_email_pin():
             })
             return jsonify({
                 "exito": True,
-                "token": token,
+                "token":         tokens["access"],
+                "refresh_token": tokens["refresh"],
                 "usuario": {
                     "id":            cliente[0],
                     "nombre":        cliente[1],

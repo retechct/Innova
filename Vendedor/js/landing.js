@@ -42,6 +42,7 @@ function imCerrarSesionCliente() {
     if (r.isConfirmed) {
       localStorage.removeItem('usuarioInnova');
       localStorage.removeItem('innova_token');
+      localStorage.removeItem('innova_refresh_token');
       location.reload();
     }
   });
@@ -141,6 +142,7 @@ async function imEntrarAlSistema() {
       // Guardar token JWT para las peticiones al API
       // FIX-1: localStorage persiste al recargar; sessionStorage se borraría
       if (data.token) localStorage.setItem('innova_token', data.token);
+      if (data.refresh_token) localStorage.setItem('innova_refresh_token', data.refresh_token);
 
       // Cliente: se queda en el landing, no entra al panel
       if (usuarioActivo.rol === 'Cliente') {
