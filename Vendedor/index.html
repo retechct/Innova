@@ -797,11 +797,13 @@
                             <input type="text" id="bq-mod" placeholder="Modelo de Banqueta" class="form-input-sm" style="margin-bottom: 8px;">
                             <div class="row">
                                 <input type="number" id="bq-largo" placeholder="Largo" class="form-input-sm">
-                                <input type="number" id="bq-ancho" placeholder="Ancho" class="form-input-sm">
+                                <input type="number" id="bq-fondo" placeholder="Profundidad" class="form-input-sm">
                             </div>
-                            <div class="row">
-                                <input type="number" id="bq-fondo" placeholder="Fondo" class="form-input-sm">
-                                <input type="number" id="bq-alto" placeholder="Alto" class="form-input-sm">
+                            <div class="row" style="align-items:center; gap:6px; margin-top:5px;">
+                                <button type="button" onclick="toggleAltura('bq-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:3px 8px;white-space:nowrap;">+ Altura</button>
+                                <span id="bq-alto-wrap" style="display:none;">
+                                    <input type="number" id="bq-alto" placeholder="Alto" class="form-input-sm">
+                                </span>
                             </div>
                         </div>
                     </div>

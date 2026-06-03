@@ -269,6 +269,20 @@ function toggleBanqueta() {
     document.getElementById('banqueta-inputs').style.display = isChecked ? 'block' : 'none';
 }
 
+// ─── Toggle altura condicional en sofás ────────────────────────────────────
+function toggleAltura(target) {
+    // target puede ser un ID (string) o directamente el elemento DOM
+    const el = (typeof target === 'string') ? document.getElementById(target) : target;
+    if (!el) return;
+    const visible = el.style.display !== 'none';
+    el.style.display = visible ? 'none' : 'inline-block';
+    // Limpiar el input si se oculta para que no quede valor fantasma
+    if (visible) {
+        const inp = el.querySelector('input');
+        if (inp) inp.value = '';
+    }
+}
+
 function actualizarVistaSofa() {
     const modelo = document.getElementById('sofa-modelo').value;
     const imgPreview = document.getElementById('preview-sofa');
@@ -287,37 +301,70 @@ function actualizarVistaSofa() {
         addCuerpoSofa('3'); 
     } else if (modelo === 'multi3') {
         medContainer.innerHTML = `
-            <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 3 PIEZAS (L, A, F, Alto)</label>
-            <div class="medida-row"><span style="font-size:10px; width:45px; font-weight:bold;">Grande:</span><input type="number" id="m3-l1" class="form-input-sm" placeholder="L"><input type="number" id="m3-a1" class="form-input-sm" placeholder="A"><input type="number" id="m3-f1" class="form-input-sm" placeholder="F"><input type="number" id="m3-h1" class="form-input-sm" placeholder="H"></div>
-            <div class="medida-row"><span style="font-size:10px; width:45px; font-weight:bold;">Modular:</span><input type="number" id="m3-l2" class="form-input-sm" placeholder="L"><input type="number" id="m3-a2" class="form-input-sm" placeholder="A"><input type="number" id="m3-f2" class="form-input-sm" placeholder="F"><input type="number" id="m3-h2" class="form-input-sm" placeholder="H"></div>
+            <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 3 PIEZAS (Largo, Profundidad)</label>
+            <div class="medida-row" style="align-items:center;">
+                <span style="font-size:10px; width:50px; font-weight:bold;">Grande:</span>
+                <input type="number" id="m3-l1" class="form-input-sm" placeholder="Largo">
+                <input type="number" id="m3-f1" class="form-input-sm" placeholder="Prof.">
+                <button type="button" onclick="toggleAltura('m3-h1-wrap')" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                <span id="m3-h1-wrap" style="display:none;"><input type="number" id="m3-h1" class="form-input-sm" placeholder="Alto"></span>
+            </div>
+            <div class="medida-row" style="align-items:center;">
+                <span style="font-size:10px; width:50px; font-weight:bold;">Modular:</span>
+                <input type="number" id="m3-l2" class="form-input-sm" placeholder="Largo">
+                <input type="number" id="m3-f2" class="form-input-sm" placeholder="Prof.">
+                <button type="button" onclick="toggleAltura('m3-h2-wrap')" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                <span id="m3-h2-wrap" style="display:none;"><input type="number" id="m3-h2" class="form-input-sm" placeholder="Alto"></span>
+            </div>
         `;
     } else if (modelo === 'multi4') {
         medContainer.innerHTML = `
-            <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 4 PIEZAS (L, A, F, Alto)</label>
-            <div class="medida-row"><span style="font-size:10px; width:45px; font-weight:bold;">Gnde 1:</span><input type="number" id="m4-l1" class="form-input-sm" placeholder="L"><input type="number" id="m4-a1" class="form-input-sm" placeholder="A"><input type="number" id="m4-f1" class="form-input-sm" placeholder="F"><input type="number" id="m4-h1" class="form-input-sm" placeholder="H"></div>
-            <div class="medida-row"><span style="font-size:10px; width:45px; font-weight:bold;">Gnde 2:</span><input type="number" id="m4-l2" class="form-input-sm" placeholder="L"><input type="number" id="m4-a2" class="form-input-sm" placeholder="A"><input type="number" id="m4-f2" class="form-input-sm" placeholder="F"><input type="number" id="m4-h2" class="form-input-sm" placeholder="H"></div>
-            <div class="medida-row"><span style="font-size:10px; width:45px; font-weight:bold;">Modular:</span><input type="number" id="m4-l3" class="form-input-sm" placeholder="L"><input type="number" id="m4-a3" class="form-input-sm" placeholder="A"><input type="number" id="m4-f3" class="form-input-sm" placeholder="F"><input type="number" id="m4-h3" class="form-input-sm" placeholder="H"></div>
+            <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 4 PIEZAS (Largo, Profundidad)</label>
+            <div class="medida-row" style="align-items:center;">
+                <span style="font-size:10px; width:50px; font-weight:bold;">Gnde 1:</span>
+                <input type="number" id="m4-l1" class="form-input-sm" placeholder="Largo">
+                <input type="number" id="m4-f1" class="form-input-sm" placeholder="Prof.">
+                <button type="button" onclick="toggleAltura('m4-h1-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                <span id="m4-h1-wrap" style="display:none;"><input type="number" id="m4-h1" class="form-input-sm" placeholder="Alto"></span>
+            </div>
+            <div class="medida-row" style="align-items:center;">
+                <span style="font-size:10px; width:50px; font-weight:bold;">Gnde 2:</span>
+                <input type="number" id="m4-l2" class="form-input-sm" placeholder="Largo">
+                <input type="number" id="m4-f2" class="form-input-sm" placeholder="Prof.">
+                <button type="button" onclick="toggleAltura('m4-h2-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                <span id="m4-h2-wrap" style="display:none;"><input type="number" id="m4-h2" class="form-input-sm" placeholder="Alto"></span>
+            </div>
+            <div class="medida-row" style="align-items:center;">
+                <span style="font-size:10px; width:50px; font-weight:bold;">Modular:</span>
+                <input type="number" id="m4-l3" class="form-input-sm" placeholder="Largo">
+                <input type="number" id="m4-f3" class="form-input-sm" placeholder="Prof.">
+                <button type="button" onclick="toggleAltura('m4-h3-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                <span id="m4-h3-wrap" style="display:none;"><input type="number" id="m4-h3" class="form-input-sm" placeholder="Alto"></span>
+            </div>
         `;
     } else if (modelo === 'u') {
         medContainer.innerHTML = `
             <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS EN "U" (cm)</label>
-            <div class="medida-row" style="flex-wrap: wrap;">
-                <input type="number" id="u-largo-izq" class="form-input-sm" placeholder="Largo Izq." style="width: 48%;">
-                <input type="number" id="u-largo-der" class="form-input-sm" placeholder="Largo Der." style="width: 48%;">
-                
-                <input type="number" id="u-ancho" class="form-input-sm" placeholder="Ancho Gen." style="width: 31%; margin-top:5px;">
-                <input type="number" id="u-fondo" class="form-input-sm" placeholder="Fondo Gen." style="width: 31%; margin-top:5px;">
-                <input type="number" id="u-alto" class="form-input-sm" placeholder="Alto Gen." style="width: 31%; margin-top:5px;">
+            <div class="medida-row" style="flex-wrap: wrap; align-items:center; gap:5px;">
+                <input type="number" id="u-largo-izq" class="form-input-sm" placeholder="Largo Izq." style="width: 46%;">
+                <input type="number" id="u-largo-der" class="form-input-sm" placeholder="Largo Der." style="width: 46%;">
+                <input type="number" id="u-fondo" class="form-input-sm" placeholder="Profundidad Gen." style="width: 60%; margin-top:5px;">
+                <button type="button" onclick="toggleAltura('u-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;margin-top:5px;white-space:nowrap;">+ Altura</button>
+                <span id="u-alto-wrap" style="display:none; margin-top:5px; width:100%;">
+                    <input type="number" id="u-alto" class="form-input-sm" placeholder="Alto Gen." style="width:60%;">
+                </span>
             </div>
         `;
     } else {
         medContainer.innerHTML = `
             <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS TOTALES (cm)</label>
-            <div class="medida-row" style="flex-wrap: wrap;">
-                <input type="number" id="med-largo" class="form-input-sm" placeholder="Largo" style="width: 48%;">
-                <input type="number" id="med-ancho" class="form-input-sm" placeholder="Ancho" style="width: 48%;">
-                <input type="number" id="med-fondo" class="form-input-sm" placeholder="Fondo" style="width: 48%; margin-top:5px;">
-                <input type="number" id="med-alto" class="form-input-sm" placeholder="Alto" style="width: 48%; margin-top:5px;">
+            <div class="medida-row" style="flex-wrap: wrap; align-items:center; gap:5px;">
+                <input type="number" id="med-largo" class="form-input-sm" placeholder="Largo" style="width: 46%;">
+                <input type="number" id="med-fondo" class="form-input-sm" placeholder="Profundidad" style="width: 46%;">
+                <button type="button" onclick="toggleAltura('med-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;margin-top:5px;white-space:nowrap;">+ Altura</button>
+                <span id="med-alto-wrap" style="display:none; margin-top:5px; width:100%;">
+                    <input type="number" id="med-alto" class="form-input-sm" placeholder="Alto" style="width:46%;">
+                </span>
             </div>
         `;
     }
@@ -334,10 +381,10 @@ function addCuerpoSofa(cuerpos) {
 
     div.innerHTML = `
         <span style="font-size:11px; font-weight:bold; width:35px; text-align:center;">${cuerpos} C.</span>
-        <input type="number" class="form-input-sm c-largo" title="Largo" placeholder="L">
-        <input type="number" class="form-input-sm c-ancho" title="Ancho" placeholder="A">
-        <input type="number" class="form-input-sm c-fondo" title="Fondo" placeholder="F">
-        <input type="number" class="form-input-sm c-alto" title="Alto" placeholder="H">
+        <input type="number" class="form-input-sm c-largo" title="Largo" placeholder="Largo">
+        <input type="number" class="form-input-sm c-fondo" title="Profundidad" placeholder="Prof.">
+        <button type="button" onclick="event.stopPropagation(); toggleAltura(this.nextElementSibling)" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 5px;white-space:nowrap;">+ Alt</button>
+        <span class="alto-wrap" style="display:none;"><input type="number" class="form-input-sm c-alto" title="Alto" placeholder="Alto"></span>
         <button onclick="event.stopPropagation(); this.parentElement.remove()" style="border:none; color:red; background:none; cursor:pointer; padding:2px;"><i class="fa-solid fa-trash"></i></button>
     `;
     
@@ -395,34 +442,51 @@ async function confirmarPersonalizadoSofa() {
         const filas = document.querySelectorAll('.cuerpos-medida');
         filas.forEach(f => {
             const c = f.querySelector('span').innerText;
-            const l = f.querySelector('.c-largo').value || '0', an = f.querySelector('.c-ancho').value || '0', fon = f.querySelector('.c-fondo').value || '0', a = f.querySelector('.c-alto').value || '0';
-            medidasText += `[${c}: L${l}xA${an}xF${fon}xH${a}] `;
+            const l = f.querySelector('.c-largo').value || '0';
+            const fon = f.querySelector('.c-fondo').value || '0';
+            const altWrap = f.querySelector('.alto-wrap');
+            const a = (altWrap && altWrap.style.display !== 'none') ? (f.querySelector('.c-alto')?.value || '') : '';
+            medidasText += `[${c}: L${l}xP${fon}${a ? `xH${a}` : ''}] `;
         });
     } else if (modeloVal === 'multi3') {
-        const l1 = document.getElementById('m3-l1').value||'0', a1 = document.getElementById('m3-a1').value||'0', f1 = document.getElementById('m3-f1').value||'0', h1 = document.getElementById('m3-h1').value||'0';
-        const l2 = document.getElementById('m3-l2').value||'0', a2 = document.getElementById('m3-a2').value||'0', f2 = document.getElementById('m3-f2').value||'0', h2 = document.getElementById('m3-h2').value||'0';
-        medidasText = `<br>-> [Grande: L${l1}xA${a1}xF${f1}xH${h1}]<br>-> [Modular: L${l2}xA${a2}xF${f2}xH${h2}]`;
+        const l1 = document.getElementById('m3-l1').value||'0', f1 = document.getElementById('m3-f1').value||'0';
+        const l2 = document.getElementById('m3-l2').value||'0', f2 = document.getElementById('m3-f2').value||'0';
+        const h1El = document.getElementById('m3-h1'), h2El = document.getElementById('m3-h2');
+        const h1 = (document.getElementById('m3-h1-wrap')?.style.display !== 'none' && h1El) ? h1El.value||'' : '';
+        const h2 = (document.getElementById('m3-h2-wrap')?.style.display !== 'none' && h2El) ? h2El.value||'' : '';
+        medidasText = `<br>-> [Grande: L${l1}xP${f1}${h1?`xH${h1}`:''}]<br>-> [Modular: L${l2}xP${f2}${h2?`xH${h2}`:''}]`;
     } else if (modeloVal === 'multi4') {
-        const l1 = document.getElementById('m4-l1').value||'0', a1 = document.getElementById('m4-a1').value||'0', f1 = document.getElementById('m4-f1').value||'0', h1 = document.getElementById('m4-h1').value||'0';
-        const l2 = document.getElementById('m4-l2').value||'0', a2 = document.getElementById('m4-a2').value||'0', f2 = document.getElementById('m4-f2').value||'0', h2 = document.getElementById('m4-h2').value||'0';
-        const l3 = document.getElementById('m4-l3').value||'0', a3 = document.getElementById('m4-a3').value||'0', f3 = document.getElementById('m4-f3').value||'0', h3 = document.getElementById('m4-h3').value||'0';
-        medidasText = `<br>-> [Grande 1: L${l1}xA${a1}xF${f1}xH${h1}]<br>-> [Grande 2: L${l2}xA${a2}xF${f2}xH${h2}]<br>-> [Modular: L${l3}xA${a3}xF${f3}xH${h3}]`;
+        const l1 = document.getElementById('m4-l1').value||'0', f1 = document.getElementById('m4-f1').value||'0';
+        const l2 = document.getElementById('m4-l2').value||'0', f2 = document.getElementById('m4-f2').value||'0';
+        const l3 = document.getElementById('m4-l3').value||'0', f3 = document.getElementById('m4-f3').value||'0';
+        const h1El = document.getElementById('m4-h1'), h2El = document.getElementById('m4-h2'), h3El = document.getElementById('m4-h3');
+        const h1 = (document.getElementById('m4-h1-wrap')?.style.display !== 'none' && h1El) ? h1El.value||'' : '';
+        const h2 = (document.getElementById('m4-h2-wrap')?.style.display !== 'none' && h2El) ? h2El.value||'' : '';
+        const h3 = (document.getElementById('m4-h3-wrap')?.style.display !== 'none' && h3El) ? h3El.value||'' : '';
+        medidasText = `<br>-> [Grande 1: L${l1}xP${f1}${h1?`xH${h1}`:''}]<br>-> [Grande 2: L${l2}xP${f2}${h2?`xH${h2}`:''}]<br>-> [Modular: L${l3}xP${f3}${h3?`xH${h3}`:''}]`;
     } else if (modeloVal === 'u') {
         const li = document.getElementById('u-largo-izq').value || '0', ld = document.getElementById('u-largo-der').value || '0';
-        const a = document.getElementById('u-ancho').value || '0', f = document.getElementById('u-fondo').value || '0', h = document.getElementById('u-alto').value || '0';
-        medidasText = `[Izq: L${li}] [Der: L${ld}] [General: A${a}xF${f}xH${h}]`;
+        const f = document.getElementById('u-fondo').value || '0';
+        const uAltoWrap = document.getElementById('u-alto-wrap');
+        const h = (uAltoWrap && uAltoWrap.style.display !== 'none') ? (document.getElementById('u-alto')?.value||'') : '';
+        medidasText = `[Izq: L${li}] [Der: L${ld}] [Prof: ${f}${h?` xH${h}`:''}]`;
     } else {
-        const l = document.getElementById('med-largo').value || '0', an = document.getElementById('med-ancho').value || '0';
-        const f = document.getElementById('med-fondo').value || '0', a = document.getElementById('med-alto').value || '0';
-        medidasText = `[Total: L${l}xA${an}xF${f}xH${a}]`;
+        const l = document.getElementById('med-largo').value || '0';
+        const f = document.getElementById('med-fondo').value || '0';
+        const medAltoWrap = document.getElementById('med-alto-wrap');
+        const a = (medAltoWrap && medAltoWrap.style.display !== 'none') ? (document.getElementById('med-alto')?.value||'') : '';
+        medidasText = `[Total: L${l}xP${f}${a?`xH${a}`:''}]`;
     }
 
     // 2. Banqueta
     let banquetaText = "";
     if (document.getElementById('check-banqueta').checked) {
-        const bMod = document.getElementById('bq-mod').value || 'Estándar', bL = document.getElementById('bq-largo').value || '0';
-        const bAn = document.getElementById('bq-ancho').value || '0', bF = document.getElementById('bq-fondo').value || '0', bA = document.getElementById('bq-alto').value || '0';
-        banquetaText = `<br><b style="color:var(--accent)">BANQUETA:</b> Mod: ${bMod} | L${bL} x A${bAn} x F${bF} x H${bA}`;
+        const bMod = document.getElementById('bq-mod').value || 'Estándar';
+        const bL = document.getElementById('bq-largo').value || '0';
+        const bF = document.getElementById('bq-fondo').value || '0';
+        const bqAltoWrap = document.getElementById('bq-alto-wrap');
+        const bA = (bqAltoWrap && bqAltoWrap.style.display !== 'none') ? (document.getElementById('bq-alto')?.value||'') : '';
+        banquetaText = `<br><b style="color:var(--accent)">BANQUETA:</b> Mod: ${bMod} | L${bL} x P${bF}${bA?` x H${bA}`:''}`;
     }
 
     // 3. CAPTURAR DATOS DE ERP
