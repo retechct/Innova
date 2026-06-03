@@ -1792,18 +1792,8 @@ def generar_orden_compra(id):
         # ── Guardar registro y cambiar estado ─────────────────────────
         try:
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS ordenes_compra_seq (
-                    id SERIAL PRIMARY KEY,
-                    logistica_id INTEGER UNIQUE,
-                    numero_oc VARCHAR(20),
-                    url_pdf TEXT,
-                    fecha_creacion TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            cursor.execute("""
                 INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, url_pdf)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (logistica_id) DO UPDATE SET url_pdf = EXCLUDED.url_pdf
             """, (id, numero_oc, url_pdf))
         except Exception as e_seq:
             conexion.rollback()
@@ -1851,6 +1841,80 @@ def registrar_pago_proveedor(id):
         """, (url_voucher, id))
         conexion.commit()
         return jsonify({'exito': True, 'url': url_voucher}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+@produccion_bp.route('/api/logistica/<int:id>/listo-para-recojo', methods=['PUT'])
+def marcar_listo_para_recojo(id):
+    """
+    Marca la logística externa como 'Listo para Recojo' y desbloquea
+    automáticamente los tickets de TELAS/CORTE_Y_CONTROL_TELAS de la venta
+    para que el encargado de telas vaya a recoger el material al proveedor.
+    """
+    try:
+        conexion = get_db_connection()
+        conexion.autocommit = False
+        cursor = conexion.cursor()
+
+        # 1. Verificar que existe y obtener venta_id
+        cursor.execute("""
+            SELECT id, venta_id, estado, insumo_nombre
+            FROM logistica_externa
+            WHERE id = %s
+        """, (id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Logística no encontrada'}), 404
+
+        _, venta_id, estado_actual, insumo_nombre = row
+
+        if estado_actual == 'Listo para Recojo':
+            return jsonify({'error': 'Esta logística ya está marcada como Listo para Recojo'}), 400
+
+        # 2. Actualizar estado de logística externa
+        cursor.execute("""
+            UPDATE logistica_externa
+            SET estado = 'Listo para Recojo'
+            WHERE id = %s
+        """, (id,))
+
+        # 3. Desbloquear tickets de TELAS de la venta si hay venta_id
+        tickets_desbloqueados = 0
+        if venta_id:
+            cursor.execute("""
+                UPDATE tickets_produccion
+                SET estado_ticket = 'En Proceso',
+                    fecha_inicio  = CURRENT_TIMESTAMP
+                WHERE id IN (
+                    SELECT t.id
+                    FROM tickets_produccion t
+                    JOIN items_venta i ON t.item_id = i.id
+                    WHERE i.venta_id = %s
+                      AND t.area_trabajo IN ('TELAS', 'CORTE_Y_CONTROL_TELAS')
+                      AND t.estado_ticket = 'Bloqueado'
+                )
+            """, (venta_id,))
+            tickets_desbloqueados = cursor.rowcount
+
+        conexion.commit()
+
+        msg = 'Logística marcada como Listo para Recojo.'
+        if tickets_desbloqueados > 0:
+            msg += f' {tickets_desbloqueados} ticket(s) de Telas desbloqueado(s) — el encargado puede ir a recoger.'
+        else:
+            msg += ' No se encontraron tickets de Telas bloqueados para esta venta.'
+
+        return jsonify({
+            'exito': True,
+            'mensaje': msg,
+            'tickets_desbloqueados': tickets_desbloqueados,
+            'insumo': insumo_nombre,
+        }), 200
+
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
