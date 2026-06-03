@@ -956,10 +956,13 @@ async function cargarTicketsTaller() {
                 const productoSafe = (t.producto || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
                 const fotoBtoa    = (t.foto||'').replace(/"/g,'&quot;');
 
-                // Foto del mueble — primera si hay varias separadas por |
-                const fotoCardSrc = t.foto && !t.foto.includes('sin_foto')
-                    ? t.foto.split('|')[0]
-                    : null;
+                // Foto del mueble — preferir fotos de referencia ([1..]) sobre logo catálogo ([0])
+                const _fotosCard = t.foto ? t.foto.split('|').filter(f => f.trim()) : [];
+                const fotoCardSrc = _fotosCard.length > 1
+                    ? _fotosCard[1]          // primera foto real del vendedor
+                    : (_fotosCard.length === 1 && !_fotosCard[0].includes('sin_foto')
+                        ? _fotosCard[0]      // solo hay logo catálogo, usarlo
+                        : null);
                 const fotoCardHTML = fotoCardSrc
                     ? `<div style="margin:-15px -15px 12px -15px; border-radius:8px 8px 0 0; overflow:hidden; height:160px; background:#f1f5f9;">
                            <img src="${fotoCardSrc}" alt="${productoSafe}"
@@ -1072,15 +1075,31 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
     // ── Construir HTML de las líneas de texto ──
     const specsHtml = seccionesFiltradas
         .map(l => {
-            // 1. Limpiamos cualquier tag HTML sucio que haya quedado (<b>, <span>, <i>, etc.)
-            let fLine = l.replace(/<[^>]+>/g, '').trim();
-            if (!fLine) return '';
+            // 1. Extraer URLs de fotos href ANTES de limpiar HTML
+            //    (vienen como <a href="url">[Ver Foto]</a> de procesarNotasConFotos)
+            const _fotosHref = [];
+            const _hrefRx = /href=["']?(https?:\/\/[^"'\s>]+)["']?/gi;
+            let _hm;
+            while ((_hm = _hrefRx.exec(l)) !== null) _fotosHref.push(_hm[1]);
 
-            // 2. Convertimos enlaces en imágenes si existen
+            // 2. Limpiar tags HTML pero preservar texto plano
+            let fLine = l.replace(/<[^>]+>/g, '').trim();
+            fLine = fLine.replace(/\[Ver Foto\]/gi, '').trim();
+            if (!fLine && _fotosHref.length === 0) return '';
+
+            // 3. Convertir URLs de texto plano en imágenes
             const urlRegex = /(https?:\/\/[^\s"<]+)/g;
             fLine = fLine.replace(urlRegex, function(url) {
                 return `<br><img src="${url}" style="width:120px; height:120px; object-fit:cover; border-radius:6px; border:2px solid #cbd5e1; margin-top:4px; cursor:pointer;" onclick="ampliarImagen('${url}')">`;
             });
+
+            // 4. Agregar fotos extraídas de hrefs como galería destacada
+            if (_fotosHref.length > 0) {
+                const _galeriaHtml = _fotosHref.map(url =>
+                    `<img src="${url}" style="width:110px; height:110px; object-fit:cover; border-radius:6px; border:2px solid #f59e0b; margin:4px 4px 0 0; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.15); display:inline-block;" onclick="ampliarImagen('${url}')" title="📸 Foto de referencia del vendedor">`
+                ).join('');
+                fLine += `<div style="margin-top:6px; padding:6px; background:#fffbeb; border-radius:6px; border-left:3px solid #f59e0b;"><div style="font-size:10px; font-weight:800; color:#92400e; margin-bottom:4px;">📸 FOTO DE REFERENCIA</div>${_galeriaHtml}</div>`;
+            }
             
             // Si la línea tiene formato "Clave: Valor"
             if (fLine.includes(':') && !fLine.startsWith('http') && !fLine.includes('<img')) {
@@ -1114,13 +1133,14 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
         })
         .join('');
 
-    // ── Foto del mueble (Slider si hay más de 1) ──
+    // ── Foto del mueble: fotos de referencia del vendedor > logo catálogo ──
     let fotoMueble = '';
     if (foto) {
-        const fotosArray = foto.split('|').filter(f => f.trim() !== '');
-        if (fotosArray.length === 1) {
-            fotoMueble = `<img src="${fotosArray[0]}" style="width:100%; height:200px; object-fit:contain; background:#f1f5f9; border-radius:10px; margin-bottom:12px; border:1px solid #e2e8f0;" onerror="this.style.display='none'">`;
-        } else if (fotosArray.length > 1) {
+        const todasFotos = foto.split('|').filter(f => f.trim() !== '');
+        // [0] = foto catálogo (logo genérico), [1..] = fotos reales subidas por el vendedor
+        const fotosReferencia = todasFotos.slice(1);
+        const fotosArray = fotosReferencia.length > 0 ? fotosReferencia : todasFotos.slice(0, 1);
+        if (fotosArray.length >= 1) {
             const slides = fotosArray.map(f => `
                 <div style="min-width:100%; flex-shrink:0; display:flex; justify-content:center; align-items:center; scroll-snap-align:center;">
                     <img src="${f}" style="width:100%; height:200px; object-fit:contain; background:#f1f5f9; border-radius:10px; border:1px solid #e2e8f0;" onerror="this.style.display='none'">
@@ -1131,17 +1151,16 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
                     <div id="ficha-carousel-container" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scroll-behavior:smooth; gap:0; -webkit-overflow-scrolling:touch;" class="hide-scroll">
                         ${slides}
                     </div>
-                    <!-- Botones de Navegación -->
+                    ${fotosArray.length > 1 ? `
                     <button onclick="scrollFichaCarousel(-1)" style="position:absolute; top:50%; left:8px; transform:translateY(-50%); background:rgba(15,23,42,0.6); color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:14px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center; transition: background 0.2s;" onmouseover="this.style.background='rgba(15,23,42,0.8)'" onmouseout="this.style.background='rgba(15,23,42,0.6)'">
                         <i class="fa-solid fa-chevron-left"></i>
                     </button>
                     <button onclick="scrollFichaCarousel(1)" style="position:absolute; top:50%; right:8px; transform:translateY(-50%); background:rgba(15,23,42,0.6); color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:14px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center; transition: background 0.2s;" onmouseover="this.style.background='rgba(15,23,42,0.8)'" onmouseout="this.style.background='rgba(15,23,42,0.6)'">
                         <i class="fa-solid fa-chevron-right"></i>
                     </button>
-
                     <div style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%); background:rgba(15,23,42,0.8); color:white; padding:4px 12px; border-radius:20px; font-size:10px; font-weight:bold; pointer-events:none; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
                         📸 ${fotosArray.length} FOTOS (Desliza <i class="fa-solid fa-arrows-left-right"></i>)
-                    </div>
+                    </div>` : ''}
                 </div>
                 <style>.hide-scroll::-webkit-scrollbar { display:none; } .hide-scroll { -ms-overflow-style:none; scrollbar-width:none; }</style>
             `;

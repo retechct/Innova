@@ -245,7 +245,7 @@ def obtener_tickets_taller():
             cursor.execute(f"""
                 SELECT DISTINCT item_id FROM tickets_produccion
                 WHERE item_id IN ({placeholders_items})
-                  AND estado_ticket != 'Terminado' AND area_trabajo != 'DESPACHO_CENTRAL'
+                  AND estado_ticket NOT IN ('Terminado', 'Bloqueado') AND area_trabajo != 'DESPACHO_CENTRAL'
             """, tuple(item_ids_despacho))
             items_incompletos = {r[0] for r in cursor.fetchall()}
 
@@ -1608,10 +1608,15 @@ def generar_orden_compra(id):
          cantidad, unidad, prov_informal) = row
 
         # Número de OC — intentar obtener el próximo de la secuencia
-        try:
+        cursor.execute("""
+    SELECT EXISTS(
+        SELECT 1 FROM pg_proc WHERE proname = 'generar_numero_oc'
+    )
+""")
+        if cursor.fetchone()[0]:
             cursor.execute("SELECT generar_numero_oc()")
             numero_oc = cursor.fetchone()[0]
-        except Exception:
+        else:
             numero_oc = f"OC-{id:04d}"
 
         fecha_emision = datetime.now().strftime('%d/%m/%Y')
@@ -1787,12 +1792,22 @@ def generar_orden_compra(id):
         # ── Guardar registro y cambiar estado ─────────────────────────
         try:
             cursor.execute("""
+                CREATE TABLE IF NOT EXISTS ordenes_compra_seq (
+                    id SERIAL PRIMARY KEY,
+                    logistica_id INTEGER UNIQUE,
+                    numero_oc VARCHAR(20),
+                    url_pdf TEXT,
+                    fecha_creacion TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cursor.execute("""
                 INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, url_pdf)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (logistica_id) DO UPDATE SET url_pdf = EXCLUDED.url_pdf
             """, (id, numero_oc, url_pdf))
-        except Exception:
-            pass  # tabla puede no tener la constraint; el UPDATE de estado es lo crítico
+        except Exception as e_seq:
+            conexion.rollback()
+            print(f"[ordenes_compra_seq] Advertencia: {e_seq}")
 
         cursor.execute("""
             UPDATE logistica_externa SET estado = 'Orden Enviada' WHERE id = %s
