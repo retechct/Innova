@@ -686,7 +686,9 @@ def obtener_logistica():
                        (SELECT foto_url FROM maestro_bases_comedor WHERE sku = l.sku LIMIT 1),
                        (SELECT foto_url FROM maestro_sillas        WHERE sku = l.sku LIMIT 1),
                        (SELECT foto_url FROM maestro_butacas       WHERE sku = l.sku LIMIT 1),
-                       (SELECT foto_url FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1)
+                       (SELECT foto_url FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1),
+                       -- FALLBACK: foto del primer ítem de la venta que generó este requerimiento
+                       (SELECT i2.foto_url FROM items_venta i2 WHERE i2.venta_id = l.venta_id LIMIT 1)
                    ) AS foto_url,
                    -- Detalles descriptivos del insumo según su tipo
                    COALESCE(
@@ -1475,7 +1477,8 @@ def enviar_cotizacion_proveedor(id):
                        (SELECT foto_url FROM maestro_bases_comedor   WHERE sku = l.sku LIMIT 1),
                        (SELECT foto_url FROM maestro_sillas          WHERE sku = l.sku LIMIT 1),
                        (SELECT foto_url FROM maestro_butacas         WHERE sku = l.sku LIMIT 1),
-                       (SELECT foto_url FROM maestro_disenos_cojin   WHERE sku = l.sku LIMIT 1)
+                       (SELECT foto_url FROM maestro_disenos_cojin   WHERE sku = l.sku LIMIT 1),
+                       (SELECT foto_url FROM items_venta             WHERE venta_id = l.venta_id LIMIT 1)
                    ) AS foto_url
             FROM logistica_externa l
             JOIN ventas v           ON l.venta_id    = v.id
@@ -1494,6 +1497,7 @@ def enviar_cotizacion_proveedor(id):
         from database import BACKEND_URL
         token = uuid.uuid4().hex
         link  = f"{BACKEND_URL}/cotizar.html?token={token}"
+        foto_url_limpia = limpiar_foto(foto_url.split('|')[0]) if foto_url else ''
 
         cursor.execute("""
             UPDATE logistica_externa
@@ -1513,7 +1517,7 @@ def enviar_cotizacion_proveedor(id):
             'insumo':            insumo,
             'sku':               sku or '',
             'codigo_venta':      codigo_venta,
-            'foto_url':          foto_url or '',
+            'foto_url':          foto_url_limpia,
         }), 200
 
     except Exception as e:
