@@ -307,10 +307,27 @@ function actualizarVistaSofa() {
     const modelo = document.getElementById('sofa-modelo').value;
     const imgPreview = document.getElementById('preview-sofa');
     const medContainer = document.getElementById('medidas-container');
-    
-    imgPreview.src = imagenesSofa[modelo] || tempItem.img;
 
-    if (modelo === 'juego') {
+    imgPreview.src = imagenesSofa[modelo] || (tempItem && tempItem.img) || 'imagenes/sin_foto.jpg';
+
+    // Resolver el tipo de medidas real:
+    // Para modelos fijos lo sabemos de memoria.
+    // Para modelos custom lo leemos del localStorage (campo 'medidas').
+    const MODELOS_FIJOS = { juego: 'juego', multi3: 'multi3', multi4: 'multi4', u: 'u' };
+    let tipoMedidas = MODELOS_FIJOS[modelo] || null;
+
+    if (!tipoMedidas) {
+        // Modelo custom: buscar en innova_modelos_sofa
+        try {
+            const guardados = JSON.parse(localStorage.getItem('innova_modelos_sofa') || '[]');
+            const encontrado = guardados.find(m => m.key === modelo);
+            tipoMedidas = encontrado ? (encontrado.medidas || 'general') : 'general';
+        } catch(e) {
+            tipoMedidas = 'general';
+        }
+    }
+
+    if (tipoMedidas === 'juego') {
         medContainer.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                 <label style="font-size:10px; font-weight:bold; color:gray;">CONSTRUIR JUEGO (L, A, F, H)</label>
@@ -320,7 +337,7 @@ function actualizarVistaSofa() {
         `;
         addCuerpoSofa('3');
 
-    } else if (modelo === 'multi3') {
+    } else if (tipoMedidas === 'multi3') {
         medContainer.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                 <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 3 PIEZAS (Largo, Profundidad)</label>
@@ -349,7 +366,7 @@ function actualizarVistaSofa() {
             <input type="hidden" id="sofa-medidas-estandar" value="">
         `;
 
-    } else if (modelo === 'multi4') {
+    } else if (tipoMedidas === 'multi4') {
         medContainer.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                 <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 4 PIEZAS (Largo, Profundidad)</label>
@@ -385,7 +402,7 @@ function actualizarVistaSofa() {
             <input type="hidden" id="sofa-medidas-estandar" value="">
         `;
 
-    } else if (modelo === 'u') {
+    } else if (tipoMedidas === 'u') {
         medContainer.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                 <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS EN "U" (cm)</label>
@@ -499,16 +516,26 @@ async function confirmarPersonalizadoSofa() {
     const modeloSelect = document.getElementById('sofa-modelo');
     const modeloBase = modeloSelect.options[modeloSelect.selectedIndex].text;
     const modeloVal = modeloSelect.value;
+
+    // Resolver tipoMedidas real (igual que en actualizarVistaSofa)
+    const _MODELOS_FIJOS = { juego: 'juego', multi3: 'multi3', multi4: 'multi4', u: 'u' };
+    let tipoMedidas = _MODELOS_FIJOS[modeloVal] || null;
+    if (!tipoMedidas) {
+        try {
+            const _guardados = JSON.parse(localStorage.getItem('innova_modelos_sofa') || '[]');
+            const _enc = _guardados.find(m => m.key === modeloVal);
+            tipoMedidas = _enc ? (_enc.medidas || 'general') : 'general';
+        } catch(e) { tipoMedidas = 'general'; }
+    }
     
     // 1. Capturar Medidas
-   // 1. Capturar Medidas
     let medidasText = "";
 
     // Detectar modo estándar (aplica a todos los modelos excepto juego)
     const estandarHidden = document.getElementById('sofa-medidas-estandar');
     if (estandarHidden && estandarHidden.value === 'MEDIDAS ESTÁNDAR') {
         medidasText = ' [MEDIDAS ESTÁNDAR]';
-    } else if (modeloVal === 'juego') {
+    } else if (tipoMedidas === 'juego') {
         const filas = document.querySelectorAll('.cuerpos-medida');
         filas.forEach(f => {
             const c = f.querySelector('span').innerText;
@@ -518,14 +545,14 @@ async function confirmarPersonalizadoSofa() {
             const a = (altWrap && altWrap.style.display !== 'none') ? (f.querySelector('.c-alto')?.value || '') : '';
             medidasText += `[${c}: L${l}xP${fon}${a ? `xH${a}` : ''}] `;
         });
-    } else if (modeloVal === 'multi3') {
+    } else if (tipoMedidas === 'multi3') {
         const l1 = document.getElementById('m3-l1').value||'0', f1 = document.getElementById('m3-f1').value||'0';
         const l2 = document.getElementById('m3-l2').value||'0', f2 = document.getElementById('m3-f2').value||'0';
         const h1El = document.getElementById('m3-h1'), h2El = document.getElementById('m3-h2');
         const h1 = (document.getElementById('m3-h1-wrap')?.style.display !== 'none' && h1El) ? h1El.value||'' : '';
         const h2 = (document.getElementById('m3-h2-wrap')?.style.display !== 'none' && h2El) ? h2El.value||'' : '';
         medidasText = `<br>-> [Grande: L${l1}xP${f1}${h1?`xH${h1}`:''}]<br>-> [Modular: L${l2}xP${f2}${h2?`xH${h2}`:''}]`;
-    } else if (modeloVal === 'multi4') {
+    } else if (tipoMedidas === 'multi4') {
         const l1 = document.getElementById('m4-l1').value||'0', f1 = document.getElementById('m4-f1').value||'0';
         const l2 = document.getElementById('m4-l2').value||'0', f2 = document.getElementById('m4-f2').value||'0';
         const l3 = document.getElementById('m4-l3').value||'0', f3 = document.getElementById('m4-f3').value||'0';
@@ -534,7 +561,7 @@ async function confirmarPersonalizadoSofa() {
         const h2 = (document.getElementById('m4-h2-wrap')?.style.display !== 'none' && h2El) ? h2El.value||'' : '';
         const h3 = (document.getElementById('m4-h3-wrap')?.style.display !== 'none' && h3El) ? h3El.value||'' : '';
         medidasText = `<br>-> [Grande 1: L${l1}xP${f1}${h1?`xH${h1}`:''}]<br>-> [Grande 2: L${l2}xP${f2}${h2?`xH${h2}`:''}]<br>-> [Modular: L${l3}xP${f3}${h3?`xH${h3}`:''}]`;
-    } else if (modeloVal === 'u') {
+    } else if (tipoMedidas === 'u') {
         const li = document.getElementById('u-largo-izq').value || '0', ld = document.getElementById('u-largo-der').value || '0';
         const f = document.getElementById('u-fondo').value || '0';
         const uAltoWrap = document.getElementById('u-alto-wrap');
