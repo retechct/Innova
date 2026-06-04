@@ -956,13 +956,9 @@ async function cargarTicketsTaller() {
                 const productoSafe = (t.producto || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
                 const fotoBtoa    = (t.foto||'').replace(/"/g,'&quot;');
 
-                // Foto del mueble — preferir fotos de referencia ([1..]) sobre logo catálogo ([0])
+                // Foto del mueble — mostrar siempre la foto del modelo base (la primera)
                 const _fotosCard = t.foto ? t.foto.split('|').filter(f => f.trim()) : [];
-                const fotoCardSrc = _fotosCard.length > 1
-                    ? _fotosCard[1]          // primera foto real del vendedor
-                    : (_fotosCard.length === 1 && !_fotosCard[0].includes('sin_foto')
-                        ? _fotosCard[0]      // solo hay logo catálogo, usarlo
-                        : null);
+                const fotoCardSrc = _fotosCard.length > 0 && !_fotosCard[0].includes('sin_foto') ? _fotosCard[0] : null;
                 const fotoCardHTML = fotoCardSrc
                     ? `<div style="margin:-15px -15px 12px -15px; border-radius:8px 8px 0 0; overflow:hidden; height:160px; background:#f1f5f9;">
                            <img src="${fotoCardSrc}" alt="${productoSafe}"
@@ -1133,7 +1129,7 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
         })
         .join('');
 
-    // ── Foto del mueble: fotos de referencia del vendedor > logo catálogo ──
+    // ── Foto del mueble: mostrar todas las fotos (modelo base primero + referencias) ──
     let fotoMueble = '';
     if (foto) {
         const todasFotos = foto.split('|').filter(f => f.trim() !== '');

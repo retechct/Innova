@@ -500,7 +500,7 @@ def obtener_ordenes_produccion():
                 items_list.append({
                     'id': item_id,
                     'producto': item[1],
-                    'foto': limpiar_foto(item[2]),
+                    'foto': limpiar_foto(item[2].split('|')[0] if item[2] else ''),
                     'tickets': tickets_list
                 })
                 
