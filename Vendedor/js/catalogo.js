@@ -727,7 +727,8 @@ async function confirmarPersonalizadoSofa() {
         base:                document.getElementById('sku-base').value
     };
 
-    const imagenFinal = await subirFotosReferencia('sofa-fotos', tempItem.img);
+    const imagenUrl = document.getElementById('preview-sofa').src;
+    const imagenFinal = await subirFotosReferencia('sofa-fotos', imagenUrl);
     addToCart(tempItem.name, precio, imagenFinal, specs, componentes);
     closeModal();
 
