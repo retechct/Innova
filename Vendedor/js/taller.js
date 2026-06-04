@@ -1137,9 +1137,8 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
     let fotoMueble = '';
     if (foto) {
         const todasFotos = foto.split('|').filter(f => f.trim() !== '');
-        // [0] = foto catálogo (logo genérico), [1..] = fotos reales subidas por el vendedor
-        const fotosReferencia = todasFotos.slice(1);
-        const fotosArray = fotosReferencia.length > 0 ? fotosReferencia : todasFotos.slice(0, 1);
+        // Mostrar todas las fotos en el carousel (logo genérico + fotos de referencia del vendedor)
+        const fotosArray = todasFotos;
         if (fotosArray.length >= 1) {
             const slides = fotosArray.map(f => `
                 <div style="min-width:100%; flex-shrink:0; display:flex; justify-content:center; align-items:center; scroll-snap-align:center;">

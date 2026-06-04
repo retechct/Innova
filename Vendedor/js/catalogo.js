@@ -254,7 +254,15 @@ function openConfig(name, img) {
 
     // Forzamos que el input de fotos acepte múltiples archivos
     const fInp = document.getElementById('sofa-fotos');
-    if (fInp) fInp.setAttribute('multiple', 'multiple');
+    if (fInp) {
+        fInp.setAttribute('multiple', 'multiple');
+        if (!fInp.dataset.bound) {
+            fInp.addEventListener('change', function() { _mostrarPreviewMultiplesFotos(this, 'sofa'); });
+            fInp.dataset.bound = '1';
+        }
+    }
+    const prevCont = document.getElementById('preview-multiples-sofa');
+    if (prevCont) prevCont.innerHTML = '';
 
     document.getElementById('modal-config').style.display = 'flex';
     document.getElementById('sofa-modelo').value = 'multi3'; 
@@ -842,7 +850,15 @@ function openConfigComedor() {
     });
 
     const fInp = document.getElementById('comedor-fotos');
-    if (fInp) fInp.setAttribute('multiple', 'multiple');
+    if (fInp) {
+        fInp.setAttribute('multiple', 'multiple');
+        if (!fInp.dataset.bound) {
+            fInp.addEventListener('change', function() { _mostrarPreviewMultiplesFotos(this, 'comedor'); });
+            fInp.dataset.bound = '1';
+        }
+    }
+    const prevCont = document.getElementById('preview-multiples-comedor');
+    if (prevCont) prevCont.innerHTML = '';
 
     document.getElementById('modal-config-comedor').style.display = 'flex';
     document.getElementById('comedor-formato').value = 'rect-6';
@@ -907,7 +923,15 @@ function openConfigCentro() {
     });
 
     const fInp = document.getElementById('centro-fotos');
-    if (fInp) fInp.setAttribute('multiple', 'multiple');
+    if (fInp) {
+        fInp.setAttribute('multiple', 'multiple');
+        if (!fInp.dataset.bound) {
+            fInp.addEventListener('change', function() { _mostrarPreviewMultiplesFotos(this, 'centro'); });
+            fInp.dataset.bound = '1';
+        }
+    }
+    const prevCont = document.getElementById('preview-multiples-centro');
+    if (prevCont) prevCont.innerHTML = '';
 
     document.getElementById('modal-config-centro').style.display = 'flex';
     document.getElementById('centro-tipo').selectedIndex = 0;
@@ -997,7 +1021,15 @@ function openConfigButaca() {
     });
 
     const fInp = document.getElementById('butaca-fotos');
-    if (fInp) fInp.setAttribute('multiple', 'multiple');
+    if (fInp) {
+        fInp.setAttribute('multiple', 'multiple');
+        if (!fInp.dataset.bound) {
+            fInp.addEventListener('change', function() { _mostrarPreviewMultiplesFotos(this, 'butaca'); });
+            fInp.dataset.bound = '1';
+        }
+    }
+    const prevCont = document.getElementById('preview-multiples-butaca');
+    if (prevCont) prevCont.innerHTML = '';
 
     document.getElementById('modal-config-butaca').style.display = 'flex';
     document.getElementById('butaca-tipo').selectedIndex = 0;

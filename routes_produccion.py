@@ -174,7 +174,8 @@ def obtener_cola_recojo():
             "ticket_id": r[0], "area": r[1], "producto": r[2], "codigo_venta": r[3],
             "cliente": r[4], "operario": r[5],
             "fecha_fin": r[6].strftime('%d/%m/%Y %H:%M') if r[6] else 'S/F',
-            "foto_url": limpiar_foto(r[7]), "especificaciones": r[8] or '',
+            "foto_url": "|".join([limpiar_foto(p) for p in r[7].split('|')]) if r[7] and "|" in r[7] else limpiar_foto(r[7]),
+            "especificaciones": r[8] or '',
             "foto_evidencia": r[9] if r[9] else '', "direccion": r[10] or '',
             "fecha_entrega": r[11].strftime('%d/%m/%Y') if r[11] else 'S/F',
             "item_id": r[12], "tapicero": r[13],
@@ -261,7 +262,7 @@ def obtener_tickets_taller():
                 "area":            row[3],
                 "trabajador":      row[5],
                 "especificaciones": row[4] if row[4] else (row[7] if row[7] else "Sin notas técnicas"),
-                "foto":            limpiar_foto(row[9]),
+                "foto":            "|".join([limpiar_foto(p) for p in row[9].split('|')]) if row[9] and "|" in row[9] else limpiar_foto(row[9]),
                 "trabajador_nombre": row[11] if row[11] else 'Sin asignar',
                 "item_id":         row[8]
             })
