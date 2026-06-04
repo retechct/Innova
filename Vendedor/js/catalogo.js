@@ -505,6 +505,15 @@ function toggleCojinPendiente() {
         document.getElementById('sku-cojin-diseno').value = '';
         document.getElementById('img-preview-cojin-entero').style.display = 'none';
         document.getElementById('img-preview-cojin-diseno').style.display = 'none';
+        // Limpiar también campos de reversibles
+        const ids = ['c-reversible','search-cojin-rev-diseno','search-cojin-rev-entero',
+                     'sku-cojin-rev-diseno','sku-cojin-rev-entero',
+                     'proveedor-cojin-rev-diseno','proveedor-cojin-rev-entero','nota-cojin-reversible'];
+        ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+        const imgRevD = document.getElementById('img-preview-cojin-rev-diseno');
+        const imgRevE = document.getElementById('img-preview-cojin-rev-entero');
+        if(imgRevD) imgRevD.style.display = 'none';
+        if(imgRevE) imgRevE.style.display = 'none';
     }
 }
 
@@ -598,38 +607,66 @@ async function confirmarPersonalizadoSofa() {
     const brazo = document.getElementById('med-brazo').value || '0';
 
     const cojinPendiente = document.getElementById('cojin-pendiente')?.checked || false;
-    const cEnteros     = cojinPendiente ? '⏳ POR CONFIRMAR' : (document.getElementById('c-enteros').value || '0');
-    const cDiseno      = cojinPendiente ? '' : (document.getElementById('c-diseno').value || '0');
-    const skuCojinEnt  = cojinPendiente ? 'PENDIENTE' : (document.getElementById('sku-cojin-entero').value || 'N/A');
-    const skuCojinDis  = cojinPendiente ? 'PENDIENTE' : (document.getElementById('sku-cojin-diseno').value || 'N/A');
-    const nombreCojinEnt = cojinPendiente ? '' : (document.getElementById('search-cojin-entero').value || '');
-    const nombreCojinDis = cojinPendiente ? '' : (document.getElementById('search-cojin-diseno').value || '');
-    const tipoCojinDis   = cojinPendiente ? '' : (document.getElementById('tipo-tela-cojin-diseno')?.value || '');
+
+    // ── Cojines Enteros ──────────────────────────────────────────────────────
+    const cEnteros          = cojinPendiente ? '⏳ POR CONFIRMAR' : (document.getElementById('c-enteros').value || '0');
+    const skuCojinEnt       = cojinPendiente ? 'PENDIENTE' : (document.getElementById('sku-cojin-entero').value || 'N/A');
+    const nombreCojinEnt    = cojinPendiente ? '' : (document.getElementById('search-cojin-entero').value || '');
+    const provCojinEnt      = cojinPendiente ? '' : (document.getElementById('proveedor-cojin-entero')?.value || '');
+
+    // ── Cojines c/Diseño ─────────────────────────────────────────────────────
+    const cDiseno           = cojinPendiente ? '' : (document.getElementById('c-diseno').value || '0');
+    const skuCojinDis       = cojinPendiente ? 'PENDIENTE' : (document.getElementById('sku-cojin-diseno').value || 'N/A');
+    const nombreCojinDis    = cojinPendiente ? '' : (document.getElementById('search-cojin-diseno').value || '');
+    const tipoCojinDis      = cojinPendiente ? '' : (document.getElementById('tipo-tela-cojin-diseno')?.value || '');
+    const provCojinDis      = cojinPendiente ? '' : (document.getElementById('proveedor-cojin-diseno')?.value || '');
+
+    // ── Cojines Reversibles ──────────────────────────────────────────────────
+    const cReversible       = cojinPendiente ? '' : (document.getElementById('c-reversible')?.value || '0');
+    const skuRevDiseno      = cojinPendiente ? '' : (document.getElementById('sku-cojin-rev-diseno')?.value || '');
+    const nombreRevDiseno   = cojinPendiente ? '' : (document.getElementById('search-cojin-rev-diseno')?.value || '');
+    const provRevDiseno     = cojinPendiente ? '' : (document.getElementById('proveedor-cojin-rev-diseno')?.value || '');
+    const skuRevEntero      = cojinPendiente ? '' : (document.getElementById('sku-cojin-rev-entero')?.value || '');
+    const nombreRevEntero   = cojinPendiente ? '' : (document.getElementById('search-cojin-rev-entero')?.value || '');
+    const provRevEntero     = cojinPendiente ? '' : (document.getElementById('proveedor-cojin-rev-entero')?.value || '');
+    const notaReversible    = cojinPendiente ? '' : (document.getElementById('nota-cojin-reversible')?.value || '');
+    const hayReversible     = !cojinPendiente && parseInt(cReversible) > 0 && (skuRevDiseno || skuRevEntero);
 
     const skuBase = document.getElementById('sku-base').value;
     const nombreBase = document.getElementById('search-base').value;
+    const provTela = document.getElementById('proveedor-tela')?.value || '';
+    const provBase = document.getElementById('proveedor-base')?.value || '';
 
-    const notas = await procesarNotasConFotos(['tela', 'espuma', 'cojin-entero', 'cojin-diseno', 'base']);
+    const notas = await procesarNotasConFotos(['tela', 'espuma', 'cojin-entero', 'cojin-diseno', 'cojin-rev-diseno', 'cojin-rev-entero', 'base']);
+
+    // ── Línea de cojines reversibles para el specs ───────────────────────────
+    const lineaReversible = hayReversible ? `
+        - ${cReversible} Reversibles:<br>
+          &nbsp;&nbsp;Cara A (diseño): [SKU: ${skuRevDiseno}] ${nombreRevDiseno}${provRevDiseno ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provRevDiseno}]</span>` : ''}${notas['cojin-rev-diseno']}<br>
+          &nbsp;&nbsp;Cara B (entero): [SKU: ${skuRevEntero}] ${nombreRevEntero}${provRevEntero ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provRevEntero}]</span>` : ''}${notas['cojin-rev-entero']}${notaReversible ? `<br>&nbsp;&nbsp;💬 ${notaReversible}` : ''}<br>` : '';
 
     const specs = `
         <b>MOD:</b> ${modeloBase} ${medidasText}<br>
-        <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${notas['tela']}<br>
+        <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${provTela ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provTela}]</span>` : ''}${notas['tela']}<br>
         <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm${notas['espuma']}<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>
         ${cojinPendiente
             ? `- ⏳ <b style="color:#7c3aed;">POR CONFIRMAR AL FINAL</b> (cliente decide después)<br>`
-            : `- ${cEnteros} Enteros (Telas): [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${notas['cojin-entero']}<br>
-        - ${cDiseno} c/Diseño (Patrones): [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${notas['cojin-diseno']}<br>`
+            : `${parseInt(cEnteros) > 0 || skuCojinEnt !== 'N/A' ? `- ${cEnteros} Enteros: [SKU: ${skuCojinEnt}] ${nombreCojinEnt}${provCojinEnt ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provCojinEnt}]</span>` : ''}${notas['cojin-entero']}<br>` : ''}
+        ${parseInt(cDiseno) > 0 || skuCojinDis !== 'N/A' ? `- ${cDiseno} c/Diseño: [SKU: ${skuCojinDis}] ${nombreCojinDis}${tipoCojinDis ? ` (${tipoCojinDis})` : ''}${provCojinDis ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provCojinDis}]</span>` : ''}${notas['cojin-diseno']}<br>` : ''}
+        ${lineaReversible}`
         }
-        <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}${notas['base']}
+        <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}${provBase ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provBase}]</span>` : ''}${notas['base']}
         ${banquetaText}
     `;
 
     const componentes = {
-        tela: document.getElementById('sku-tela').value,
-        'cojin-entero': document.getElementById('sku-cojin-entero').value,
-        'cojin-diseno': document.getElementById('sku-cojin-diseno').value,
-        base: document.getElementById('sku-base').value
+        tela:                document.getElementById('sku-tela').value,
+        'cojin-entero':      document.getElementById('sku-cojin-entero').value,
+        'cojin-diseno':      document.getElementById('sku-cojin-diseno').value,
+        'cojin-rev-diseno':  skuRevDiseno,
+        'cojin-rev-entero':  skuRevEntero,
+        base:                document.getElementById('sku-base').value
     };
 
     const imagenFinal = await subirFotosReferencia('sofa-fotos', tempItem.img);

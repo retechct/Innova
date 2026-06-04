@@ -10,8 +10,8 @@ function filtrarMaterial(tipoInput) {
     }
 
    // 1. SEPARACIÓN ABSOLUTA (Butacas tienen su propio almacén)
-    if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin') tipoData = 'telas';
-    else if (tipoInput === 'cojin-diseno') tipoData = 'cojines';
+    if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero') tipoData = 'telas';
+    else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno') tipoData = 'cojines';
     else if (tipoInput === 'base') tipoData = 'bases';
     else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro') tipoData = 'tableros'; 
     else if (tipoInput === 'base-mesa' || tipoInput === 'base-centro') tipoData = 'bases_comedor'; 
@@ -58,7 +58,8 @@ function filtrarMaterial(tipoInput) {
         const isDescontinuado = item.estado === 'Descontinuado';
         const noDisponible    = isAgotado || isDescontinuado;
         const styleAgotado    = noDisponible ? 'filter: grayscale(1); opacity: 0.5; cursor: not-allowed; background: #f1f5f9;' : '';
-        const action          = noDisponible ? '' : `onclick="seleccionarMaterial('${tipoInput}', '${item.sku}', '${safeTitulo}', '${item.foto_url}')"`;
+        const provSeguro      = (item.proveedor || '').replace(/'/g, "\'");
+        const action          = noDisponible ? '' : `onclick="seleccionarMaterial('${tipoInput}', '${item.sku}', '${safeTitulo}', '${item.foto_url}', '${provSeguro}')"`;
         const badge           = isAgotado       ? '<b style="color:red;">(AGOTADO)</b>'
                               : isDescontinuado ? '<b style="color:#6b7280;">(DESCONTINUADO)</b>'
                               : '';
@@ -78,11 +79,15 @@ function filtrarMaterial(tipoInput) {
     
     listContainer.classList.add('show');
 }
-function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl) {
+function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl, proveedor) {
     // Guardamos el SKU secreto
     document.getElementById(`sku-${tipoInput}`).value = sku;
     // Ponemos el nombre en el buscador
     document.getElementById(`search-${tipoInput}`).value = nombre;
+
+    // Guardamos el proveedor en su campo hidden (si existe)
+    const provHidden = document.getElementById(`proveedor-${tipoInput}`);
+    if (provHidden) provHidden.value = proveedor || '';
     
     // MOSTRAMOS LA IMAGEN EN MINIATURA
     let imgPreview = document.getElementById(`img-preview-${tipoInput}`);
