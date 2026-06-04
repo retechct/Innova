@@ -282,7 +282,27 @@ function toggleAltura(target) {
         if (inp) inp.value = '';
     }
 }
-
+function toggleMedidasEstandar(btnId, containerId, hiddenId) {
+    const btn = document.getElementById(btnId);
+    const container = document.getElementById(containerId);
+    const hidden = document.getElementById(hiddenId);
+    const activo = btn.dataset.estandar === '1';
+    if (activo) {
+        btn.dataset.estandar = '0';
+        btn.style.background = '#f1f5f9';
+        btn.style.color = '#64748b';
+        btn.innerHTML = '📐 Medidas Estándar';
+        container.style.display = '';
+        hidden.value = '';
+    } else {
+        btn.dataset.estandar = '1';
+        btn.style.background = 'var(--accent)';
+        btn.style.color = 'white';
+        btn.innerHTML = '✅ Medidas Estándar ACTIVADO';
+        container.style.display = 'none';
+        hidden.value = 'MEDIDAS ESTÁNDAR';
+    }
+}
 function actualizarVistaSofa() {
     const modelo = document.getElementById('sofa-modelo').value;
     const imgPreview = document.getElementById('preview-sofa');
@@ -298,74 +318,118 @@ function actualizarVistaSofa() {
             </div>
             <div id="lista-cuerpos"></div>
         `;
-        addCuerpoSofa('3'); 
+        addCuerpoSofa('3');
+
     } else if (modelo === 'multi3') {
         medContainer.innerHTML = `
-            <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 3 PIEZAS (Largo, Profundidad)</label>
-            <div class="medida-row" style="align-items:center;">
-                <span style="font-size:10px; width:50px; font-weight:bold;">Grande:</span>
-                <input type="number" id="m3-l1" class="form-input-sm" placeholder="Largo">
-                <input type="number" id="m3-f1" class="form-input-sm" placeholder="Prof.">
-                <button type="button" onclick="toggleAltura('m3-h1-wrap')" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
-                <span id="m3-h1-wrap" style="display:none;"><input type="number" id="m3-h1" class="form-input-sm" placeholder="Alto"></span>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 3 PIEZAS (Largo, Profundidad)</label>
+                <button type="button" id="btn-estandar-sofa" data-estandar="0"
+                    onclick="toggleMedidasEstandar('btn-estandar-sofa','sofa-medidas-inputs','sofa-medidas-estandar')"
+                    style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                    📐 Medidas Estándar
+                </button>
             </div>
-            <div class="medida-row" style="align-items:center;">
-                <span style="font-size:10px; width:50px; font-weight:bold;">Modular:</span>
-                <input type="number" id="m3-l2" class="form-input-sm" placeholder="Largo">
-                <input type="number" id="m3-f2" class="form-input-sm" placeholder="Prof.">
-                <button type="button" onclick="toggleAltura('m3-h2-wrap')" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
-                <span id="m3-h2-wrap" style="display:none;"><input type="number" id="m3-h2" class="form-input-sm" placeholder="Alto"></span>
+            <div id="sofa-medidas-inputs">
+                <div class="medida-row" style="align-items:center;">
+                    <span style="font-size:10px; width:50px; font-weight:bold;">Grande:</span>
+                    <input type="number" id="m3-l1" class="form-input-sm" placeholder="Largo">
+                    <input type="number" id="m3-f1" class="form-input-sm" placeholder="Prof.">
+                    <button type="button" onclick="toggleAltura('m3-h1-wrap')" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                    <span id="m3-h1-wrap" style="display:none;"><input type="number" id="m3-h1" class="form-input-sm" placeholder="Alto"></span>
+                </div>
+                <div class="medida-row" style="align-items:center;">
+                    <span style="font-size:10px; width:50px; font-weight:bold;">Modular:</span>
+                    <input type="number" id="m3-l2" class="form-input-sm" placeholder="Largo">
+                    <input type="number" id="m3-f2" class="form-input-sm" placeholder="Prof.">
+                    <button type="button" onclick="toggleAltura('m3-h2-wrap')" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                    <span id="m3-h2-wrap" style="display:none;"><input type="number" id="m3-h2" class="form-input-sm" placeholder="Alto"></span>
+                </div>
             </div>
+            <input type="hidden" id="sofa-medidas-estandar" value="">
         `;
+
     } else if (modelo === 'multi4') {
         medContainer.innerHTML = `
-            <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 4 PIEZAS (Largo, Profundidad)</label>
-            <div class="medida-row" style="align-items:center;">
-                <span style="font-size:10px; width:50px; font-weight:bold;">Gnde 1:</span>
-                <input type="number" id="m4-l1" class="form-input-sm" placeholder="Largo">
-                <input type="number" id="m4-f1" class="form-input-sm" placeholder="Prof.">
-                <button type="button" onclick="toggleAltura('m4-h1-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
-                <span id="m4-h1-wrap" style="display:none;"><input type="number" id="m4-h1" class="form-input-sm" placeholder="Alto"></span>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 4 PIEZAS (Largo, Profundidad)</label>
+                <button type="button" id="btn-estandar-sofa" data-estandar="0"
+                    onclick="toggleMedidasEstandar('btn-estandar-sofa','sofa-medidas-inputs','sofa-medidas-estandar')"
+                    style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                    📐 Medidas Estándar
+                </button>
             </div>
-            <div class="medida-row" style="align-items:center;">
-                <span style="font-size:10px; width:50px; font-weight:bold;">Gnde 2:</span>
-                <input type="number" id="m4-l2" class="form-input-sm" placeholder="Largo">
-                <input type="number" id="m4-f2" class="form-input-sm" placeholder="Prof.">
-                <button type="button" onclick="toggleAltura('m4-h2-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
-                <span id="m4-h2-wrap" style="display:none;"><input type="number" id="m4-h2" class="form-input-sm" placeholder="Alto"></span>
+            <div id="sofa-medidas-inputs">
+                <div class="medida-row" style="align-items:center;">
+                    <span style="font-size:10px; width:50px; font-weight:bold;">Gnde 1:</span>
+                    <input type="number" id="m4-l1" class="form-input-sm" placeholder="Largo">
+                    <input type="number" id="m4-f1" class="form-input-sm" placeholder="Prof.">
+                    <button type="button" onclick="toggleAltura('m4-h1-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                    <span id="m4-h1-wrap" style="display:none;"><input type="number" id="m4-h1" class="form-input-sm" placeholder="Alto"></span>
+                </div>
+                <div class="medida-row" style="align-items:center;">
+                    <span style="font-size:10px; width:50px; font-weight:bold;">Gnde 2:</span>
+                    <input type="number" id="m4-l2" class="form-input-sm" placeholder="Largo">
+                    <input type="number" id="m4-f2" class="form-input-sm" placeholder="Prof.">
+                    <button type="button" onclick="toggleAltura('m4-h2-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                    <span id="m4-h2-wrap" style="display:none;"><input type="number" id="m4-h2" class="form-input-sm" placeholder="Alto"></span>
+                </div>
+                <div class="medida-row" style="align-items:center;">
+                    <span style="font-size:10px; width:50px; font-weight:bold;">Modular:</span>
+                    <input type="number" id="m4-l3" class="form-input-sm" placeholder="Largo">
+                    <input type="number" id="m4-f3" class="form-input-sm" placeholder="Prof.">
+                    <button type="button" onclick="toggleAltura('m4-h3-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
+                    <span id="m4-h3-wrap" style="display:none;"><input type="number" id="m4-h3" class="form-input-sm" placeholder="Alto"></span>
+                </div>
             </div>
-            <div class="medida-row" style="align-items:center;">
-                <span style="font-size:10px; width:50px; font-weight:bold;">Modular:</span>
-                <input type="number" id="m4-l3" class="form-input-sm" placeholder="Largo">
-                <input type="number" id="m4-f3" class="form-input-sm" placeholder="Prof.">
-                <button type="button" onclick="toggleAltura('m4-h3-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
-                <span id="m4-h3-wrap" style="display:none;"><input type="number" id="m4-h3" class="form-input-sm" placeholder="Alto"></span>
-            </div>
+            <input type="hidden" id="sofa-medidas-estandar" value="">
         `;
+
     } else if (modelo === 'u') {
         medContainer.innerHTML = `
-            <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS EN "U" (cm)</label>
-            <div class="medida-row" style="flex-wrap: wrap; align-items:center; gap:5px;">
-                <input type="number" id="u-largo-izq" class="form-input-sm" placeholder="Largo Izq." style="width: 46%;">
-                <input type="number" id="u-largo-der" class="form-input-sm" placeholder="Largo Der." style="width: 46%;">
-                <input type="number" id="u-fondo" class="form-input-sm" placeholder="Profundidad Gen." style="width: 60%; margin-top:5px;">
-                <button type="button" onclick="toggleAltura('u-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;margin-top:5px;white-space:nowrap;">+ Altura</button>
-                <span id="u-alto-wrap" style="display:none; margin-top:5px; width:100%;">
-                    <input type="number" id="u-alto" class="form-input-sm" placeholder="Alto Gen." style="width:60%;">
-                </span>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS EN "U" (cm)</label>
+                <button type="button" id="btn-estandar-sofa" data-estandar="0"
+                    onclick="toggleMedidasEstandar('btn-estandar-sofa','sofa-medidas-inputs','sofa-medidas-estandar')"
+                    style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                    📐 Medidas Estándar
+                </button>
             </div>
+            <div id="sofa-medidas-inputs">
+                <div class="medida-row" style="flex-wrap: wrap; align-items:center; gap:5px;">
+                    <input type="number" id="u-largo-izq" class="form-input-sm" placeholder="Largo Izq." style="width: 46%;">
+                    <input type="number" id="u-largo-der" class="form-input-sm" placeholder="Largo Der." style="width: 46%;">
+                    <input type="number" id="u-fondo" class="form-input-sm" placeholder="Profundidad Gen." style="width: 60%; margin-top:5px;">
+                    <button type="button" onclick="toggleAltura('u-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;margin-top:5px;white-space:nowrap;">+ Altura</button>
+                    <span id="u-alto-wrap" style="display:none; margin-top:5px; width:100%;">
+                        <input type="number" id="u-alto" class="form-input-sm" placeholder="Alto Gen." style="width:60%;">
+                    </span>
+                </div>
+            </div>
+            <input type="hidden" id="sofa-medidas-estandar" value="">
         `;
+
     } else {
         medContainer.innerHTML = `
-            <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS TOTALES (cm)</label>
-            <div class="medida-row" style="flex-wrap: wrap; align-items:center; gap:5px;">
-                <input type="number" id="med-largo" class="form-input-sm" placeholder="Largo" style="width: 46%;">
-                <input type="number" id="med-fondo" class="form-input-sm" placeholder="Profundidad" style="width: 46%;">
-                <button type="button" onclick="toggleAltura('med-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;margin-top:5px;white-space:nowrap;">+ Altura</button>
-                <span id="med-alto-wrap" style="display:none; margin-top:5px; width:100%;">
-                    <input type="number" id="med-alto" class="form-input-sm" placeholder="Alto" style="width:46%;">
-                </span>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS TOTALES (cm)</label>
+                <button type="button" id="btn-estandar-sofa" data-estandar="0"
+                    onclick="toggleMedidasEstandar('btn-estandar-sofa','sofa-medidas-inputs','sofa-medidas-estandar')"
+                    style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                    📐 Medidas Estándar
+                </button>
             </div>
+            <div id="sofa-medidas-inputs">
+                <div class="medida-row" style="flex-wrap: wrap; align-items:center; gap:5px;">
+                    <input type="number" id="med-largo" class="form-input-sm" placeholder="Largo" style="width: 46%;">
+                    <input type="number" id="med-fondo" class="form-input-sm" placeholder="Profundidad" style="width: 46%;">
+                    <button type="button" onclick="toggleAltura('med-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;margin-top:5px;white-space:nowrap;">+ Altura</button>
+                    <span id="med-alto-wrap" style="display:none; margin-top:5px; width:100%;">
+                        <input type="number" id="med-alto" class="form-input-sm" placeholder="Alto" style="width:46%;">
+                    </span>
+                </div>
+            </div>
+            <input type="hidden" id="sofa-medidas-estandar" value="">
         `;
     }
 }
@@ -437,8 +501,14 @@ async function confirmarPersonalizadoSofa() {
     const modeloVal = modeloSelect.value;
     
     // 1. Capturar Medidas
+   // 1. Capturar Medidas
     let medidasText = "";
-    if (modeloVal === 'juego') {
+
+    // Detectar modo estándar (aplica a todos los modelos excepto juego)
+    const estandarHidden = document.getElementById('sofa-medidas-estandar');
+    if (estandarHidden && estandarHidden.value === 'MEDIDAS ESTÁNDAR') {
+        medidasText = ' [MEDIDAS ESTÁNDAR]';
+    } else if (modeloVal === 'juego') {
         const filas = document.querySelectorAll('.cuerpos-medida');
         filas.forEach(f => {
             const c = f.querySelector('span').innerText;
@@ -576,8 +646,11 @@ async function confirmarComedor() {
     const cantidadSillas = formatoVal.split('-')[1]; 
     const formatoTexto = esRectangular ? 'Rectangular' : 'Circular';
 
-    let medidasTexto = "";
-    if (esRectangular) {
+   let medidasTexto = "";
+    const estandarComedor = document.getElementById('comedor-medidas-estandar');
+    if (estandarComedor && estandarComedor.value === 'MEDIDAS ESTÁNDAR') {
+        medidasTexto = 'MEDIDAS ESTÁNDAR';
+    } else if (esRectangular) {
         const largo = document.getElementById('med-tablero-largo')?.value || "0";
         const ancho = document.getElementById('med-tablero-ancho')?.value || "0";
         medidasTexto = `L${largo}cm x A${ancho}cm`;
@@ -669,22 +742,36 @@ function actualizarVistaComedor() {
 
     if (formato.startsWith('rect')) {
         imgPreview.src = `imagenes/comedor_${formato}.jpg`;
-        
         medContainer.innerHTML = `
-            <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS DEL TABLERO RECTANGULAR (cm)</label>
-            <div style="display:flex; gap:10px; margin-top:5px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS DEL TABLERO RECTANGULAR (cm)</label>
+                <button type="button" id="btn-estandar-comedor" data-estandar="0"
+                    onclick="toggleMedidasEstandar('btn-estandar-comedor','comedor-medidas-inputs','comedor-medidas-estandar')"
+                    style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                    📐 Medidas Estándar
+                </button>
+            </div>
+            <div id="comedor-medidas-inputs" style="display:flex; gap:10px; margin-top:5px;">
                 <input type="number" id="med-tablero-largo" class="form-input-sm" placeholder="Largo (cm)" style="flex:1;">
                 <input type="number" id="med-tablero-ancho" class="form-input-sm" placeholder="Ancho (cm)" style="flex:1;">
             </div>
+            <input type="hidden" id="comedor-medidas-estandar" value="">
         `;
     } else if (formato.startsWith('circ')) {
         imgPreview.src = `imagenes/comedor_${formato}.jpg`;
-        
         medContainer.innerHTML = `
-            <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDA DEL TABLERO CIRCULAR (cm)</label>
-            <div style="display:flex; gap:10px; margin-top:5px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDA DEL TABLERO CIRCULAR (cm)</label>
+                <button type="button" id="btn-estandar-comedor" data-estandar="0"
+                    onclick="toggleMedidasEstandar('btn-estandar-comedor','comedor-medidas-inputs','comedor-medidas-estandar')"
+                    style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                    📐 Medidas Estándar
+                </button>
+            </div>
+            <div id="comedor-medidas-inputs" style="display:flex; gap:10px; margin-top:5px;">
                 <input type="number" id="med-tablero-diametro" class="form-input-sm" placeholder="Diámetro (cm)" style="flex:1;">
             </div>
+            <input type="hidden" id="comedor-medidas-estandar" value="">
         `;
     }
 

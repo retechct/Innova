@@ -1002,12 +1002,20 @@
                     </div>
                     
                     <div style="margin-top: 15px;">
-                        <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS DEL TABLERO (cm)</label>
-                        <div style="display:flex; gap:10px; margin-top:5px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                            <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS DEL TABLERO (cm)</label>
+                            <button type="button" id="btn-estandar-centro" data-estandar="0"
+                                onclick="toggleMedidasEstandar('btn-estandar-centro','centro-medidas-inputs','centro-medidas-estandar')"
+                                style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                                📐 Medidas Estándar
+                            </button>
+                        </div>
+                        <div id="centro-medidas-inputs" style="display:flex; gap:10px; margin-top:5px;">
                             <input type="number" id="centro-largo" class="form-input-sm" placeholder="Largo" style="flex:1;">
                             <input type="number" id="centro-ancho" class="form-input-sm" placeholder="Ancho" style="flex:1;">
                             <input type="number" id="centro-espesor" class="form-input-sm" placeholder="Espesor" style="flex:1;">
                         </div>
+                        <input type="hidden" id="centro-medidas-estandar" value="">
                     </div>
 
                     <div style="margin-top: 20px; border-top: 2px dashed #e2e8f0; padding-top: 15px;">
