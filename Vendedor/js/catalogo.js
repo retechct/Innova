@@ -505,7 +505,7 @@ function toggleCojinPendiente() {
         document.getElementById('sku-cojin-diseno').value = '';
         document.getElementById('img-preview-cojin-entero').style.display = 'none';
         document.getElementById('img-preview-cojin-diseno').style.display = 'none';
-        // Limpiar también campos de reversibles
+        // Limpiar también campos de reversibles y resetear su toggle
         const ids = ['c-reversible','search-cojin-rev-diseno','search-cojin-rev-entero',
                      'sku-cojin-rev-diseno','sku-cojin-rev-entero',
                      'proveedor-cojin-rev-diseno','proveedor-cojin-rev-entero','nota-cojin-reversible'];
@@ -514,6 +514,56 @@ function toggleCojinPendiente() {
         const imgRevE = document.getElementById('img-preview-cojin-rev-entero');
         if(imgRevD) imgRevD.style.display = 'none';
         if(imgRevE) imgRevE.style.display = 'none';
+        // Volver a modo normal en el toggle de reversibles
+        const modoNormal = document.getElementById('cojin-modo-normal');
+        const modoRev    = document.getElementById('cojin-modo-reversible');
+        const btnRev     = document.getElementById('btn-toggle-reversible');
+        if(modoNormal) modoNormal.style.display = 'block';
+        if(modoRev)    modoRev.style.display    = 'none';
+        if(btnRev)   { btnRev.innerHTML = '🔄 Agregar cojines reversibles'; btnRev.style.background = '#f5f3ff'; btnRev.style.color = '#7c3aed'; }
+    }
+}
+
+// ─── Toggle: Cojines reversibles (botón) ────────────────────────────────────
+function toggleCojinReversible() {
+    const modoNormal     = document.getElementById('cojin-modo-normal');
+    const modoReversible = document.getElementById('cojin-modo-reversible');
+    const btn            = document.getElementById('btn-toggle-reversible');
+    const abierto        = modoReversible.style.display !== 'none';
+
+    if (abierto) {
+        // Volver a modo normal
+        modoReversible.style.display = 'none';
+        modoNormal.style.display     = 'block';
+        btn.innerHTML = '🔄 Agregar cojines reversibles';
+        btn.style.background = '#f5f3ff';
+        btn.style.color      = '#7c3aed';
+        // Limpiar campos reversibles
+        ['c-reversible','search-cojin-rev-diseno','search-cojin-rev-entero',
+         'sku-cojin-rev-diseno','sku-cojin-rev-entero',
+         'proveedor-cojin-rev-diseno','proveedor-cojin-rev-entero'].forEach(id => {
+            const el = document.getElementById(id); if(el) el.value = '';
+        });
+        const imgD = document.getElementById('img-preview-cojin-rev-diseno');
+        const imgE = document.getElementById('img-preview-cojin-rev-entero');
+        if(imgD) imgD.style.display = 'none';
+        if(imgE) imgE.style.display = 'none';
+    } else {
+        // Abrir modo reversible, ocultar enteros/diseño
+        modoReversible.style.display = 'block';
+        modoNormal.style.display     = 'none';
+        btn.innerHTML = '✖ Quitar cojines reversibles';
+        btn.style.background = '#ede9fe';
+        btn.style.color      = '#5b21b6';
+        // Limpiar campos normales para no mezclar datos
+        ['c-enteros','c-diseno','search-cojin-entero','search-cojin-diseno',
+         'sku-cojin-entero','sku-cojin-diseno','proveedor-cojin-entero','proveedor-cojin-diseno'].forEach(id => {
+            const el = document.getElementById(id); if(el) el.value = '';
+        });
+        const imgE2 = document.getElementById('img-preview-cojin-entero');
+        const imgD2 = document.getElementById('img-preview-cojin-diseno');
+        if(imgE2) imgE2.style.display = 'none';
+        if(imgD2) imgD2.style.display = 'none';
     }
 }
 

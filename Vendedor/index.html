@@ -747,39 +747,50 @@
                         <!-- Sección ocultable cuando está marcado "por confirmar" -->
                         <div id="cojin-detalle-wrap">
 
-                            <!-- ── COJINES ENTEROS ────────────────────────── -->
-                            <label style="font-size:10px; font-weight:800; color:#475569; text-transform:uppercase; display:block; margin-bottom:3px;">Cojines Enteros</label>
-                            <input type="number" id="c-enteros" placeholder="Cant. Enteros" class="form-input-sm" style="margin-bottom:4px;">
-                            <div style="display: flex; gap: 8px; align-items: center; margin-top:2px;">
-                                <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                    <input type="text" id="search-cojin-entero" class="form-input-sm" placeholder="🔍 Tela Cojines Enteros..." onkeyup="filtrarMaterial('cojin-entero')" onclick="filtrarMaterial('cojin-entero')">
-                                    <div id="list-cojin-entero" class="custom-options"></div>
+                            <!-- ── MODO: NORMAL (enteros + diseño) por defecto ── -->
+                            <div id="cojin-modo-normal">
+                                <!-- Cojines Enteros -->
+                                <label style="font-size:10px; font-weight:800; color:#475569; text-transform:uppercase; display:block; margin-bottom:3px;">Cojines Enteros</label>
+                                <input type="number" id="c-enteros" placeholder="Cant. Enteros" class="form-input-sm" style="margin-bottom:4px;">
+                                <div style="display: flex; gap: 8px; align-items: center; margin-top:2px;">
+                                    <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                        <input type="text" id="search-cojin-entero" class="form-input-sm" placeholder="🔍 Tela Cojines Enteros..." onkeyup="filtrarMaterial('cojin-entero')" onclick="filtrarMaterial('cojin-entero')">
+                                        <div id="list-cojin-entero" class="custom-options"></div>
+                                    </div>
+                                    <img id="img-preview-cojin-entero" src="" style="width:35px;height:35px;border-radius:5px;object-fit:cover;border:1px solid #cbd5e1;display:none;cursor:zoom-in;" onclick="ampliarImagen(this.src)">
                                 </div>
-                                <img id="img-preview-cojin-entero" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
-                            </div>
-                            <input type="hidden" id="sku-cojin-entero">
-                            <input type="hidden" id="proveedor-cojin-entero">
+                                <input type="hidden" id="sku-cojin-entero">
+                                <input type="hidden" id="proveedor-cojin-entero">
 
-                            <!-- ── COJINES C/DISEÑO ───────────────────────── -->
-                            <label style="font-size:10px; font-weight:800; color:#475569; text-transform:uppercase; display:block; margin-top:8px; margin-bottom:3px;">Cojines c/Diseño</label>
-                            <input type="number" id="c-diseno" placeholder="Cant. c/Diseño" class="form-input-sm" style="margin-bottom:4px;">
-                            <div style="display: flex; gap: 8px; align-items: center; margin-top:2px;">
-                                <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                    <input type="text" id="search-cojin-diseno" class="form-input-sm" placeholder="🔍 Diseño Cojines c/Patrón..." onkeyup="filtrarMaterial('cojin-diseno')" onclick="filtrarMaterial('cojin-diseno')">
-                                    <div id="list-cojin-diseno" class="custom-options"></div>
+                                <!-- Cojines c/Diseño -->
+                                <label style="font-size:10px; font-weight:800; color:#475569; text-transform:uppercase; display:block; margin-top:8px; margin-bottom:3px;">Cojines c/Diseño</label>
+                                <input type="number" id="c-diseno" placeholder="Cant. c/Diseño" class="form-input-sm" style="margin-bottom:4px;">
+                                <div style="display: flex; gap: 8px; align-items: center; margin-top:2px;">
+                                    <div class="custom-select-wrapper" style="flex-grow: 1;">
+                                        <input type="text" id="search-cojin-diseno" class="form-input-sm" placeholder="🔍 Diseño Cojines c/Patrón..." onkeyup="filtrarMaterial('cojin-diseno')" onclick="filtrarMaterial('cojin-diseno')">
+                                        <div id="list-cojin-diseno" class="custom-options"></div>
+                                    </div>
+                                    <img id="img-preview-cojin-diseno" src="" style="width:35px;height:35px;border-radius:5px;object-fit:cover;border:1px solid #cbd5e1;display:none;cursor:zoom-in;" onclick="ampliarImagen(this.src)">
                                 </div>
-                                <img id="img-preview-cojin-diseno" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
+                                <input type="hidden" id="sku-cojin-diseno">
+                                <input type="hidden" id="tipo-tela-cojin-diseno">
+                                <input type="hidden" id="proveedor-cojin-diseno">
                             </div>
-                            <input type="hidden" id="sku-cojin-diseno">
-                            <input type="hidden" id="tipo-tela-cojin-diseno">
-                            <input type="hidden" id="proveedor-cojin-diseno">
 
-                            <!-- ── COJINES REVERSIBLES ────────────────────── -->
-                            <div style="border-top:1px dashed #a78bfa; margin-top:10px; padding-top:8px; background:#fdf4ff; border-radius:8px; padding:8px;">
-                                <label style="font-size:10px; font-weight:800; color:#7c3aed; text-transform:uppercase; display:block; margin-bottom:5px;">
+                            <!-- ── BOTÓN TOGGLE REVERSIBLE ─────────────────── -->
+                            <button type="button" id="btn-toggle-reversible" onclick="toggleCojinReversible()"
+                                    style="margin-top:8px; width:100%; padding:6px 10px; background:#f5f3ff;
+                                           border:1px dashed #a78bfa; border-radius:7px; color:#7c3aed;
+                                           font-size:11px; font-weight:700; cursor:pointer; text-align:left;">
+                                🔄 Agregar cojines reversibles
+                            </button>
+
+                            <!-- ── MODO: REVERSIBLE (oculto por defecto) ────── -->
+                            <div id="cojin-modo-reversible" style="display:none; background:#fdf4ff; border:1px dashed #a78bfa; border-radius:8px; padding:8px; margin-top:6px;">
+                                <div style="font-size:10px; font-weight:800; color:#7c3aed; text-transform:uppercase; margin-bottom:6px;">
                                     🔄 Cojines Reversibles
-                                    <span style="font-size:9px; font-weight:400; color:#6b7280; text-transform:none; display:block; margin-top:1px;">Cara A: tela con diseño · Cara B: tela entera</span>
-                                </label>
+                                    <span style="font-size:9px; font-weight:400; color:#6b7280; text-transform:none; margin-left:4px;">· Cara A: diseño · Cara B: tela entera</span>
+                                </div>
                                 <input type="number" id="c-reversible" placeholder="Cant. Reversibles" class="form-input-sm" style="margin-bottom:6px; border:1px solid #a78bfa;">
 
                                 <!-- Cara A: tela con diseño -->
@@ -805,12 +816,12 @@
                                 </div>
                                 <input type="hidden" id="sku-cojin-rev-entero">
                                 <input type="hidden" id="proveedor-cojin-rev-entero">
-
-                                <!-- Comentario para el área de cojines -->
-                                <input type="text" id="nota-cojin-reversible" class="form-input-sm"
-                                       placeholder="💬 Comentario para el área de cojines (opcional)"
-                                       style="margin-top:6px; font-size:11px; border:1px dashed #a78bfa; background:#fff;">
                             </div>
+
+                            <!-- ── COMENTARIO — siempre visible ───────────── -->
+                            <input type="text" id="nota-cojin-reversible" class="form-input-sm"
+                                   placeholder="💬 Comentario para el área de cojines (opcional)"
+                                   style="margin-top:8px; font-size:11px; border:1px dashed #cbd5e1; background:#fafafa;">
 
                         </div>
 
