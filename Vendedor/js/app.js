@@ -197,7 +197,10 @@ async function loadMisPedidos() {
     const container = document.getElementById('pedidos-container');
     if (!container) return;
 
-    container.innerHTML = `<p style="text-align:center; padding:20px; color:gray;">Cargando seguimiento...</p>`;
+    container.style.display = 'grid';
+    container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))';
+    container.style.gap = '15px';
+    container.innerHTML = `<p style="text-align:center; padding:20px; color:gray; grid-column:1/-1;">Cargando seguimiento...</p>`;
 
     try {
        // ✅ CORRECCIÓN:
@@ -207,12 +210,12 @@ async function loadMisPedidos() {
         const data = await res.json();
         
         if (data.length === 0) {
-            container.innerHTML = `<p style="text-align:center; color:gray; padding:40px;">No hay pedidos registrados.</p>`;
+            container.innerHTML = `<p style="text-align:center; color:gray; padding:40px; grid-column:1/-1;">No hay pedidos registrados.</p>`;
             return;
         }
 
         container.innerHTML = data.map(v => `
-            <div class="pedido-card" onclick="verSeguimientoVendedor('${v.codigo}')" style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border:1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; transition: 0.2s;">
+            <div class="pedido-card" onclick="verSeguimientoVendedor('${v.codigo}')" style="background:white; padding:15px; border-radius:10px; border:1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; transition: 0.2s;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <span style="font-weight:800; color:#1a1a1a;">#${v.codigo}</span>
                     <small style="color:#d4af37; font-weight:800;">${v.estado.toUpperCase()}</small>
@@ -416,7 +419,7 @@ async function cargarLogisticaExterna() {
 
         if (esMobil) {
             // ── VISTA MÓVIL: Cards apiladas ──────────────────────────
-            html += `<div style="display:flex;flex-direction:column;gap:12px;">`;
+            html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;">`;
             items.forEach(item => {
                 const c = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
                 const fotoHTML = item.foto_url
@@ -1850,8 +1853,11 @@ tbody.innerHTML = lista.map((v, i) => `
     </tr>`).join('');
 
 // === Cards (mobile) === CORREGIDO PARA MOSTRAR LA SEDE EN CELULARES
+cards.style.display = isMobile ? 'grid' : 'none';
+cards.style.gridTemplateColumns = 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))';
+cards.style.gap = '15px';
 cards.innerHTML = lista.map(v => `
-    <div style="background:white; border-radius:12px; border:1px solid #e2e8f0; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+    <div style="background:white; border-radius:12px; border:1px solid #e2e8f0; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
             <span style="font-weight:900; font-size:15px; color:#d4af37;">#${v.codigo}</span>
             ${ec(v)}
@@ -2002,13 +2008,17 @@ async function cargarCambiosPrecioPendientes() {
     const badge      = document.getElementById('badge-cambios-precio');
     if (!contenedor) return;
 
+    contenedor.style.display = 'grid';
+    contenedor.style.gridTemplateColumns = 'repeat(auto-fill, minmax(min(100%, 350px), 1fr))';
+    contenedor.style.gap = '15px';
+
     try {
         const res  = await apiFetch(`${API_URL}/api/cambios-precio/pendientes`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
 
         if (data.length === 0) {
-            contenedor.innerHTML = '<p style="color:#94a3b8; font-size:13px;">Sin solicitudes pendientes.</p>';
+            contenedor.innerHTML = '<p style="color:#94a3b8; font-size:13px; grid-column:1/-1;">Sin solicitudes pendientes.</p>';
             badge.style.display = 'none';
             return;
         }

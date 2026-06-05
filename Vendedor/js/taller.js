@@ -1064,7 +1064,7 @@ async function cargarTicketsTaller() {
                     <span style="color:${colorCab === '#22c55e' ? '#166534' : '#0f172a'};">${cfg.icono} ${cfg.nombre}</span>
                     <span style="background:#1e293b; color:white; padding:3px 10px; border-radius:20px; font-size:11px;">${listaTickets.length}</span>
                 </h3>
-                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:15px;">`;
+                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%, 280px),1fr)); gap:15px;">`;
 
             listaTickets.forEach(t => {
                 const isBloqueado = t.estado === 'Bloqueado';
@@ -1773,6 +1773,9 @@ async function cargarInventarioTaller() {
 async function cargarGestorAprobacion() {
     const contenedor = document.getElementById('lista-aprobacion-pendientes');
     if (!contenedor) return;
+    contenedor.style.display = 'grid';
+    contenedor.style.gridTemplateColumns = 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))';
+    contenedor.style.gap = '15px';
     contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; grid-column: 1/-1;">Sincronizando modelos e insumos pendientes...</p>';
 
     // Cargar cambios de precio pendientes en paralelo
@@ -2371,7 +2374,7 @@ async function cargarVistaEntregados(contenedor, choferId) {
             html += `
             <div style="background:#fff;border:2px solid #86efac;border-radius:14px;margin-bottom:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
                 <!-- Cabecera verde -->
-                <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:12px 16px;border-bottom:1px solid #86efac;display:flex;justify-content:space-between;align-items:center;">
+                <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:12px 16px;border-bottom:1px solid #86efac;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
                     <div>
                         <div style="font-size:10px;font-weight:900;color:#166534;text-transform:uppercase;letter-spacing:1px;">Entregado</div>
                         <div style="font-size:14px;font-weight:800;color:#0f172a;margin-top:2px;">${e.producto}</div>
@@ -2383,7 +2386,7 @@ async function cargarVistaEntregados(contenedor, choferId) {
                     </div>
                 </div>
                 <!-- Detalle -->
-                <div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+                <div style="padding:12px 16px;display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 120px), 1fr));gap:8px;font-size:12px;">
                     <div>
                         <div style="color:#64748b;font-size:10px;font-weight:700;text-transform:uppercase;">Chofer</div>
                         <div style="font-weight:700;color:#0f172a;">${e.chofer}</div>
@@ -2505,14 +2508,14 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
           </div>
 
           <!-- Sub-tabs: Disponibles / Entregados -->
-          <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
             <button id="subtab-disp-${contenedorId}" onclick="_filtrarStockSofa('disponible','${contenedorId}')"
-                style="flex:1;padding:10px;border-radius:8px;border:2px solid #7c3aed;
+                style="flex:1;min-width:140px;padding:10px;border-radius:8px;border:2px solid #7c3aed;
                        background:#7c3aed;color:white;font-weight:800;cursor:pointer;font-size:12px;">
                 <i class="fa-solid fa-box"></i> En stock (${disponibles.length})
             </button>
             <button id="subtab-ent-${contenedorId}" onclick="_filtrarStockSofa('entregado','${contenedorId}')"
-                style="flex:1;padding:10px;border-radius:8px;border:2px solid #15803d;
+                style="flex:1;min-width:140px;padding:10px;border-radius:8px;border:2px solid #15803d;
                        background:#f0fdf4;color:#15803d;font-weight:800;cursor:pointer;font-size:12px;">
                 <i class="fa-solid fa-circle-check"></i> Entregados (${entregados.length})
             </button>
@@ -2559,13 +2562,13 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
                   📐 Medidas estándar
               </button>
             </div>
-            <div id="bloque-medidas" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+            <div id="bloque-medidas" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
               <input id="se-ancho" type="number" placeholder="Ancho"
-                  style="padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                  style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
               <input id="se-prof" type="number" placeholder="Prof."
-                  style="padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                  style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
               <input id="se-alto" type="number" placeholder="Alto"
-                  style="padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                  style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
             </div>
             <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;cursor:pointer;">
               <input type="checkbox" id="se-estandar"> Marcar como medida estándar
@@ -2630,27 +2633,25 @@ function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
         const bloque = document.getElementById('bloque-medidas');
         if (bloque) bloque.style.display = 'grid';
 
-        // Cargar modelos base (plantillas del catálogo)
+        // Cargar modelos base desde el configurador de Sofás
         const selModelo = document.getElementById('se-modelo-base');
         if (selModelo) {
-            selModelo.innerHTML = '<option value="">Cargando plantillas...</option>';
-            apiFetch(`${API_URL}/api/catalogo`)
-                .then(r => r.json())
-                .then(productos => {
-                    const plantillas = (productos || []).filter(p => p.es_plantilla);
-                    selModelo.innerHTML = '<option value="">— Seleccionar modelo base —</option>' +
-                        plantillas.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('');
-                    if (plantillas.length === 0) {
-                        selModelo.innerHTML += '<option value="" disabled>Sin plantillas registradas</option>';
-                    }
-                })
-                .catch(() => {
-                    selModelo.innerHTML = '<option value="">Error al cargar — escríbelo a mano</option>';
-                    // Fallback: mostrar como input de texto
-                    selModelo.insertAdjacentHTML('afterend',
-                        `<input id="se-modelo-base-txt" placeholder="Ej: Seccional, Multifuncional..."
-                            style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-top:5px;font-size:13px;">`);
-                });
+            const sofaModeloOrig = document.getElementById('sofa-modelo');
+            if (sofaModeloOrig && sofaModeloOrig.options.length > 0) {
+                selModelo.innerHTML = '<option value="">— Seleccionar modelo base —</option>' +
+                    Array.from(sofaModeloOrig.options)
+                         .filter(o => o.value !== '')
+                         .map(o => `<option value="${o.text}">${o.text}</option>`)
+                         .join('');
+            } else {
+                selModelo.innerHTML = '<option value="">Escríbelo a mano abajo</option>';
+            }
+            
+            if (!document.getElementById('se-modelo-base-txt')) {
+                selModelo.insertAdjacentHTML('afterend',
+                    `<input id="se-modelo-base-txt" placeholder="O escribe otro modelo (Ej: Seccional curvo)..."
+                        style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;font-size:13px;">`);
+            }
         }
     }
 }
@@ -2667,7 +2668,7 @@ function _renderListaEstructuras(lista) {
             <p style="font-weight:700;font-size:14px;color:#475569;margin:0;">Sin registros</p>
             <p style="font-size:12px;margin:4px 0 0;">Registra la primera estructura con el botón de arriba.</p>
         </div>`;
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;">` +
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%, 250px),1fr));gap:14px;">` +
     lista.map(e => `
       <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;
                   overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
