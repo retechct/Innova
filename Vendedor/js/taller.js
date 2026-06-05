@@ -2488,7 +2488,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
         const entregados  = data.filter(e => e.estado === 'entregado');
 
         document.getElementById(contenedorId).innerHTML = `
-        <div>
+        <div style="max-width:1400px;">
           <!-- Header: título área + botón registrar -->
           <div style="display:flex;justify-content:space-between;align-items:center;
                       margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #e2e8f0;flex-wrap:wrap;gap:10px;">
@@ -2505,6 +2505,25 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
                        display:flex;align-items:center;gap:6px;white-space:nowrap;">
                 <i class="fa-solid fa-plus"></i> Registrar
             </button>
+          </div>
+
+          <!-- ── Buscador de contratos pendientes ── -->
+          <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+            <div style="font-size:11px;font-weight:800;color:#7c3aed;letter-spacing:0.08em;margin-bottom:8px;">
+              <i class="fa-solid fa-magnifying-glass"></i> BUSCAR CONTRATO PENDIENTE
+            </div>
+            <div style="display:flex;gap:8px;">
+              <input id="se-buscar-contrato-${contenedorId}"
+                  placeholder="Ej: INV-0042 o solo 42"
+                  style="flex:1;padding:9px 12px;border:1.5px solid #d8b4fe;border-radius:8px;font-size:13px;outline:none;"
+                  onkeydown="if(event.key==='Enter') _buscarContratoPendiente('${contenedorId}')">
+              <button onclick="_buscarContratoPendiente('${contenedorId}')"
+                  style="padding:9px 16px;background:#7c3aed;color:white;border:none;border-radius:8px;
+                         font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                  Buscar
+              </button>
+            </div>
+            <div id="se-contrato-resultado-${contenedorId}" style="margin-top:10px;"></div>
           </div>
 
           <!-- Sub-tabs: Disponibles / Entregados -->
@@ -2530,64 +2549,81 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
         <div id="modal-registro-estructura" style="display:none;position:fixed;inset:0;
              background:rgba(0,0,0,0.6);z-index:9999;
              justify-content:center;align-items:center;">
-          <div style="background:white;border-radius:16px;padding:24px;width:380px;max-width:95vw;max-height:90vh;overflow-y:auto;">
-            <h3 style="margin:0 0 16px;font-size:16px;">Registrar estructura / destrokes</h3>
+          <div style="background:white;border-radius:16px;padding:24px;width:400px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+              <h3 style="margin:0;font-size:16px;" id="se-modal-titulo">Registrar estructura / destrokes</h3>
+              <button onclick="cerrarModalEstructura()"
+                  style="background:#f1f5f9;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:16px;color:#64748b;">✕</button>
+            </div>
 
             <label style="font-size:12px;font-weight:700;color:#475569;">TIPO</label>
-            <select id="se-tipo" style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;">
-              <option value="estructura">Estructura de sofá</option>
-              <option value="destrokes">Destrokes</option>
+            <select id="se-tipo" onchange="_onChangeTipoEstructura()"
+                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
+              <option value="estructura">🪵 Estructura de sofá</option>
+              <option value="destrokes">🔧 Destrokes</option>
             </select>
 
-            <label style="font-size:12px;font-weight:700;color:#475569;">NOMBRE DEL LOTE *</label>
-            <input id="se-nombre" placeholder="Ej: Seccional 3+2 Gris Perla"
-                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;">
+            <label style="font-size:12px;font-weight:700;color:#475569;">NOMBRE / DESCRIPCIÓN *</label>
+            <input id="se-nombre" placeholder="Ej: Seccional 3+2 · Gris Perla"
+                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
 
-            <label style="font-size:12px;font-weight:700;color:#475569;">MODELO BASE *</label>
-            <div style="font-size:11px;color:#64748b;margin-bottom:5px;">Selecciona el tipo de sofá de las plantillas del catálogo</div>
-            <select id="se-modelo-base"
-                style="width:100%;padding:9px;border:1.5px solid #7c3aed;border-radius:8px;margin-bottom:10px;font-size:13px;">
-              <option value="">— Seleccionar modelo base —</option>
-            </select>
+            <!-- ── Bloque SOLO para Estructura ── -->
+            <div id="bloque-solo-estructura">
+              <label style="font-size:12px;font-weight:700;color:#475569;">MODELO BASE *</label>
+              <div style="font-size:11px;color:#64748b;margin-bottom:5px;">Tipo de sofá de las plantillas del catálogo</div>
+              <select id="se-modelo-base"
+                  style="width:100%;padding:9px;border:1.5px solid #7c3aed;border-radius:8px;margin-bottom:10px;font-size:13px;">
+                <option value="">— Seleccionar modelo base —</option>
+              </select>
+
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <label style="font-size:12px;font-weight:700;color:#475569;">MEDIDAS (cm)</label>
+                <button id="btn-medidas-estandar" onclick="_toggleMedidasEstandar()"
+                    style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #7c3aed;
+                           background:#f5f3ff;color:#7c3aed;cursor:pointer;font-weight:700;">
+                    📐 Medidas estándar
+                </button>
+              </div>
+              <div id="bloque-medidas" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+                <input id="se-ancho" type="number" placeholder="Ancho"
+                    style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                <input id="se-prof" type="number" placeholder="Prof."
+                    style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                <input id="se-alto" type="number" placeholder="Alto"
+                    style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" id="se-estandar"> Marcar como medida estándar
+              </label>
+            </div>
+            <!-- ── fin bloque estructura ── -->
+
+            <!-- ── Bloque SOLO para Destrokes ── -->
+            <div id="bloque-solo-destrokes" style="display:none;">
+              <label style="font-size:12px;font-weight:700;color:#475569;">CANTIDAD *</label>
+              <input id="se-cantidad" type="number" placeholder="Ej: 10" min="1" step="1"
+                  style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
+            </div>
+            <!-- ── fin bloque destrokes ── -->
 
             <label style="font-size:12px;font-weight:700;color:#475569;">PRECIO (S/)</label>
             <input id="se-precio" type="number" placeholder="Ej: 350.00" step="0.01"
-                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;">
-
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-              <label style="font-size:12px;font-weight:700;color:#475569;">MEDIDAS (cm)</label>
-              <button id="btn-medidas-estandar" onclick="_toggleMedidasEstandar()"
-                  style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #7c3aed;
-                         background:#f5f3ff;color:#7c3aed;cursor:pointer;font-weight:700;">
-                  📐 Medidas estándar
-              </button>
-            </div>
-            <div id="bloque-medidas" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
-              <input id="se-ancho" type="number" placeholder="Ancho"
-                  style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
-              <input id="se-prof" type="number" placeholder="Prof."
-                  style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
-              <input id="se-alto" type="number" placeholder="Alto"
-                  style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
-            </div>
-            <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;cursor:pointer;">
-              <input type="checkbox" id="se-estandar"> Marcar como medida estándar
-            </label>
+                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
 
             <label style="font-size:12px;font-weight:700;color:#475569;">FOTO *</label>
             <input type="file" id="se-foto" accept="image/*"
-                style="width:100%;margin-bottom:14px;font-size:13px;">
+                style="width:100%;margin-bottom:16px;font-size:13px;">
 
             <div style="display:flex;gap:8px;">
               <button onclick="cerrarModalEstructura()"
-                  style="flex:1;padding:10px;border:1.5px solid #cbd5e1;background:white;
-                         border-radius:8px;cursor:pointer;font-weight:700;">
+                  style="flex:1;padding:11px;border:1.5px solid #cbd5e1;background:white;
+                         border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">
                 Cancelar
               </button>
               <button onclick="guardarEstructura()"
-                  style="flex:1;padding:10px;background:#7c3aed;color:white;border:none;
-                         border-radius:8px;cursor:pointer;font-weight:700;">
-                Guardar
+                  style="flex:1;padding:11px;background:#7c3aed;color:white;border:none;
+                         border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">
+                <i class="fa-solid fa-floppy-disk"></i> Guardar
               </button>
             </div>
           </div>
@@ -2599,6 +2635,84 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
     } catch(e) {
         const el = document.getElementById(contenedorId);
         if (el) el.innerHTML = `<p style="color:red;text-align:center;">Error al cargar stock.</p>`;
+    }
+}
+
+
+// ── Buscador inteligente de contratos pendientes (carpintero de sofás) ──
+async function _buscarContratoPendiente(contenedorId) {
+    const input = document.getElementById(`se-buscar-contrato-${contenedorId}`);
+    const resultado = document.getElementById(`se-contrato-resultado-${contenedorId}`);
+    if (!input || !resultado) return;
+
+    let query = input.value.trim();
+    if (!query) return;
+
+    // Normalizar: si es solo dígitos → agregar prefijo INV-
+    if (/^\d+$/.test(query)) {
+        query = 'INV-' + query.padStart(4, '0');
+    } else {
+        query = query.toUpperCase();
+    }
+
+    resultado.innerHTML = `<div style="font-size:12px;color:#7c3aed;padding:6px 0;">
+        <i class="fa-solid fa-circle-notch fa-spin"></i> Buscando ${query}...
+    </div>`;
+
+    try {
+        // Usamos el endpoint de tickets pendientes y filtramos por código
+        const res  = await apiFetch(`${API_URL}/api/taller/tickets_pendientes`);
+        const data = await res.json();
+
+        if (!Array.isArray(data)) {
+            resultado.innerHTML = `<div style="color:#dc2626;font-size:12px;">Error al consultar contratos.</div>`;
+            return;
+        }
+
+        // Filtrar por código de venta (partial match, insensible a mayúsculas)
+        const coincidencias = data.filter(t =>
+            (t.codigo || '').toUpperCase().includes(query) &&
+            (t.area === 'ESTRUCTURAS_MUEBLES' || !t.area)
+        );
+
+        // Si no hay por área específica, buscar en todos
+        const todos = coincidencias.length > 0 ? coincidencias :
+            data.filter(t => (t.codigo || '').toUpperCase().includes(query));
+
+        if (!todos.length) {
+            resultado.innerHTML = `
+              <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px;text-align:center;">
+                <div style="font-size:22px;margin-bottom:6px;">🔍</div>
+                <div style="font-weight:700;font-size:13px;color:#374151;">No se encontró "${query}"</div>
+                <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Verifica el número o el contrato ya está asignado / terminado.</div>
+              </div>`;
+            return;
+        }
+
+        resultado.innerHTML = todos.map(t => `
+          <div style="background:white;border:1px solid #ddd6fe;border-radius:10px;
+                      padding:14px 16px;margin-bottom:8px;border-left:3px solid #7c3aed;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;">
+              <div>
+                <div style="font-weight:900;font-size:15px;color:#0f172a;">${t.codigo}</div>
+                <div style="font-size:13px;color:#374151;margin-top:2px;">${t.producto}</div>
+                <div style="font-size:11px;color:#64748b;margin-top:4px;">
+                  <i class="fa-solid fa-user"></i> ${t.cliente || '—'} &nbsp;·&nbsp;
+                  <i class="fa-solid fa-calendar"></i> Entrega: <b>${t.entrega || 'S/F'}</b>
+                </div>
+                ${t.especificaciones ? `<div style="font-size:11px;color:#7c3aed;margin-top:4px;">
+                  <i class="fa-solid fa-palette"></i> ${t.especificaciones}
+                </div>` : ''}
+              </div>
+              <span style="font-size:10px;font-weight:800;padding:4px 10px;border-radius:20px;
+                           background:#faf5ff;color:#7c3aed;border:1px solid #ddd6fe;white-space:nowrap;">
+                ${t.estado || 'Pendiente'}
+              </span>
+            </div>
+          </div>`).join('');
+
+    } catch(e) {
+        resultado.innerHTML = `<div style="color:#dc2626;font-size:12px;">Error de conexión. Intenta de nuevo.</div>`;
     }
 }
 
@@ -2621,38 +2735,64 @@ function _toggleMedidasEstandar() {
 function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
     window._modalEstructuraCtx = { contenedorId, esAdminCtx };
     const modal = document.getElementById('modal-registro-estructura');
-    if (modal) {
-        modal.style.display = 'flex';
-        // Reset campos
-        ['se-nombre','se-precio','se-ancho','se-prof','se-alto'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-        const cb = document.getElementById('se-estandar');
-        if (cb) cb.checked = false;
-        const bloque = document.getElementById('bloque-medidas');
-        if (bloque) bloque.style.display = 'grid';
+    if (!modal) return;
+    modal.style.display = 'flex';
 
-        // Cargar modelos base desde el configurador de Sofás
-        const selModelo = document.getElementById('se-modelo-base');
-        if (selModelo) {
-            const sofaModeloOrig = document.getElementById('sofa-modelo');
-            if (sofaModeloOrig && sofaModeloOrig.options.length > 0) {
-                selModelo.innerHTML = '<option value="">— Seleccionar modelo base —</option>' +
-                    Array.from(sofaModeloOrig.options)
-                         .filter(o => o.value !== '')
-                         .map(o => `<option value="${o.text}">${o.text}</option>`)
-                         .join('');
-            } else {
-                selModelo.innerHTML = '<option value="">Escríbelo a mano abajo</option>';
-            }
-            
-            if (!document.getElementById('se-modelo-base-txt')) {
-                selModelo.insertAdjacentHTML('afterend',
-                    `<input id="se-modelo-base-txt" placeholder="O escribe otro modelo (Ej: Seccional curvo)..."
-                        style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;font-size:13px;">`);
-            }
+    // Reset todos los campos
+    ['se-nombre','se-precio','se-ancho','se-prof','se-alto','se-cantidad'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const cb = document.getElementById('se-estandar');
+    if (cb) cb.checked = false;
+
+    // Resetear tipo a "estructura" y disparar el cambio de UI
+    const selTipo = document.getElementById('se-tipo');
+    if (selTipo) { selTipo.value = 'estructura'; _onChangeTipoEstructura(); }
+
+    // Cargar modelos base desde el configurador de Sofás
+    const selModelo = document.getElementById('se-modelo-base');
+    if (selModelo) {
+        const sofaModeloOrig = document.getElementById('sofa-modelo');
+        if (sofaModeloOrig && sofaModeloOrig.options.length > 0) {
+            selModelo.innerHTML = '<option value="">— Seleccionar modelo base —</option>' +
+                Array.from(sofaModeloOrig.options)
+                     .filter(o => o.value !== '')
+                     .map(o => `<option value="${o.text}">${o.text}</option>`)
+                     .join('');
+        } else {
+            selModelo.innerHTML = '<option value="">Escríbelo a mano abajo</option>';
         }
+        // Campo libre para modelo no listado
+        if (!document.getElementById('se-modelo-base-txt')) {
+            selModelo.insertAdjacentHTML('afterend',
+                `<input id="se-modelo-base-txt" placeholder="O escribe otro modelo (Ej: Seccional curvo)..."
+                    style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;font-size:13px;">`);
+        } else {
+            document.getElementById('se-modelo-base-txt').value = '';
+        }
+    }
+}
+
+/** Mostrar/ocultar campos según si es Estructura o Destrokes */
+function _onChangeTipoEstructura() {
+    const tipo = document.getElementById('se-tipo')?.value;
+    const bloqEst  = document.getElementById('bloque-solo-estructura');
+    const bloqDest = document.getElementById('bloque-solo-destrokes');
+    const titulo   = document.getElementById('se-modal-titulo');
+    if (!bloqEst || !bloqDest) return;
+
+    if (tipo === 'destrokes') {
+        bloqEst.style.display  = 'none';
+        bloqDest.style.display = 'block';
+        if (titulo) titulo.textContent = 'Registrar Destrokes';
+    } else {
+        bloqEst.style.display  = 'block';
+        bloqDest.style.display = 'none';
+        if (titulo) titulo.textContent = 'Registrar Estructura de Sofá';
+        // Restaurar medidas si estaban ocultas
+        const bloqueMed = document.getElementById('bloque-medidas');
+        if (bloqueMed) bloqueMed.style.display = 'flex';
     }
 }
 
@@ -2668,7 +2808,7 @@ function _renderListaEstructuras(lista) {
             <p style="font-weight:700;font-size:14px;color:#475569;margin:0;">Sin registros</p>
             <p style="font-size:12px;margin:4px 0 0;">Registra la primera estructura con el botón de arriba.</p>
         </div>`;
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%, 250px),1fr));gap:14px;">` +
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%, 250px),1fr));gap:14px;max-width:1400px;">` +
     lista.map(e => `
       <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;
                   overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
@@ -2703,38 +2843,66 @@ function _renderListaEstructuras(lista) {
 // con la lógica completa (carga de plantillas del catálogo)
 
 async function guardarEstructura() {
-    const nombre     = document.getElementById('se-nombre').value.trim();
-    const foto       = document.getElementById('se-foto').files[0];
-    const modeloBase = (document.getElementById('se-modelo-base')?.value ||
-                        document.getElementById('se-modelo-base-txt')?.value || '').trim();
+    const nombre = document.getElementById('se-nombre').value.trim();
+    const foto   = document.getElementById('se-foto').files[0];
+    const tipo   = document.getElementById('se-tipo').value;
 
-    if (!nombre || !foto) {
-        return Swal.fire({ icon:'warning', title:'Faltan datos',
-            text:'Nombre del lote y foto son obligatorios.' });
+    if (!nombre) {
+        return Swal.fire({ icon:'warning', title:'Falta el nombre', text:'Escribe un nombre o descripción.' });
     }
-    if (!modeloBase) {
-        return Swal.fire({ icon:'warning', title:'Falta el modelo base',
-            text:'Selecciona o escribe el modelo base (Seccional, Multifuncional, etc.).' });
+    if (!foto) {
+        return Swal.fire({ icon:'warning', title:'Falta la foto', text:'Agrega una foto del lote.' });
+    }
+
+    const esDestrokes = tipo === 'destrokes';
+
+    // Validaciones específicas por tipo
+    if (!esDestrokes) {
+        const modeloBase = (document.getElementById('se-modelo-base')?.value ||
+                            document.getElementById('se-modelo-base-txt')?.value || '').trim();
+        if (!modeloBase) {
+            return Swal.fire({ icon:'warning', title:'Falta el modelo base',
+                text:'Selecciona o escribe el modelo base (Seccional, Multifuncional, etc.).' });
+        }
+    } else {
+        const cant = document.getElementById('se-cantidad').value;
+        if (!cant || parseInt(cant) < 1) {
+            return Swal.fire({ icon:'warning', title:'Falta la cantidad',
+                text:'Ingresa cuántas piezas de destrokes registras.' });
+        }
     }
 
     const fd = new FormData();
-    fd.append('nombre_modelo',   nombre);
-    fd.append('modelo_base',     modeloBase);
-    fd.append('tipo',            document.getElementById('se-tipo').value);
-    fd.append('precio',          document.getElementById('se-precio').value || 0);
-    fd.append('ancho',           document.getElementById('se-ancho').value || 0);
-    fd.append('profundidad',     document.getElementById('se-prof').value || 0);
-    fd.append('alto',            document.getElementById('se-alto').value || 0);
-    fd.append('medida_estandar', document.getElementById('se-estandar').checked ? 'true' : 'false');
-    fd.append('foto', foto);
+    fd.append('nombre_modelo', nombre);
+    fd.append('tipo',          tipo);
+    fd.append('precio',        document.getElementById('se-precio').value || 0);
+    fd.append('foto',          foto);
+
+    if (esDestrokes) {
+        // Destrokes: solo cantidad, sin medidas ni modelo base
+        fd.append('cantidad',    document.getElementById('se-cantidad').value || 1);
+        fd.append('ancho',       0);
+        fd.append('profundidad', 0);
+        fd.append('alto',        0);
+        fd.append('modelo_base', '');
+        fd.append('medida_estandar', 'false');
+    } else {
+        const modeloBase = (document.getElementById('se-modelo-base')?.value ||
+                            document.getElementById('se-modelo-base-txt')?.value || '').trim();
+        fd.append('modelo_base',     modeloBase);
+        fd.append('ancho',           document.getElementById('se-ancho').value || 0);
+        fd.append('profundidad',     document.getElementById('se-prof').value || 0);
+        fd.append('alto',            document.getElementById('se-alto').value || 0);
+        fd.append('medida_estandar', document.getElementById('se-estandar').checked ? 'true' : 'false');
+        fd.append('cantidad',        1);
+    }
 
     try {
         const res = await fetch(`${API_URL}/api/stock-estructuras`, { method:'POST', body: fd });
         const d   = await res.json();
         if (d.exito) {
             cerrarModalEstructura();
-            Swal.fire({ icon:'success', title:'Guardado', timer:1500, showConfirmButton:false });
-            // Refrescar donde corresponde
+            Swal.fire({ icon:'success', title:'¡Guardado!', timer:1400, showConfirmButton:false });
             const ctx = window._modalEstructuraCtx || {};
             if (ctx.contenedorId) {
                 await _cargarContenidoStockSofa(ctx.contenedorId, ctx.esAdminCtx);
@@ -2742,9 +2910,9 @@ async function guardarEstructura() {
                 cargarTicketsTaller();
             }
         } else {
-            Swal.fire({ icon:'error', title:'Error', text: d.error });
+            Swal.fire({ icon:'error', title:'Error al guardar', text: d.error });
         }
     } catch(e) {
-        Swal.fire({ icon:'error', title:'Sin conexión' });
+        Swal.fire({ icon:'error', title:'Sin conexión', text:'Verifica tu red e intenta de nuevo.' });
     }
 }

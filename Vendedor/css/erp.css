@@ -634,3 +634,74 @@ header {
   #area-impresion, #area-impresion * { visibility: visible; }
   #area-impresion { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
 }
+/* ─── RESPONSIVE: TALLER / STOCK PRODUCCIÓN ────────────────────── */
+/* Limita el grid principal a un máximo razonable en pantallas grandes */
+#contenedor-tickets-taller {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 20px;
+  max-width: 1400px;
+  width: 100%;
+}
+
+/* En desktop grande (>1400px): máx 4 columnas */
+@media (min-width: 1400px) {
+  #contenedor-tickets-taller {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* En desktop medio (1024–1399px): máx 3 columnas */
+@media (min-width: 1024px) and (max-width: 1399px) {
+  #contenedor-tickets-taller {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* En tablet (768–1023px): 2 columnas */
+@media (min-width: 768px) and (max-width: 1023px) {
+  #contenedor-tickets-taller {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* En móvil (<768px): 1 columna */
+@media (max-width: 767px) {
+  #contenedor-tickets-taller {
+    grid-template-columns: 1fr;
+  }
+
+  /* Padding reducido en móvil para las secciones view */
+  .view-section {
+    padding: 12px !important;
+  }
+
+  /* Header del taller en móvil: stack vertical */
+  #taller-subheader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  #stats-taller {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* ── Stock Producción: el grid de tarjetas de estructuras ─────────
+   _renderListaEstructuras usa inline style; sobreescribimos con
+   max-width para que no se estire infinito en pantallas grandes    */
+#sp-sofa-contenido > div > div[style*="grid"] {
+  max-width: 1400px;
+}
+
+/* ─── RESPONSIVE: MAIN CONTENT ─────────────────────────────────── */
+@media (max-width: 600px) {
+  .main-content {
+    padding: 0.75rem;
+  }
+  .view-title-container h2 {
+    font-size: 1.1rem;
+  }
+}

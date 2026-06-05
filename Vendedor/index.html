@@ -359,7 +359,8 @@
 
     <div id="view-taller" class="view-section" style="display:none; padding: 20px;">
         
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid var(--border); padding-bottom: 15px; flex-wrap:wrap; gap:10px;">
+        <!-- id="taller-subheader": se oculta cuando la vista es stock-produccion para evitar doble título -->
+        <div id="taller-subheader" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom: 2px solid var(--border); padding-bottom: 15px; flex-wrap:wrap; gap:10px;">
             <h2 style="font-family: var(--font-ui); font-weight: 800; color: var(--primary); margin:0; letter-spacing: -1px;">
                 <i class="fa-solid fa-industry" style="color: var(--accent); margin-right: 10px;"></i> CONTROL DE PRODUCCIÓN
             </h2>
@@ -369,7 +370,8 @@
             </div>
         </div>
 
-        <div id="contenedor-tickets-taller" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+        <!-- grid responsive: máx 3 columnas en desktop, 2 en tablet, 1 en móvil -->
+        <div id="contenedor-tickets-taller" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 20px; max-width: 1400px;">
         </div>
     </div>
 <div id="view-inventario" class="view-section" style="display:none; padding: 20px;">
