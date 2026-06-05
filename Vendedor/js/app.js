@@ -1397,6 +1397,7 @@ function changeView(view) {
         'inv-tienda':      () => typeof cargarVistaInventario === 'function',
         'inventario':      () => typeof cargarInventarioTaller === 'function',
         'taller':          () => typeof cargarTicketsTaller === 'function',
+        'stock-produccion': () => typeof cargarTicketsTaller === 'function',
     };
     if (guardas[view] && !guardas[view]()) {
         console.warn(`changeView('${view}'): función de carga aún no disponible, reintentando...`);
@@ -1511,8 +1512,8 @@ function changeView(view) {
         cargarGestorAprobacion();
     }
     else if (view === 'stock-produccion') {              // ← nuevo bloque
+        filtroAdminTaller = 'stock_produccion';          // setear ANTES de mostrar y cargar
         mostrar('view-taller');
-        filtroAdminTaller = 'stock_produccion';
         cargarTicketsTaller();
     }
     else {
