@@ -337,15 +337,15 @@ async function verSeguimientoVendedor(codigo) {
 /* ================================================================= */
 /* --- LOGÍSTICA EXTERNA (PROCURA) --- */
 /* ================================================================= */
-// ── Helper PDF: fuerza descarga en Cloudinary para evitar error 401
-// del visor PDF de Chrome (chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai)
+// ── Helper PDF: abre el PDF usando el visor de Google Docs como fallback
+// Evita ERR_INVALID_RESPONSE que produce fl_attachment en Cloudinary raw
 function _abrirPDF(urlPdf) {
     if (!urlPdf) return;
-    let url = urlPdf;
-    if (url.includes('cloudinary.com') && !url.includes('fl_attachment')) {
-        url = url.replace('/upload/', '/upload/fl_attachment/');
-    }
-    window.open(url, '_blank');
+    // Limpiar fl_attachment si ya estaba en la URL guardada
+    let url = urlPdf.replace('/upload/fl_attachment/', '/upload/');
+    // Usar Google Docs viewer: abre el PDF inline en cualquier browser sin errores
+    const visor = 'https://docs.google.com/viewer?embedded=true&url=' + encodeURIComponent(url);
+    window.open(visor, '_blank');
 }
 
 // ── Helper: normalizar número peruano para wa.me ──────────────────────────────
@@ -1488,9 +1488,6 @@ function changeView(view) {
         if (typeof filtroAdminTaller !== 'undefined' && filtroAdminTaller === 'stock_produccion') {
             filtroAdminTaller = 'pendientes';
         }
-        // Restaurar subheader interno al volver a vista normal de taller
-        const tallerSubheader = document.getElementById('taller-subheader');
-        if (tallerSubheader) tallerSubheader.style.display = '';
         mostrar('view-taller');
         cargarTicketsTaller();
     }
@@ -1522,9 +1519,6 @@ function changeView(view) {
     }
     else if (view === 'stock-produccion') {              // ← nuevo bloque
         filtroAdminTaller = 'stock_produccion';          // setear ANTES de mostrar y cargar
-        // Ocultar el subheader interno para evitar el doble título
-        const tallerSub = document.getElementById('taller-subheader');
-        if (tallerSub) tallerSub.style.display = 'none';
         mostrar('view-taller');
         cargarTicketsTaller();
     }
