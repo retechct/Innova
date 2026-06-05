@@ -457,36 +457,89 @@ async function cargarVistaColaRecojo(contenedor) {
     }
 }
 
-// Al abrir un ticket de ESTRUCTURAS_MUEBLES, cargar sugerencias
-async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, contenedorId) {
-    const res  = await apiFetch(
-        `${API_URL}/api/stock-estructuras/sugerir?ancho=${ancho}&profundidad=${profundidad}&alto=${alto}`
-    );
-    const sugerencias = await res.json();
-    const cont = document.getElementById(contenedorId);
-    if (!cont || !sugerencias.length) return;
+// Helper: detecta el modelo base de un nombre de producto (para buscar stock coincidente)
+function _extraerModeloBase(nombreProducto) {
+    if (!nombreProducto) return '';
+    const nombre = nombreProducto.toLowerCase();
+    // Lista de modelos base — deben coincidir con los nombres en catalogo_productos (es_plantilla=true)
+    const modelos = [
+        'multifuncional', 'multi3', 'multi4',
+        'seccional', 'seccional invertido',
+        'curvo', 'en u', 'juego', 'esquinero',
+        'sofa 3', 'sofa 2', 'sofa 1', 'sofá 3', 'sofá 2', 'sofá 1',
+        'butaca', 'silla', 'cama', 'camas', 'puff',
+    ];
+    for (const m of modelos) {
+        if (nombre.includes(m)) {
+            // Retornar capitalizado para comparar con BD
+            return m.charAt(0).toUpperCase() + m.slice(1);
+        }
+    }
+    return '';
+}
 
-    cont.innerHTML = `
-      <div style="background:#f5f3ff;border:1.5px solid #7c3aed;border-radius:10px;padding:12px;margin-top:10px;">
-        <div style="font-weight:700;font-size:13px;color:#7c3aed;margin-bottom:8px;">
-          📦 Tienes estructuras en stock con medidas similares:
-        </div>
-        <select id="sel-estructura-${ticketId}"
-            style="width:100%;padding:9px;border:1.5px solid #7c3aed;border-radius:8px;
-                   font-size:13px;margin-bottom:8px;">
-          <option value="">— Seleccionar estructura del stock —</option>
-          ${sugerencias.map(s => `
-            <option value="${s.id}">
-              ${s.nombre_modelo} · ${s.ancho}×${s.profundidad}×${s.alto} cm
-              ${s.medida_estandar ? '⭐ Estándar' : ''}
-            </option>`).join('')}
-        </select>
-        <button onclick="usarEstructuraStock(${ticketId})"
-            style="width:100%;padding:9px;background:#7c3aed;color:white;border:none;
-                   border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">
-            Usar esta estructura (ya está pagada)
-        </button>
-      </div>`;
+// Al abrir un ticket de ESTRUCTURAS_MUEBLES, cargar sugerencias por modelo base + medidas
+async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, contenedorId, modeloBase = '') {
+    try {
+        const params = new URLSearchParams({ ancho, profundidad, alto });
+        if (modeloBase) params.append('modelo_base', modeloBase);
+        const res = await apiFetch(`${API_URL}/api/stock-estructuras/sugerir?${params}`);
+        const sugerencias = await res.json();
+        const cont = document.getElementById(contenedorId);
+        if (!cont || !Array.isArray(sugerencias) || !sugerencias.length) return;
+
+        // Separar coincidencias exactas de modelo de las que son solo por medidas
+        const porModelo  = sugerencias.filter(s => s.modelo_base && modeloBase &&
+            s.modelo_base.toLowerCase() === modeloBase.toLowerCase());
+        const porMedidas = sugerencias.filter(s => !porModelo.includes(s));
+
+        const renderOption = s => {
+            const tagModelo  = (s.modelo_base && modeloBase && s.modelo_base.toLowerCase() === modeloBase.toLowerCase())
+                ? ' 🎯 Mismo modelo' : '';
+            const tagEst     = s.medida_estandar ? ' ⭐ Estándar' : '';
+            const medidas    = (s.ancho || s.profundidad || s.alto)
+                ? ` · ${s.ancho}×${s.profundidad}×${s.alto} cm` : '';
+            const modeloTag  = s.modelo_base ? ` (${s.modelo_base})` : '';
+            return `<option value="${s.id}">${s.nombre_modelo}${modeloTag}${medidas}${tagModelo}${tagEst}</option>`;
+        };
+
+        let opcionesHTML = `<option value="">— Seleccionar estructura del stock —</option>`;
+        if (porModelo.length > 0) {
+            opcionesHTML += `<optgroup label="🎯 Mismo modelo (${modeloBase})">`;
+            opcionesHTML += porModelo.map(renderOption).join('');
+            opcionesHTML += `</optgroup>`;
+        }
+        if (porMedidas.length > 0) {
+            opcionesHTML += `<optgroup label="📐 Medidas similares">`;
+            opcionesHTML += porMedidas.map(renderOption).join('');
+            opcionesHTML += `</optgroup>`;
+        }
+        if (!porModelo.length && !porMedidas.length) {
+            opcionesHTML += sugerencias.map(renderOption).join('');
+        }
+
+        cont.innerHTML = `
+          <div style="background:#f5f3ff;border:1.5px solid #7c3aed;border-radius:10px;padding:12px;margin-top:10px;">
+            <div style="font-weight:700;font-size:13px;color:#7c3aed;margin-bottom:4px;">
+              📦 Stock disponible — ya está pagado, NO cobrar:
+            </div>
+            <div style="font-size:11px;color:#64748b;margin-bottom:8px;">
+              Selecciona una estructura del inventario para asignarla a este pedido.
+            </div>
+            <select id="sel-estructura-${ticketId}"
+                style="width:100%;padding:9px;border:1.5px solid #7c3aed;border-radius:8px;
+                       font-size:13px;margin-bottom:8px;">
+              ${opcionesHTML}
+            </select>
+            <button onclick="usarEstructuraStock(${ticketId})"
+                style="width:100%;padding:10px;background:#7c3aed;color:white;border:none;
+                       border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">
+                ✅ Usar esta estructura (ya está pagada — no cobrar al cliente)
+            </button>
+          </div>`;
+    } catch(e) {
+        console.warn('No se pudieron cargar sugerencias de stock:', e);
+    }
 }
 
 async function usarEstructuraStock(ticketId) {
@@ -495,9 +548,12 @@ async function usarEstructuraStock(ticketId) {
         return Swal.fire({ icon:'warning', text:'Selecciona una estructura.' });
     }
     const { isConfirmed } = await Swal.fire({
-        icon:'question', title:'¿Usar esta estructura?',
-        text:'Se marcará como entregada desde stock.',
-        showCancelButton:true, confirmButtonText:'Sí, usar', cancelButtonText:'Cancelar'
+        icon:'question', title:'¿Usar esta estructura del stock?',
+        html: `<p style="font-size:13px;color:#475569;">Esta estructura <b>ya está pagada</b> — se asignará al ticket y el carpintero NO necesita fabricarla.<br><br>
+               <span style="background:#fef3c7;color:#92400e;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:700;display:inline-block;">
+               ⚠️ NO cobrar al cliente por esta pieza</span></p>`,
+        showCancelButton:true, confirmButtonText:'✅ Sí, usar del stock', cancelButtonText:'Cancelar',
+        confirmButtonColor: '#7c3aed'
     });
     if (!isConfirmed) return;
 
@@ -1079,7 +1135,7 @@ async function cargarTicketsTaller() {
 
         contenedor.innerHTML = html;
 
-        // Cargar sugerencias para estructuras
+        // Cargar sugerencias para estructuras — buscar por modelo base + medidas
         ticketsFiltrados.forEach(t => {
             if (t.area === 'ESTRUCTURAS_MUEBLES' && t.estado !== 'Terminado') {
                 let l = 0, p = 0, h = 0;
@@ -1089,9 +1145,13 @@ async function cargarTicketsTaller() {
                     p = parseFloat(m[2]) || 0;
                     h = parseFloat(m[3]) || 0;
                 }
-                
-                if (l > 0 || p > 0) {
-                    cargarSugerenciasEstructura(l, p, h, t.id, `sug-est-${t.id}`);
+
+                // Extraer modelo base del nombre del producto
+                // Intenta detectar el tipo de sofá del nombre del ticket (ej: "Seccional 3+2", "Multifuncional")
+                const modeloBaseDetectado = _extraerModeloBase(t.producto || '');
+
+                if (l > 0 || p > 0 || modeloBaseDetectado) {
+                    cargarSugerenciasEstructura(l, p, h, t.id, `sug-est-${t.id}`, modeloBaseDetectado);
                 }
             }
         });
@@ -1703,7 +1763,6 @@ async function cargarInventarioTaller() {
             if (el) el.innerHTML = htmlContent;
         };
 
-  // DESPUÉS:
         setHtml('contenedor-telas-admin',    telas.map(i=>dibujarTarjetaMaterial(i,'tela')).join(''));
         setHtml('contenedor-cojines-admin',  cojines.map(i=>dibujarTarjetaMaterial(i,'cojin')).join(''));
         setHtml('contenedor-tableros-admin', tableros.map(i=>dibujarTarjetaMaterial(i,'tablero')).join(''));
@@ -2492,9 +2551,16 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
               <option value="destrokes">Destrokes</option>
             </select>
 
-            <label style="font-size:12px;font-weight:700;color:#475569;">NOMBRE / MODELO *</label>
-            <input id="se-nombre" placeholder="Ej: Seccional 3 cuerpos"
+            <label style="font-size:12px;font-weight:700;color:#475569;">NOMBRE DEL LOTE *</label>
+            <input id="se-nombre" placeholder="Ej: Seccional 3+2 Gris Perla"
                 style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;">
+
+            <label style="font-size:12px;font-weight:700;color:#475569;">MODELO BASE *</label>
+            <div style="font-size:11px;color:#64748b;margin-bottom:5px;">Selecciona el tipo de sofá de las plantillas del catálogo</div>
+            <select id="se-modelo-base"
+                style="width:100%;padding:9px;border:1.5px solid #7c3aed;border-radius:8px;margin-bottom:10px;font-size:13px;">
+              <option value="">— Seleccionar modelo base —</option>
+            </select>
 
             <label style="font-size:12px;font-weight:700;color:#475569;">PRECIO (S/)</label>
             <input id="se-precio" type="number" placeholder="Ej: 350.00" step="0.01"
@@ -2578,6 +2644,29 @@ function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
         if (cb) cb.checked = false;
         const bloque = document.getElementById('bloque-medidas');
         if (bloque) bloque.style.display = 'grid';
+
+        // Cargar modelos base (plantillas del catálogo)
+        const selModelo = document.getElementById('se-modelo-base');
+        if (selModelo) {
+            selModelo.innerHTML = '<option value="">Cargando plantillas...</option>';
+            apiFetch(`${API_URL}/api/catalogo`)
+                .then(r => r.json())
+                .then(productos => {
+                    const plantillas = (productos || []).filter(p => p.es_plantilla);
+                    selModelo.innerHTML = '<option value="">— Seleccionar modelo base —</option>' +
+                        plantillas.map(p => `<option value="${p.nombre}">${p.nombre}</option>`).join('');
+                    if (plantillas.length === 0) {
+                        selModelo.innerHTML += '<option value="" disabled>Sin plantillas registradas</option>';
+                    }
+                })
+                .catch(() => {
+                    selModelo.innerHTML = '<option value="">Error al cargar — escríbelo a mano</option>';
+                    // Fallback: mostrar como input de texto
+                    selModelo.insertAdjacentHTML('afterend',
+                        `<input id="se-modelo-base-txt" placeholder="Ej: Seccional, Multifuncional..."
+                            style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-top:5px;font-size:13px;">`);
+                });
+        }
     }
 }
 
@@ -2596,6 +2685,7 @@ function _renderListaEstructuras(lista) {
              onerror="this.src='imagenes/sin_foto.jpg'">
         <div style="flex:1;min-width:0;">
           <div style="font-weight:700;font-size:14px;">${e.nombre_modelo}</div>
+          ${e.modelo_base ? `<div style="font-size:11px;color:#7c3aed;font-weight:700;margin-bottom:2px;">🏷️ ${e.modelo_base}</div>` : ''}
           <div style="font-size:12px;color:#64748b;">
             ${e.tipo === 'destrokes' ? '🔧 Destrokes' : '🪵 Estructura'}
             ${e.medida_estandar ? ' · <span style="color:#7c3aed;font-weight:700;">Estándar</span>' : ''}
@@ -2614,29 +2704,28 @@ function _renderListaEstructuras(lista) {
       </div>`).join('');
 }
 
-function mostrarTabEstructuras(estado) {
-    const data = window._stockEstructurasData || [];
-    const filtrado = data.filter(e => e.estado === estado);
-    document.getElementById('lista-estructuras-stock').innerHTML = _renderListaEstructuras(filtrado);
-}
 
-function abrirModalRegistrarEstructura() {
-    document.getElementById('modal-registro-estructura').style.display = 'flex';
-}
-
-function cerrarModalEstructura() {
-    document.getElementById('modal-registro-estructura').style.display = 'none';
-}
+// Nota: abrirModalRegistrarEstructura y cerrarModalEstructura están definidas arriba
+// con la lógica completa (carga de plantillas del catálogo)
 
 async function guardarEstructura() {
-    const nombre = document.getElementById('se-nombre').value.trim();
-    const foto   = document.getElementById('se-foto').files[0];
+    const nombre     = document.getElementById('se-nombre').value.trim();
+    const foto       = document.getElementById('se-foto').files[0];
+    const modeloBase = (document.getElementById('se-modelo-base')?.value ||
+                        document.getElementById('se-modelo-base-txt')?.value || '').trim();
+
     if (!nombre || !foto) {
         return Swal.fire({ icon:'warning', title:'Faltan datos',
-            text:'Nombre y foto son obligatorios.' });
+            text:'Nombre del lote y foto son obligatorios.' });
     }
+    if (!modeloBase) {
+        return Swal.fire({ icon:'warning', title:'Falta el modelo base',
+            text:'Selecciona o escribe el modelo base (Seccional, Multifuncional, etc.).' });
+    }
+
     const fd = new FormData();
     fd.append('nombre_modelo',   nombre);
+    fd.append('modelo_base',     modeloBase);
     fd.append('tipo',            document.getElementById('se-tipo').value);
     fd.append('precio',          document.getElementById('se-precio').value || 0);
     fd.append('ancho',           document.getElementById('se-ancho').value || 0);

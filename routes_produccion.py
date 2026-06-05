@@ -1945,7 +1945,8 @@ def listar_stock_estructuras():
         cursor.execute("""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
                    medida_estandar, foto_url, tipo, cantidad, estado,
-                   ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY'), COALESCE(precio, 0)
+                   ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY'), COALESCE(precio, 0),
+                   COALESCE(modelo_base, '')
             FROM stock_estructuras_sofa
             ORDER BY fecha_registro DESC
         """)
@@ -1955,7 +1956,8 @@ def listar_stock_estructuras():
             'ancho': float(r[2] or 0), 'profundidad': float(r[3] or 0), 'alto': float(r[4] or 0),
             'medida_estandar': r[5], 'foto_url': r[6], 'tipo': r[7],
             'cantidad': r[8], 'estado': r[9], 'ticket_id': r[10], 'fecha': r[11],
-            'precio': float(r[12] or 0)
+            'precio': float(r[12] or 0),
+            'modelo_base': r[13]
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1969,6 +1971,7 @@ def registrar_stock_estructura():
     import cloudinary.uploader
     try:
         nombre          = request.form.get('nombre_modelo')
+        modelo_base     = request.form.get('modelo_base', '')
         ancho           = request.form.get('ancho') or 0
         profundidad     = request.form.get('profundidad') or 0
         alto            = request.form.get('alto') or 0
@@ -1976,7 +1979,7 @@ def registrar_stock_estructura():
         tipo            = request.form.get('tipo', 'estructura')
         cantidad        = int(request.form.get('cantidad', 1))
         precio          = float(request.form.get('precio') or 0)
-        
+
         foto_url = None
         if 'foto' in request.files and request.files['foto'].filename:
             res = cloudinary.uploader.upload(request.files['foto'], folder='stock_estructuras')
@@ -1986,9 +1989,11 @@ def registrar_stock_estructura():
         cursor   = conexion.cursor()
         cursor.execute("""
             INSERT INTO stock_estructuras_sofa
-                (nombre_modelo, ancho, profundidad, alto, medida_estandar, foto_url, tipo, cantidad, precio)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-        """, (nombre, ancho, profundidad, alto, medida_estandar, foto_url, tipo, cantidad, precio))
+                (nombre_modelo, modelo_base, ancho, profundidad, alto,
+                 medida_estandar, foto_url, tipo, cantidad, precio)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        """, (nombre, modelo_base, ancho, profundidad, alto,
+              medida_estandar, foto_url, tipo, cantidad, precio))
         new_id = cursor.fetchone()[0]
         conexion.commit()
         return jsonify({'exito': True, 'id': new_id}), 201
@@ -2002,7 +2007,7 @@ def registrar_stock_estructura():
 
 @produccion_bp.route('/api/stock-estructuras/<int:stock_id>/usar', methods=['POST'])
 def usar_stock_estructura(stock_id):
-    """Marca una estructura como entregada y la vincula a un ticket."""
+    """Marca una estructura como entregada, la vincula al ticket y termina el ticket."""
     data      = request.get_json()
     ticket_id = data.get('ticket_id')
     try:
@@ -2013,6 +2018,14 @@ def usar_stock_estructura(stock_id):
             SET estado = 'entregado', ticket_id = %s
             WHERE id = %s
         """, (ticket_id, stock_id))
+        # Marcar el ticket de carpintería como Terminado automáticamente
+        # (la estructura ya estaba hecha — no hay que fabricarla)
+        if ticket_id:
+            cursor.execute("""
+                UPDATE tickets_produccion
+                SET estado_ticket = 'Terminado'
+                WHERE id = %s
+            """, (ticket_id,))
         conexion.commit()
         return jsonify({'exito': True}), 200
     except Exception as e:
@@ -2026,38 +2039,51 @@ def usar_stock_estructura(stock_id):
 @produccion_bp.route('/api/stock-estructuras/sugerir', methods=['GET'])
 def sugerir_estructura():
     """
-    Dado ancho+profundidad+alto de un ticket, devuelve estructuras disponibles
-    con medidas similares (±15 cm) o estándar.
+    Dado ancho+profundidad+alto y opcionalmente modelo_base de un ticket,
+    devuelve estructuras disponibles ordenadas: primero por modelo exacto,
+    luego estándar, luego por medidas similares (±15 cm).
     """
     try:
         ancho       = float(request.args.get('ancho', 0))
         profundidad = float(request.args.get('profundidad', 0))
         alto        = float(request.args.get('alto', 0))
+        modelo_base = request.args.get('modelo_base', '').strip()
         margen      = 15  # cm
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
-                   medida_estandar, foto_url, tipo, cantidad
+                   medida_estandar, foto_url, tipo, cantidad,
+                   COALESCE(modelo_base, '')
             FROM stock_estructuras_sofa
             WHERE estado = 'disponible'
               AND (
                 medida_estandar = TRUE
+                OR (%(modelo_base)s != '' AND LOWER(modelo_base) = LOWER(%(modelo_base)s))
                 OR (
-                    ABS(ancho - %s)       <= %s AND
-                    ABS(profundidad - %s) <= %s AND
-                    ABS(alto - %s)        <= %s
+                    ABS(ancho       - %(ancho)s)       <= %(margen)s AND
+                    ABS(profundidad - %(profundidad)s) <= %(margen)s AND
+                    ABS(alto        - %(alto)s)        <= %(margen)s
                 )
               )
-            ORDER BY medida_estandar DESC, ABS(ancho - %s) ASC
-            LIMIT 5
-        """, (ancho, margen, profundidad, margen, alto, margen, ancho))
+            ORDER BY
+                CASE WHEN %(modelo_base)s != ''
+                          AND LOWER(modelo_base) = LOWER(%(modelo_base)s)
+                     THEN 0 ELSE 1 END ASC,
+                medida_estandar DESC,
+                ABS(ancho - %(ancho)s) ASC
+            LIMIT 8
+        """, {
+            'ancho': ancho, 'profundidad': profundidad, 'alto': alto,
+            'modelo_base': modelo_base, 'margen': margen
+        })
         rows = cursor.fetchall()
         return jsonify([{
             'id': r[0], 'nombre_modelo': r[1],
             'ancho': float(r[2] or 0), 'profundidad': float(r[3] or 0), 'alto': float(r[4] or 0),
-            'medida_estandar': r[5], 'foto_url': r[6], 'tipo': r[7], 'cantidad': r[8]
+            'medida_estandar': r[5], 'foto_url': r[6], 'tipo': r[7], 'cantidad': r[8],
+            'modelo_base': r[9]
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
