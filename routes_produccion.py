@@ -1935,3 +1935,130 @@ def marcar_listo_para_recojo(id):
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+            # ─── STOCK ESTRUCTURAS SOFÁ ───────────────────────────────────────────────────
+
+@produccion_bp.route('/api/stock-estructuras', methods=['GET'])
+def listar_stock_estructuras():
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT id, nombre_modelo, ancho, profundidad, alto,
+                   medida_estandar, foto_url, tipo, cantidad, estado,
+                   ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY')
+            FROM stock_estructuras_sofa
+            ORDER BY fecha_registro DESC
+        """)
+        rows = cursor.fetchall()
+        return jsonify([{
+            'id': r[0], 'nombre_modelo': r[1],
+            'ancho': float(r[2] or 0), 'profundidad': float(r[3] or 0), 'alto': float(r[4] or 0),
+            'medida_estandar': r[5], 'foto_url': r[6], 'tipo': r[7],
+            'cantidad': r[8], 'estado': r[9], 'ticket_id': r[10], 'fecha': r[11]
+        } for r in rows]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/stock-estructuras', methods=['POST'])
+def registrar_stock_estructura():
+    import cloudinary.uploader
+    try:
+        nombre          = request.form.get('nombre_modelo')
+        ancho           = request.form.get('ancho') or 0
+        profundidad     = request.form.get('profundidad') or 0
+        alto            = request.form.get('alto') or 0
+        medida_estandar = request.form.get('medida_estandar') == 'true'
+        tipo            = request.form.get('tipo', 'estructura')  # 'estructura' | 'destrokes'
+        cantidad        = int(request.form.get('cantidad', 1))
+
+        foto_url = None
+        if 'foto' in request.files and request.files['foto'].filename:
+            res = cloudinary.uploader.upload(request.files['foto'], folder='stock_estructuras')
+            foto_url = res.get('secure_url')
+
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            INSERT INTO stock_estructuras_sofa
+                (nombre_modelo, ancho, profundidad, alto, medida_estandar, foto_url, tipo, cantidad)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        """, (nombre, ancho, profundidad, alto, medida_estandar, foto_url, tipo, cantidad))
+        new_id = cursor.fetchone()[0]
+        conexion.commit()
+        return jsonify({'exito': True, 'id': new_id}), 201
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/stock-estructuras/<int:stock_id>/usar', methods=['POST'])
+def usar_stock_estructura(stock_id):
+    """Marca una estructura como entregada y la vincula a un ticket."""
+    data      = request.get_json()
+    ticket_id = data.get('ticket_id')
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            UPDATE stock_estructuras_sofa
+            SET estado = 'entregado', ticket_id = %s
+            WHERE id = %s
+        """, (ticket_id, stock_id))
+        conexion.commit()
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/stock-estructuras/sugerir', methods=['GET'])
+def sugerir_estructura():
+    """
+    Dado ancho+profundidad+alto de un ticket, devuelve estructuras disponibles
+    con medidas similares (±15 cm) o estándar.
+    """
+    try:
+        ancho       = float(request.args.get('ancho', 0))
+        profundidad = float(request.args.get('profundidad', 0))
+        alto        = float(request.args.get('alto', 0))
+        margen      = 15  # cm
+
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT id, nombre_modelo, ancho, profundidad, alto,
+                   medida_estandar, foto_url, tipo, cantidad
+            FROM stock_estructuras_sofa
+            WHERE estado = 'disponible'
+              AND (
+                medida_estandar = TRUE
+                OR (
+                    ABS(ancho - %s)       <= %s AND
+                    ABS(profundidad - %s) <= %s AND
+                    ABS(alto - %s)        <= %s
+                )
+              )
+            ORDER BY medida_estandar DESC, ABS(ancho - %s) ASC
+            LIMIT 5
+        """, (ancho, margen, profundidad, margen, alto, margen, ancho))
+        rows = cursor.fetchall()
+        return jsonify([{
+            'id': r[0], 'nombre_modelo': r[1],
+            'ancho': float(r[2] or 0), 'profundidad': float(r[3] or 0), 'alto': float(r[4] or 0),
+            'medida_estandar': r[5], 'foto_url': r[6], 'tipo': r[7], 'cantidad': r[8]
+        } for r in rows]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)

@@ -457,6 +457,64 @@ async function cargarVistaColaRecojo(contenedor) {
     }
 }
 
+// Al abrir un ticket de ESTRUCTURAS_MUEBLES, cargar sugerencias
+async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, contenedorId) {
+    const res  = await apiFetch(
+        `${API_URL}/api/stock-estructuras/sugerir?ancho=${ancho}&profundidad=${profundidad}&alto=${alto}`
+    );
+    const sugerencias = await res.json();
+    const cont = document.getElementById(contenedorId);
+    if (!cont || !sugerencias.length) return;
+
+    cont.innerHTML = `
+      <div style="background:#f5f3ff;border:1.5px solid #7c3aed;border-radius:10px;padding:12px;margin-top:10px;">
+        <div style="font-weight:700;font-size:13px;color:#7c3aed;margin-bottom:8px;">
+          📦 Tienes estructuras en stock con medidas similares:
+        </div>
+        <select id="sel-estructura-${ticketId}"
+            style="width:100%;padding:9px;border:1.5px solid #7c3aed;border-radius:8px;
+                   font-size:13px;margin-bottom:8px;">
+          <option value="">— Seleccionar estructura del stock —</option>
+          ${sugerencias.map(s => `
+            <option value="${s.id}">
+              ${s.nombre_modelo} · ${s.ancho}×${s.profundidad}×${s.alto} cm
+              ${s.medida_estandar ? '⭐ Estándar' : ''}
+            </option>`).join('')}
+        </select>
+        <button onclick="usarEstructuraStock(${ticketId})"
+            style="width:100%;padding:9px;background:#7c3aed;color:white;border:none;
+                   border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">
+            Usar esta estructura (ya está pagada)
+        </button>
+      </div>`;
+}
+
+async function usarEstructuraStock(ticketId) {
+    const sel = document.getElementById(`sel-estructura-${ticketId}`);
+    if (!sel || !sel.value) {
+        return Swal.fire({ icon:'warning', text:'Selecciona una estructura.' });
+    }
+    const { isConfirmed } = await Swal.fire({
+        icon:'question', title:'¿Usar esta estructura?',
+        text:'Se marcará como entregada desde stock.',
+        showCancelButton:true, confirmButtonText:'Sí, usar', cancelButtonText:'Cancelar'
+    });
+    if (!isConfirmed) return;
+
+    const res = await apiFetch(`${API_URL}/api/stock-estructuras/${sel.value}/usar`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ ticket_id: ticketId })
+    });
+    const d = await res.json();
+    if (d.exito) {
+        Swal.fire({ icon:'success', title:'Listo', text:'Estructura asignada desde stock.', timer:1800, showConfirmButton:false });
+        cargarTicketsTaller();
+    } else {
+        Swal.fire({ icon:'error', text: d.error });
+    }
+}
+
 /* --- PDF UNITARIO DE RECOJO --- */
 function imprimirPDFRecojoUnitario(idx) {
     const cola = window._colaRecojoData;
@@ -727,6 +785,13 @@ async function cargarTicketsTaller() {
                     border:2px solid #86efac;">
                     <i class="fa-solid fa-circle-check"></i> ENTREGADOS
                 </button>
+                <button onclick="filtroAdminTaller='stock_estructuras'; cargarTicketsTaller()"
+                    style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
+                    background:${filtroAdminTaller==='stock_estructuras' ? '#7c3aed' : '#f5f3ff'};
+                    color:${filtroAdminTaller==='stock_estructuras' ? 'white' : '#7c3aed'};
+                    border:2px solid #7c3aed;">
+                    <i class="fa-solid fa-boxes-stacked"></i> STOCK ESTRUCTURAS
+                </button>
                 <button onclick="cargarTicketsTaller()"
                     style="padding:10px 16px; border-radius:10px; border:none; font-size:11px; font-weight:800; cursor:pointer; background:#f1f5f9; color:#475569;">
                     <i class="fa-solid fa-rotate"></i> Actualizar
@@ -751,6 +816,13 @@ async function cargarTicketsTaller() {
         if (filtroAdminTaller === 'ordenes') {
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando órdenes de producción...</p>';
             await cargarOrdenesProduccion(contenedor);
+            return;
+        }
+
+        // Si está en vista STOCK ESTRUCTURAS, mostrar esa sección y salir
+        if (filtroAdminTaller === 'stock_estructuras') {
+            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando stock de estructuras...</p>';
+            await cargarVistaStockEstructuras(contenedor);
             return;
         }
     } else if (esChofer) {
@@ -986,6 +1058,7 @@ async function cargarTicketsTaller() {
                         <i class="fa-solid fa-eye"></i> Ver Ficha Técnica Completa
                     </button>
                     ${renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin)}
+                    <div id="sug-est-${t.id}"></div>
                 </div>`;
             });
 
@@ -993,6 +1066,23 @@ async function cargarTicketsTaller() {
         }
 
         contenedor.innerHTML = html;
+
+        // Cargar sugerencias para estructuras
+        ticketsFiltrados.forEach(t => {
+            if (t.area === 'ESTRUCTURAS_MUEBLES' && t.estado !== 'Terminado') {
+                let l = 0, p = 0, h = 0;
+                const m = (t.especificaciones || '').match(/L(\d+)(?:\.\d+)?\s*x\s*P(\d+)(?:\.\d+)?(?:(?:\s*x\s*H|\s*x\s*Alto)\s*(\d+)(?:\.\d+)?)?/i);
+                if (m) {
+                    l = parseFloat(m[1]) || 0;
+                    p = parseFloat(m[2]) || 0;
+                    h = parseFloat(m[3]) || 0;
+                }
+                
+                if (l > 0 || p > 0) {
+                    cargarSugerenciasEstructura(l, p, h, t.id, `sug-est-${t.id}`);
+                }
+            }
+        });
 
         // Event delegation para fichas técnicas
         contenedor.querySelectorAll('.btn-ver-ficha').forEach(btn => {
@@ -2300,4 +2390,167 @@ function _syncDerivarFoto(inputOrigen) {
         previewDiv.style.display = 'block';
     };
     reader.readAsDataURL(file);
+}
+async function cargarVistaStockEstructuras(contenedor) {
+    try {
+        const res  = await apiFetch(`${API_URL}/api/stock-estructuras`);
+        const data = await res.json();
+
+        const disponibles = data.filter(e => e.estado === 'disponible');
+        const entregadosDesdeStock = data.filter(e => e.estado === 'entregado');
+
+        contenedor.innerHTML = `
+        <div style="padding:16px;">
+
+          <!-- Botón registrar -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h3 style="margin:0;font-size:15px;">📦 Stock de Estructuras</h3>
+            <button onclick="abrirModalRegistrarEstructura()"
+                style="background:#7c3aed;color:white;border:none;border-radius:8px;
+                       padding:9px 16px;cursor:pointer;font-size:13px;font-weight:700;">
+                + Registrar estructura
+            </button>
+          </div>
+
+          <!-- Tab interno: Disponibles / Entregados desde stock -->
+          <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button id="tab-disp" onclick="mostrarTabEstructuras('disponible')"
+                style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #7c3aed;
+                       background:#7c3aed;color:white;font-weight:700;cursor:pointer;font-size:12px;">
+                📦 En stock (${disponibles.length})
+            </button>
+            <button id="tab-entregados-stock" onclick="mostrarTabEstructuras('entregado')"
+                style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #15803d;
+                       background:#f0fdf4;color:#15803d;font-weight:700;cursor:pointer;font-size:12px;">
+                ✅ Entregados desde stock (${entregadosDesdeStock.length})
+            </button>
+          </div>
+
+          <div id="lista-estructuras-stock">
+            ${_renderListaEstructuras(disponibles)}
+          </div>
+        </div>
+
+        <!-- Modal registrar -->
+        <div id="modal-registro-estructura" style="display:none;position:fixed;inset:0;
+             background:rgba(0,0,0,0.6);z-index:9999;display:none;
+             justify-content:center;align-items:center;">
+          <div style="background:white;border-radius:16px;padding:24px;width:360px;max-width:95vw;">
+            <h3 style="margin:0 0 16px;font-size:16px;">Registrar estructura / destrokes</h3>
+            <label style="font-size:12px;font-weight:700;color:#475569;">TIPO</label>
+            <select id="se-tipo" style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;">
+              <option value="estructura">Estructura de sofá</option>
+              <option value="destrokes">Destrokes (pague en estructura)</option>
+            </select>
+            <label style="font-size:12px;font-weight:700;color:#475569;">NOMBRE / MODELO</label>
+            <input id="se-nombre" placeholder="Ej: Seccional 3 cuerpos"
+                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;">
+            <label style="font-size:12px;font-weight:700;color:#475569;">MEDIDAS (cm)</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+              <input id="se-ancho" type="number" placeholder="Ancho"
+                  style="padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+              <input id="se-prof" type="number" placeholder="Prof."
+                  style="padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+              <input id="se-alto" type="number" placeholder="Alto"
+                  style="padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;cursor:pointer;">
+              <input type="checkbox" id="se-estandar"> Medida estándar
+            </label>
+            <label style="font-size:12px;font-weight:700;color:#475569;">FOTO *</label>
+            <input type="file" id="se-foto" accept="image/*"
+                style="width:100%;margin-bottom:14px;font-size:13px;">
+            <div style="display:flex;gap:8px;">
+              <button onclick="cerrarModalEstructura()"
+                  style="flex:1;padding:10px;border:1.5px solid #cbd5e1;background:white;
+                         border-radius:8px;cursor:pointer;font-weight:700;">
+                Cancelar
+              </button>
+              <button onclick="guardarEstructura()"
+                  style="flex:1;padding:10px;background:#7c3aed;color:white;border:none;
+                         border-radius:8px;cursor:pointer;font-weight:700;">
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>`;
+
+        // Guardar datos en window para cambio de tab sin re-fetch
+        window._stockEstructurasData = data;
+
+    } catch(e) {
+        contenedor.innerHTML = `<p style="color:red;text-align:center;">Error al cargar stock.</p>`;
+    }
+}
+
+function _renderListaEstructuras(lista) {
+    if (!lista.length) return `<p style="color:gray;text-align:center;padding:30px;">Sin registros.</p>`;
+    return lista.map(e => `
+      <div style="display:flex;gap:12px;align-items:center;background:#fafafa;
+                  border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px;">
+        <img src="${e.foto_url || 'imagenes/sin_foto.jpg'}"
+             style="width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0;"
+             onerror="this.src='imagenes/sin_foto.jpg'">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:14px;">${e.nombre_modelo}</div>
+          <div style="font-size:12px;color:#64748b;">
+            ${e.tipo === 'destrokes' ? '🔧 Destrokes' : '🪵 Estructura'}
+            ${e.medida_estandar ? ' · <span style="color:#7c3aed;font-weight:700;">Estándar</span>' : ''}
+          </div>
+          <div style="font-size:12px;color:#475569;">
+            ${e.ancho ? `${e.ancho}×${e.profundidad}×${e.alto} cm` : 'Sin medidas'}
+          </div>
+        </div>
+        ${e.estado === 'disponible' ? `
+        <span style="background:#dcfce7;color:#15803d;border-radius:6px;
+                     padding:3px 8px;font-size:11px;font-weight:700;">Disponible</span>` : `
+        <span style="background:#f1f5f9;color:#64748b;border-radius:6px;
+                     padding:3px 8px;font-size:11px;font-weight:700;">Entregado</span>`}
+      </div>`).join('');
+}
+
+function mostrarTabEstructuras(estado) {
+    const data = window._stockEstructurasData || [];
+    const filtrado = data.filter(e => e.estado === estado);
+    document.getElementById('lista-estructuras-stock').innerHTML = _renderListaEstructuras(filtrado);
+}
+
+function abrirModalRegistrarEstructura() {
+    document.getElementById('modal-registro-estructura').style.display = 'flex';
+}
+
+function cerrarModalEstructura() {
+    document.getElementById('modal-registro-estructura').style.display = 'none';
+}
+
+async function guardarEstructura() {
+    const nombre = document.getElementById('se-nombre').value.trim();
+    const foto   = document.getElementById('se-foto').files[0];
+    if (!nombre || !foto) {
+        return Swal.fire({ icon:'warning', title:'Faltan datos',
+            text:'Nombre y foto son obligatorios.' });
+    }
+    const fd = new FormData();
+    fd.append('nombre_modelo', nombre);
+    fd.append('tipo',          document.getElementById('se-tipo').value);
+    fd.append('ancho',         document.getElementById('se-ancho').value || 0);
+    fd.append('profundidad',   document.getElementById('se-prof').value || 0);
+    fd.append('alto',          document.getElementById('se-alto').value || 0);
+    fd.append('medida_estandar', document.getElementById('se-estandar').checked ? 'true' : 'false');
+    fd.append('foto', foto);
+
+    try {
+        const res = await fetch(`${API_URL}/api/stock-estructuras`, { method:'POST', body: fd });
+        const d   = await res.json();
+        if (d.exito) {
+            cerrarModalEstructura();
+            Swal.fire({ icon:'success', title:'Guardado', timer:1500, showConfirmButton:false });
+            filtroAdminTaller = 'stock_estructuras';
+            cargarTicketsTaller();
+        } else {
+            Swal.fire({ icon:'error', title:'Error', text: d.error });
+        }
+    } catch(e) {
+        Swal.fire({ icon:'error', title:'Sin conexión' });
+    }
 }
