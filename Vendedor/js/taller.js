@@ -843,6 +843,7 @@ async function cargarTicketsTaller() {
                 </button>
                 <button onclick="filtroAdminTaller='stock_produccion'; cargarTicketsTaller()"
                     style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
+                    display:${currentMode==='stock-produccion' ? 'block' : 'none'};
                     background:${filtroAdminTaller==='stock_produccion' ? '#7c3aed' : '#f5f3ff'};
                     color:${filtroAdminTaller==='stock_produccion' ? 'white' : '#7c3aed'};
                     border:2px solid #7c3aed;">
