@@ -812,19 +812,6 @@ async function cargarTicketsTaller() {
     }
 
     if (esAdmin) {
-        // ── Si venimos de stock-produccion y volvemos a taller, resetear filtro ──
-        if (currentMode === 'taller' && filtroAdminTaller === 'stock_produccion') {
-            filtroAdminTaller = 'pendientes';
-        }
-
-        // ── Vista STOCK DE PRODUCCIÓN: sin tabs de taller, directo al contenido ──
-        if (currentMode === 'stock-produccion') {
-            tabsHeader.innerHTML = '';
-            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando stock de producción...</p>';
-            await cargarVistaStockProduccion(contenedor);
-            return;
-        }
-
         tabsHeader.innerHTML = `
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; width:100%;">
                 <button onclick="filtroAdminTaller='pendientes'; cargarTicketsTaller()"
@@ -854,6 +841,13 @@ async function cargarTicketsTaller() {
                     border:2px solid #86efac;">
                     <i class="fa-solid fa-circle-check"></i> ENTREGADOS
                 </button>
+                <button onclick="filtroAdminTaller='stock_produccion'; cargarTicketsTaller()"
+                    style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
+                    background:${filtroAdminTaller==='stock_produccion' ? '#7c3aed' : '#f5f3ff'};
+                    color:${filtroAdminTaller==='stock_produccion' ? 'white' : '#7c3aed'};
+                    border:2px solid #7c3aed;">
+                    <i class="fa-solid fa-warehouse"></i> STOCK PRODUCCIÓN
+                </button>
                 <button onclick="cargarTicketsTaller()"
                     style="padding:10px 16px; border-radius:10px; border:none; font-size:11px; font-weight:800; cursor:pointer; background:#f1f5f9; color:#475569;">
                     <i class="fa-solid fa-rotate"></i> Actualizar
@@ -878,6 +872,14 @@ async function cargarTicketsTaller() {
         if (filtroAdminTaller === 'ordenes') {
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando órdenes de producción...</p>';
             await cargarOrdenesProduccion(contenedor);
+            return;
+        }
+
+        // Si está en vista STOCK ESTRUCTURAS, mostrar esa sección y salir
+        // Si está en vista STOCK PRODUCCIÓN, mostrar esa sección y salir
+        if (filtroAdminTaller === 'stock_produccion') {
+            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando stock de producción...</p>';
+            await cargarVistaStockProduccion(contenedor);
             return;
         }
     } else if (esChofer) {
@@ -2462,25 +2464,8 @@ function _syncDerivarFoto(inputOrigen) {
 }
 // ── Stock Producción (Admin) — portal con secciones futuras, por ahora solo sofás ──
 async function cargarVistaStockProduccion(contenedor) {
-    contenedor.innerHTML = `
-    <div style="padding:16px;">
-      <h3 style="margin:0 0 16px;font-size:16px;font-weight:800;">🏭 Stock de Producción</h3>
-
-      <!-- Secciones futuras irán aquí como tabs -->
-      <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
-        <button id="tab-sp-sofa" onclick="mostrarSeccionStockProd('sofa')"
-            style="padding:9px 18px;border-radius:8px;border:2px solid #7c3aed;
-                   background:#7c3aed;color:white;font-weight:800;cursor:pointer;font-size:13px;">
-            🛋️ Estructuras de Sofá
-        </button>
-        <!-- Aquí agregarás más secciones en el futuro -->
-      </div>
-
-      <div id="sp-seccion-sofa">
-        <div id="sp-sofa-contenido">Cargando...</div>
-      </div>
-    </div>`;
-
+    // Sin título extra — el header de la página ya muestra "STOCK DE PRODUCCION"
+    contenedor.innerHTML = '<div id="sp-sofa-contenido" style="padding:4px 0;">Cargando...</div>';
     await _cargarContenidoStockSofa('sp-sofa-contenido', true);
 }
 
@@ -2507,27 +2492,35 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
 
         document.getElementById(contenedorId).innerHTML = `
         <div>
-          <!-- Botón registrar -->
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-            <span style="font-weight:700;font-size:14px;">📦 Estructuras de Sofá</span>
+          <!-- Header: título área + botón registrar -->
+          <div style="display:flex;justify-content:space-between;align-items:center;
+                      margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #e2e8f0;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <i class="fa-solid fa-couch" style="color:#7c3aed;font-size:18px;"></i>
+              <div>
+                <div style="font-weight:900;font-size:15px;color:#0f172a;">Estructuras de Sofá</div>
+                <div style="font-size:11px;color:#64748b;margin-top:1px;">${disponibles.length} disponible${disponibles.length!==1?'s':''} · ${entregados.length} entregado${entregados.length!==1?'s':''}</div>
+              </div>
+            </div>
             <button onclick="abrirModalRegistrarEstructura('${contenedorId}', ${esAdmin})"
                 style="background:#7c3aed;color:white;border:none;border-radius:8px;
-                       padding:9px 16px;cursor:pointer;font-size:13px;font-weight:700;">
-                + Registrar
+                       padding:10px 20px;cursor:pointer;font-size:13px;font-weight:700;
+                       display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                <i class="fa-solid fa-plus"></i> Registrar
             </button>
           </div>
 
           <!-- Sub-tabs: Disponibles / Entregados -->
-          <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
             <button id="subtab-disp-${contenedorId}" onclick="_filtrarStockSofa('disponible','${contenedorId}')"
-                style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #7c3aed;
-                       background:#7c3aed;color:white;font-weight:700;cursor:pointer;font-size:12px;">
-                📦 En stock (${disponibles.length})
+                style="flex:1;padding:10px;border-radius:8px;border:2px solid #7c3aed;
+                       background:#7c3aed;color:white;font-weight:800;cursor:pointer;font-size:12px;">
+                <i class="fa-solid fa-box"></i> En stock (${disponibles.length})
             </button>
             <button id="subtab-ent-${contenedorId}" onclick="_filtrarStockSofa('entregado','${contenedorId}')"
-                style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #15803d;
-                       background:#f0fdf4;color:#15803d;font-weight:700;cursor:pointer;font-size:12px;">
-                ✅ Entregados (${entregados.length})
+                style="flex:1;padding:10px;border-radius:8px;border:2px solid #15803d;
+                       background:#f0fdf4;color:#15803d;font-weight:800;cursor:pointer;font-size:12px;">
+                <i class="fa-solid fa-circle-check"></i> Entregados (${entregados.length})
             </button>
           </div>
 
@@ -2674,32 +2667,40 @@ function cerrarModalEstructura() {
 }
 
 function _renderListaEstructuras(lista) {
-    if (!lista.length) return `<p style="color:gray;text-align:center;padding:30px;">Sin registros.</p>`;
-    return lista.map(e => `
-      <div style="display:flex;gap:12px;align-items:center;background:#fafafa;
-                  border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:10px;">
-        <img src="${e.foto_url || 'imagenes/sin_foto.jpg'}"
-             style="width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0;"
-             onerror="this.src='imagenes/sin_foto.jpg'">
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:14px;">${e.nombre_modelo}</div>
-          ${e.modelo_base ? `<div style="font-size:11px;color:#7c3aed;font-weight:700;margin-bottom:2px;">🏷️ ${e.modelo_base}</div>` : ''}
-          <div style="font-size:12px;color:#64748b;">
-            ${e.tipo === 'destrokes' ? '🔧 Destrokes' : '🪵 Estructura'}
-            ${e.medida_estandar ? ' · <span style="color:#7c3aed;font-weight:700;">Estándar</span>' : ''}
-          </div>
-          <div style="font-size:12px;color:#475569;">
-            ${e.ancho ? `${e.ancho}×${e.profundidad}×${e.alto} cm` : 'Sin medidas'}
-          </div>
-          ${e.precio ? `<div style="font-size:12px;color:#15803d;font-weight:700;">S/ ${parseFloat(e.precio).toFixed(2)}</div>` : ''}
-          </div>
+    if (!lista.length) return `
+        <div style="text-align:center;padding:40px 20px;color:#94a3b8;">
+            <i class="fa-solid fa-box-open" style="font-size:2.5rem;display:block;margin-bottom:12px;"></i>
+            <p style="font-weight:700;font-size:14px;color:#475569;margin:0;">Sin registros</p>
+            <p style="font-size:12px;margin:4px 0 0;">Registra la primera estructura con el botón de arriba.</p>
+        </div>`;
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;">` +
+    lista.map(e => `
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;
+                  overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        <div style="position:relative;">
+          <img src="${e.foto_url || 'imagenes/sin_foto.jpg'}"
+               style="width:100%;height:150px;object-fit:cover;display:block;"
+               onerror="this.src='imagenes/sin_foto.jpg'">
+          <span style="position:absolute;top:8px;right:8px;
+                       background:${e.estado==='disponible'?'#dcfce7':'#f1f5f9'};
+                       color:${e.estado==='disponible'?'#15803d':'#64748b'};
+                       border-radius:20px;padding:3px 10px;font-size:11px;font-weight:800;">
+            ${e.estado==='disponible'?'✓ Disponible':'Entregado'}
+          </span>
         </div>
-        ${e.estado === 'disponible' ? `
-        <span style="background:#dcfce7;color:#15803d;border-radius:6px;
-                     padding:3px 8px;font-size:11px;font-weight:700;">Disponible</span>` : `
-        <span style="background:#f1f5f9;color:#64748b;border-radius:6px;
-                     padding:3px 8px;font-size:11px;font-weight:700;">Entregado</span>`}
-      </div>`).join('');
+        <div style="padding:12px 14px;">
+          <div style="font-weight:800;font-size:14px;color:#0f172a;margin-bottom:4px;">${e.nombre_modelo}</div>
+          ${e.modelo_base ? `<div style="font-size:11px;color:#7c3aed;font-weight:700;margin-bottom:4px;"><i class="fa-solid fa-tag"></i> ${e.modelo_base}</div>` : ''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+            <span style="font-size:11px;color:#64748b;background:#f8fafc;padding:3px 8px;border-radius:6px;">
+              ${e.tipo === 'destrokes' ? '🔧 Destrokes' : '🪵 Estructura'}
+            </span>
+            ${e.medida_estandar ? `<span style="font-size:11px;color:#7c3aed;background:#f5f3ff;padding:3px 8px;border-radius:6px;font-weight:700;">⭐ Estándar</span>` : ''}
+          </div>
+          ${e.ancho ? `<div style="font-size:12px;color:#475569;margin-top:6px;"><i class="fa-solid fa-ruler-combined" style="color:#94a3b8;"></i> ${e.ancho}×${e.profundidad}×${e.alto} cm</div>` : ''}
+          ${e.precio ? `<div style="font-size:14px;color:#15803d;font-weight:800;margin-top:6px;">S/ ${parseFloat(e.precio).toFixed(2)}</div>` : ''}
+        </div>
+      </div>`).join('') + `</div>`;
 }
 
 
