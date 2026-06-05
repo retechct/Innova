@@ -107,6 +107,7 @@ function configurarInterfazPorRol() {
     if (!usuarioActivo) return;
     
     const btnTaller      = document.getElementById('btn-menu-taller');
+    const btnStockProduccion = document.getElementById('btn-menu-stock-produccion'); // ← nuevo
     const btnInventario  = document.getElementById('btn-menu-inventario');
     const btnInvTienda   = document.getElementById('btn-menu-inv-tienda');
     const btnGestor      = document.getElementById('btn-menu-gestor');
@@ -124,9 +125,9 @@ function configurarInterfazPorRol() {
     const btnCreaciones  = document.getElementById('btn-menu-creaciones');
 
     // Ocultar todo por defecto
-    [btnTaller, btnInventario, btnInvTienda, btnGestor, btnAddProd,
-     btnLogistica, btnUsuarios, btnProv, btnContratos,
-     btnStock, btnCatalogo, btnContrato, btnPedidos, btnCreaciones
+    [btnTaller, btnStockProduccion, btnInventario, btnInvTienda, btnGestor, btnAddProd,
+    btnLogistica, btnUsuarios, btnProv, btnContratos,
+    btnStock, btnCatalogo, btnContrato, btnPedidos, btnCreaciones
     ].forEach(b => { if (b) b.style.display = 'none'; });
 
     const rol = usuarioActivo.rol;
@@ -162,13 +163,20 @@ function configurarInterfazPorRol() {
     }
 
     // ── Solo Admin ───────────────────────────────────────────────────
-    if (esAdmin) {
-        if (btnGestor)    btnGestor.style.display    = 'flex';
-        if (btnLogistica) btnLogistica.style.display = 'flex';
-        if (btnUsuarios)  btnUsuarios.style.display  = 'flex';
-        if (btnProv)      btnProv.style.display      = 'flex';
-        if (btnContratos) btnContratos.style.display = 'block';
-    }
+if (esAdmin) {
+    if (btnStockProduccion) btnStockProduccion.style.display = 'flex'; // ← nuevo
+    if (btnGestor)          btnGestor.style.display          = 'flex';
+    if (btnLogistica)       btnLogistica.style.display       = 'flex';
+    if (btnUsuarios)        btnUsuarios.style.display        = 'flex';
+    if (btnProv)            btnProv.style.display            = 'flex';
+    if (btnContratos)       btnContratos.style.display       = 'block';
+}
+
+// Si también quieres que el Jefe de Taller lo vea:
+if (esAdmin || esJefeTaller) {
+    if (btnInvTienda)       btnInvTienda.style.display       = 'flex';
+    if (btnStockProduccion) btnStockProduccion.style.display = 'flex'; // ← mover aquí si aplica
+}
 
     // ── Carrito flotante: solo Vendedor y Admin lo necesitan ─────────
     const fab = document.querySelector('.fab');
@@ -1402,6 +1410,7 @@ function changeView(view) {
         'contrato':     'DISEÑOS A MEDIDA',
         'pedidos':      'SEGUIMIENTO',
         'taller':       'GESTIÓN DE TALLER',
+        'stock-produccion': 'STOCK DE PRODUCCION',
         'inventario':   'CONTROL DE INSUMOS',
         'contratos':    'REPORTES Y VENTAS',
         'inv-tienda':   'INVENTARIO POR TIENDA',
@@ -1495,10 +1504,16 @@ function changeView(view) {
         mostrar('view-proveedores');
         listarProveedores();
     }
+    // DESPUÉS:
     else if (view === 'gestor-aprobacion') {
         mostrar('view-gestor-aprobacion');
         document.getElementById('view-title').innerText = 'GESTOR DE MODELOS (Make vs Buy)';
         cargarGestorAprobacion();
+    }
+    else if (view === 'stock-produccion') {              // ← nuevo bloque
+        mostrar('view-taller');
+        filtroAdminTaller = 'stock_produccion';
+        cargarTicketsTaller();
     }
     else {
         console.warn(`changeView: vista desconocida → '${view}'`);
