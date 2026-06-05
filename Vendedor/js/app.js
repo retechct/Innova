@@ -1482,6 +1482,9 @@ function changeView(view) {
         loadMisPedidos();
     }
     else if (view === 'taller') {
+        if (typeof filtroAdminTaller !== 'undefined' && filtroAdminTaller === 'stock_produccion') {
+            filtroAdminTaller = 'pendientes';
+        }
         mostrar('view-taller');
         cargarTicketsTaller();
     }

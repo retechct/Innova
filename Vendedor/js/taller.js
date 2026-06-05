@@ -811,6 +811,15 @@ async function cargarTicketsTaller() {
         contenedor.parentNode.insertBefore(tabsHeader, contenedor);
     }
 
+    if (esAdmin && typeof filtroAdminTaller !== 'undefined' && filtroAdminTaller === 'stock_produccion') {
+        tabsHeader.style.display = 'none';
+        contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando stock de producción...</p>';
+        await cargarVistaStockProduccion(contenedor);
+        return;
+    } else {
+        tabsHeader.style.display = 'flex';
+    }
+
     if (esAdmin) {
         tabsHeader.innerHTML = `
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; width:100%;">
@@ -841,13 +850,6 @@ async function cargarTicketsTaller() {
                     border:2px solid #86efac;">
                     <i class="fa-solid fa-circle-check"></i> ENTREGADOS
                 </button>
-                <button onclick="filtroAdminTaller='stock_produccion'; cargarTicketsTaller()"
-                    style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
-                    background:${filtroAdminTaller==='stock_produccion' ? '#7c3aed' : '#f5f3ff'};
-                    color:${filtroAdminTaller==='stock_produccion' ? 'white' : '#7c3aed'};
-                    border:2px solid #7c3aed;">
-                    <i class="fa-solid fa-warehouse"></i> STOCK PRODUCCIÓN
-                </button>
                 <button onclick="cargarTicketsTaller()"
                     style="padding:10px 16px; border-radius:10px; border:none; font-size:11px; font-weight:800; cursor:pointer; background:#f1f5f9; color:#475569;">
                     <i class="fa-solid fa-rotate"></i> Actualizar
@@ -872,14 +874,6 @@ async function cargarTicketsTaller() {
         if (filtroAdminTaller === 'ordenes') {
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando órdenes de producción...</p>';
             await cargarOrdenesProduccion(contenedor);
-            return;
-        }
-
-        // Si está en vista STOCK ESTRUCTURAS, mostrar esa sección y salir
-        // Si está en vista STOCK PRODUCCIÓN, mostrar esa sección y salir
-        if (filtroAdminTaller === 'stock_produccion') {
-            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando stock de producción...</p>';
-            await cargarVistaStockProduccion(contenedor);
             return;
         }
     } else if (esChofer) {
