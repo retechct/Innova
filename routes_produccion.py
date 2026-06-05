@@ -1945,7 +1945,7 @@ def listar_stock_estructuras():
         cursor.execute("""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
                    medida_estandar, foto_url, tipo, cantidad, estado,
-                   ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY')
+                   ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY'), COALESCE(precio, 0)
             FROM stock_estructuras_sofa
             ORDER BY fecha_registro DESC
         """)
@@ -1954,7 +1954,8 @@ def listar_stock_estructuras():
             'id': r[0], 'nombre_modelo': r[1],
             'ancho': float(r[2] or 0), 'profundidad': float(r[3] or 0), 'alto': float(r[4] or 0),
             'medida_estandar': r[5], 'foto_url': r[6], 'tipo': r[7],
-            'cantidad': r[8], 'estado': r[9], 'ticket_id': r[10], 'fecha': r[11]
+            'cantidad': r[8], 'estado': r[9], 'ticket_id': r[10], 'fecha': r[11],
+            'precio': float(r[12] or 0)
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1972,9 +1973,10 @@ def registrar_stock_estructura():
         profundidad     = request.form.get('profundidad') or 0
         alto            = request.form.get('alto') or 0
         medida_estandar = request.form.get('medida_estandar') == 'true'
-        tipo            = request.form.get('tipo', 'estructura')  # 'estructura' | 'destrokes'
+        tipo            = request.form.get('tipo', 'estructura')
         cantidad        = int(request.form.get('cantidad', 1))
-
+        precio          = float(request.form.get('precio') or 0)
+        
         foto_url = None
         if 'foto' in request.files and request.files['foto'].filename:
             res = cloudinary.uploader.upload(request.files['foto'], folder='stock_estructuras')
@@ -1984,9 +1986,9 @@ def registrar_stock_estructura():
         cursor   = conexion.cursor()
         cursor.execute("""
             INSERT INTO stock_estructuras_sofa
-                (nombre_modelo, ancho, profundidad, alto, medida_estandar, foto_url, tipo, cantidad)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-        """, (nombre, ancho, profundidad, alto, medida_estandar, foto_url, tipo, cantidad))
+                (nombre_modelo, ancho, profundidad, alto, medida_estandar, foto_url, tipo, cantidad, precio)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        """, (nombre, ancho, profundidad, alto, medida_estandar, foto_url, tipo, cantidad, precio))
         new_id = cursor.fetchone()[0]
         conexion.commit()
         return jsonify({'exito': True, 'id': new_id}), 201

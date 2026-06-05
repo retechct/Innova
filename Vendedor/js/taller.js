@@ -785,12 +785,12 @@ async function cargarTicketsTaller() {
                     border:2px solid #86efac;">
                     <i class="fa-solid fa-circle-check"></i> ENTREGADOS
                 </button>
-                <button onclick="filtroAdminTaller='stock_estructuras'; cargarTicketsTaller()"
+                <button onclick="filtroAdminTaller='stock_produccion'; cargarTicketsTaller()"
                     style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
-                    background:${filtroAdminTaller==='stock_estructuras' ? '#7c3aed' : '#f5f3ff'};
-                    color:${filtroAdminTaller==='stock_estructuras' ? 'white' : '#7c3aed'};
+                    background:${filtroAdminTaller==='stock_produccion' ? '#7c3aed' : '#f5f3ff'};
+                    color:${filtroAdminTaller==='stock_produccion' ? 'white' : '#7c3aed'};
                     border:2px solid #7c3aed;">
-                    <i class="fa-solid fa-boxes-stacked"></i> STOCK ESTRUCTURAS
+                    <i class="fa-solid fa-warehouse"></i> STOCK PRODUCCIÓN
                 </button>
                 <button onclick="cargarTicketsTaller()"
                     style="padding:10px 16px; border-radius:10px; border:none; font-size:11px; font-weight:800; cursor:pointer; background:#f1f5f9; color:#475569;">
@@ -820,9 +820,10 @@ async function cargarTicketsTaller() {
         }
 
         // Si está en vista STOCK ESTRUCTURAS, mostrar esa sección y salir
-        if (filtroAdminTaller === 'stock_estructuras') {
-            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando stock de estructuras...</p>';
-            await cargarVistaStockEstructuras(contenedor);
+        // Si está en vista STOCK PRODUCCIÓN, mostrar esa sección y salir
+        if (filtroAdminTaller === 'stock_produccion') {
+            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando stock de producción...</p>';
+            await cargarVistaStockProduccion(contenedor);
             return;
         }
     } else if (esChofer) {
@@ -919,15 +920,26 @@ async function cargarTicketsTaller() {
         return; // El chofer no sigue el flujo normal del taller
 
     } else {
-        // Operario / Jefe de área: tabs Pendientes / Terminados
+        // Carpintero de sofás: tiene tab extra de STOCK
+        const esCarpinteroSofa = esOperario && usuarioActivo.area_asignada === 'ESTRUCTURAS_MUEBLES';
         tabsHeader.innerHTML = `
             <button onclick="filtroTaller='Pendientes'; cargarTicketsTaller()" class="btn-filter-taller ${filtroTaller === 'Pendientes' ? 'active' : ''}" style="flex:1;">
-                <i class="fa-solid fa-clock"></i> MIS TAREAS\n            </button>
+                <i class="fa-solid fa-clock"></i> MIS TAREAS
+            </button>
+            ${esCarpinteroSofa ? `
+            <button onclick="filtroTaller='StockCarpintero'; cargarTicketsTaller()" class="btn-filter-taller ${filtroTaller === 'StockCarpintero' ? 'active' : ''}" style="flex:1;">
+                <i class="fa-solid fa-boxes-stacked"></i> STOCK
+            </button>` : ''}
             <button onclick="filtroTaller='Terminado'; cargarTicketsTaller()" class="btn-filter-taller ${filtroTaller === 'Terminado' ? 'active' : ''}" style="flex:1;">
-                <i class="fa-solid fa-circle-check"></i> TRABAJOS TERMINADOS
+                <i class="fa-solid fa-circle-check"></i> ${esCarpinteroSofa ? 'ENTREGADOS' : 'TRABAJOS TERMINADOS'}
             </button>`;
     }
-
+    // Carpintero de sofás: tab de stock propio
+    if (esOperario && usuarioActivo.area_asignada === 'ESTRUCTURAS_MUEBLES' && filtroTaller === 'StockCarpintero') {
+        contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando stock...</p>';
+        await cargarVistaStockCarpinteroSofa(contenedor);
+        return;
+    }
     contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Sincronizando...</p>';
 
     try {
@@ -2391,62 +2403,112 @@ function _syncDerivarFoto(inputOrigen) {
     };
     reader.readAsDataURL(file);
 }
-async function cargarVistaStockEstructuras(contenedor) {
+// ── Stock Producción (Admin) — portal con secciones futuras, por ahora solo sofás ──
+async function cargarVistaStockProduccion(contenedor) {
+    contenedor.innerHTML = `
+    <div style="padding:16px;">
+      <h3 style="margin:0 0 16px;font-size:16px;font-weight:800;">🏭 Stock de Producción</h3>
+
+      <!-- Secciones futuras irán aquí como tabs -->
+      <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;">
+        <button id="tab-sp-sofa" onclick="mostrarSeccionStockProd('sofa')"
+            style="padding:9px 18px;border-radius:8px;border:2px solid #7c3aed;
+                   background:#7c3aed;color:white;font-weight:800;cursor:pointer;font-size:13px;">
+            🛋️ Estructuras de Sofá
+        </button>
+        <!-- Aquí agregarás más secciones en el futuro -->
+      </div>
+
+      <div id="sp-seccion-sofa">
+        <div id="sp-sofa-contenido">Cargando...</div>
+      </div>
+    </div>`;
+
+    await _cargarContenidoStockSofa('sp-sofa-contenido', true);
+}
+
+// ── Stock del Carpintero de Sofás (Operario con area ESTRUCTURAS_MUEBLES) ──
+async function cargarVistaStockCarpinteroSofa(contenedor) {
+    contenedor.innerHTML = `<div style="padding:16px;" id="stock-carp-wrapper">Cargando...</div>`;
+    await _cargarContenidoStockSofa('stock-carp-wrapper', false);
+}
+
+async function mostrarSeccionStockProd(seccion) {
+    // Por ahora solo hay sofás; extender aquí en el futuro
+    if (seccion === 'sofa') await _cargarContenidoStockSofa('sp-sofa-contenido', true);
+}
+
+// ── Motor compartido de stock de estructuras de sofá ──
+async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
     try {
         const res  = await apiFetch(`${API_URL}/api/stock-estructuras`);
         const data = await res.json();
 
+        window._stockEstructurasData = data;
         const disponibles = data.filter(e => e.estado === 'disponible');
-        const entregadosDesdeStock = data.filter(e => e.estado === 'entregado');
+        const entregados  = data.filter(e => e.estado === 'entregado');
 
-        contenedor.innerHTML = `
-        <div style="padding:16px;">
-
+        document.getElementById(contenedorId).innerHTML = `
+        <div>
           <!-- Botón registrar -->
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h3 style="margin:0;font-size:15px;">📦 Stock de Estructuras</h3>
-            <button onclick="abrirModalRegistrarEstructura()"
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <span style="font-weight:700;font-size:14px;">📦 Estructuras de Sofá</span>
+            <button onclick="abrirModalRegistrarEstructura('${contenedorId}', ${esAdmin})"
                 style="background:#7c3aed;color:white;border:none;border-radius:8px;
                        padding:9px 16px;cursor:pointer;font-size:13px;font-weight:700;">
-                + Registrar estructura
+                + Registrar
             </button>
           </div>
 
-          <!-- Tab interno: Disponibles / Entregados desde stock -->
+          <!-- Sub-tabs: Disponibles / Entregados -->
           <div style="display:flex;gap:8px;margin-bottom:14px;">
-            <button id="tab-disp" onclick="mostrarTabEstructuras('disponible')"
+            <button id="subtab-disp-${contenedorId}" onclick="_filtrarStockSofa('disponible','${contenedorId}')"
                 style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #7c3aed;
                        background:#7c3aed;color:white;font-weight:700;cursor:pointer;font-size:12px;">
                 📦 En stock (${disponibles.length})
             </button>
-            <button id="tab-entregados-stock" onclick="mostrarTabEstructuras('entregado')"
+            <button id="subtab-ent-${contenedorId}" onclick="_filtrarStockSofa('entregado','${contenedorId}')"
                 style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #15803d;
                        background:#f0fdf4;color:#15803d;font-weight:700;cursor:pointer;font-size:12px;">
-                ✅ Entregados desde stock (${entregadosDesdeStock.length})
+                ✅ Entregados (${entregados.length})
             </button>
           </div>
 
-          <div id="lista-estructuras-stock">
+          <div id="lista-est-${contenedorId}">
             ${_renderListaEstructuras(disponibles)}
           </div>
         </div>
 
         <!-- Modal registrar -->
         <div id="modal-registro-estructura" style="display:none;position:fixed;inset:0;
-             background:rgba(0,0,0,0.6);z-index:9999;display:none;
+             background:rgba(0,0,0,0.6);z-index:9999;
              justify-content:center;align-items:center;">
-          <div style="background:white;border-radius:16px;padding:24px;width:360px;max-width:95vw;">
+          <div style="background:white;border-radius:16px;padding:24px;width:380px;max-width:95vw;max-height:90vh;overflow-y:auto;">
             <h3 style="margin:0 0 16px;font-size:16px;">Registrar estructura / destrokes</h3>
+
             <label style="font-size:12px;font-weight:700;color:#475569;">TIPO</label>
             <select id="se-tipo" style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;">
               <option value="estructura">Estructura de sofá</option>
-              <option value="destrokes">Destrokes (pague en estructura)</option>
+              <option value="destrokes">Destrokes</option>
             </select>
-            <label style="font-size:12px;font-weight:700;color:#475569;">NOMBRE / MODELO</label>
+
+            <label style="font-size:12px;font-weight:700;color:#475569;">NOMBRE / MODELO *</label>
             <input id="se-nombre" placeholder="Ej: Seccional 3 cuerpos"
                 style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;">
-            <label style="font-size:12px;font-weight:700;color:#475569;">MEDIDAS (cm)</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+
+            <label style="font-size:12px;font-weight:700;color:#475569;">PRECIO (S/)</label>
+            <input id="se-precio" type="number" placeholder="Ej: 350.00" step="0.01"
+                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;">
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <label style="font-size:12px;font-weight:700;color:#475569;">MEDIDAS (cm)</label>
+              <button id="btn-medidas-estandar" onclick="_toggleMedidasEstandar()"
+                  style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #7c3aed;
+                         background:#f5f3ff;color:#7c3aed;cursor:pointer;font-weight:700;">
+                  📐 Medidas estándar
+              </button>
+            </div>
+            <div id="bloque-medidas" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
               <input id="se-ancho" type="number" placeholder="Ancho"
                   style="padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
               <input id="se-prof" type="number" placeholder="Prof."
@@ -2455,11 +2517,13 @@ async function cargarVistaStockEstructuras(contenedor) {
                   style="padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
             </div>
             <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;cursor:pointer;">
-              <input type="checkbox" id="se-estandar"> Medida estándar
+              <input type="checkbox" id="se-estandar"> Marcar como medida estándar
             </label>
+
             <label style="font-size:12px;font-weight:700;color:#475569;">FOTO *</label>
             <input type="file" id="se-foto" accept="image/*"
                 style="width:100%;margin-bottom:14px;font-size:13px;">
+
             <div style="display:flex;gap:8px;">
               <button onclick="cerrarModalEstructura()"
                   style="flex:1;padding:10px;border:1.5px solid #cbd5e1;background:white;
@@ -2475,12 +2539,51 @@ async function cargarVistaStockEstructuras(contenedor) {
           </div>
         </div>`;
 
-        // Guardar datos en window para cambio de tab sin re-fetch
-        window._stockEstructurasData = data;
+        // Guardar el contenedorId activo para saber dónde refrescar
+        window._stockSofaContenedorActivo = contenedorId;
 
     } catch(e) {
-        contenedor.innerHTML = `<p style="color:red;text-align:center;">Error al cargar stock.</p>`;
+        const el = document.getElementById(contenedorId);
+        if (el) el.innerHTML = `<p style="color:red;text-align:center;">Error al cargar stock.</p>`;
     }
+}
+
+function _filtrarStockSofa(estado, contenedorId) {
+    const data = window._stockEstructurasData || [];
+    document.getElementById(`lista-est-${contenedorId}`).innerHTML =
+        _renderListaEstructuras(data.filter(e => e.estado === estado));
+}
+
+function _toggleMedidasEstandar() {
+    const bloque = document.getElementById('bloque-medidas');
+    const btn    = document.getElementById('btn-medidas-estandar');
+    if (!bloque) return;
+    const oculto = bloque.style.display === 'none';
+    bloque.style.display = oculto ? 'grid' : 'none';
+    btn.style.background  = oculto ? '#f5f3ff' : '#7c3aed';
+    btn.style.color       = oculto ? '#7c3aed' : 'white';
+}
+
+function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
+    window._modalEstructuraCtx = { contenedorId, esAdminCtx };
+    const modal = document.getElementById('modal-registro-estructura');
+    if (modal) {
+        modal.style.display = 'flex';
+        // Reset campos
+        ['se-nombre','se-precio','se-ancho','se-prof','se-alto'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        const cb = document.getElementById('se-estandar');
+        if (cb) cb.checked = false;
+        const bloque = document.getElementById('bloque-medidas');
+        if (bloque) bloque.style.display = 'grid';
+    }
+}
+
+function cerrarModalEstructura() {
+    const modal = document.getElementById('modal-registro-estructura');
+    if (modal) modal.style.display = 'none';
 }
 
 function _renderListaEstructuras(lista) {
@@ -2499,6 +2602,8 @@ function _renderListaEstructuras(lista) {
           </div>
           <div style="font-size:12px;color:#475569;">
             ${e.ancho ? `${e.ancho}×${e.profundidad}×${e.alto} cm` : 'Sin medidas'}
+          </div>
+          ${e.precio ? `<div style="font-size:12px;color:#15803d;font-weight:700;">S/ ${parseFloat(e.precio).toFixed(2)}</div>` : ''}
           </div>
         </div>
         ${e.estado === 'disponible' ? `
@@ -2531,11 +2636,12 @@ async function guardarEstructura() {
             text:'Nombre y foto son obligatorios.' });
     }
     const fd = new FormData();
-    fd.append('nombre_modelo', nombre);
-    fd.append('tipo',          document.getElementById('se-tipo').value);
-    fd.append('ancho',         document.getElementById('se-ancho').value || 0);
-    fd.append('profundidad',   document.getElementById('se-prof').value || 0);
-    fd.append('alto',          document.getElementById('se-alto').value || 0);
+    fd.append('nombre_modelo',   nombre);
+    fd.append('tipo',            document.getElementById('se-tipo').value);
+    fd.append('precio',          document.getElementById('se-precio').value || 0);
+    fd.append('ancho',           document.getElementById('se-ancho').value || 0);
+    fd.append('profundidad',     document.getElementById('se-prof').value || 0);
+    fd.append('alto',            document.getElementById('se-alto').value || 0);
     fd.append('medida_estandar', document.getElementById('se-estandar').checked ? 'true' : 'false');
     fd.append('foto', foto);
 
@@ -2545,8 +2651,13 @@ async function guardarEstructura() {
         if (d.exito) {
             cerrarModalEstructura();
             Swal.fire({ icon:'success', title:'Guardado', timer:1500, showConfirmButton:false });
-            filtroAdminTaller = 'stock_estructuras';
-            cargarTicketsTaller();
+            // Refrescar donde corresponde
+            const ctx = window._modalEstructuraCtx || {};
+            if (ctx.contenedorId) {
+                await _cargarContenidoStockSofa(ctx.contenedorId, ctx.esAdminCtx);
+            } else {
+                cargarTicketsTaller();
+            }
         } else {
             Swal.fire({ icon:'error', title:'Error', text: d.error });
         }
