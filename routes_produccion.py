@@ -1607,8 +1607,14 @@ def generar_orden_compra(id):
                 logistica_id INTEGER REFERENCES logistica_externa(id),
                 numero_oc    VARCHAR(50) NOT NULL,
                 url_pdf      TEXT,
+                public_id    TEXT,
                 fecha_emision TIMESTAMP DEFAULT NOW()
             );
+        """)
+        # Auto-migración: agregar public_id si la tabla ya existía sin esa columna
+        cursor.execute("""
+            ALTER TABLE ordenes_compra_seq
+            ADD COLUMN IF NOT EXISTS public_id TEXT;
         """)
         conexion.commit()
 
@@ -1834,16 +1840,17 @@ def generar_orden_compra(id):
             public_id=f'OC-{id}-{cod_venta}',
             overwrite=True,
         )
-        url_pdf = resp.get('secure_url')
+        url_pdf   = resp.get('secure_url')
+        cl_public = resp.get('public_id')  # ← guardar el public_id real de Cloudinary
 
         # ── Guardar en ordenes_compra_seq (commit propio) ─────────────
         # Separado del UPDATE de estado para que un fallo en el INSERT
         # no cancele el cambio de estado (transacciones independientes).
         try:
             cursor.execute("""
-                INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, url_pdf)
-                VALUES (%s, %s, %s)
-            """, (id, numero_oc, url_pdf))
+                INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, url_pdf, public_id)
+                VALUES (%s, %s, %s, %s)
+            """, (id, numero_oc, url_pdf, cl_public))
             conexion.commit()
         except Exception as e_seq:
             conexion.rollback()
@@ -1935,26 +1942,38 @@ def servir_pdf_oc(id):
 
         public_id = None
 
-        # 1. Intentar obtener public_id desde URL guardada en la tabla
+        # 1. Usar el public_id real guardado en la tabla (más confiable)
         try:
             cursor.execute("""
-                SELECT url_pdf FROM ordenes_compra_seq
+                SELECT public_id, url_pdf FROM ordenes_compra_seq
                 WHERE logistica_id = %s
                 ORDER BY id DESC LIMIT 1
             """, (id,))
             row = cursor.fetchone()
-            if row and row[0]:
-                # URL: https://res.cloudinary.com/<cloud>/raw/upload/ordenes_compra/OC-64-INV-0064.pdf
-                partes = row[0].split('/upload/')
-                if len(partes) == 2:
-                    public_id = partes[1].rsplit('.', 1)[0]  # quitar .pdf
+            if row:
+                if row[0]:
+                    # public_id guardado directamente — el más confiable
+                    public_id = row[0]
+                elif row[1]:
+                    # Compatibilidad: extraer public_id de la URL guardada
+                    partes = row[1].split('/upload/')
+                    if len(partes) == 2:
+                        # Quitar la firma si hay (/s--xxx--/) y la extensión
+                        parte_path = partes[1]
+                        if parte_path.startswith('s--'):
+                            # formato firmado: s--firma--/v123/folder/file.pdf
+                            segmentos = parte_path.split('/')
+                            # saltar firma (s--) y versión (v123)
+                            parte_path = '/'.join(segmentos[2:]) if len(segmentos) > 2 else parte_path
+                        public_id = parte_path.rsplit('.', 1)[0]
         except Exception as e_sel:
             conexion.rollback()
             print(f"[pdf-oc] Error al leer ordenes_compra_seq: {e_sel}")
 
-        # 2. Fallback: reconstruir public_id desde código de venta
+        # 2. Fallback: listar en Cloudinary para encontrar el archivo real
         if not public_id:
             try:
+                import cloudinary.api as cl_api
                 cursor.execute("""
                     SELECT v.codigo_venta
                     FROM logistica_externa l
@@ -1964,6 +1983,7 @@ def servir_pdf_oc(id):
                 fila = cursor.fetchone()
                 if fila:
                     cod_venta = fila[0]
+                    # Intentar con el public_id canónico
                     public_id = f"ordenes_compra/OC-{id}-{cod_venta}"
                     print(f"[pdf-oc] Fallback public_id: {public_id}")
             except Exception as e_fb:
