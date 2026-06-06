@@ -1927,55 +1927,212 @@ def registrar_pago_proveedor(id):
 @produccion_bp.route('/api/logistica/<int:id>/pdf-oc', methods=['GET'])
 def servir_pdf_oc(id):
     """
-    Sirve el PDF de la Orden de Compra directamente desde la base de datos.
-    El PDF se guardó como BYTEA en ordenes_compra_seq al generarse.
-    Si no hay bytes guardados (OC vieja), regenera el PDF on-demand.
+    Genera y sirve la Orden de Compra como HTML con diseño corporativo.
+    El browser abre el HTML en ventana nueva y puede imprimirlo como PDF.
+    Elimina la dependencia de Cloudinary y problemas de Content-Type.
     """
-    from flask import Response as FlaskResponse
+    from flask import make_response
     conexion = None
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        # Intentar obtener el PDF guardado en la tabla
+        # Obtener datos del requerimiento
+        cursor.execute("""
+            SELECT l.insumo_nombre, l.sku, l.precio_cotizado,
+                   l.fecha_entrega_proveedor, l.notas_proveedor,
+                   v.codigo_venta, COALESCE(p.nombre,'Sin proveedor') AS prov,
+                   COALESCE(p.telefono,'') AS tel_prov,
+                   COALESCE(p.correo,'')  AS correo_prov,
+                   COALESCE(l.cantidad, 1) AS cantidad,
+                   COALESCE(l.unidad, 'und') AS unidad,
+                   COALESCE(l.proveedor_informal,'') AS prov_informal
+            FROM logistica_externa l
+            JOIN ventas v           ON l.venta_id    = v.id
+            LEFT JOIN proveedores p ON l.proveedor_id = p.id
+            WHERE l.id = %s
+        """, (id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Registro no encontrado'}), 404
+
+        (insumo, sku, precio, fecha_entrega, notas,
+         cod_venta, proveedor, tel_prov, correo_prov,
+         cantidad, unidad, prov_informal) = row
+
+        # Obtener número de OC
+        numero_oc = f'OC-{id:04d}'
         try:
             cursor.execute("""
-                SELECT pdf_bytes, numero_oc FROM ordenes_compra_seq
-                WHERE logistica_id = %s
-                ORDER BY id DESC LIMIT 1
+                SELECT numero_oc FROM ordenes_compra_seq
+                WHERE logistica_id = %s ORDER BY id DESC LIMIT 1
             """, (id,))
-            row = cursor.fetchone()
+            oc_row = cursor.fetchone()
+            if oc_row and oc_row[0]:
+                numero_oc = oc_row[0]
         except Exception:
             conexion.rollback()
-            row = None
 
-        if row and row[0]:
-            # PDF encontrado en DB — servir directamente
-            pdf_bytes = bytes(row[0])
-            numero_oc = row[1] or f'OC-{id}'
-            return FlaskResponse(
-                pdf_bytes,
-                mimetype='application/pdf',
-                headers={
-                    'Content-Disposition': f'inline; filename="{numero_oc}.pdf"',
-                    'Content-Length':      str(len(pdf_bytes)),
-                    'Cache-Control':       'no-store',
-                }
-            )
+        from datetime import datetime as dt
+        fecha_emision     = dt.now().strftime('%d/%m/%Y')
+        fecha_entrega_str = fecha_entrega.strftime('%d/%m/%Y') if fecha_entrega else 'Por confirmar'
+        precio_unit = float(precio) if precio else 0.0
+        subtotal    = precio_unit * float(cantidad)
+        igv         = round(subtotal * 0.18, 2)
+        total       = round(subtotal + igv, 2)
+        nombre_prov = prov_informal if prov_informal else proveedor
+        notas_html  = f'<div class="notas-box"><b>Observaciones:</b> {notas}</div>' if notas else ''
 
-        # Sin PDF guardado: verificar que existe el registro de logística
-        cursor.execute("""
-            SELECT l.id FROM logistica_externa l WHERE l.id = %s
-        """, (id,))
-        if not cursor.fetchone():
-            return jsonify({'error': 'Registro de logística no encontrado.'}), 404
+        html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orden de Compra {numero_oc}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Plus Jakarta Sans', Arial, sans-serif; background: #f1f5f9; padding: 30px 16px; color: #1e293b; }}
+  .page {{ width: 210mm; margin: auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }}
 
-        return jsonify({
-            'error': (
-                'No hay Orden de Compra generada para este requerimiento. '
-                'Haz clic en "Generar OC" para crearla.'
-            )
-        }), 404
+  /* HEADER */
+  .header {{ background: #0f172a; padding: 28px 36px 20px; position: relative; }}
+  .header-row {{ display: flex; justify-content: space-between; align-items: flex-start; }}
+  .brand {{ color: #fff; }}
+  .brand-name {{ font-size: 26px; font-weight: 900; letter-spacing: 1px; }}
+  .brand-name span {{ color: #c9a84c; }}
+  .brand-sub {{ font-size: 10px; color: #94a3b8; margin-top: 2px; }}
+  .oc-info {{ text-align: right; }}
+  .oc-title {{ font-size: 20px; font-weight: 900; color: #c9a84c; letter-spacing: 1px; }}
+  .oc-num {{ font-size: 13px; color: #cbd5e1; margin-top: 4px; }}
+  .header-meta {{ display: flex; justify-content: space-between; margin-top: 16px; padding-top: 14px; border-top: 1.5px solid #c9a84c; font-size: 11px; color: #94a3b8; }}
+
+  /* BODY */
+  .body {{ padding: 32px 36px; }}
+
+  /* CAJAS INFO */
+  .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }}
+  .info-box {{ background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; padding: 16px 18px; }}
+  .info-box-label {{ font-size: 9px; font-weight: 800; color: #c9a84c; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }}
+  .info-box-nombre {{ font-size: 15px; font-weight: 900; color: #0f172a; margin-bottom: 6px; }}
+  .info-box-row {{ font-size: 11px; color: #475569; margin-bottom: 3px; }}
+
+  /* TABLA */
+  table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+  thead tr {{ background: #0f172a; }}
+  thead th {{ color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 11px 12px; text-align: left; }}
+  thead th:last-child {{ text-align: right; }}
+  tbody tr {{ background: #f8fafc; }}
+  tbody td {{ padding: 14px 12px; font-size: 12px; color: #334155; border-bottom: 1px solid #e2e8f0; vertical-align: top; }}
+  tbody td:last-child {{ text-align: right; font-weight: 900; color: #0f172a; white-space: nowrap; }}
+  .td-sku {{ color: #64748b; font-size: 11px; }}
+
+  /* TOTALES */
+  .totales {{ display: flex; justify-content: flex-end; margin-bottom: 20px; }}
+  .totales-inner {{ width: 240px; }}
+  .tot-row {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #475569; }}
+  .tot-row.final {{ background: #0f172a; color: #fff; border-radius: 6px; padding: 10px 14px; margin-top: 6px; font-weight: 900; font-size: 14px; border: none; }}
+  .tot-row.final span:last-child {{ color: #c9a84c; }}
+
+  /* NOTAS */
+  .notas-box {{ background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 12px 16px; font-size: 11px; color: #78350f; margin-bottom: 24px; }}
+
+  /* PIE */
+  .footer {{ background: #0f172a; padding: 14px 36px; text-align: center; font-size: 9px; color: #475569; }}
+
+  /* BOTÓN IMPRIMIR */
+  .print-bar {{ text-align: center; margin-bottom: 20px; }}
+  .btn-print {{ background: #0f172a; color: #c9a84c; border: none; padding: 12px 32px; border-radius: 8px; font-size: 14px; font-weight: 800; cursor: pointer; letter-spacing: 0.5px; }}
+  .btn-print:hover {{ background: #1e293b; }}
+
+  @media print {{
+    body {{ background: #fff; padding: 0; }}
+    .page {{ box-shadow: none; border-radius: 0; }}
+    .print-bar {{ display: none; }}
+  }}
+</style>
+</head>
+<body>
+<div class="print-bar">
+  <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+</div>
+<div class="page">
+  <div class="header">
+    <div class="header-row">
+      <div class="brand">
+        <div class="brand-name">INNOVA <span>MÖBILI</span></div>
+        <div class="brand-sub">Muebles de diseño a medida &nbsp;·&nbsp; RUC 20600768175</div>
+      </div>
+      <div class="oc-info">
+        <div class="oc-title">ORDEN DE COMPRA</div>
+        <div class="oc-num">N° {numero_oc}</div>
+      </div>
+    </div>
+    <div class="header-meta">
+      <span>Fecha de emisión: <b style="color:#cbd5e1">{fecha_emision}</b></span>
+      <span>Ref. pedido: <b style="color:#cbd5e1">{cod_venta}</b></span>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="info-grid">
+      <div class="info-box">
+        <div class="info-box-label">Proveedor</div>
+        <div class="info-box-nombre">{nombre_prov}</div>
+        {'<div class="info-box-row">📞 ' + tel_prov + '</div>' if tel_prov else ''}
+        {'<div class="info-box-row">✉️ ' + correo_prov + '</div>' if correo_prov else ''}
+      </div>
+      <div class="info-box">
+        <div class="info-box-label">Condiciones</div>
+        <div class="info-box-row"><b>Entrega pactada:</b> {fecha_entrega_str}</div>
+        <div class="info-box-row"><b>Moneda:</b> Soles (PEN)</div>
+        <div class="info-box-row"><b>Pago:</b> Contra entrega</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Descripción</th>
+          <th>SKU</th>
+          <th>Cant.</th>
+          <th>P. Unit.</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{insumo or '—'}</td>
+          <td class="td-sku">{sku or '—'}</td>
+          <td>{int(float(cantidad))} {unidad}</td>
+          <td>S/ {precio_unit:.2f}</td>
+          <td>S/ {subtotal:.2f}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="totales">
+      <div class="totales-inner">
+        <div class="tot-row"><span>Subtotal</span><span>S/ {subtotal:.2f}</span></div>
+        <div class="tot-row"><span>IGV (18%)</span><span>S/ {igv:.2f}</span></div>
+        <div class="tot-row final"><span>TOTAL</span><span>S/ {total:.2f}</span></div>
+      </div>
+    </div>
+
+    {notas_html}
+  </div>
+
+  <div class="footer">
+    Innova Möbili &nbsp;·&nbsp; Documento generado el {fecha_emision} &nbsp;·&nbsp; Ref. {cod_venta} &nbsp;·&nbsp; {numero_oc}
+  </div>
+</div>
+</body>
+</html>"""
+
+        resp = make_response(html)
+        resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
 
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -2263,4 +2420,4 @@ def sugerir_estructura():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            cursor.close(); release_db_connection(conexion) 
