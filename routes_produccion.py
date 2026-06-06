@@ -147,9 +147,19 @@ def finalizar_ticket(id):
 
 @produccion_bp.route('/api/taller/cola-recojo', methods=['GET'])
 def obtener_cola_recojo():
+    """
+    Devuelve un objeto con dos secciones:
+      - estructuras: estructuras terminadas esperando tapicero (comportamiento original)
+      - telas: logística en estado 'Listo para Recojo' con ticket de telas En Proceso
+    """
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+
+        # ── Sección A: Estructuras listas para llevar al tapicero ─────────────
+        # Incluye tapicería en Bloqueado O en En Proceso (para capturar el momento
+        # en que Telas derivó y la tapicería ya está activa pero la estructura
+        # aún no fue físicamente entregada).
         cursor.execute("""
             SELECT t.id, t.area_trabajo, i.producto, v.codigo_venta, v.nombre_cliente,
                    COALESCE(u.nombre, 'Sin asignar') AS operario, t.fecha_fin,
@@ -164,13 +174,13 @@ def obtener_cola_recojo():
             LEFT JOIN tickets_produccion tap
                 ON tap.item_id = t.item_id
                AND tap.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS')
-               AND tap.estado_ticket = 'Bloqueado'
+               AND tap.estado_ticket IN ('Bloqueado', 'En Proceso')
             LEFT JOIN usuarios ut ON tap.trabajador_asignado_id = ut.id
             WHERE t.area_trabajo IN ('ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS')
               AND t.estado_ticket = 'Terminado' AND tap.id IS NOT NULL
             ORDER BY t.fecha_fin DESC;
         """)
-        resultado = [{
+        estructuras = [{
             "ticket_id": r[0], "area": r[1], "producto": r[2], "codigo_venta": r[3],
             "cliente": r[4], "operario": r[5],
             "fecha_fin": r[6].strftime('%d/%m/%Y %H:%M') if r[6] else 'S/F',
@@ -180,7 +190,49 @@ def obtener_cola_recojo():
             "fecha_entrega": r[11].strftime('%d/%m/%Y') if r[11] else 'S/F',
             "item_id": r[12], "tapicero": r[13],
         } for r in cursor.fetchall()]
-        return jsonify(resultado), 200
+
+        # ── Sección B: Telas listas para recoger del proveedor ────────────────
+        # logistica_externa en 'Listo para Recojo' + ticket TELAS/CORTE todavía En Proceso
+        cursor.execute("""
+            SELECT l.id, v.codigo_venta, v.nombre_cliente,
+                   l.insumo_nombre, l.sku,
+                   COALESCE(p.nombre, l.proveedor_informal, 'Sin proveedor') AS proveedor,
+                   COALESCE(p.telefono, '')       AS telefono_proveedor,
+                   COALESCE(p.direccion, '')      AS direccion_proveedor,
+                   l.fecha_entrega_proveedor,
+                   l.url_cotizacion_adjunta,
+                   COALESCE(l.notas_proveedor, '') AS notas_proveedor,
+                   l.cantidad, l.unidad
+            FROM logistica_externa l
+            JOIN ventas v           ON l.venta_id    = v.id
+            LEFT JOIN proveedores p ON l.proveedor_id = p.id
+            WHERE l.estado = 'Listo para Recojo'
+              AND EXISTS (
+                  SELECT 1 FROM tickets_produccion t2
+                  JOIN items_venta i2 ON t2.item_id = i2.id
+                  WHERE i2.venta_id = l.venta_id
+                    AND t2.area_trabajo IN ('TELAS', 'CORTE_Y_CONTROL_TELAS')
+                    AND t2.estado_ticket = 'En Proceso'
+              )
+            ORDER BY l.id DESC;
+        """)
+        telas = [{
+            "logistica_id":        r[0],
+            "codigo_venta":        r[1],
+            "cliente":             r[2],
+            "insumo":              r[3],
+            "sku":                 r[4] or '',
+            "proveedor":           r[5],
+            "telefono_proveedor":  r[6],
+            "direccion_proveedor": r[7],
+            "fecha_entrega_proveedor": r[8].strftime('%d/%m/%Y') if r[8] else None,
+            "url_cotizacion_adjunta":  r[9],
+            "notas_proveedor":     r[10],
+            "cantidad":            float(r[11]) if r[11] else 1,
+            "unidad":              r[12] or '',
+        } for r in cursor.fetchall()]
+
+        return jsonify({"estructuras": estructuras, "telas": telas}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -1793,13 +1845,18 @@ def generar_orden_compra(id):
         buf.seek(0)
 
         # ── Subir a Cloudinary ────────────────────────────────────────
+        # resource_type='image' permite que Cloudinary sirva el PDF directamente
+        # al browser con Content-Type: application/pdf (sin forzar descarga).
+        # Con resource_type='raw' se servía como octet-stream y Google Docs Viewer
+        # devolvía 403/404. Con 'image' la URL abre en Chrome/Edge/Safari sin proxy.
         resp = cloudinary.uploader.upload(
             buf,
             folder='ordenes_compra',
-            resource_type='raw',
-            format='pdf',                          # fuerza extensión .pdf en la URL
-            public_id=f'OC-{id}-{cod_venta}.pdf', # nombre explícito con .pdf
+            resource_type='image',   # ← CLAVE: image sirve PDFs directamente al browser
+            format='pdf',
+            public_id=f'OC-{id}-{cod_venta}',   # sin .pdf en public_id (Cloudinary lo añade)
             overwrite=True,
+            flags='attachment:false',            # inline, no descarga forzada
         )
         url_pdf = resp.get('secure_url')
 
@@ -1935,6 +1992,68 @@ def marcar_listo_para_recojo(id):
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/logistica/<int:id>/confirmar-recojo-tela', methods=['POST'])
+def confirmar_recojo_tela(id):
+    """
+    El operario de Telas fue físicamente al proveedor y recogió la tela.
+    Marca logistica_externa.estado = 'Recibido' y registra fecha_recojo_fisico
+    para auditoría. El ticket de TELAS/CORTE sigue En Proceso — el operario
+    lo cerrará manualmente con 'Derivar' cuando termine el corte.
+    El ítem desaparece de la sección B de la cola de recojo.
+    """
+    try:
+        conexion = get_db_connection()
+        conexion.autocommit = False
+        cursor = conexion.cursor()
+
+        cursor.execute("""
+            SELECT id, venta_id, estado, insumo_nombre
+            FROM logistica_externa WHERE id = %s
+        """, (id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Logística no encontrada'}), 404
+
+        _, venta_id, estado_actual, insumo_nombre = row
+
+        if estado_actual == 'Recibido':
+            return jsonify({'error': 'Esta tela ya fue marcada como recibida'}), 400
+
+        # Marcar como Recibido y registrar fecha física de recojo para auditoría.
+        # Se intenta actualizar fecha_recojo_fisico si la columna existe;
+        # si no existe aún, se hace el UPDATE sin ella.
+        try:
+            cursor.execute("""
+                UPDATE logistica_externa
+                SET estado = 'Recibido',
+                    fecha_recojo_fisico = NOW()
+                WHERE id = %s
+            """, (id,))
+        except Exception:
+            conexion.rollback()
+            cursor.execute("""
+                UPDATE logistica_externa
+                SET estado = 'Recibido'
+                WHERE id = %s
+            """, (id,))
+
+        conexion.commit()
+        return jsonify({
+            'exito':  True,
+            'mensaje': f'Recojo de "{insumo_nombre}" confirmado. El ticket de telas sigue en proceso — ciérralo con "Derivar" al terminar el corte.',
+            'insumo': insumo_nombre,
+        }), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
             # ─── STOCK ESTRUCTURAS SOFÁ ───────────────────────────────────────────────────
 
 @produccion_bp.route('/api/stock-estructuras', methods=['GET'])

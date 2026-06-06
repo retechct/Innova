@@ -366,9 +366,17 @@ const CONFIG_AREAS = {
 async function cargarVistaColaRecojo(contenedor) {
     try {
         const res  = await apiFetch(`${API_URL}/api/taller/cola-recojo`);
-        const cola = await res.json();
+        const data = await res.json();
 
-        if (!Array.isArray(cola) || cola.length === 0) {
+        // Soporte retrocompatible: si el backend devuelve array plano (versión vieja),
+        // lo convertimos al nuevo formato.
+        const estructuras = Array.isArray(data) ? data : (data.estructuras || []);
+        const telas       = Array.isArray(data) ? []   : (data.telas       || []);
+
+        // Guardar para los PDF masivos (sección A)
+        window._colaRecojoData = estructuras;
+
+        if (estructuras.length === 0 && telas.length === 0) {
             contenedor.innerHTML = `
                 <div style="text-align:center; padding:60px 20px; color:#94a3b8;">
                     <i class="fa-solid fa-circle-check" style="font-size:3rem; color:#22c55e; display:block; margin-bottom:15px;"></i>
@@ -378,82 +386,183 @@ async function cargarVistaColaRecojo(contenedor) {
             return;
         }
 
-        // Botón PDF masivo
-        let html = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
-                <div>
-                    <h3 style="margin:0; color:#c2410c; font-size:15px; font-weight:900;">
-                        <i class="fa-solid fa-truck-fast"></i> ${cola.length} estructura${cola.length>1?'s':''} lista${cola.length>1?'s':''} para recoger
-                    </h3>
-                    <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">Descarga el PDF de cada item o genera una hoja de recojo masiva</p>
-                </div>
-                <button onclick="imprimirPDFRecojoMasivo()" 
-                    style="background:#c2410c; color:white; border:none; padding:12px 20px; border-radius:10px; font-size:12px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:8px;">
-                    <i class="fa-solid fa-file-pdf"></i> PDF MASIVO (${cola.length} items)
-                </button>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:15px;">`;
+        let html = '';
 
-        cola.forEach((c, idx) => {
-            const fotoEstructura = c.foto_url && !c.foto_url.includes('sin_foto') ? c.foto_url.split('|')[0] : null;
-            const fotoEvidencia  = c.foto_evidencia || null;
-
+        // ── SECCIÓN B: Telas listas para recoger del proveedor ─────────────────
+        if (telas.length > 0) {
             html += `
-            <div style="background:white; border-radius:14px; border:1px solid #fed7aa; box-shadow:0 4px 12px rgba(249,115,22,0.08); overflow:hidden;">
-                <!-- Cabecera naranja -->
-                <div style="background:linear-gradient(135deg,#fff7ed,#ffedd5); padding:14px 18px; border-bottom:2px solid #fed7aa; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+            <div style="margin-bottom:28px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
                     <div>
-                        <span style="font-size:10px; font-weight:900; color:#f97316; text-transform:uppercase; letter-spacing:1px;">${c.area.replace(/_/g,' ')} · Terminado el ${c.fecha_fin}</span>
-                        <h4 style="margin:4px 0 2px 0; font-size:15px; font-weight:900; color:#0f172a;">${c.producto}</h4>
-                        <p style="margin:0; font-size:12px; color:#64748b;">
-                            <b>Ref:</b> ${c.codigo_venta} &nbsp;|&nbsp; <b>Cliente:</b> ${c.cliente}
-                            ${c.direccion ? `&nbsp;|&nbsp; <b>Entrega:</b> ${c.fecha_entrega}` : ''}
-                        </p>
-                        <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">
-                            <i class="fa-solid fa-user-gear"></i> <b>Carpintero:</b> ${c.operario} &nbsp;
-                            <i class="fa-solid fa-couch"></i> <b>Tapicero:</b> <span style="color:#0369a1; font-weight:bold;">${c.tapicero}</span>
-                        </p>
+                        <h3 style="margin:0; color:#7c3aed; font-size:15px; font-weight:900;">
+                            <i class="fa-solid fa-scissors"></i> 🧵 ${telas.length} tela${telas.length>1?'s':''} lista${telas.length>1?'s':''} para recoger del proveedor
+                        </h3>
+                        <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">El operario de telas debe ir a buscarlas físicamente</p>
                     </div>
-                    <button onclick="imprimirPDFRecojoUnitario(${idx})" 
-                        data-recojo-idx="${idx}"
-                        style="background:#f97316; color:white; border:none; padding:9px 16px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;">
-                        <i class="fa-solid fa-file-pdf"></i> PDF Unitario
+                </div>
+                <div style="display:flex; flex-direction:column; gap:12px;">`;
+
+            telas.forEach(t => {
+                const fechaProv = t.fecha_entrega_proveedor
+                    ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;">📅 Disponible desde ${t.fecha_entrega_proveedor}</span>`
+                    : '';
+                const tel = t.telefono_proveedor
+                    ? `<a href="tel:${t.telefono_proveedor}" style="color:#7c3aed;font-weight:700;text-decoration:none;"><i class="fa-solid fa-phone"></i> ${t.telefono_proveedor}</a>`
+                    : '';
+                const dir = t.direccion_proveedor
+                    ? `<span style="color:#64748b;font-size:11px;"><i class="fa-solid fa-location-dot"></i> ${t.direccion_proveedor}</span>`
+                    : '';
+                const fotoCot = t.url_cotizacion_adjunta
+                    ? `<a href="${t.url_cotizacion_adjunta}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#f5f3ff;color:#7c3aed;padding:5px 10px;border-radius:7px;font-size:10px;font-weight:800;text-decoration:none;"><i class="fa-solid fa-file-image"></i> Ver cotización</a>`
+                    : '';
+                const notas = t.notas_proveedor
+                    ? `<div style="font-size:11px;color:#475569;background:#faf5ff;border-left:3px solid #a78bfa;padding:6px 10px;border-radius:0 6px 6px 0;margin-top:6px;">${t.notas_proveedor}</div>`
+                    : '';
+
+                html += `
+                <div style="background:white; border-radius:14px; border:1.5px solid #ddd6fe; box-shadow:0 4px 12px rgba(124,58,237,0.07); overflow:hidden;">
+                    <div style="background:linear-gradient(135deg,#faf5ff,#ede9fe); padding:13px 18px; border-bottom:2px solid #ddd6fe; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <span style="font-size:10px; font-weight:900; color:#7c3aed; text-transform:uppercase; letter-spacing:1px;">Tela · Ref. ${t.codigo_venta}</span>
+                            <h4 style="margin:4px 0 2px 0; font-size:15px; font-weight:900; color:#0f172a;">${t.insumo}${t.sku ? ` <span style="font-size:11px;color:#94a3b8;font-weight:600;">(${t.sku})</span>` : ''}</h4>
+                            <p style="margin:0; font-size:12px; color:#64748b;"><b>Cliente:</b> ${t.cliente}</p>
+                            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; align-items:center;">
+                                <span style="font-size:12px; font-weight:800; color:#0f172a; background:#ede9fe; padding:3px 10px; border-radius:20px;">
+                                    <i class="fa-solid fa-store"></i> ${t.proveedor}
+                                </span>
+                                ${tel} ${dir} ${fechaProv}
+                            </div>
+                        </div>
+                        <button onclick="_confirmarRecojoTela(${t.logistica_id}, '${t.insumo.replace(/'/g,"\\'")}', this)"
+                            style="background:#7c3aed; color:white; border:none; padding:10px 16px; border-radius:9px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px;">
+                            <i class="fa-solid fa-circle-check"></i> Confirmar recojo
+                        </button>
+                    </div>
+                    <div style="padding:12px 18px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                        ${fotoCot}
+                        ${notas}
+                        ${t.cantidad > 1 ? `<span style="font-size:11px;color:#64748b;background:#f8fafc;padding:3px 8px;border-radius:6px;"><i class="fa-solid fa-ruler"></i> ${t.cantidad} ${t.unidad || 'unid.'}</span>` : ''}
+                    </div>
+                </div>`;
+            });
+
+            html += `</div></div>`;
+        }
+
+        // ── SECCIÓN A: Estructuras listas para llevar al tapicero ──────────────
+        if (estructuras.length > 0) {
+            html += `
+            <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <h3 style="margin:0; color:#c2410c; font-size:15px; font-weight:900;">
+                            <i class="fa-solid fa-truck-fast"></i> 🧱 ${estructuras.length} estructura${estructuras.length>1?'s':''} lista${estructuras.length>1?'s':''} para llevar al tapicero
+                        </h3>
+                        <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">Descarga el PDF de cada item o genera una hoja de recojo masiva</p>
+                    </div>
+                    <button onclick="imprimirPDFRecojoMasivo()" 
+                        style="background:#c2410c; color:white; border:none; padding:12px 20px; border-radius:10px; font-size:12px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                        <i class="fa-solid fa-file-pdf"></i> PDF MASIVO (${estructuras.length} items)
                     </button>
                 </div>
-                <!-- Cuerpo con fotos -->
-                <div style="padding:15px 18px; display:flex; gap:15px; flex-wrap:wrap; align-items:flex-start;">
-                    ${fotoEstructura ? `
-                    <div style="text-align:center;">
-                        <span style="font-size:9px; font-weight:900; color:#64748b; display:block; margin-bottom:4px; text-transform:uppercase;">Foto del Mueble</span>
-                        <img src="${fotoEstructura}" alt="Mueble"
-                            style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:2px solid #e2e8f0;"
-                            onerror="this.parentElement.style.display='none'">
-                    </div>` : ''}
-                    ${fotoEvidencia ? `
-                    <div style="text-align:center;">
-                        <span style="font-size:9px; font-weight:900; color:#64748b; display:block; margin-bottom:4px; text-transform:uppercase;">Evidencia Terminado</span>
-                        <img src="${fotoEvidencia}" alt="Evidencia"
-                            style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:2px solid #22c55e;"
-                            onerror="this.parentElement.style.display='none'">
-                    </div>` : ''}
-                    ${c.especificaciones ? `
-                    <div style="flex:1; min-width:180px; background:#f8fafc; padding:10px; border-radius:8px; border-left:3px solid #f97316;">
-                        <span style="font-size:9px; font-weight:900; color:#f97316; display:block; margin-bottom:6px; text-transform:uppercase;">Especificaciones</span>
-                        <div style="font-size:11px; color:#374151; line-height:1.5;">${c.especificaciones.replace(/\n/g,'<br>')}</div>
-                    </div>` : ''}
-                </div>
-            </div>`;
-        });
+                <div style="display:flex; flex-direction:column; gap:15px;">`;
 
-        html += `</div>`;
+            estructuras.forEach((c, idx) => {
+                const fotoEstructura = c.foto_url && !c.foto_url.includes('sin_foto') ? c.foto_url.split('|')[0] : null;
+                const fotoEvidencia  = c.foto_evidencia || null;
+
+                html += `
+                <div style="background:white; border-radius:14px; border:1px solid #fed7aa; box-shadow:0 4px 12px rgba(249,115,22,0.08); overflow:hidden;">
+                    <!-- Cabecera naranja -->
+                    <div style="background:linear-gradient(135deg,#fff7ed,#ffedd5); padding:14px 18px; border-bottom:2px solid #fed7aa; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <span style="font-size:10px; font-weight:900; color:#f97316; text-transform:uppercase; letter-spacing:1px;">${c.area.replace(/_/g,' ')} · Terminado el ${c.fecha_fin}</span>
+                            <h4 style="margin:4px 0 2px 0; font-size:15px; font-weight:900; color:#0f172a;">${c.producto}</h4>
+                            <p style="margin:0; font-size:12px; color:#64748b;">
+                                <b>Ref:</b> ${c.codigo_venta} &nbsp;|&nbsp; <b>Cliente:</b> ${c.cliente}
+                                ${c.direccion ? `&nbsp;|&nbsp; <b>Entrega:</b> ${c.fecha_entrega}` : ''}
+                            </p>
+                            <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">
+                                <i class="fa-solid fa-user-gear"></i> <b>Carpintero:</b> ${c.operario} &nbsp;
+                                <i class="fa-solid fa-couch"></i> <b>Tapicero:</b> <span style="color:#0369a1; font-weight:bold;">${c.tapicero}</span>
+                            </p>
+                        </div>
+                        <button onclick="imprimirPDFRecojoUnitario(${idx})" 
+                            data-recojo-idx="${idx}"
+                            style="background:#f97316; color:white; border:none; padding:9px 16px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;">
+                            <i class="fa-solid fa-file-pdf"></i> PDF Unitario
+                        </button>
+                    </div>
+                    <!-- Cuerpo con fotos -->
+                    <div style="padding:15px 18px; display:flex; gap:15px; flex-wrap:wrap; align-items:flex-start;">
+                        ${fotoEstructura ? `
+                        <div style="text-align:center;">
+                            <span style="font-size:9px; font-weight:900; color:#64748b; display:block; margin-bottom:4px; text-transform:uppercase;">Foto del Mueble</span>
+                            <img src="${fotoEstructura}" alt="Mueble"
+                                style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:2px solid #e2e8f0;"
+                                onerror="this.parentElement.style.display='none'">
+                        </div>` : ''}
+                        ${fotoEvidencia ? `
+                        <div style="text-align:center;">
+                            <span style="font-size:9px; font-weight:900; color:#64748b; display:block; margin-bottom:4px; text-transform:uppercase;">Evidencia Terminado</span>
+                            <img src="${fotoEvidencia}" alt="Evidencia"
+                                style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:2px solid #22c55e;"
+                                onerror="this.parentElement.style.display='none'">
+                        </div>` : ''}
+                        ${c.especificaciones ? `
+                        <div style="flex:1; min-width:180px; background:#f8fafc; padding:10px; border-radius:8px; border-left:3px solid #f97316;">
+                            <span style="font-size:9px; font-weight:900; color:#f97316; display:block; margin-bottom:6px; text-transform:uppercase;">Especificaciones</span>
+                            <div style="font-size:11px; color:#374151; line-height:1.5;">${c.especificaciones.replace(/\n/g,'<br>')}</div>
+                        </div>` : ''}
+                    </div>
+                </div>`;
+            });
+
+            html += `</div></div>`;
+        }
+
         contenedor.innerHTML = html;
-
-        // Guardar los datos en window para que los PDF los lean
-        window._colaRecojoData = cola;
 
     } catch(e) {
         console.error('Error cargando cola de recojo:', e);
         contenedor.innerHTML = `<p style="color:red; text-align:center;">Error al cargar la cola de recojo.</p>`;
+    }
+}
+
+async function _confirmarRecojoTela(logisticaId, insumoNombre, btnEl) {
+    const conf = await Swal.fire({
+        icon: 'question',
+        title: '¿Confirmar recojo?',
+        html: `<p style="font-size:14px;color:#374151;">Confirma que fuiste a buscar:<br><b>${insumoNombre}</b><br><br>El ticket de telas seguirá en proceso hasta que termines el corte.</p>`,
+        showCancelButton: true,
+        confirmButtonColor: '#7c3aed',
+        cancelButtonColor: 'transparent',
+        confirmButtonText: '✅ Sí, recogí la tela',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!conf.isConfirmed) return;
+
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/logistica/${logisticaId}/confirmar-recojo-tela`, { method: 'POST' });
+        const d   = await res.json();
+        if (d.exito) {
+            Swal.fire({ icon: 'success', title: '¡Recojo confirmado!', text: d.mensaje, timer: 2500, showConfirmButton: false });
+            // Recargar la cola para que el item desaparezca
+            const cont = btnEl.closest('[id]') || document.getElementById('contenedor-cola-recojo') || btnEl.closest('div[style*="flex-direction:column"]')?.parentElement?.parentElement;
+            const contFinal = document.getElementById('contenedor-cola-recojo') || document.querySelector('.cola-recojo-wrapper');
+            if (contFinal) await cargarVistaColaRecojo(contFinal);
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: d.error || 'No se pudo confirmar' });
+            btnEl.disabled = false;
+            btnEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Confirmar recojo';
+        }
+    } catch(e) {
+        Swal.fire({ icon: 'error', title: 'Sin conexión', text: 'Intenta de nuevo.' });
+        btnEl.disabled = false;
+        btnEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> Confirmar recojo';
     }
 }
 
