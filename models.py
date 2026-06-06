@@ -320,12 +320,19 @@ class LogisticaExterna(db.Model):
     fecha_pago                = db.Column(db.DateTime, nullable=True)
     fecha_envio_cotizacion    = db.Column(db.DateTime, nullable=True)
     fecha_respuesta_proveedor = db.Column(db.DateTime, nullable=True)
+    # Columnas adicionales ya existentes en Neon (agregadas manualmente fuera de Alembic).
+    # NO correr flask db migrate sin revisar — Alembic ignorará las que no conoce.
+    proveedor_informal        = db.Column(db.String(200), nullable=True)
+    url_cotizacion_adjunta    = db.Column(db.String(500), nullable=True)
+    fecha_recojo_fisico       = db.Column(db.DateTime,    nullable=True)
 
     ordenes_compra = db.relationship('OrdenCompraSeq', backref='logistica', lazy=True)
 
 
 class OrdenCompraSeq(db.Model):
     __tablename__ = 'ordenes_compra_seq'
+    # NOTA: esta tabla se auto-crea en generar_orden_compra() y servir_pdf_oc()
+    # con CREATE TABLE IF NOT EXISTS — no requiere flask db upgrade manual.
     id           = db.Column(db.Integer, primary_key=True)
     logistica_id = db.Column(db.Integer, db.ForeignKey('logistica_externa.id'), nullable=True)
     numero_oc    = db.Column(db.String(50), nullable=False)

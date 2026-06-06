@@ -1598,6 +1598,33 @@ def generar_orden_compra(id):
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+
+        # ── Auto-migración: crear tabla ordenes_compra_seq si no existe ──────
+        # Neon/PostgreSQL — seguro ejecutar siempre (IF NOT EXISTS)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ordenes_compra_seq (
+                id           SERIAL PRIMARY KEY,
+                logistica_id INTEGER REFERENCES logistica_externa(id),
+                numero_oc    VARCHAR(50) NOT NULL,
+                url_pdf      TEXT,
+                fecha_emision TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        conexion.commit()
+
+        # ── Auto-migración: agregar columna proveedor_informal si no existe ──
+        cursor.execute("""
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_name = 'logistica_externa'
+              AND column_name = 'proveedor_informal';
+        """)
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("""
+                ALTER TABLE logistica_externa
+                ADD COLUMN proveedor_informal VARCHAR(200);
+            """)
+            conexion.commit()
+
         cursor.execute("""
             SELECT l.insumo_nombre, l.sku, l.precio_cotizado,
                    l.fecha_entrega_proveedor, l.notas_proveedor,
@@ -1622,15 +1649,18 @@ def generar_orden_compra(id):
 
         # Número de OC — intentar obtener el próximo de la secuencia
         cursor.execute("""
-    SELECT EXISTS(
-        SELECT 1 FROM pg_proc WHERE proname = 'generar_numero_oc'
-    )
-""")
+            SELECT EXISTS(
+                SELECT 1 FROM pg_proc WHERE proname = 'generar_numero_oc'
+            )
+        """)
         if cursor.fetchone()[0]:
             cursor.execute("SELECT generar_numero_oc()")
             numero_oc = cursor.fetchone()[0]
         else:
-            numero_oc = f"OC-{id:04d}"
+            # Fallback: usar el próximo número de la tabla ordenes_compra_seq
+            cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM ordenes_compra_seq")
+            seq_num   = cursor.fetchone()[0]
+            numero_oc = f"OC-{seq_num:04d}"
 
         fecha_emision = datetime.now().strftime('%d/%m/%Y')
         fecha_entrega_str = fecha_entrega.strftime('%d/%m/%Y') if fecha_entrega else 'Por confirmar'
@@ -1806,20 +1836,30 @@ def generar_orden_compra(id):
         )
         url_pdf = resp.get('secure_url')
 
-        # ── Guardar registro y cambiar estado ─────────────────────────
+        # ── Guardar en ordenes_compra_seq (commit propio) ─────────────
+        # Separado del UPDATE de estado para que un fallo en el INSERT
+        # no cancele el cambio de estado (transacciones independientes).
         try:
             cursor.execute("""
                 INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, url_pdf)
                 VALUES (%s, %s, %s)
             """, (id, numero_oc, url_pdf))
+            conexion.commit()
         except Exception as e_seq:
             conexion.rollback()
-            print(f"[ordenes_compra_seq] Advertencia: {e_seq}")
+            print(f"[ordenes_compra_seq] Advertencia al guardar OC: {e_seq}")
+            # No propagamos el error — la OC ya está en Cloudinary y se puede
+            # servir directamente con url_pdf aunque no haya registro local.
 
-        cursor.execute("""
-            UPDATE logistica_externa SET estado = 'Orden Enviada' WHERE id = %s
-        """, (id,))
-        conexion.commit()
+        # ── Actualizar estado logística (commit propio) ────────────────
+        try:
+            cursor.execute("""
+                UPDATE logistica_externa SET estado = 'Orden Enviada' WHERE id = %s
+            """, (id,))
+            conexion.commit()
+        except Exception as e_upd:
+            conexion.rollback()
+            print(f"[generar_orden] Advertencia al actualizar estado: {e_upd}")
 
         return jsonify({
             'exito':      True,
@@ -1872,6 +1912,10 @@ def servir_pdf_oc(id):
     con Content-Type: application/pdf correcto.
     Soluciona ERR_INVALID_RESPONSE que ocurre cuando el browser intenta
     abrir directamente una URL de Cloudinary con resource_type raw/image.
+
+    FALLBACK: si la tabla ordenes_compra_seq no tiene registro para este id
+    (por ejemplo, la tabla no existía cuando se generó la OC), regenera la
+    URL desde Cloudinary directamente usando el patrón de public_id conocido.
     """
     import requests as req_lib
     from flask import Response as FlaskResponse
@@ -1879,20 +1923,78 @@ def servir_pdf_oc(id):
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        cursor.execute("""
-            SELECT url_pdf FROM ordenes_compra_seq
-            WHERE logistica_id = %s
-            ORDER BY id DESC LIMIT 1
-        """, (id,))
-        row = cursor.fetchone()
-        if not row or not row[0]:
-            return jsonify({'error': 'No hay OC generada para esta logística'}), 404
-        url_pdf = row[0]
 
-        # Descargar el PDF desde Cloudinary en el servidor (sin restricción CORS ni HTTPS del browser)
-        r = req_lib.get(url_pdf, timeout=20)
+        # ── Auto-crear tabla si no existe (Neon safe) ─────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ordenes_compra_seq (
+                id           SERIAL PRIMARY KEY,
+                logistica_id INTEGER REFERENCES logistica_externa(id),
+                numero_oc    VARCHAR(50) NOT NULL,
+                url_pdf      TEXT,
+                fecha_emision TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        conexion.commit()
+
+        url_pdf = None
+
+        # Intentar obtener URL guardada en la tabla
+        try:
+            cursor.execute("""
+                SELECT url_pdf FROM ordenes_compra_seq
+                WHERE logistica_id = %s
+                ORDER BY id DESC LIMIT 1
+            """, (id,))
+            row = cursor.fetchone()
+            if row and row[0]:
+                url_pdf = row[0]
+        except Exception as e_sel:
+            conexion.rollback()
+            print(f"[pdf-oc] Error al leer ordenes_compra_seq: {e_sel}")
+
+        # ── Fallback: construir URL de Cloudinary directamente ─────────
+        # Si no hay registro en la tabla (OC generada antes de la migración),
+        # reconstruimos la URL pública usando el código de venta.
+        if not url_pdf:
+            try:
+                cursor.execute("""
+                    SELECT v.codigo_venta
+                    FROM logistica_externa l
+                    JOIN ventas v ON l.venta_id = v.id
+                    WHERE l.id = %s
+                """, (id,))
+                fila = cursor.fetchone()
+                if fila:
+                    import cloudinary
+                    cloud_name = cloudinary.config().cloud_name
+                    cod_venta  = fila[0]
+                    public_id  = f"OC-{id}-{cod_venta}"
+                    url_pdf    = (
+                        f"https://res.cloudinary.com/{cloud_name}"
+                        f"/raw/upload/ordenes_compra/{public_id}.pdf"
+                    )
+                    print(f"[pdf-oc] Fallback URL: {url_pdf}")
+            except Exception as e_fb:
+                print(f"[pdf-oc] Error en fallback: {e_fb}")
+
+        if not url_pdf:
+            return jsonify({
+                'error': (
+                    'No hay Orden de Compra generada para este requerimiento. '
+                    'Primero genera la OC desde el botón "Aprobar y generar Orden de Compra".'
+                )
+            }), 404
+
+        # Descargar el PDF desde Cloudinary en el servidor
+        r = req_lib.get(url_pdf, timeout=25)
         if r.status_code != 200:
-            return jsonify({'error': f'Cloudinary devolvió {r.status_code}'}), 502
+            return jsonify({
+                'error': (
+                    f'No se pudo descargar el PDF desde Cloudinary '
+                    f'(código {r.status_code}). '
+                    'Intenta regenerar la Orden de Compra.'
+                )
+            }), 502
 
         return FlaskResponse(
             r.content,
@@ -1900,9 +2002,11 @@ def servir_pdf_oc(id):
             headers={
                 'Content-Disposition': 'inline; filename="orden-de-compra.pdf"',
                 'Content-Length': str(len(r.content)),
+                'Cache-Control':  'no-store',
             }
         )
     except Exception as e:
+        import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
         if conexion:
