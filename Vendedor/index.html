@@ -77,13 +77,6 @@
           </span>
         </div>
 
-        <div id="im-sede-wrapper" style="display:none; margin-bottom:14px;">
-          <label class="im-lf-label" for="im-login-sede">¿En qué sede estás hoy?</label>
-          <select id="im-login-sede" class="im-lf-input" style="cursor:pointer;">
-            <option value="">— Selecciona tu sede —</option>
-          </select>
-        </div>
-
         <button class="im-submit-btn" onclick="imEntrarAlSistema()">
           <span>Ingresar</span>
         </button>
@@ -2167,5 +2160,49 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <script src="js/gestores_modelos.js"></script>
+
+<!-- ── MODAL OBLIGATORIO DE SEDE (aparece tras login de rol ERP) ──────── -->
+<div id="modal-sede" style="
+    display:none; position:fixed; inset:0; z-index:99999;
+    background:rgba(13,11,8,0.92); backdrop-filter:blur(8px);
+    align-items:center; justify-content:center;">
+  <div style="
+      background:#1a120b; border:1px solid rgba(201,168,76,0.25);
+      border-radius:4px; padding:36px 32px; width:100%;
+      max-width:380px; box-shadow:0 24px 64px rgba(0,0,0,0.5);
+      font-family:'Jost',sans-serif; text-align:center;">
+    <div style="font-size:28px; margin-bottom:12px;">📍</div>
+    <h3 style="
+        font-family:'Cormorant Garamond',serif; font-size:22px;
+        font-weight:400; color:#f5f0e8; margin:0 0 6px;">
+      ¿En qué sede estás hoy?
+    </h3>
+    <p style="font-size:12px; color:rgba(245,240,232,0.4);
+              letter-spacing:0.08em; margin:0 0 24px;">
+      Selecciona tu sede para continuar
+    </p>
+    <select id="modal-sede-select" style="
+        width:100%; padding:12px 14px; margin-bottom:20px;
+        background:#2c1f0e; color:#f5f0e8;
+        border:1px solid rgba(201,168,76,0.3); border-radius:4px;
+        font-family:'Jost',sans-serif; font-size:14px;
+        font-weight:400; cursor:pointer; outline:none;
+        appearance:none; -webkit-appearance:none;">
+      <option value="">— Selecciona una sede —</option>
+    </select>
+    <button onclick="imConfirmarSede()" style="
+        width:100%; padding:13px; background:#c9a84c; color:#1a120b;
+        border:none; border-radius:4px; font-family:'Jost',sans-serif;
+        font-size:13px; font-weight:600; letter-spacing:0.15em;
+        text-transform:uppercase; cursor:pointer; transition:background 0.2s;">
+      Confirmar y entrar
+    </button>
+    <p id="modal-sede-error" style="
+        color:#c0392b; font-size:12px; margin-top:10px;
+        display:none;">
+      Debes seleccionar una sede para continuar.
+    </p>
+  </div>
+</div>
 
 </body>

@@ -149,20 +149,8 @@ async function imEntrarAlSistema() {
     if (data.exito) {
       usuarioActivo = data.usuario;
       usuarioActivo.horaLogin = new Date().toLocaleTimeString();
-
-      // Si es rol ERP, capturar la sede seleccionada
-      const sedeWrapper = document.getElementById('im-sede-wrapper');
-      const sedeSelect  = document.getElementById('im-login-sede');
-      if (ROLES_ERP.includes(usuarioActivo.rol) && sedeSelect && sedeSelect.value) {
-        usuarioActivo.sede_id = sedeSelect.value;
-        usuarioActivo.tienda  = sedeSelect.options[sedeSelect.selectedIndex].text;
-      } else if (!usuarioActivo.tienda && usuarioActivo.area_asignada) {
+      if (!usuarioActivo.tienda && usuarioActivo.area_asignada) {
         usuarioActivo.tienda = usuarioActivo.area_asignada;
-      }
-
-      // Mostrar dropdown de sede para roles ERP en próximos logins
-      if (sedeWrapper) {
-        sedeWrapper.style.display = ROLES_ERP.includes(usuarioActivo.rol) ? 'block' : 'none';
       }
       localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
       // Guardar token JWT para las peticiones al API
@@ -187,22 +175,16 @@ async function imEntrarAlSistema() {
           confirmButtonColor:'#c9a84c' });
       }
 
-      // Trabajador: entra al ERP normalmente
+      // Trabajador: mostrar modal de sede ANTES de entrar al ERP
       document.getElementById('pantalla-login').style.display = 'none';
-      configurarInterfazPorRol();
-      mostrarUsuarioEnHeader();
+      // Cerrar panel de login
+      const wrapper = document.getElementById('im-panel-wrapper');
+      if (wrapper) wrapper.classList.remove('visible');
+      imPanelActivo = null;
 
-      const esOperario = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
-      const esChofer   = usuarioActivo.rol === 'Chofer';
-      const esAlmacen  = usuarioActivo.rol === 'ALMACEN';
-      changeView(esChofer ? 'taller' : esOperario ? 'taller' : esAlmacen ? 'inventario' : 'catalogo');
-
-      const sedeTexto = usuarioActivo.tienda && usuarioActivo.tienda !== '— Selecciona tu sede —'
-        ? `Sede: ${usuarioActivo.tienda}` : 'Sin sede asignada';
-      Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
-        title:`¡Hola, ${usuarioActivo.nombre.split(' ')[0]}!`,
-        text: sedeTexto,
-        timer: 2200, showConfirmButton: false });
+      // Abrir modal de sede (bloqueante)
+      imMostrarModalSede();
+      return;
     } else {
       document.getElementById('login-pin').value = '';
       Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'error',
@@ -338,6 +320,63 @@ function imMostrarBotonTrabajador() {
   const slot = document.getElementById('header-worker-slot');
   if (slot) slot.appendChild(btn);
   else header.appendChild(btn);
+}
+
+// ── Modal de sede post-login ──────────────────────────────────────
+async function imMostrarModalSede() {
+  const modal = document.getElementById('modal-sede');
+  const sel   = document.getElementById('modal-sede-select');
+  if (!modal || !sel) return;
+
+  // Cargar sedes si aún no están
+  if (sel.options.length <= 1) {
+    try {
+      const res  = await fetch(`${API_URL}/api/sedes`);
+      const list = await res.json();
+      list.forEach(s => {
+        sel.innerHTML += `<option value="${s.id}" data-nombre="${s.nombre}">${s.nombre}</option>`;
+      });
+    } catch(e) { console.warn('No se pudieron cargar sedes', e); }
+  }
+
+  modal.style.display = 'flex';
+}
+
+function imConfirmarSede() {
+  const sel   = document.getElementById('modal-sede-select');
+  const error = document.getElementById('modal-sede-error');
+  if (!sel.value) {
+    error.style.display = 'block';
+    return;
+  }
+  error.style.display = 'none';
+
+  // Guardar sede en el usuario activo
+  usuarioActivo.sede_id = sel.value;
+  usuarioActivo.tienda  = sel.options[sel.selectedIndex].text;
+  localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('innova_token')) {
+    // token ya guardado en imEntrarAlSistema
+  }
+
+  // Cerrar modal
+  document.getElementById('modal-sede').style.display = 'none';
+
+  // Entrar al ERP
+  configurarInterfazPorRol();
+  mostrarUsuarioEnHeader();
+
+  const esOperario = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
+  const esChofer   = usuarioActivo.rol === 'Chofer';
+  const esAlmacen  = usuarioActivo.rol === 'ALMACEN';
+  changeView(esChofer ? 'taller' : esOperario ? 'taller' : esAlmacen ? 'inventario' : 'catalogo');
+
+  Swal.fire({
+    background:'#14100a', color:'#f5f0e8', icon:'success',
+    title:`¡Hola, ${usuarioActivo.nombre.split(' ')[0]}!`,
+    text:`Sede: ${usuarioActivo.tienda}`,
+    timer: 2200, showConfirmButton: false
+  });
 }
 
 // ── Al cargar: restaurar estado según rol ───────────────────────

@@ -178,6 +178,9 @@ function imprimirOrdenTaller(data) {
 }
 /* ── HELPER: Botón de acción correcto según rol, estado y área ── */
 function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
+    const isListoParaRecojo = t.estado === 'Listo para Recojo';
+    const isRecogido        = t.estado === 'Recogido';
+    const esAreaEstructura  = t.area === 'ESTRUCTURAS_MUEBLES' || t.area === 'ESTRUCTURAS_SILLAS';
 
     // ── ADMIN: solo ve botón para ASIGNAR, nunca para terminar ──
     if (esAdmin) {
@@ -202,6 +205,18 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                         style="width:100%; background:#0f172a; color:white; border:none; padding:10px; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer;">
                         <i class="fa-solid fa-truck"></i> Asignar Chofer y Despachar
                     </button>`;
+        }
+
+        // Badge para estados especiales de estructura (admin no puede confirmar recojo)
+        if (isListoParaRecojo) {
+            return `<div style="background:#fee2e2; color:#991b1b; padding:8px; border-radius:8px; text-align:center; font-size:11px; font-weight:bold;">
+                        🔴 Listo para Recojo — Esperando al chofer
+                    </div>`;
+        }
+        if (isRecogido) {
+            return `<div style="background:#dcfce7; color:#166534; padding:8px; border-radius:8px; text-align:center; font-size:11px; font-weight:bold;">
+                        ✅ Recogido por chofer — En camino al tapicero
+                    </div>`;
         }
 
         // Áreas normales: admin asigna maestro
@@ -259,6 +274,20 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                 </div>`;
     }
 
+    // Estado: Listo para Recojo (carpintero ya marcó terminado, espera al chofer)
+    if (isListoParaRecojo) {
+        return `<div style="text-align:center; padding:10px; background:#fee2e2; color:#991b1b; border-radius:8px; font-size:11px; font-weight:bold; border:1px solid #fca5a5;">
+                    🔴 Esperando recojo — El chofer pasará a buscarlo
+                </div>`;
+    }
+
+    // Estado: Recogido (el chofer ya lo recogió)
+    if (isRecogido) {
+        return `<div style="text-align:center; padding:10px; background:#dcfce7; color:#166534; border-radius:8px; font-size:11px; font-weight:bold;">
+                    ✅ Recogido — En camino al tapicero
+                </div>`;
+    }
+
     if (isEnProceso) {
         // Despacho en proceso: chofer confirma entrega
         if (t.area === 'DESPACHO_CENTRAL') {
@@ -308,6 +337,10 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
         }
 
         // Cualquier otra área en proceso: evidencia + finalizar
+        const labelFinalizar = esAreaEstructura
+            ? '🔴 Listo para Recojo'
+            : '<i class="fa-solid fa-check-double"></i> MARCAR COMO TERMINADO';
+        const colorFinalizar = esAreaEstructura ? '#dc2626' : '#22c55e';
         return `<div style="margin-top:10px; padding:10px; background:#f1f5f9; border-radius:8px; border:1px solid #cbd5e1;">
                     <label style="font-size:9px; font-weight:900; color:#475569; display:block; margin-bottom:6px;">📷 FOTO DE TRABAJO TERMINADO:</label>
                     <div style="display:flex;gap:6px;margin-bottom:8px;">
@@ -330,8 +363,8 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                         <img id="foto-evid-img-${t.id}" src="" style="max-height:70px;border-radius:6px;border:1px solid #e2e8f0;">
                     </div>
                     <button onclick="finalizarTicketTaller(${t.id}, document.getElementById('foto-evid-cam-${t.id}')?.files[0] ? document.getElementById('foto-evid-cam-${t.id}') : document.getElementById('foto-evid-${t.id}'), '${t.area}', '${t.producto}')"
-                        style="width:100%; background:#22c55e; color:white; border:none; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
-                        <i class="fa-solid fa-check-double"></i> MARCAR COMO TERMINADO
+                        style="width:100%; background:${colorFinalizar}; color:white; border:none; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
+                        ${labelFinalizar}
                     </button>
                 </div>`;
     }
@@ -340,6 +373,108 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
     return `<p style="font-size:11px; color:#f59e0b; text-align:center; font-weight:bold; margin:8px 0 0 0;">
                 <i class="fa-solid fa-clock"></i> Asignado — esperando que inicies
             </p>`;
+}
+
+/* ================================================================= */
+/* --- COLA DE RECOJO PARA CHOFER: confirmar recojo de estructuras  --- */
+/* ================================================================= */
+
+async function cargarVistaColaRecojoChofer(contenedor) {
+    try {
+        const res  = await apiFetch(`${API_URL}/api/taller/cola-recojo`);
+        const data = await res.json();
+        const estructuras = Array.isArray(data) ? data : (data.estructuras || []);
+
+        if (estructuras.length === 0) {
+            contenedor.innerHTML = `
+                <div style="text-align:center; padding:60px 20px; color:#94a3b8;">
+                    <i class="fa-solid fa-circle-check" style="font-size:3rem; color:#22c55e; display:block; margin-bottom:15px;"></i>
+                    <p style="font-weight:800; font-size:16px; color:#475569;">Sin estructuras pendientes de recojo</p>
+                    <p style="font-size:13px;">Cuando un carpintero marque una estructura como lista, aparecerá aquí.</p>
+                </div>`;
+            return;
+        }
+
+        let html = `
+            <div style="margin-bottom:16px; padding:14px 18px; background:linear-gradient(135deg,#fff5f5,#fee2e2); border-radius:12px; border:2px solid #fca5a5;">
+                <h3 style="margin:0 0 4px; color:#991b1b; font-size:15px; font-weight:900;">
+                    🔴 ${estructuras.length} estructura${estructuras.length>1?'s':''} lista${estructuras.length>1?'s':''} para recoger
+                </h3>
+                <p style="margin:0; font-size:12px; color:#64748b;">Confirma cada recojo cuando pases a buscar la estructura al taller de carpintería.</p>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px;">`;
+
+        estructuras.forEach(c => {
+            const fotoEstructura = c.foto_url && !c.foto_url.includes('sin_foto') ? c.foto_url.split('|')[0] : null;
+            html += `
+            <div style="background:white; border-radius:14px; border:2px solid #fca5a5; box-shadow:0 4px 12px rgba(220,38,38,0.10); overflow:hidden;">
+                <div style="background:linear-gradient(135deg,#fff5f5,#fee2e2); padding:14px 18px; border-bottom:2px solid #fca5a5; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <span style="font-size:10px; font-weight:900; color:#dc2626; text-transform:uppercase; letter-spacing:1px;">🔴 ${c.area.replace(/_/g,' ')} · Listo desde ${c.fecha_fin}</span>
+                        <h4 style="margin:4px 0 2px 0; font-size:15px; font-weight:900; color:#0f172a;">${c.producto}</h4>
+                        <p style="margin:0; font-size:12px; color:#64748b;">
+                            <b>Ref:</b> ${c.codigo_venta} &nbsp;|&nbsp; <b>Cliente:</b> ${c.cliente}
+                        </p>
+                        <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">
+                            <i class="fa-solid fa-user-gear"></i> <b>Carpintero:</b> ${c.operario}
+                            ${c.tapicero && c.tapicero !== 'Sin asignar' ? `&nbsp;|&nbsp; <i class="fa-solid fa-couch"></i> <b>Tapicero:</b> <span style="color:#0369a1; font-weight:bold;">${c.tapicero}</span>` : ''}
+                        </p>
+                    </div>
+                    <button onclick="confirmarRecojoEstructura(${c.ticket_id}, '${(c.producto||'').replace(/'/g,"\\'")}', this)"
+                        style="background:#dc2626; color:white; border:none; padding:12px 20px; border-radius:9px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px; box-shadow:0 2px 8px rgba(220,38,38,0.3);">
+                        ✅ Confirmar Recojo
+                    </button>
+                </div>
+                ${fotoEstructura ? `
+                <div style="padding:12px 18px; display:flex; gap:14px; align-items:center;">
+                    <img src="${fotoEstructura}" alt="Mueble"
+                        style="width:80px; height:80px; object-fit:cover; border-radius:8px; border:2px solid #e2e8f0; flex-shrink:0;"
+                        onerror="this.parentElement.style.display='none'">
+                    ${c.especificaciones ? `<div style="font-size:11px; color:#374151; background:#f8fafc; padding:8px; border-radius:8px; border-left:3px solid #dc2626; flex:1;">${(c.especificaciones||'').replace(/\n/g,'<br>').substring(0,200)}</div>` : ''}
+                </div>` : (c.especificaciones ? `
+                <div style="padding:12px 18px;">
+                    <div style="font-size:11px; color:#374151; background:#f8fafc; padding:8px; border-radius:8px; border-left:3px solid #dc2626;">${(c.especificaciones||'').replace(/\n/g,'<br>').substring(0,200)}</div>
+                </div>` : '')}
+            </div>`;
+        });
+        html += `</div>`;
+        contenedor.innerHTML = html;
+    } catch(e) {
+        console.error('Error cargando cola de recojo chofer:', e);
+        contenedor.innerHTML = `<p style="color:red; text-align:center;">Error al cargar. Intenta de nuevo.</p>`;
+    }
+}
+
+async function confirmarRecojoEstructura(ticketId, producto, btnEl) {
+    const conf = await Swal.fire({
+        icon: 'question',
+        title: '¿Confirmar recojo?',
+        html: `<p style="font-size:14px;color:#374151;">Confirma que recogiste físicamente:<br><b>${producto}</b><br><br>
+               <span style="font-size:12px;color:#64748b;">Esto desbloquea automáticamente la tapicería si las telas ya están listas.</span></p>`,
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: 'transparent',
+        confirmButtonText: '✅ Sí, recogí la estructura',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!conf.isConfirmed) return;
+
+    if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...'; }
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/taller/ticket/${ticketId}/confirmar-recojo`, { method: 'POST' });
+        const d   = await res.json();
+        if (d.exito) {
+            Swal.fire({ icon: 'success', title: '✅ ¡Recojo confirmado!', text: d.mensaje, timer: 2800, showConfirmButton: false });
+            cargarTicketsTaller();
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: d.error || 'No se pudo confirmar' });
+            if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '✅ Confirmar Recojo'; }
+        }
+    } catch(e) {
+        Swal.fire({ icon: 'error', title: 'Sin conexión', text: 'Intenta de nuevo.' });
+        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '✅ Confirmar Recojo'; }
+    }
 }
 
 /* ================================================================= */
@@ -487,11 +622,19 @@ async function cargarVistaColaRecojo(contenedor) {
                                 <i class="fa-solid fa-couch"></i> <b>Tapicero:</b> <span style="color:#0369a1; font-weight:bold;">${c.tapicero}</span>
                             </p>
                         </div>
-                        <button onclick="imprimirPDFRecojoUnitario(${idx})" 
-                            data-recojo-idx="${idx}"
-                            style="background:#f97316; color:white; border:none; padding:9px 16px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;">
-                            <i class="fa-solid fa-file-pdf"></i> PDF Unitario
-                        </button>
+                        <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+                            <button onclick="imprimirPDFRecojoUnitario(${idx})" 
+                                data-recojo-idx="${idx}"
+                                style="background:#f97316; color:white; border:none; padding:9px 16px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;">
+                                <i class="fa-solid fa-file-pdf"></i> PDF Unitario
+                            </button>
+                            ${(typeof usuarioActivo !== 'undefined' && (usuarioActivo.rol === 'Chofer' || usuarioActivo.rol === 'Admin' || usuarioActivo.rol === 'Jefe_Taller'))
+                                ? `<button onclick="confirmarRecojoEstructura(${c.ticket_id}, '${(c.producto||'').replace(/'/g,"\\'")}', this)"
+                                    style="background:#dc2626; color:white; border:none; padding:9px 16px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;">
+                                    ✅ Confirmar Recojo
+                                </button>`
+                                : ''}
+                        </div>
                     </div>
                     <!-- Cuerpo con fotos -->
                     <div style="padding:15px 18px; display:flex; gap:15px; flex-wrap:wrap; align-items:flex-start;">
@@ -1071,9 +1214,18 @@ async function cargarTicketsTaller() {
         }
     } else if (esChofer) {
         // ── CHOFER: vista propia con fichas de entrega ──────────────────────
-        const filtroChofer = (typeof filtroAdminTaller !== 'undefined' && filtroAdminTaller === 'entregados_chofer') ? 'entregados_chofer' : 'activas';
+        const filtroChofer = (typeof filtroAdminTaller !== 'undefined' && filtroAdminTaller === 'entregados_chofer')
+            ? 'entregados_chofer'
+            : (filtroAdminTaller === 'cola_recojo_chofer' ? 'cola_recojo_chofer' : 'activas');
         tabsHeader.innerHTML = `
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; width:100%;">
+                <button onclick="filtroAdminTaller='cola_recojo_chofer'; cargarTicketsTaller()"
+                    style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
+                    background:${filtroChofer==='cola_recojo_chofer' ? '#dc2626' : '#fff5f5'};
+                    color:${filtroChofer==='cola_recojo_chofer' ? 'white' : '#991b1b'};
+                    border:2px solid #fca5a5;">
+                    🔴 COLA DE RECOJO
+                </button>
                 <button onclick="filtroAdminTaller='activas'; cargarTicketsTaller()"
                     style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
                     background:${filtroChofer==='activas' ? '#1e40af' : '#eff6ff'};
@@ -1093,6 +1245,13 @@ async function cargarTicketsTaller() {
                     <i class="fa-solid fa-rotate"></i> Actualizar
                 </button>
             </div>`;
+
+        // ── Tab "Cola de Recojo" del chofer ──────────────────────────────────
+        if (filtroChofer === 'cola_recojo_chofer') {
+            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:30px;">Cargando cola de recojo...</p>';
+            await cargarVistaColaRecojoChofer(contenedor);
+            return;
+        }
 
         // ── Tab "Mis Entregados" del chofer ──────────────────────────────────
         if (filtroChofer === 'entregados_chofer') {
@@ -1205,22 +1364,23 @@ async function cargarTicketsTaller() {
             // Admin ve:
             // Admin ve tickets no terminados.
             // DESPACHO_CENTRAL Terminado va al historial de Entregados, no aquí.
-            ticketsFiltrados = tickets.filter(t => t.estado !== 'Terminado');
+            ticketsFiltrados = tickets.filter(t => t.estado !== 'Terminado' && t.estado !== 'Recogido');
         } else if (esOperario) {
             // Operario: solo los asignados a él
             ticketsFiltrados = tickets.filter(t => Number(t.trabajador) === Number(usuarioActivo.id));
             // Luego aplica filtro de tab
             if (filtroTaller === 'Pendientes') {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado');
+                // 'Listo para Recojo' se muestra aquí con badge especial para el carpintero
+                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado' && t.estado !== 'Recogido');
             } else {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado');
+                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado' || t.estado === 'Recogido');
             }
         } else {
             // Jefe de taller: ve todos, con tabs
             if (filtroTaller === 'Pendientes') {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado');
+                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado' && t.estado !== 'Recogido');
             } else {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado');
+                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado' || t.estado === 'Recogido');
             }
         }
 
@@ -1260,19 +1420,43 @@ async function cargarTicketsTaller() {
                 <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%, 280px),1fr)); gap:15px;">`;
 
             listaTickets.forEach(t => {
-                const isBloqueado = t.estado === 'Bloqueado';
-                const isTerminado = t.estado === 'Terminado';
-                const isEnProceso = t.estado === 'En Proceso';
-                const isPendiente = t.estado === 'Pendiente';
+                const isBloqueado       = t.estado === 'Bloqueado';
+                const isTerminado       = t.estado === 'Terminado';
+                const isEnProceso       = t.estado === 'En Proceso';
+                const isPendiente       = t.estado === 'Pendiente';
+                const isListoParaRecojo = t.estado === 'Listo para Recojo';
+                const isRecogido        = t.estado === 'Recogido';
 
                 const specsB64   = btoa(unescape(encodeURIComponent(t.especificaciones || '')));
-                let colorBorde   = isBloqueado ? '#94a3b8' : (isTerminado ? '#22c55e' : (isEnProceso ? '#3b82f6' : '#f59e0b'));
-                let bgCard       = isBloqueado ? '#f1f5f9' : '#ffffff';
+                let colorBorde   = isBloqueado       ? '#94a3b8'
+                                 : isTerminado        ? '#22c55e'
+                                 : isEnProceso        ? '#3b82f6'
+                                 : isListoParaRecojo  ? '#dc2626'
+                                 : isRecogido         ? '#22c55e'
+                                 : '#f59e0b';
+                let bgCard       = isBloqueado       ? '#f1f5f9'
+                                 : isListoParaRecojo  ? '#fff5f5'
+                                 : '#ffffff';
                 let opacidad     = isBloqueado ? '0.55' : '1';
 
-                let badgeBg  = isBloqueado ? '#e2e8f0' : (isTerminado ? '#dcfce7' : (isEnProceso ? '#dbeafe' : '#fef3c7'));
-                let badgeCol = isBloqueado ? '#64748b' : (isTerminado ? '#166534' : (isEnProceso ? '#1e40af' : '#b45309'));
-                let badgeTxt = isBloqueado ? '🔒 BLOQUEADO' : (isTerminado ? '✅ TERMINADO' : (isEnProceso ? '🔵 EN PROCESO' : '🟡 PENDIENTE'));
+                let badgeBg  = isBloqueado       ? '#e2e8f0'
+                             : isTerminado        ? '#dcfce7'
+                             : isEnProceso        ? '#dbeafe'
+                             : isListoParaRecojo  ? '#fee2e2'
+                             : isRecogido         ? '#dcfce7'
+                             : '#fef3c7';
+                let badgeCol = isBloqueado       ? '#64748b'
+                             : isTerminado        ? '#166534'
+                             : isEnProceso        ? '#1e40af'
+                             : isListoParaRecojo  ? '#991b1b'
+                             : isRecogido         ? '#166534'
+                             : '#b45309';
+                let badgeTxt = isBloqueado       ? '🔒 BLOQUEADO'
+                             : isTerminado        ? '✅ TERMINADO'
+                             : isEnProceso        ? '🔵 EN PROCESO'
+                             : isListoParaRecojo  ? '🔴 LISTO PARA RECOJO'
+                             : isRecogido         ? '✅ RECOGIDO'
+                             : '🟡 PENDIENTE';
 
                 // Asignado a quién
                 const asignadoA = t.trabajador_nombre && t.trabajador_nombre !== 'Sin asignar'
@@ -1942,6 +2126,13 @@ async function finalizarTicketTaller(ticketId, inputFile, area, producto) {
                     title: '🎉 ¡Entrega Confirmada!',
                     text: 'La entrega fue registrada. Puedes verla en "Mis Entregados".',
                     confirmButtonColor: '#15803d'
+                });
+            } else if (data.es_listo_recojo) {
+                await Swal.fire({
+                    icon: 'info',
+                    title: '🔴 Estructura lista para recojo',
+                    text: data.mensaje || 'Esperando que el chofer confirme el recojo.',
+                    confirmButtonColor: '#dc2626'
                 });
             } else {
                 Swal.fire('¡Trabajo Completado!', 'El ticket fue marcado como Terminado.', 'success');
