@@ -337,27 +337,24 @@ async function verSeguimientoVendedor(codigo) {
 /* ================================================================= */
 /* --- LOGÍSTICA EXTERNA (PROCURA) --- */
 /* ================================================================= */
-// ── Helper PDF: abre el PDF usando el visor de Google Docs como fallback
-// Evita ERR_INVALID_RESPONSE que produce fl_attachment en Cloudinary raw
+// ── Helper PDF: abre el PDF directamente (Cloudinary resource_type='image')
 function _abrirPDF(urlPdf) {
     if (!urlPdf) return;
-    // Normalizar: quitar fl_attachment si venía en la URL previa
-    let url = urlPdf.replace(/\/upload\/fl_attachment:[^/]+\//g, '/upload/');
-    // Usar Google Docs Viewer para evitar ERR_INVALID_RESPONSE con PDFs raw de Cloudinary
-    const visor = `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(url)}`;
-    window.open(visor, '_blank');
+    // Las OC ahora se suben con resource_type='image' en Cloudinary,
+    // por lo que la URL ya abre directamente como PDF en el browser.
+    // Normalizamos fl_attachment y corregimos URLs legacy con /raw/upload/.
+    let url = urlPdf
+        .replace(/\/upload\/fl_attachment:[^/]+\//g, '/upload/')
+        .replace(/\/raw\/upload\//g, '/image/upload/');
+    window.open(url, '_blank');
 }
-// ── _urlPdfPublica — NUEVA función helper (agregar cerca de _abrirPDF) ────
-// Devuelve la URL que se puede pegar en WhatsApp / copiar y que abre el PDF.
-// Para Cloudinary raw usamos el visor de Google, para otras URLs el raw directo.
+// Devuelve la URL directa del PDF para pegar en WhatsApp u otro canal.
+// Con resource_type='image' en Cloudinary la URL ya es pública y abre sin intermediarios.
 function _urlPdfPublica(urlPdf) {
     if (!urlPdf) return urlPdf;
-    let url = urlPdf.replace(/\/upload\/fl_attachment:[^/]+\//g, '/upload/');
-    // Solo aplicar el visor si es un recurso raw de Cloudinary
-    if (url.includes('res.cloudinary.com') && url.includes('/raw/upload/')) {
-        return `https://docs.google.com/viewer?url=${encodeURIComponent(url)}`;
-    }
-    return url;
+    return urlPdf
+        .replace(/\/upload\/fl_attachment:[^/]+\//g, '/upload/')
+        .replace(/\/raw\/upload\//g, '/image/upload/');
 }
 // ── Helper: normalizar número peruano para wa.me ──────────────────────────────
 function _normalizarTelWA(raw) {
