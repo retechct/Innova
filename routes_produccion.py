@@ -2035,56 +2035,108 @@ def usar_stock_estructura(stock_id):
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
 
+# =============================================================================
+# INNOVA MÖBILI — routes_produccion.py  PATCH
+# Reemplazar SOLO la función sugerir_estructura() (~línea 2039).
+# El resto del archivo no se toca.
+# =============================================================================
+
 
 @produccion_bp.route('/api/stock-estructuras/sugerir', methods=['GET'])
 def sugerir_estructura():
     """
-    Dado ancho+profundidad+alto y opcionalmente modelo_base de un ticket,
-    devuelve estructuras disponibles ordenadas: primero por modelo exacto,
+    Devuelve estructuras disponibles ordenadas: primero por modelo exacto,
     luego estándar, luego por medidas similares (±15 cm).
+
+    Query params:
+      ancho, profundidad, alto  — medidas del ticket (float, default 0)
+      modelo_base               — modelo del sofá (str, opcional)
+      solo_estandar             — si 'true', ignora medidas y devuelve
+                                  solo tipo='estructura' con medida_estandar=TRUE
     """
     try:
-        ancho       = float(request.args.get('ancho', 0))
-        profundidad = float(request.args.get('profundidad', 0))
-        alto        = float(request.args.get('alto', 0))
-        modelo_base = request.args.get('modelo_base', '').strip()
-        margen      = 15  # cm
+        ancho        = float(request.args.get('ancho', 0))
+        profundidad  = float(request.args.get('profundidad', 0))
+        alto         = float(request.args.get('alto', 0))
+        modelo_base  = request.args.get('modelo_base', '').strip()
+        solo_estandar = request.args.get('solo_estandar', 'false').lower() == 'true'
+        margen       = 15  # cm
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        cursor.execute("""
-            SELECT id, nombre_modelo, ancho, profundidad, alto,
-                   medida_estandar, foto_url, tipo, cantidad,
-                   COALESCE(modelo_base, '')
-            FROM stock_estructuras_sofa
-            WHERE estado = 'disponible'
-              AND (
-                medida_estandar = TRUE
-                OR (%(modelo_base)s != '' AND LOWER(modelo_base) = LOWER(%(modelo_base)s))
-                OR (
-                    ABS(ancho       - %(ancho)s)       <= %(margen)s AND
-                    ABS(profundidad - %(profundidad)s) <= %(margen)s AND
-                    ABS(alto        - %(alto)s)        <= %(margen)s
-                )
-              )
-            ORDER BY
-                CASE WHEN %(modelo_base)s != ''
-                          AND LOWER(modelo_base) = LOWER(%(modelo_base)s)
-                     THEN 0 ELSE 1 END ASC,
-                medida_estandar DESC,
-                ABS(ancho - %(ancho)s) ASC
-            LIMIT 8
-        """, {
-            'ancho': ancho, 'profundidad': profundidad, 'alto': alto,
-            'modelo_base': modelo_base, 'margen': margen
-        })
+
+        if solo_estandar:
+            # ── Caso C: solo estructuras estándar, sin filtro de medidas ──────
+            cursor.execute("""
+                SELECT id, nombre_modelo, ancho, profundidad, alto,
+                       medida_estandar, foto_url, tipo, cantidad,
+                       COALESCE(modelo_base, '')
+                FROM stock_estructuras_sofa
+                WHERE estado = 'disponible'
+                  AND medida_estandar = TRUE
+                  AND tipo = 'estructura'
+                ORDER BY nombre_modelo ASC
+                LIMIT 8
+            """)
+        else:
+            # Determinar si debemos aplicar el filtro de medidas similares.
+            # Si los tres valores son 0, NO aplicar (evita "ancho <= 15" que
+            # devuelve basura).
+            hay_medidas = (ancho > 0 or profundidad > 0 or alto > 0)
+
+            if hay_medidas:
+                medidas_clause = """
+                    OR (
+                        ABS(ancho       - %(ancho)s)       <= %(margen)s AND
+                        ABS(profundidad - %(profundidad)s) <= %(margen)s AND
+                        (%(alto)s = 0 OR ABS(alto - %(alto)s) <= %(margen)s)
+                    )
+                """
+            else:
+                # Sin medidas: no incluir cláusula de distancia
+                medidas_clause = ""
+
+            sql = f"""
+                SELECT id, nombre_modelo, ancho, profundidad, alto,
+                       medida_estandar, foto_url, tipo, cantidad,
+                       COALESCE(modelo_base, '')
+                FROM stock_estructuras_sofa
+                WHERE estado = 'disponible'
+                  AND (
+                    medida_estandar = TRUE
+                    OR (%(modelo_base)s != '' AND LOWER(modelo_base) = LOWER(%(modelo_base)s))
+                    {medidas_clause}
+                  )
+                ORDER BY
+                    CASE WHEN %(modelo_base)s != ''
+                              AND LOWER(modelo_base) = LOWER(%(modelo_base)s)
+                         THEN 0 ELSE 1 END ASC,
+                    medida_estandar DESC,
+                    ABS(ancho - %(ancho)s) ASC
+                LIMIT 8
+            """
+            cursor.execute(sql, {
+                'ancho':        ancho,
+                'profundidad':  profundidad,
+                'alto':         alto,
+                'modelo_base':  modelo_base,
+                'margen':       margen,
+            })
+
         rows = cursor.fetchall()
         return jsonify([{
-            'id': r[0], 'nombre_modelo': r[1],
-            'ancho': float(r[2] or 0), 'profundidad': float(r[3] or 0), 'alto': float(r[4] or 0),
-            'medida_estandar': r[5], 'foto_url': r[6], 'tipo': r[7], 'cantidad': r[8],
-            'modelo_base': r[9]
+            'id':             r[0],
+            'nombre_modelo':  r[1],
+            'ancho':          float(r[2] or 0),
+            'profundidad':    float(r[3] or 0),
+            'alto':           float(r[4] or 0),
+            'medida_estandar': r[5],
+            'foto_url':       r[6],
+            'tipo':           r[7],
+            'cantidad':       r[8],
+            'modelo_base':    r[9],
         } for r in rows]), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:

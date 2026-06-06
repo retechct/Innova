@@ -461,69 +461,103 @@ async function cargarVistaColaRecojo(contenedor) {
 function _extraerModeloBase(nombreProducto) {
     if (!nombreProducto) return '';
     const nombre = nombreProducto.toLowerCase();
-    // Lista de modelos base — deben coincidir con los nombres en catalogo_productos (es_plantilla=true)
     const modelos = [
         'multifuncional', 'multi3', 'multi4',
-        'seccional', 'seccional invertido',
+        'seccional invertido', 'seccional',
         'curvo', 'en u', 'juego', 'esquinero',
-        'sofa 3', 'sofa 2', 'sofa 1', 'sofá 3', 'sofá 2', 'sofá 1',
+        'sofá 3', 'sofá 2', 'sofá 1',
+        'sofa 3', 'sofa 2', 'sofa 1',
         'butaca', 'silla', 'cama', 'camas', 'puff',
     ];
     for (const m of modelos) {
         if (nombre.includes(m)) {
-            // Retornar capitalizado para comparar con BD
             return m.charAt(0).toUpperCase() + m.slice(1);
         }
     }
     return '';
 }
 
-// Al abrir un ticket de ESTRUCTURAS_MUEBLES, cargar sugerencias por modelo base + medidas
 async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, contenedorId, modeloBase = '') {
     try {
-        const params = new URLSearchParams({ ancho, profundidad, alto });
-        if (modeloBase) params.append('modelo_base', modeloBase);
-        const res = await apiFetch(`${API_URL}/api/stock-estructuras/sugerir?${params}`);
-        const sugerencias = await res.json();
         const cont = document.getElementById(contenedorId);
-        if (!cont || !Array.isArray(sugerencias) || !sugerencias.length) return;
-
-        // Separar coincidencias exactas de modelo de las que son solo por medidas
-        const porModelo  = sugerencias.filter(s => s.modelo_base && modeloBase &&
-            s.modelo_base.toLowerCase() === modeloBase.toLowerCase());
-        const porMedidas = sugerencias.filter(s => !porModelo.includes(s));
-
+        if (!cont) return;
+ 
+        // — Primera consulta: por modelo_base y/o medidas —
+        const params = new URLSearchParams({
+            ancho:       ancho       || 0,
+            profundidad: profundidad || 0,
+            alto:        alto        || 0,
+        });
+        if (modeloBase) params.append('modelo_base', modeloBase);
+ 
+        const res          = await apiFetch(`${API_URL}/api/stock-estructuras/sugerir?${params}`);
+        let   sugerencias  = await res.json();
+ 
+        // — Fallback: si no hay resultados, buscar solo estructuras estándar —
+        let soloEstandar = false;
+        if (!Array.isArray(sugerencias) || !sugerencias.length) {
+            const res2       = await apiFetch(`${API_URL}/api/stock-estructuras/sugerir?solo_estandar=true`);
+            sugerencias      = await res2.json();
+            soloEstandar     = true;
+        }
+ 
+        if (!Array.isArray(sugerencias) || !sugerencias.length) return;
+ 
+        // — Agrupar resultados —
+        const porModelo   = sugerencias.filter(s =>
+            s.modelo_base && modeloBase &&
+            s.modelo_base.toLowerCase() === modeloBase.toLowerCase()
+        );
+        const estandares  = sugerencias.filter(s => s.medida_estandar && !porModelo.includes(s));
+        const porMedidas  = sugerencias.filter(s => !porModelo.includes(s) && !estandares.includes(s));
+ 
         const renderOption = s => {
-            const tagModelo  = (s.modelo_base && modeloBase && s.modelo_base.toLowerCase() === modeloBase.toLowerCase())
+            const tagModelo = (s.modelo_base && modeloBase &&
+                s.modelo_base.toLowerCase() === modeloBase.toLowerCase())
                 ? ' 🎯 Mismo modelo' : '';
-            const tagEst     = s.medida_estandar ? ' ⭐ Estándar' : '';
-            const medidas    = (s.ancho || s.profundidad || s.alto)
+            const tagEst    = s.medida_estandar ? ' ⭐ Estándar' : '';
+            const medidas   = (s.ancho || s.profundidad || s.alto)
                 ? ` · ${s.ancho}×${s.profundidad}×${s.alto} cm` : '';
-            const modeloTag  = s.modelo_base ? ` (${s.modelo_base})` : '';
+            const modeloTag = s.modelo_base ? ` (${s.modelo_base})` : '';
             return `<option value="${s.id}">${s.nombre_modelo}${modeloTag}${medidas}${tagModelo}${tagEst}</option>`;
         };
-
+ 
         let opcionesHTML = `<option value="">— Seleccionar estructura del stock —</option>`;
-        if (porModelo.length > 0) {
-            opcionesHTML += `<optgroup label="🎯 Mismo modelo (${modeloBase})">`;
-            opcionesHTML += porModelo.map(renderOption).join('');
-            opcionesHTML += `</optgroup>`;
-        }
-        if (porMedidas.length > 0) {
-            opcionesHTML += `<optgroup label="📐 Medidas similares">`;
-            opcionesHTML += porMedidas.map(renderOption).join('');
-            opcionesHTML += `</optgroup>`;
-        }
-        if (!porModelo.length && !porMedidas.length) {
+ 
+        if (soloEstandar) {
+            // Modo fallback: solo estándar, mostrar con título especial
+            opcionesHTML += `<optgroup label="⭐ Estructuras estándar disponibles">`;
             opcionesHTML += sugerencias.map(renderOption).join('');
+            opcionesHTML += `</optgroup>`;
+        } else {
+            if (porModelo.length > 0) {
+                opcionesHTML += `<optgroup label="🎯 Mismo modelo (${modeloBase})">`;
+                opcionesHTML += porModelo.map(renderOption).join('');
+                opcionesHTML += `</optgroup>`;
+            }
+            if (estandares.length > 0) {
+                opcionesHTML += `<optgroup label="📐 Medidas estándar">`;
+                opcionesHTML += estandares.map(renderOption).join('');
+                opcionesHTML += `</optgroup>`;
+            }
+            if (porMedidas.length > 0) {
+                opcionesHTML += `<optgroup label="📏 Medidas similares">`;
+                opcionesHTML += porMedidas.map(renderOption).join('');
+                opcionesHTML += `</optgroup>`;
+            }
+            // Seguridad: si no cayó en ningún grupo, mostrar plano
+            if (!porModelo.length && !estandares.length && !porMedidas.length) {
+                opcionesHTML += sugerencias.map(renderOption).join('');
+            }
         }
-
+ 
         cont.innerHTML = `
-          <div style="background:#f5f3ff;border:1.5px solid #7c3aed;border-radius:10px;padding:12px;margin-top:10px;">
+          <div style="background:#f5f3ff;border:1.5px solid #7c3aed;border-radius:10px;
+                      padding:12px;margin-top:10px;" id="box-est-${ticketId}">
             <div style="font-weight:700;font-size:13px;color:#7c3aed;margin-bottom:4px;">
               📦 Stock disponible — ya está pagado, NO cobrar:
             </div>
-            <div style="font-size:11px;color:#64748b;margin-bottom:8px;">
+            <div style="font-size:11px;color:var(--text-muted,#64748b);margin-bottom:8px;">
               Selecciona una estructura del inventario para asignarla a este pedido.
             </div>
             <select id="sel-estructura-${ticketId}"
@@ -532,44 +566,94 @@ async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, c
               ${opcionesHTML}
             </select>
             <button onclick="usarEstructuraStock(${ticketId})"
+                id="btn-usar-est-${ticketId}"
                 style="width:100%;padding:10px;background:#7c3aed;color:white;border:none;
                        border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;">
                 ✅ Usar esta estructura (ya está pagada — no cobrar al cliente)
             </button>
           </div>`;
+ 
     } catch(e) {
         console.warn('No se pudieron cargar sugerencias de stock:', e);
     }
 }
-
+ 
 async function usarEstructuraStock(ticketId) {
     const sel = document.getElementById(`sel-estructura-${ticketId}`);
     if (!sel || !sel.value) {
-        return Swal.fire({ icon:'warning', text:'Selecciona una estructura.' });
+        return Swal.fire({ icon: 'warning', text: 'Selecciona una estructura.' });
     }
+ 
+    // Obtener nombre para mostrarlo en el badge
+    const nombreElegido = sel.options[sel.selectedIndex]?.text || '';
+ 
     const { isConfirmed } = await Swal.fire({
-        icon:'question', title:'¿Usar esta estructura del stock?',
-        html: `<p style="font-size:13px;color:#475569;">Esta estructura <b>ya está pagada</b> — se asignará al ticket y el carpintero NO necesita fabricarla.<br><br>
-               <span style="background:#fef3c7;color:#92400e;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:700;display:inline-block;">
-               ⚠️ NO cobrar al cliente por esta pieza</span></p>`,
-        showCancelButton:true, confirmButtonText:'✅ Sí, usar del stock', cancelButtonText:'Cancelar',
-        confirmButtonColor: '#7c3aed'
+        icon: 'question',
+        title: '¿Usar esta estructura del stock?',
+        html: `<p style="font-size:13px;color:#475569;">
+                Esta estructura <b>ya está pagada</b> — se asignará al ticket
+                y el carpintero NO necesita fabricarla.<br><br>
+                <span style="background:#fef3c7;color:#92400e;padding:6px 10px;
+                             border-radius:6px;font-size:12px;font-weight:700;
+                             display:inline-block;">
+                  ⚠️ NO cobrar al cliente por esta pieza
+                </span>
+               </p>`,
+        showCancelButton:    true,
+        confirmButtonText:   '✅ Sí, usar del stock',
+        cancelButtonText:    'Cancelar',
+        confirmButtonColor:  '#7c3aed',
     });
     if (!isConfirmed) return;
-
+ 
     const res = await apiFetch(`${API_URL}/api/stock-estructuras/${sel.value}/usar`, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ ticket_id: ticketId })
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ ticket_id: ticketId }),
     });
     const d = await res.json();
+ 
     if (d.exito) {
-        Swal.fire({ icon:'success', title:'Listo', text:'Estructura asignada desde stock.', timer:1800, showConfirmButton:false });
-        cargarTicketsTaller();
+        Swal.fire({
+            icon: 'success', title: 'Listo',
+            text: 'Estructura asignada desde stock.',
+            timer: 1800, showConfirmButton: false,
+        });
+ 
+        // ── Actualización local del DOM ──────────────────────────────────
+        // 1. Reemplazar el dropdown por un badge de confirmación
+        const box = document.getElementById(`box-est-${ticketId}`);
+        if (box) {
+            box.innerHTML = `
+              <div style="background:#ecfdf5;border:1.5px solid #16a34a;border-radius:8px;
+                          padding:10px 14px;font-size:13px;color:#15803d;font-weight:600;">
+                ✅ Estructura del stock asignada · <span style="font-weight:400;">${nombreElegido}</span>
+              </div>`;
+        }
+ 
+        // 2. Resaltar la tarjeta del ticket con borde verde
+        const card = document.querySelector(`[data-ticket-id="${ticketId}"]`)
+                  || document.getElementById(`ticket-card-${ticketId}`)
+                  || (() => {
+                       // fallback: buscar el contenedor padre del div de sugerencias
+                       const sugDiv = document.getElementById(`sug-est-${ticketId}`);
+                       return sugDiv ? sugDiv.closest('[class*="ticket"]') : null;
+                   })();
+        if (card) {
+            card.style.border     = '2px solid #16a34a';
+            card.style.background = 'rgba(22,163,74,0.04)';
+        }
+ 
+        // 3. Ocultar el botón "Iniciar trabajo" del mismo ticket (ya no hay que fabricar)
+        const btnIniciar = document.getElementById(`btn-iniciar-${ticketId}`)
+                        || document.querySelector(`[onclick*="iniciarTicket(${ticketId})"]`);
+        if (btnIniciar) btnIniciar.style.display = 'none';
+ 
     } else {
-        Swal.fire({ icon:'error', text: d.error });
+        Swal.fire({ icon: 'error', text: d.error || 'Error al asignar la estructura.' });
     }
 }
+
 
 /* --- PDF UNITARIO DE RECOJO --- */
 function imprimirPDFRecojoUnitario(idx) {
@@ -1131,24 +1215,50 @@ async function cargarTicketsTaller() {
 
         // Cargar sugerencias para estructuras — buscar por modelo base + medidas
         ticketsFiltrados.forEach(t => {
-            if (t.area === 'ESTRUCTURAS_MUEBLES' && t.estado !== 'Terminado') {
-                let l = 0, p = 0, h = 0;
-                const m = (t.especificaciones || '').match(/L(\d+)(?:\.\d+)?\s*x\s*P(\d+)(?:\.\d+)?(?:(?:\s*x\s*H|\s*x\s*Alto)\s*(\d+)(?:\.\d+)?)?/i);
-                if (m) {
-                    l = parseFloat(m[1]) || 0;
-                    p = parseFloat(m[2]) || 0;
-                    h = parseFloat(m[3]) || 0;
-                }
-
-                // Extraer modelo base del nombre del producto
-                // Intenta detectar el tipo de sofá del nombre del ticket (ej: "Seccional 3+2", "Multifuncional")
-                const modeloBaseDetectado = _extraerModeloBase(t.producto || '');
-
-                if (l > 0 || p > 0 || modeloBaseDetectado) {
-                    cargarSugerenciasEstructura(l, p, h, t.id, `sug-est-${t.id}`, modeloBaseDetectado);
-                }
+    if (t.area === 'ESTRUCTURAS_MUEBLES' && t.estado !== 'Terminado') {
+ 
+        let l = 0, p = 0, h = 0;
+        const spec = t.especificaciones || '';
+ 
+        // Formatos soportados (en orden de especificidad):
+        // 1. L120 x P90 x H45          (formato original)
+        // 2. L120 x P90 x Alto 45      (variante con "Alto")
+        // 3. Ancho: 120, Prof: 90       (con labels y coma)
+        // 4. Ancho 120 / Fondo 90       (con slash, sin ":")
+        // 5. 120cm x 90cm x 45cm        (con unidad cm)
+        // 6. 120 x 90 x 45              (solo números con x)
+        // 7. 120 x 90                   (sin alto)
+ 
+        const regexes = [
+            // L120 x P90 x H45  /  L120 x P90 x Alto 45
+            /L\s*(\d+(?:\.\d+)?)\s*[xX×]\s*P\s*(\d+(?:\.\d+)?)(?:\s*[xX×]\s*(?:H|Alto)\s*(\d+(?:\.\d+)?))?/i,
+            // Ancho: 120[,]? Prof/Fondo: 90[,]? (Alto: 45)?
+            /Ancho[:\s]+(\d+(?:\.\d+)?)[,\s]+(?:Prof|Profundidad|Fondo)[.:\s]+(\d+(?:\.\d+)?)(?:[,\s]+(?:Alto|H)[.:\s]+(\d+(?:\.\d+)?))?/i,
+            // Ancho 120 / Fondo 90
+            /Ancho\s+(\d+(?:\.\d+)?)\s*[/]\s*(?:Fondo|Prof|Profundidad)\s+(\d+(?:\.\d+)?)/i,
+            // 120cm x 90cm x 45cm  (con unidad)
+            /(\d+(?:\.\d+)?)\s*cm\s*[xX×]\s*(\d+(?:\.\d+)?)\s*cm(?:\s*[xX×]\s*(\d+(?:\.\d+)?)\s*cm)?/i,
+            // 120 x 90 x 45  o  120 x 90  (solo números)
+            /\b(\d{2,3}(?:\.\d+)?)\s*[xX×]\s*(\d{2,3}(?:\.\d+)?)(?:\s*[xX×]\s*(\d{2,3}(?:\.\d+)?))?/,
+        ];
+ 
+        for (const rx of regexes) {
+            const m = spec.match(rx);
+            if (m) {
+                l = parseFloat(m[1]) || 0;
+                p = parseFloat(m[2]) || 0;
+                h = parseFloat(m[3]) || 0;
+                break;
             }
-        });
+        }
+ 
+        const modeloBaseDetectado = _extraerModeloBase(t.producto || '');
+ 
+        // Siempre intentar — el backend devolverá vacío si no hay nada
+        // (el fallback a solo_estandar ocurre dentro de cargarSugerenciasEstructura)
+        cargarSugerenciasEstructura(l, p, h, t.id, `sug-est-${t.id}`, modeloBaseDetectado);
+    }
+});
 
         // Event delegation para fichas técnicas
         contenedor.querySelectorAll('.btn-ver-ficha').forEach(btn => {
