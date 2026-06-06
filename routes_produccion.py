@@ -1917,7 +1917,8 @@ def servir_pdf_oc(id):
     (por ejemplo, la tabla no existía cuando se generó la OC), regenera la
     URL desde Cloudinary directamente usando el patrón de public_id conocido.
     """
-    import requests as req_lib
+    import urllib.request
+    import urllib.error
     from flask import Response as FlaskResponse
     conexion = None
     try:
@@ -1986,22 +1987,33 @@ def servir_pdf_oc(id):
             }), 404
 
         # Descargar el PDF desde Cloudinary en el servidor
-        r = req_lib.get(url_pdf, timeout=25)
-        if r.status_code != 200:
+        try:
+            req = urllib.request.Request(url_pdf, headers={'User-Agent': 'InnovaMobili/1.0'})
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                if resp.status != 200:
+                    return jsonify({
+                        'error': (
+                            f'No se pudo descargar el PDF desde Cloudinary '
+                            f'(código {resp.status}). '
+                            'Intenta regenerar la Orden de Compra.'
+                        )
+                    }), 502
+                pdf_bytes = resp.read()
+        except urllib.error.HTTPError as http_err:
             return jsonify({
                 'error': (
                     f'No se pudo descargar el PDF desde Cloudinary '
-                    f'(código {r.status_code}). '
+                    f'(código {http_err.code}). '
                     'Intenta regenerar la Orden de Compra.'
                 )
             }), 502
 
         return FlaskResponse(
-            r.content,
+            pdf_bytes,
             mimetype='application/pdf',
             headers={
                 'Content-Disposition': 'inline; filename="orden-de-compra.pdf"',
-                'Content-Length': str(len(r.content)),
+                'Content-Length': str(len(pdf_bytes)),
                 'Cache-Control':  'no-store',
             }
         )
