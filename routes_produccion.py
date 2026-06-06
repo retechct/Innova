@@ -1989,104 +1989,358 @@ def servir_pdf_oc(id):
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Orden de Compra {numero_oc}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600;700&family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: 'Plus Jakarta Sans', Arial, sans-serif; background: #f1f5f9; padding: 30px 16px; color: #1e293b; }}
-  .page {{ width: 210mm; margin: auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }}
+  body {{
+    font-family: 'Jost', Arial, sans-serif;
+    background: #f5f0e8;
+    padding: 30px 16px;
+    color: #2c1f0e;
+  }}
+  .page {{
+    width: 210mm;
+    margin: auto;
+    background: #fff;
+    overflow: hidden;
+    box-shadow: 0 12px 48px rgba(44,31,14,0.18);
+  }}
 
-  /* HEADER */
-  .header {{ background: #0f172a; padding: 28px 36px 20px; position: relative; }}
-  .header-row {{ display: flex; justify-content: space-between; align-items: flex-start; }}
-  .brand {{ color: #fff; }}
-  .brand-name {{ font-size: 26px; font-weight: 900; letter-spacing: 1px; }}
-  .brand-name span {{ color: #c9a84c; }}
-  .brand-sub {{ font-size: 10px; color: #94a3b8; margin-top: 2px; }}
-  .oc-info {{ text-align: right; }}
-  .oc-title {{ font-size: 20px; font-weight: 900; color: #c9a84c; letter-spacing: 1px; }}
-  .oc-num {{ font-size: 13px; color: #cbd5e1; margin-top: 4px; }}
-  .header-meta {{ display: flex; justify-content: space-between; margin-top: 16px; padding-top: 14px; border-top: 1.5px solid #c9a84c; font-size: 11px; color: #94a3b8; }}
+  /* ── HEADER ── */
+  .header {{
+    background: #1a120b;
+    padding: 28px 40px 22px;
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }}
+  .header-left {{
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }}
+  /* Logo SVG inline */
+  .logo-mark {{
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+  }}
+  .brand-text {{}}
+  .brand-name {{
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #f5f0e8;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    line-height: 1;
+  }}
+  .brand-name em {{
+    color: #c9a84c;
+    font-style: italic;
+  }}
+  .brand-sub {{
+    font-family: 'Jost', sans-serif;
+    font-size: 9px;
+    font-weight: 300;
+    color: #8a7560;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-top: 5px;
+  }}
+  .header-right {{
+    text-align: right;
+  }}
+  .oc-label {{
+    font-family: 'Jost', sans-serif;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: #8a7560;
+    margin-bottom: 6px;
+  }}
+  .oc-title {{
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 600;
+    color: #c9a84c;
+    letter-spacing: 0.06em;
+    line-height: 1;
+  }}
+  .oc-num {{
+    font-family: 'Jost', sans-serif;
+    font-size: 12px;
+    font-weight: 300;
+    color: #8a7560;
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+  }}
 
-  /* BODY */
-  .body {{ padding: 32px 36px; }}
+  /* Línea dorada separadora */
+  .header-divider {{
+    border: none;
+    border-top: 1px solid rgba(201,168,76,0.35);
+    margin: 18px 40px 0;
+  }}
+  .header-meta {{
+    background: #1a120b;
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 40px 20px;
+    font-family: 'Jost', sans-serif;
+    font-size: 10px;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    color: #8a7560;
+  }}
+  .header-meta b {{ color: #e8dcc8; font-weight: 500; }}
+
+  /* ── BODY ── */
+  .body {{ padding: 32px 40px; }}
 
   /* CAJAS INFO */
-  .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }}
-  .info-box {{ background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; padding: 16px 18px; }}
-  .info-box-label {{ font-size: 9px; font-weight: 800; color: #c9a84c; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }}
-  .info-box-nombre {{ font-size: 15px; font-weight: 900; color: #0f172a; margin-bottom: 6px; }}
-  .info-box-row {{ font-size: 11px; color: #475569; margin-bottom: 3px; }}
+  .info-grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }}
+  .info-box {{
+    border: 1px solid #e8dcc8;
+    border-radius: 4px;
+    padding: 16px 20px;
+    background: #fdfaf5;
+  }}
+  .info-box-label {{
+    font-family: 'Jost', sans-serif;
+    font-size: 8px;
+    font-weight: 600;
+    color: #c9a84c;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e8dcc8;
+  }}
+  .info-box-nombre {{
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c1f0e;
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }}
+  .info-box-row {{
+    font-family: 'Jost', sans-serif;
+    font-size: 11px;
+    font-weight: 300;
+    color: #8a7560;
+    margin-bottom: 4px;
+    letter-spacing: 0.04em;
+  }}
+  .info-box-row b {{ font-weight: 500; color: #2c1f0e; }}
 
   /* TABLA */
-  table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-  thead tr {{ background: #0f172a; }}
-  thead th {{ color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 11px 12px; text-align: left; }}
+  table {{ width: 100%; border-collapse: collapse; margin-bottom: 24px; }}
+  thead tr {{
+    background: #2c1f0e;
+  }}
+  thead th {{
+    font-family: 'Jost', sans-serif;
+    color: #e8dcc8;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    padding: 12px 14px;
+    text-align: left;
+  }}
   thead th:last-child {{ text-align: right; }}
-  tbody tr {{ background: #f8fafc; }}
-  tbody td {{ padding: 14px 12px; font-size: 12px; color: #334155; border-bottom: 1px solid #e2e8f0; vertical-align: top; }}
-  tbody td:last-child {{ text-align: right; font-weight: 900; color: #0f172a; white-space: nowrap; }}
-  .td-sku {{ color: #64748b; font-size: 11px; }}
+  tbody tr {{ background: #fdfaf5; }}
+  tbody tr:nth-child(even) {{ background: #f5f0e8; }}
+  tbody td {{
+    padding: 16px 14px;
+    font-family: 'Jost', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    color: #2c1f0e;
+    border-bottom: 1px solid #e8dcc8;
+    vertical-align: middle;
+  }}
+  tbody td:last-child {{
+    text-align: right;
+    font-weight: 600;
+    color: #2c1f0e;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15px;
+    white-space: nowrap;
+  }}
+  .td-sku {{
+    font-family: 'Jost', sans-serif;
+    font-size: 10px;
+    font-weight: 300;
+    color: #b07d3a;
+    letter-spacing: 0.08em;
+  }}
 
   /* TOTALES */
-  .totales {{ display: flex; justify-content: flex-end; margin-bottom: 20px; }}
-  .totales-inner {{ width: 240px; }}
-  .tot-row {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #475569; }}
-  .tot-row.final {{ background: #0f172a; color: #fff; border-radius: 6px; padding: 10px 14px; margin-top: 6px; font-weight: 900; font-size: 14px; border: none; }}
-  .tot-row.final span:last-child {{ color: #c9a84c; }}
+  .totales {{ display: flex; justify-content: flex-end; margin-bottom: 24px; }}
+  .totales-inner {{ width: 260px; }}
+  .tot-row {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid #e8dcc8;
+    font-family: 'Jost', sans-serif;
+    font-size: 11px;
+    font-weight: 300;
+    color: #8a7560;
+    letter-spacing: 0.06em;
+  }}
+  .tot-row.final {{
+    background: #2c1f0e;
+    color: #f5f0e8;
+    padding: 12px 16px;
+    margin-top: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }}
+  .tot-row.final span:last-child {{
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #c9a84c;
+    letter-spacing: 0.05em;
+  }}
 
   /* NOTAS */
-  .notas-box {{ background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 12px 16px; font-size: 11px; color: #78350f; margin-bottom: 24px; }}
+  .notas-box {{
+    background: rgba(201,168,76,0.06);
+    border-left: 3px solid #c9a84c;
+    padding: 12px 18px;
+    font-family: 'Jost', sans-serif;
+    font-size: 11px;
+    font-weight: 300;
+    color: #8a7560;
+    margin-bottom: 28px;
+    letter-spacing: 0.04em;
+  }}
+  .notas-box b {{ color: #2c1f0e; font-weight: 500; }}
 
   /* PIE */
-  .footer {{ background: #0f172a; padding: 14px 36px; text-align: center; font-size: 9px; color: #475569; }}
+  .footer {{
+    background: #1a120b;
+    padding: 16px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }}
+  .footer-logo {{
+    opacity: 0.5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }}
+  .footer-logo span {{
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 11px;
+    font-weight: 300;
+    color: #8a7560;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }}
+  .footer-sep {{ color: #8a7560; opacity: 0.3; }}
+  .footer-text {{
+    font-family: 'Jost', sans-serif;
+    font-size: 9px;
+    font-weight: 300;
+    color: #8a7560;
+    letter-spacing: 0.12em;
+  }}
 
   /* BOTÓN IMPRIMIR */
-  .print-bar {{ text-align: center; margin-bottom: 20px; }}
-  .btn-print {{ background: #0f172a; color: #c9a84c; border: none; padding: 12px 32px; border-radius: 8px; font-size: 14px; font-weight: 800; cursor: pointer; letter-spacing: 0.5px; }}
-  .btn-print:hover {{ background: #1e293b; }}
+  .print-bar {{ text-align: center; margin-bottom: 24px; }}
+  .btn-print {{
+    background: #2c1f0e;
+    color: #c9a84c;
+    border: none;
+    padding: 13px 36px;
+    font-family: 'Jost', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s;
+  }}
+  .btn-print:hover {{ background: #1a120b; }}
 
   @media print {{
     body {{ background: #fff; padding: 0; }}
-    .page {{ box-shadow: none; border-radius: 0; }}
+    .page {{ box-shadow: none; width: 100%; }}
     .print-bar {{ display: none; }}
   }}
 </style>
 </head>
 <body>
 <div class="print-bar">
-  <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+  <button class="btn-print" onclick="window.print()">🖨️ &nbsp;Imprimir / Guardar como PDF</button>
 </div>
 <div class="page">
+
+  <!-- HEADER -->
   <div class="header">
-    <div class="header-row">
-      <div class="brand">
-        <div class="brand-name">INNOVA <span>MÖBILI</span></div>
+    <div class="header-left">
+      <!-- Logo mark inline SVG -->
+      <svg class="logo-mark" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="56" height="56" fill="#2c1f0e"/>
+        <!-- Forma geométrica dorada: diamante/rombo -->
+        <polygon points="28,6 50,28 28,50 6,28" fill="#c9a84c" opacity="0.9"/>
+        <polygon points="28,13 44,28 28,43 12,28" fill="#1a120b"/>
+        <!-- I central estilizada -->
+        <rect x="24" y="20" width="8" height="2" fill="#c9a84c"/>
+        <rect x="26.5" y="22" width="3" height="12" fill="#c9a84c"/>
+        <rect x="24" y="34" width="8" height="2" fill="#c9a84c"/>
+      </svg>
+      <div class="brand-text">
+        <div class="brand-name">Innova <em>Möbili</em></div>
         <div class="brand-sub">Muebles de diseño a medida &nbsp;·&nbsp; RUC 20600768175</div>
       </div>
-      <div class="oc-info">
-        <div class="oc-title">ORDEN DE COMPRA</div>
-        <div class="oc-num">N° {numero_oc}</div>
-      </div>
     </div>
-    <div class="header-meta">
-      <span>Fecha de emisión: <b style="color:#cbd5e1">{fecha_emision}</b></span>
-      <span>Ref. pedido: <b style="color:#cbd5e1">{cod_venta}</b></span>
+    <div class="header-right">
+      <div class="oc-label">Documento comercial</div>
+      <div class="oc-title">Orden de Compra</div>
+      <div class="oc-num">N° {numero_oc}</div>
     </div>
   </div>
+  <hr class="header-divider">
+  <div class="header-meta">
+    <span>Fecha de emisión: <b>{fecha_emision}</b></span>
+    <span>Ref. pedido: <b>{cod_venta}</b></span>
+  </div>
 
+  <!-- BODY -->
   <div class="body">
     <div class="info-grid">
       <div class="info-box">
         <div class="info-box-label">Proveedor</div>
         <div class="info-box-nombre">{nombre_prov}</div>
-        {'<div class="info-box-row">📞 ' + tel_prov + '</div>' if tel_prov else ''}
-        {'<div class="info-box-row">✉️ ' + correo_prov + '</div>' if correo_prov else ''}
+        {'<div class="info-box-row">📞 &nbsp;' + tel_prov + '</div>' if tel_prov else ''}
+        {'<div class="info-box-row">✉ &nbsp;' + correo_prov + '</div>' if correo_prov else ''}
       </div>
       <div class="info-box">
         <div class="info-box-label">Condiciones</div>
-        <div class="info-box-row"><b>Entrega pactada:</b> {fecha_entrega_str}</div>
-        <div class="info-box-row"><b>Moneda:</b> Soles (PEN)</div>
-        <div class="info-box-row"><b>Pago:</b> Contra entrega</div>
+        <div class="info-box-row"><b>Entrega pactada:</b> &nbsp;{fecha_entrega_str}</div>
+        <div class="info-box-row"><b>Moneda:</b> &nbsp;Soles (PEN)</div>
+        <div class="info-box-row"><b>Pago:</b> &nbsp;Contra entrega</div>
       </div>
     </div>
 
@@ -2115,16 +2369,25 @@ def servir_pdf_oc(id):
       <div class="totales-inner">
         <div class="tot-row"><span>Subtotal</span><span>S/ {subtotal:.2f}</span></div>
         <div class="tot-row"><span>IGV (18%)</span><span>S/ {igv:.2f}</span></div>
-        <div class="tot-row final"><span>TOTAL</span><span>S/ {total:.2f}</span></div>
+        <div class="tot-row final"><span>Total</span><span>S/ {total:.2f}</span></div>
       </div>
     </div>
 
     {notas_html}
   </div>
 
+  <!-- PIE -->
   <div class="footer">
-    Innova Möbili &nbsp;·&nbsp; Documento generado el {fecha_emision} &nbsp;·&nbsp; Ref. {cod_venta} &nbsp;·&nbsp; {numero_oc}
+    <div class="footer-logo">
+      <svg width="14" height="14" viewBox="0 0 56 56" fill="none">
+        <polygon points="28,4 52,28 28,52 4,28" fill="#c9a84c" opacity="0.6"/>
+      </svg>
+      <span>Innova Möbili</span>
+    </div>
+    <span class="footer-sep">·</span>
+    <span class="footer-text">Documento generado el {fecha_emision} &nbsp;·&nbsp; Ref. {cod_venta} &nbsp;·&nbsp; {numero_oc}</span>
   </div>
+
 </div>
 </body>
 </html>"""
@@ -2420,4 +2683,4 @@ def sugerir_estructura():
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion) 
+            cursor.close(); release_db_connection(conexion)
