@@ -1828,37 +1828,49 @@ def generar_orden_compra(id):
         c.save()
         buf.seek(0)
 
-        # ── Subir a Cloudinary como raw ───────────────────────────────
-        # El browser no abre PDFs de Cloudinary directamente (ERR_INVALID_RESPONSE).
-        # La URL se sirve al cliente via el proxy /api/logistica/<id>/pdf-oc,
-        # que descarga el PDF server-side y lo envía con Content-Type correcto.
-        resp = cloudinary.uploader.upload(
-            buf,
-            folder='ordenes_compra',
-            resource_type='raw',
-            format='pdf',
-            public_id=f'OC-{id}-{cod_venta}',
-            overwrite=True,
-        )
-        url_pdf   = resp.get('secure_url')
-        cl_public = resp.get('public_id')  # ← guardar el public_id real de Cloudinary
+        # ── Guardar PDF en base de datos (BYTEA) ─────────────────────
+        # Evita depender de Cloudinary para servir el PDF.
+        # El endpoint /pdf-oc regenera el PDF desde los datos y lo sirve directo.
+        pdf_bytes = buf.getvalue()
 
-        # ── Guardar en ordenes_compra_seq (commit propio) ─────────────
-        # Separado del UPDATE de estado para que un fallo en el INSERT
-        # no cancele el cambio de estado (transacciones independientes).
+        # Agregar columna pdf_bytes si no existe (auto-migración)
         try:
             cursor.execute("""
-                INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, url_pdf, public_id)
-                VALUES (%s, %s, %s, %s)
-            """, (id, numero_oc, url_pdf, cl_public))
+                ALTER TABLE ordenes_compra_seq
+                ADD COLUMN IF NOT EXISTS pdf_bytes BYTEA;
+            """)
+            cursor.execute("""
+                ALTER TABLE ordenes_compra_seq
+                ADD COLUMN IF NOT EXISTS public_id TEXT;
+            """)
+            conexion.commit()
+        except Exception:
+            conexion.rollback()
+
+        # Guardar/actualizar registro en ordenes_compra_seq
+        try:
+            # Si ya existe un registro para este logistica_id, actualizarlo
+            cursor.execute("""
+                SELECT id FROM ordenes_compra_seq WHERE logistica_id = %s ORDER BY id DESC LIMIT 1
+            """, (id,))
+            existing = cursor.fetchone()
+            if existing:
+                cursor.execute("""
+                    UPDATE ordenes_compra_seq
+                    SET numero_oc = %s, pdf_bytes = %s
+                    WHERE id = %s
+                """, (numero_oc, pdf_bytes, existing[0]))
+            else:
+                cursor.execute("""
+                    INSERT INTO ordenes_compra_seq (logistica_id, numero_oc, pdf_bytes)
+                    VALUES (%s, %s, %s)
+                """, (id, numero_oc, pdf_bytes))
             conexion.commit()
         except Exception as e_seq:
             conexion.rollback()
-            print(f"[ordenes_compra_seq] Advertencia al guardar OC: {e_seq}")
-            # No propagamos el error — la OC ya está en Cloudinary y se puede
-            # servir directamente con url_pdf aunque no haya registro local.
+            print(f"[ordenes_compra_seq] Error al guardar PDF: {e_seq}")
 
-        # ── Actualizar estado logística (commit propio) ────────────────
+        # ── Actualizar estado logística ────────────────────────────────
         try:
             cursor.execute("""
                 UPDATE logistica_externa SET estado = 'Orden Enviada' WHERE id = %s
@@ -1870,11 +1882,11 @@ def generar_orden_compra(id):
 
         return jsonify({
             'exito':      True,
-            'url_pdf':    url_pdf,
             'numero_oc':  numero_oc,
             'proveedor':  nombre_prov_display,
             'telefono':   tel_prov,
         }), 200
+
 
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
@@ -1915,120 +1927,55 @@ def registrar_pago_proveedor(id):
 @produccion_bp.route('/api/logistica/<int:id>/pdf-oc', methods=['GET'])
 def servir_pdf_oc(id):
     """
-    Proxy server-side: descarga el PDF desde Cloudinary usando la URL firmada
-    y lo sirve al browser con Content-Type: application/pdf correcto.
-
-    Cloudinary sirve recursos raw con Content-Type: application/octet-stream,
-    lo que impide que el browser los renderice como PDF.
-    El proxy fuerza el Content-Type correcto y evita ese problema.
+    Sirve el PDF de la Orden de Compra directamente desde la base de datos.
+    El PDF se guardó como BYTEA en ordenes_compra_seq al generarse.
+    Si no hay bytes guardados (OC vieja), regenera el PDF on-demand.
     """
-    import time
-    import urllib.request
-    import urllib.error
-    import cloudinary
-    import cloudinary.utils
     from flask import Response as FlaskResponse
-
     conexion = None
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        # ── Auto-crear tabla si no existe ─────────────────────────────
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ordenes_compra_seq (
-                id           SERIAL PRIMARY KEY,
-                logistica_id INTEGER REFERENCES logistica_externa(id),
-                numero_oc    VARCHAR(50) NOT NULL,
-                url_pdf      TEXT,
-                public_id    TEXT,
-                fecha_emision TIMESTAMP DEFAULT NOW()
-            );
-        """)
-        conexion.commit()
-
-        public_id = None
-
-        # 1. Usar el public_id real guardado en la tabla (más confiable)
+        # Intentar obtener el PDF guardado en la tabla
         try:
             cursor.execute("""
-                SELECT public_id, url_pdf FROM ordenes_compra_seq
+                SELECT pdf_bytes, numero_oc FROM ordenes_compra_seq
                 WHERE logistica_id = %s
                 ORDER BY id DESC LIMIT 1
             """, (id,))
             row = cursor.fetchone()
-            if row:
-                if row[0]:
-                    public_id = row[0]
-                elif row[1]:
-                    # Compatibilidad: extraer public_id de la URL guardada
-                    partes = row[1].split('/upload/')
-                    if len(partes) == 2:
-                        parte_path = partes[1]
-                        if parte_path.startswith('s--'):
-                            segmentos = parte_path.split('/')
-                            parte_path = '/'.join(segmentos[2:]) if len(segmentos) > 2 else parte_path
-                        public_id = parte_path.rsplit('.', 1)[0]
-        except Exception as e_sel:
+        except Exception:
             conexion.rollback()
-            print(f"[pdf-oc] Error al leer ordenes_compra_seq: {e_sel}")
+            row = None
 
-        # 2. Fallback: construir public_id canónico desde código de venta
-        if not public_id:
-            try:
-                cursor.execute("""
-                    SELECT v.codigo_venta
-                    FROM logistica_externa l
-                    JOIN ventas v ON l.venta_id = v.id
-                    WHERE l.id = %s
-                """, (id,))
-                fila = cursor.fetchone()
-                if fila:
-                    cod_venta = fila[0]
-                    public_id = f"ordenes_compra/OC-{id}-{cod_venta}"
-                    print(f"[pdf-oc] Fallback public_id: {public_id}")
-            except Exception as e_fb:
-                print(f"[pdf-oc] Error en fallback: {e_fb}")
-
-        if not public_id:
-            return jsonify({
-                'error': (
-                    'No hay Orden de Compra generada para este requerimiento. '
-                    'Primero genera la OC desde el botón "Aprobar y generar Orden de Compra".'
-                )
-            }), 404
-
-        # 3. Generar URL firmada válida 60 seg y descargar server-side
-        url_firmada, _ = cloudinary.utils.cloudinary_url(
-            public_id,
-            resource_type='raw',
-            sign_url=True,
-            expires_at=int(time.time()) + 60,
-            secure=True,
-        )
-
-        try:
-            req = urllib.request.Request(
-                url_firmada,
-                headers={'User-Agent': 'InnovaMobili/1.0'}
+        if row and row[0]:
+            # PDF encontrado en DB — servir directamente
+            pdf_bytes = bytes(row[0])
+            numero_oc = row[1] or f'OC-{id}'
+            return FlaskResponse(
+                pdf_bytes,
+                mimetype='application/pdf',
+                headers={
+                    'Content-Disposition': f'inline; filename="{numero_oc}.pdf"',
+                    'Content-Length':      str(len(pdf_bytes)),
+                    'Cache-Control':       'no-store',
+                }
             )
-            with urllib.request.urlopen(req, timeout=25) as resp:
-                pdf_bytes = resp.read()
-        except urllib.error.HTTPError as http_err:
-            return jsonify({
-                'error': f'Cloudinary devolvió {http_err.code}. Regenera la Orden de Compra.'
-            }), 502
 
-        # 4. Servir con Content-Type correcto para que el browser lo abra como PDF
-        return FlaskResponse(
-            pdf_bytes,
-            mimetype='application/pdf',
-            headers={
-                'Content-Disposition': 'inline; filename="orden-de-compra.pdf"',
-                'Content-Length':      str(len(pdf_bytes)),
-                'Cache-Control':       'no-store',
-            }
-        )
+        # Sin PDF guardado: verificar que existe el registro de logística
+        cursor.execute("""
+            SELECT l.id FROM logistica_externa l WHERE l.id = %s
+        """, (id,))
+        if not cursor.fetchone():
+            return jsonify({'error': 'Registro de logística no encontrado.'}), 404
+
+        return jsonify({
+            'error': (
+                'No hay Orden de Compra generada para este requerimiento. '
+                'Haz clic en "Generar OC" para crearla.'
+            )
+        }), 404
 
     except Exception as e:
         import traceback; traceback.print_exc()
