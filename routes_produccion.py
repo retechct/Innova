@@ -1915,13 +1915,19 @@ def registrar_pago_proveedor(id):
 @produccion_bp.route('/api/logistica/<int:id>/pdf-oc', methods=['GET'])
 def servir_pdf_oc(id):
     """
-    Genera una URL firmada de Cloudinary (válida 60 seg) y redirige al cliente.
-    Evita el proxy server-side que fallaba con 401 en recursos raw privados.
+    Proxy server-side: descarga el PDF desde Cloudinary usando la URL firmada
+    y lo sirve al browser con Content-Type: application/pdf correcto.
+
+    Cloudinary sirve recursos raw con Content-Type: application/octet-stream,
+    lo que impide que el browser los renderice como PDF.
+    El proxy fuerza el Content-Type correcto y evita ese problema.
     """
     import time
+    import urllib.request
+    import urllib.error
     import cloudinary
     import cloudinary.utils
-    from flask import redirect
+    from flask import Response as FlaskResponse
 
     conexion = None
     try:
@@ -1935,6 +1941,7 @@ def servir_pdf_oc(id):
                 logistica_id INTEGER REFERENCES logistica_externa(id),
                 numero_oc    VARCHAR(50) NOT NULL,
                 url_pdf      TEXT,
+                public_id    TEXT,
                 fecha_emision TIMESTAMP DEFAULT NOW()
             );
         """)
@@ -1952,28 +1959,23 @@ def servir_pdf_oc(id):
             row = cursor.fetchone()
             if row:
                 if row[0]:
-                    # public_id guardado directamente — el más confiable
                     public_id = row[0]
                 elif row[1]:
                     # Compatibilidad: extraer public_id de la URL guardada
                     partes = row[1].split('/upload/')
                     if len(partes) == 2:
-                        # Quitar la firma si hay (/s--xxx--/) y la extensión
                         parte_path = partes[1]
                         if parte_path.startswith('s--'):
-                            # formato firmado: s--firma--/v123/folder/file.pdf
                             segmentos = parte_path.split('/')
-                            # saltar firma (s--) y versión (v123)
                             parte_path = '/'.join(segmentos[2:]) if len(segmentos) > 2 else parte_path
                         public_id = parte_path.rsplit('.', 1)[0]
         except Exception as e_sel:
             conexion.rollback()
             print(f"[pdf-oc] Error al leer ordenes_compra_seq: {e_sel}")
 
-        # 2. Fallback: listar en Cloudinary para encontrar el archivo real
+        # 2. Fallback: construir public_id canónico desde código de venta
         if not public_id:
             try:
-                import cloudinary.api as cl_api
                 cursor.execute("""
                     SELECT v.codigo_venta
                     FROM logistica_externa l
@@ -1983,7 +1985,6 @@ def servir_pdf_oc(id):
                 fila = cursor.fetchone()
                 if fila:
                     cod_venta = fila[0]
-                    # Intentar con el public_id canónico
                     public_id = f"ordenes_compra/OC-{id}-{cod_venta}"
                     print(f"[pdf-oc] Fallback public_id: {public_id}")
             except Exception as e_fb:
@@ -1997,7 +1998,7 @@ def servir_pdf_oc(id):
                 )
             }), 404
 
-        # 3. Generar URL firmada válida por 60 segundos y redirigir
+        # 3. Generar URL firmada válida 60 seg y descargar server-side
         url_firmada, _ = cloudinary.utils.cloudinary_url(
             public_id,
             resource_type='raw',
@@ -2005,7 +2006,29 @@ def servir_pdf_oc(id):
             expires_at=int(time.time()) + 60,
             secure=True,
         )
-        return redirect(url_firmada, code=302)
+
+        try:
+            req = urllib.request.Request(
+                url_firmada,
+                headers={'User-Agent': 'InnovaMobili/1.0'}
+            )
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                pdf_bytes = resp.read()
+        except urllib.error.HTTPError as http_err:
+            return jsonify({
+                'error': f'Cloudinary devolvió {http_err.code}. Regenera la Orden de Compra.'
+            }), 502
+
+        # 4. Servir con Content-Type correcto para que el browser lo abra como PDF
+        return FlaskResponse(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': 'inline; filename="orden-de-compra.pdf"',
+                'Content-Length':      str(len(pdf_bytes)),
+                'Cache-Control':       'no-store',
+            }
+        )
 
     except Exception as e:
         import traceback; traceback.print_exc()
