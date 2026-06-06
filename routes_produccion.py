@@ -2021,11 +2021,12 @@ def servir_pdf_oc(id):
     align-items: center;
     gap: 18px;
   }}
-  /* Logo SVG inline */
+  /* Logo */
   .logo-mark {{
-    width: 56px;
-    height: 56px;
+    height: 80px;
+    width: auto;
     flex-shrink: 0;
+    filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.25));
   }}
   .brand-text {{}}
   .brand-name {{
@@ -2299,17 +2300,9 @@ def servir_pdf_oc(id):
   <!-- HEADER -->
   <div class="header">
     <div class="header-left">
-      <!-- Logo mark inline SVG -->
-      <svg class="logo-mark" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="56" height="56" fill="#2c1f0e"/>
-        <!-- Forma geométrica dorada: diamante/rombo -->
-        <polygon points="28,6 50,28 28,50 6,28" fill="#c9a84c" opacity="0.9"/>
-        <polygon points="28,13 44,28 28,43 12,28" fill="#1a120b"/>
-        <!-- I central estilizada -->
-        <rect x="24" y="20" width="8" height="2" fill="#c9a84c"/>
-        <rect x="26.5" y="22" width="3" height="12" fill="#c9a84c"/>
-        <rect x="24" y="34" width="8" height="2" fill="#c9a84c"/>
-      </svg>
+      <!-- Logo real (mismo archivo que usa el contrato de venta) -->
+      <img src="https://innova-4cnn.onrender.com/imagenes/Logo3.png" class="logo-mark"
+           onerror="this.style.display='none'">
       <div class="brand-text">
         <div class="brand-name">Innova <em>Möbili</em></div>
         <div class="brand-sub">Muebles de diseño a medida &nbsp;·&nbsp; RUC 20600768175</div>
