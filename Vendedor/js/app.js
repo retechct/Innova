@@ -337,24 +337,26 @@ async function verSeguimientoVendedor(codigo) {
 /* ================================================================= */
 /* --- LOGÍSTICA EXTERNA (PROCURA) --- */
 /* ================================================================= */
-// ── Helper PDF: abre el PDF directamente (Cloudinary resource_type='image')
-function _abrirPDF(urlPdf) {
-    if (!urlPdf) return;
-    // Las OC ahora se suben con resource_type='image' en Cloudinary,
-    // por lo que la URL ya abre directamente como PDF en el browser.
-    // Normalizamos fl_attachment y corregimos URLs legacy con /raw/upload/.
-    let url = urlPdf
-        .replace(/\/upload\/fl_attachment:[^/]+\//g, '/upload/')
-        .replace(/\/raw\/upload\//g, '/image/upload/');
-    window.open(url, '_blank');
+// ── Helper PDF: abre el PDF usando el visor de Google Docs como fallback
+// Evita ERR_INVALID_RESPONSE que produce fl_attachment en Cloudinary raw
+function _abrirPDF(urlPdf, logisticaId) {
+    if (!urlPdf && !logisticaId) return;
+    // Si tenemos el id de logística, usamos el proxy Flask que sirve el PDF
+    // con Content-Type correcto (Cloudinary devuelve ERR_INVALID_RESPONSE directo).
+    if (logisticaId) {
+        window.open(`${API_URL}/api/logistica/${logisticaId}/pdf-oc`, '_blank');
+        return;
+    }
+    // Fallback: abrir la URL de Cloudinary directo (puede no funcionar en todos los browsers)
+    window.open(urlPdf, '_blank');
 }
-// Devuelve la URL directa del PDF para pegar en WhatsApp u otro canal.
-// Con resource_type='image' en Cloudinary la URL ya es pública y abre sin intermediarios.
-function _urlPdfPublica(urlPdf) {
-    if (!urlPdf) return urlPdf;
-    return urlPdf
-        .replace(/\/upload\/fl_attachment:[^/]+\//g, '/upload/')
-        .replace(/\/raw\/upload\//g, '/image/upload/');
+// URL para compartir por WhatsApp — usamos el proxy Flask también,
+// así el proveedor puede abrir el PDF desde el link del mensaje.
+function _urlPdfPublica(urlPdf, logisticaId) {
+    if (logisticaId) {
+        return `${API_URL}/api/logistica/${logisticaId}/pdf-oc`;
+    }
+    return urlPdf || '';
 }
 // ── Helper: normalizar número peruano para wa.me ──────────────────────────────
 function _normalizarTelWA(raw) {
@@ -965,7 +967,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                     `📋 *Ref. pedido:* ${item.codigo_venta}`,
                     ``,
                     `📄 *Orden de Compra (PDF):*`,
-                    `👉 ${_urlPdfPublica(dOC.url_pdf)}`,
+                    `👉 ${_urlPdfPublica(dOC.url_pdf, item.id)}`,
                     ``,
                     `Por favor confirme la recepción de este documento. Gracias 🙏`,
                     ``,
@@ -984,7 +986,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                                 ${dOC.numero_oc ? `<br><b>N° OC: ${dOC.numero_oc}</b>` : ''}
                             </div>
                             <div style="margin-bottom:10px;">
-                                <a href="#" onclick="_abrirPDF('${dOC.url_pdf}');return false;"
+                                <a href="#" onclick="_abrirPDF('${dOC.url_pdf}', ${item.id});return false;"
                                    style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;
                                           border:1px solid #e2e8f0;border-radius:6px;padding:8px 14px;
                                           font-size:12px;font-weight:700;color:#0f172a;text-decoration:none;">
