@@ -84,11 +84,28 @@ function imAbrirPanel(tipo) {
   if (tipo === 'login') {
     formLogin.classList.add('active');
     btnLogin.classList.add('active-panel');
+    // Cargar sedes para el dropdown (solo si aún no fueron cargadas)
+    _imCargarSedes();
   } else {
     formReg.classList.add('active');
     btnLogin.classList.remove('active-panel');
   }
   wrapper.classList.add('visible');
+}
+
+async function _imCargarSedes() {
+  const sel = document.getElementById('im-login-sede');
+  if (!sel || sel.options.length > 1) return; // ya cargadas
+  try {
+    const res  = await fetch(`${API_URL}/api/sedes`);
+    const list = await res.json();
+    list.forEach(s => {
+      sel.innerHTML += `<option value="${s.id}">${s.nombre}</option>`;
+    });
+    // Mostrar el wrapper una vez cargadas
+    const wrapper = document.getElementById('im-sede-wrapper');
+    if (wrapper) wrapper.style.display = 'block';
+  } catch(e) { console.warn('No se pudieron cargar sedes', e); }
 }
 
 // ── Scroll suave ─────────────────────────────────────────────────
@@ -132,11 +149,20 @@ async function imEntrarAlSistema() {
     if (data.exito) {
       usuarioActivo = data.usuario;
       usuarioActivo.horaLogin = new Date().toLocaleTimeString();
-      // FIX-2: trabajadores que entran por el landing no pasan por el dropdown
-      // de sede. Usamos area_asignada como valor de tienda para que carrito.js
-      // no envíe siempre 'Sede Central' en las ventas.
-      if (!usuarioActivo.tienda && usuarioActivo.area_asignada) {
+
+      // Si es rol ERP, capturar la sede seleccionada
+      const sedeWrapper = document.getElementById('im-sede-wrapper');
+      const sedeSelect  = document.getElementById('im-login-sede');
+      if (ROLES_ERP.includes(usuarioActivo.rol) && sedeSelect && sedeSelect.value) {
+        usuarioActivo.sede_id = sedeSelect.value;
+        usuarioActivo.tienda  = sedeSelect.options[sedeSelect.selectedIndex].text;
+      } else if (!usuarioActivo.tienda && usuarioActivo.area_asignada) {
         usuarioActivo.tienda = usuarioActivo.area_asignada;
+      }
+
+      // Mostrar dropdown de sede para roles ERP en próximos logins
+      if (sedeWrapper) {
+        sedeWrapper.style.display = ROLES_ERP.includes(usuarioActivo.rol) ? 'block' : 'none';
       }
       localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
       // Guardar token JWT para las peticiones al API
@@ -171,9 +197,11 @@ async function imEntrarAlSistema() {
       const esAlmacen  = usuarioActivo.rol === 'ALMACEN';
       changeView(esChofer ? 'taller' : esOperario ? 'taller' : esAlmacen ? 'inventario' : 'catalogo');
 
+      const sedeTexto = usuarioActivo.tienda && usuarioActivo.tienda !== '— Selecciona tu sede —'
+        ? `Sede: ${usuarioActivo.tienda}` : 'Sin sede asignada';
       Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'success',
         title:`¡Hola, ${usuarioActivo.nombre.split(' ')[0]}!`,
-        text:`Bienvenido al sistema Innova Möbili.`,
+        text: sedeTexto,
         timer: 2200, showConfirmButton: false });
     } else {
       document.getElementById('login-pin').value = '';

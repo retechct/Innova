@@ -178,7 +178,7 @@ async function agregarMetodoPago() {
     }
 
     if (isNaN(monto) || monto <= 0) return Swal.fire('Error', 'Ingrese un monto mayor a 0', 'warning');
-    if (!empresa) return Swal.fire('Falta empresa', '¿A qué empresa entró el dinero? Selecciona una.', 'warning');
+    if (tipo !== 'Efectivo' && !empresa) return Swal.fire('Falta empresa', '¿A qué empresa entró el dinero? Selecciona una.', 'warning');
     if (tipo !== 'Efectivo' && operacion.trim() === '') return Swal.fire('Error', 'El Número de Operación es obligatorio para transferencias o POS', 'warning');
 
     // Validación obligatoria de foto
@@ -876,11 +876,14 @@ function imprimirContratoElegante() {
         if (!inputNombre) return;
         clearInterval(intervalo);
 
-        // Contenedor wrapper con posición relativa
-        const wrapper = inputNombre.parentElement;
-        wrapper.style.position = 'relative';
+        // Contenedor wrapper con posición relativa SOLO para input + dropdown
+        // (el botón ➕ va fuera de este wrapper para no romper el absolute)
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'position:relative; display:block;';
+        inputNombre.parentElement.insertBefore(wrapper, inputNombre);
+        wrapper.appendChild(inputNombre);
 
-        // Botón ➕ Registrar cliente
+        // Botón ➕ Registrar cliente (va DESPUÉS del wrapper, no dentro)
         const btnReg = document.createElement('button');
         btnReg.type = 'button';
         btnReg.id   = 'btn-reg-cliente';
@@ -896,8 +899,7 @@ function imprimirContratoElegante() {
         btnReg.addEventListener('mouseenter', () => btnReg.style.background = '#dbeafe');
         btnReg.addEventListener('mouseleave', () => btnReg.style.background = '#eff6ff');
         btnReg.addEventListener('click', () => _abrirModalReg(inputNombre.value.trim()));
-        // Insertar debajo del input de nombre
-        inputNombre.insertAdjacentElement('afterend', btnReg);
+        wrapper.parentElement.insertBefore(btnReg, wrapper.nextSibling);
 
         const dropdown = document.createElement('div');
         dropdown.id = 'cliente-sugerencias';
