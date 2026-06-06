@@ -899,42 +899,38 @@ function imprimirContratoElegante() {
         // Insertar debajo del input de nombre
         inputNombre.insertAdjacentElement('afterend', btnReg);
 
-        // Dropdown de sugerencias
         const dropdown = document.createElement('div');
         dropdown.id = 'cliente-sugerencias';
         dropdown.style.cssText = `
-            position:fixed; z-index:99999; background:#fff;
+            position:absolute; top:calc(100% + 2px); left:0; right:0;
+            z-index:2147483647; background:#fff;
             border:1px solid #d1d5db; border-radius:8px;
             box-shadow:0 8px 24px rgba(0,0,0,.18);
             max-height:240px; overflow-y:auto;
             display:none;
         `;
+        // El wrapper ya tiene position:relative, así que absolute lo ancla bien
         wrapper.appendChild(dropdown);
-
+ 
         let debounceTimer = null;
-
+ 
         inputNombre.addEventListener('input', () => {
             clearTimeout(debounceTimer);
             const q = inputNombre.value.trim();
             if (q.length < 1) { dropdown.style.display = 'none'; return; }
-
+ 
             debounceTimer = setTimeout(async () => {
                 try {
                     const resp = await apiFetch(`${API_URL}/api/clientes/buscar?q=${encodeURIComponent(q)}`);
                     const lista = await resp.json();
-
+ 
                     if (!lista.length) {
-                        // Sin resultados: mostrar opción de registrar
                         dropdown.innerHTML = `
                             <div style="padding:12px 14px; font-size:13px; color:#6b7280;">
                                 No hay clientes registrados con ese nombre.
                                 <br><span style="color:#1d4ed8; cursor:pointer; font-weight:600;"
                                           id="dd-link-registrar">➕ Registrar a "${q}" ahora</span>
                             </div>`;
-                        const rect2 = inputNombre.getBoundingClientRect();
-                        dropdown.style.top   = (rect2.bottom + window.scrollY + 2) + 'px';
-                        dropdown.style.left  = rect2.left + 'px';
-                        dropdown.style.width = rect2.width + 'px';
                         dropdown.style.display = 'block';
                         document.getElementById('dd-link-registrar')
                             ?.addEventListener('click', () => {
@@ -943,7 +939,7 @@ function imprimirContratoElegante() {
                             });
                         return;
                     }
-
+ 
                     dropdown.innerHTML = lista.map(c => `
                         <div class="cli-item"
                              data-nombre="${c.nombre}"
@@ -959,7 +955,7 @@ function imprimirContratoElegante() {
                           ${c.email    ? `<span style="color:#9ca3af;margin-left:8px;font-size:12px;">${c.email}</span>` : ''}
                         </div>
                     `).join('');
-
+ 
                     dropdown.querySelectorAll('.cli-item').forEach(item => {
                         item.addEventListener('mouseenter', () => item.style.background = '#f0f9ff');
                         item.addEventListener('mouseleave', () => item.style.background = '');
@@ -971,26 +967,28 @@ function imprimirContratoElegante() {
                             dropdown.style.display = 'none';
                         });
                     });
-
-                    // Posicionar justo debajo del input, sobre todo lo demás
-                    const rect = inputNombre.getBoundingClientRect();
-                    dropdown.style.top    = (rect.bottom + window.scrollY + 2) + 'px';
-                    dropdown.style.left   = rect.left + 'px';
-                    dropdown.style.width  = rect.width + 'px';
+ 
                     dropdown.style.display = 'block';
                 } catch (err) {
                     console.warn('Autocomplete clientes:', err);
                 }
             }, 180);
         });
-
-        // Cerrar dropdown al hacer click fuera
+ 
+        // Usar 'mousedown' en el dropdown para prevenir que el blur del input
+        // cierre el dropdown antes de que el click se procese
+        dropdown.addEventListener('mousedown', e => e.preventDefault());
+ 
+        // Cerrar dropdown al hacer click/touch fuera del wrapper
         document.addEventListener('click', e => {
-            if (!wrapper.contains(e.target)) dropdown.style.display = 'none';
+            if (!wrapper.contains(e.target) && e.target !== dropdown) {
+                dropdown.style.display = 'none';
+            }
         });
+        // Soporte táctil: cerrar también en touchstart fuera
+        document.addEventListener('touchstart', e => {
+            if (!wrapper.contains(e.target)) dropdown.style.display = 'none';
+        }, { passive: true });
+        // ── fin del bloque dropdown ───────────────────────────────────────────
     }, 300);
 })();
-
-// ==========================================
-// MÓDULO DE TALLER: DETALLES E IMPRESIÓN
-// ==========================================

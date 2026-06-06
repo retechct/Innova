@@ -341,14 +341,23 @@ async function verSeguimientoVendedor(codigo) {
 // Evita ERR_INVALID_RESPONSE que produce fl_attachment en Cloudinary raw
 function _abrirPDF(urlPdf) {
     if (!urlPdf) return;
-    // Limpiar fl_attachment si venía en la URL
-    let url = urlPdf.replace('/upload/fl_attachment/', '/upload/');
-    // Para Cloudinary raw: forzar entrega como PDF inline
-    // fl_attachment:false hace que el browser lo abra en lugar de descargarlo
+    // Normalizar: quitar fl_attachment si venía en la URL previa
+    let url = urlPdf.replace(/\/upload\/fl_attachment:[^/]+\//g, '/upload/');
+    // Usar Google Docs Viewer para evitar ERR_INVALID_RESPONSE con PDFs raw de Cloudinary
+    const visor = `https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(url)}`;
+    window.open(visor, '_blank');
+}
+// ── _urlPdfPublica — NUEVA función helper (agregar cerca de _abrirPDF) ────
+// Devuelve la URL que se puede pegar en WhatsApp / copiar y que abre el PDF.
+// Para Cloudinary raw usamos el visor de Google, para otras URLs el raw directo.
+function _urlPdfPublica(urlPdf) {
+    if (!urlPdf) return urlPdf;
+    let url = urlPdf.replace(/\/upload\/fl_attachment:[^/]+\//g, '/upload/');
+    // Solo aplicar el visor si es un recurso raw de Cloudinary
     if (url.includes('res.cloudinary.com') && url.includes('/raw/upload/')) {
-        url = url.replace('/raw/upload/', '/raw/upload/fl_attachment:false/');
+        return `https://docs.google.com/viewer?url=${encodeURIComponent(url)}`;
     }
-    window.open(url, '_blank');
+    return url;
 }
 // ── Helper: normalizar número peruano para wa.me ──────────────────────────────
 function _normalizarTelWA(raw) {
@@ -959,7 +968,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                     `📋 *Ref. pedido:* ${item.codigo_venta}`,
                     ``,
                     `📄 *Orden de Compra (PDF):*`,
-                    `👉 ${dOC.url_pdf}`,
+                    `👉 ${_urlPdfPublica(dOC.url_pdf)}`,
                     ``,
                     `Por favor confirme la recepción de este documento. Gracias 🙏`,
                     ``,
