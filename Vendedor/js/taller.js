@@ -2468,7 +2468,7 @@ async function cargarVistaStockProduccion(contenedor) {
 
 // ── Stock del Carpintero de Sofás (Operario con area ESTRUCTURAS_MUEBLES) ──
 async function cargarVistaStockCarpinteroSofa(contenedor) {
-    contenedor.innerHTML = `<div style="padding:16px;" id="stock-carp-wrapper">Cargando...</div>`;
+    contenedor.innerHTML = `<div style="padding:16px;box-sizing:border-box;width:100%;overflow-x:hidden;" id="stock-carp-wrapper">Cargando...</div>`;
     await _cargarContenidoStockSofa('stock-carp-wrapper', false);
 }
 
@@ -2488,7 +2488,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
         const entregados  = data.filter(e => e.estado === 'entregado');
 
         document.getElementById(contenedorId).innerHTML = `
-        <div style="max-width:1400px;">
+        <div style="max-width:1000px;width:100%;box-sizing:border-box;margin:0 auto;">
           <!-- Header: título área + botón registrar -->
           <div style="display:flex;justify-content:space-between;align-items:center;
                       margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #e2e8f0;flex-wrap:wrap;gap:10px;">
@@ -2507,7 +2507,8 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             </button>
           </div>
 
-          <!-- ── Buscador de contratos pendientes ── -->
+          <!-- ── Buscador de contratos pendientes (solo operario carpintero, no gestor admin) ── -->
+          ${!esAdmin ? `
           <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
             <div style="font-size:11px;font-weight:800;color:#7c3aed;letter-spacing:0.08em;margin-bottom:8px;">
               <i class="fa-solid fa-magnifying-glass"></i> BUSCAR CONTRATO PENDIENTE
@@ -2524,7 +2525,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
               </button>
             </div>
             <div id="se-contrato-resultado-${contenedorId}" style="margin-top:10px;"></div>
-          </div>
+          </div>` : ''}
 
           <!-- Sub-tabs: Disponibles / Entregados -->
           <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
@@ -2808,13 +2809,13 @@ function _renderListaEstructuras(lista) {
             <p style="font-weight:700;font-size:14px;color:#475569;margin:0;">Sin registros</p>
             <p style="font-size:12px;margin:4px 0 0;">Registra la primera estructura con el botón de arriba.</p>
         </div>`;
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%, 250px),1fr));gap:14px;max-width:1400px;">` +
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,240px));gap:14px;max-width:1400px;margin:0 auto;">` +
     lista.map(e => `
       <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;
                   overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
         <div style="position:relative;">
           <img src="${e.foto_url || 'imagenes/sin_foto.jpg'}"
-               style="width:100%;height:150px;object-fit:cover;display:block;"
+               style="width:100%;height:clamp(120px,18vw,160px);object-fit:cover;display:block;"
                onerror="this.src='imagenes/sin_foto.jpg'">
           <span style="position:absolute;top:8px;right:8px;
                        background:${e.estado==='disponible'?'#dcfce7':'#f1f5f9'};

@@ -341,13 +341,15 @@ async function verSeguimientoVendedor(codigo) {
 // Evita ERR_INVALID_RESPONSE que produce fl_attachment en Cloudinary raw
 function _abrirPDF(urlPdf) {
     if (!urlPdf) return;
-    // Limpiar fl_attachment si ya estaba en la URL guardada
+    // Limpiar fl_attachment si venía en la URL
     let url = urlPdf.replace('/upload/fl_attachment/', '/upload/');
-    // Usar Google Docs viewer: abre el PDF inline en cualquier browser sin errores
-    const visor = 'https://docs.google.com/viewer?embedded=true&url=' + encodeURIComponent(url);
-    window.open(visor, '_blank');
+    // Para Cloudinary raw: forzar entrega como PDF inline
+    // fl_attachment:false hace que el browser lo abra en lugar de descargarlo
+    if (url.includes('res.cloudinary.com') && url.includes('/raw/upload/')) {
+        url = url.replace('/raw/upload/', '/raw/upload/fl_attachment:false/');
+    }
+    window.open(url, '_blank');
 }
-
 // ── Helper: normalizar número peruano para wa.me ──────────────────────────────
 function _normalizarTelWA(raw) {
     if (!raw) return '';
