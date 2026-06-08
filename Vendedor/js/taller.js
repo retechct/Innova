@@ -2978,7 +2978,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
           </div>` : ''}
 
           <!-- Sub-tabs: Disponibles / Entregados -->
-          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
             <button id="subtab-disp-${contenedorId}" onclick="_filtrarStockSofa('disponible','${contenedorId}')"
                 style="flex:1;min-width:140px;padding:10px;border-radius:8px;border:2px solid #7c3aed;
                        background:#7c3aed;color:white;font-weight:800;cursor:pointer;font-size:12px;">
@@ -2989,6 +2989,26 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
                        background:#f0fdf4;color:#15803d;font-weight:800;cursor:pointer;font-size:12px;">
                 <i class="fa-solid fa-circle-check"></i> Entregados (${entregados.length})
             </button>
+          </div>
+
+          <!-- Radio buttons: solo visibles en tab "En stock" -->
+          <div id="radio-subtipo-${contenedorId}"
+               style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
+            ${['todos','estandar','personalizada'].map((v,i) => {
+                const labels = ['Todos','⭐ Estándar','📐 Personalizadas'];
+                const checked = i === 0 ? 'checked' : '';
+                return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;
+                                      padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;
+                                      border:1.5px solid ${i===0?'#7c3aed':'#e2e8f0'};
+                                      background:${i===0?'#f5f3ff':'white'};
+                                      color:${i===0?'#7c3aed':'#64748b'};"
+                               id="radio-label-${v}-${contenedorId}">
+                          <input type="radio" name="subtipo-${contenedorId}" value="${v}" ${checked}
+                                 style="accent-color:#7c3aed;"
+                                 onchange="_filtrarSubtipoSofa('${contenedorId}')">
+                          ${labels[i]}
+                        </label>`;
+            }).join('')}
           </div>
 
           <div id="lista-est-${contenedorId}">
@@ -3178,8 +3198,62 @@ async function _buscarContratoPendiente(contenedorId) {
 
 function _filtrarStockSofa(estado, contenedorId) {
     const data = window._stockEstructurasData || [];
+
+    // Estilo activo/inactivo en los tabs
+    const btnDisp = document.getElementById(`subtab-disp-${contenedorId}`);
+    const btnEnt  = document.getElementById(`subtab-ent-${contenedorId}`);
+    if (btnDisp && btnEnt) {
+        if (estado === 'disponible') {
+            btnDisp.style.background = '#7c3aed'; btnDisp.style.color = 'white';
+            btnEnt.style.background  = '#f0fdf4'; btnEnt.style.color  = '#15803d';
+        } else {
+            btnEnt.style.background  = '#15803d'; btnEnt.style.color  = 'white';
+            btnDisp.style.background = '#f5f3ff'; btnDisp.style.color = '#7c3aed';
+        }
+    }
+
+    // Mostrar radio buttons solo en "En stock", ocultar en "Entregados"
+    const radioWrap = document.getElementById(`radio-subtipo-${contenedorId}`);
+    if (radioWrap) {
+        radioWrap.style.display = estado === 'disponible' ? 'flex' : 'none';
+        // Resetear a "Todos" al cambiar de tab
+        const radioTodos = radioWrap.querySelector(`input[value="todos"]`);
+        if (radioTodos) {
+            radioTodos.checked = true;
+            _actualizarEstiloRadios(contenedorId, 'todos');
+        }
+    }
+
+    const lista = data.filter(e => e.estado === estado);
     document.getElementById(`lista-est-${contenedorId}`).innerHTML =
-        _renderListaEstructuras(data.filter(e => e.estado === estado));
+        _renderListaEstructuras(lista);
+}
+
+function _filtrarSubtipoSofa(contenedorId) {
+    const data   = window._stockEstructurasData || [];
+    const radios = document.querySelectorAll(`input[name="subtipo-${contenedorId}"]`);
+    let subtipo  = 'todos';
+    radios.forEach(r => { if (r.checked) subtipo = r.value; });
+
+    _actualizarEstiloRadios(contenedorId, subtipo);
+
+    let lista = data.filter(e => e.estado === 'disponible');
+    if (subtipo === 'estandar')     lista = lista.filter(e => e.medida_estandar);
+    if (subtipo === 'personalizada') lista = lista.filter(e => !e.medida_estandar);
+
+    document.getElementById(`lista-est-${contenedorId}`).innerHTML =
+        _renderListaEstructuras(lista);
+}
+
+function _actualizarEstiloRadios(contenedorId, activo) {
+    ['todos','estandar','personalizada'].forEach(v => {
+        const lbl = document.getElementById(`radio-label-${v}-${contenedorId}`);
+        if (!lbl) return;
+        const esActivo = v === activo;
+        lbl.style.border     = `1.5px solid ${esActivo ? '#7c3aed' : '#e2e8f0'}`;
+        lbl.style.background = esActivo ? '#f5f3ff' : 'white';
+        lbl.style.color      = esActivo ? '#7c3aed' : '#64748b';
+    });
 }
 
 function _toggleMedidasEstandar() {

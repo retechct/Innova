@@ -910,7 +910,9 @@ def obtener_logistica():
                        (SELECT CONCAT(modelo, ' · ', color_estructura) FROM maestro_sillas WHERE sku = l.sku LIMIT 1),
                        (SELECT CONCAT(modelo, ' · ', color_estructura) FROM maestro_butacas WHERE sku = l.sku LIMIT 1),
                        (SELECT nombre_diseno FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1)
-                   ) AS detalle_insumo
+                   ) AS detalle_insumo,
+                   COALESCE(l.categoria_insumo, 'OTRO')  AS categoria_insumo,
+                   l.estado_distribucion
             FROM logistica_externa l
             JOIN ventas v           ON l.venta_id    = v.id
             LEFT JOIN proveedores p ON l.proveedor_id = p.id
@@ -932,6 +934,8 @@ def obtener_logistica():
             "foto_url":                limpiar_foto(r[17]) if r[17] else "",
             "detalle_insumo":          r[18] or "",
             "url_cotizacion_adjunta":  r[19] if len(r) > 19 else None,
+            "categoria_insumo":        r[20] if len(r) > 20 else 'OTRO',
+            "estado_distribucion":     r[21] if len(r) > 21 else None,
         } for r in cursor.fetchall()]
         return jsonify(items), 200
     except Exception as e:
@@ -2141,7 +2145,10 @@ def generar_orden_compra(id):
 
 @produccion_bp.route('/api/logistica/<int:id>/registrar-pago', methods=['POST'])
 def registrar_pago_proveedor(id):
-    """Sube voucher de pago a Cloudinary y actualiza estado."""
+    """Sube voucher de pago a Cloudinary y actualiza estado.
+    Detecta automáticamente si el insumo es TELA o ESTRUCTURAL
+    y asigna estado_distribucion correspondiente.
+    """
     if 'comprobante' not in request.files:
         return jsonify({'error': 'Campo comprobante es obligatorio'}), 400
     archivo = request.files['comprobante']
@@ -2150,15 +2157,63 @@ def registrar_pago_proveedor(id):
         url_voucher = resp.get('secure_url')
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+
+        # Agregar columnas si aún no existen (idempotente)
+        cursor.execute("""
+            ALTER TABLE logistica_externa
+                ADD COLUMN IF NOT EXISTS categoria_insumo   VARCHAR(30) DEFAULT 'OTRO',
+                ADD COLUMN IF NOT EXISTS estado_distribucion VARCHAR(30) DEFAULT NULL;
+        """)
+
+        # Leer el SKU de esta fila para detectar la categoría
+        cursor.execute("SELECT sku FROM logistica_externa WHERE id = %s", (id,))
+        row_sku = cursor.fetchone()
+        sku = (row_sku[0] or '').strip() if row_sku else ''
+
+        # Detectar categoría cruzando con tablas maestro
+        categoria_insumo   = 'OTRO'
+        estado_distribucion = None
+
+        if sku:
+            cursor.execute("SELECT 1 FROM maestro_telas WHERE sku = %s LIMIT 1", (sku,))
+            if cursor.fetchone():
+                categoria_insumo    = 'TELA'
+                estado_distribucion = 'En espera'   # el operario decide cuándo está listo
+            else:
+                cursor.execute("""
+                    SELECT 1 FROM (
+                        SELECT sku FROM maestro_tableros      WHERE sku = %s
+                        UNION ALL
+                        SELECT sku FROM maestro_bases         WHERE sku = %s
+                        UNION ALL
+                        SELECT sku FROM maestro_bases_comedor WHERE sku = %s
+                        UNION ALL
+                        SELECT sku FROM maestro_sillas        WHERE sku = %s
+                        UNION ALL
+                        SELECT sku FROM maestro_butacas       WHERE sku = %s
+                    ) t LIMIT 1
+                """, (sku, sku, sku, sku, sku))
+                if cursor.fetchone():
+                    categoria_insumo    = 'ESTRUCTURAL'
+                    estado_distribucion = 'Listo para recojo'   # va directo a cola
+
         cursor.execute("""
             UPDATE logistica_externa
-            SET url_comprobante_pago = %s,
-                fecha_pago = NOW(),
-                estado     = 'Pagado'
+            SET url_comprobante_pago  = %s,
+                fecha_pago            = NOW(),
+                estado                = 'Pagado',
+                categoria_insumo      = %s,
+                estado_distribucion   = %s
             WHERE id = %s
-        """, (url_voucher, id))
+        """, (url_voucher, categoria_insumo, estado_distribucion, id))
+
         conexion.commit()
-        return jsonify({'exito': True, 'url': url_voucher}), 200
+        return jsonify({
+            'exito':               True,
+            'url':                 url_voucher,
+            'categoria_insumo':    categoria_insumo,
+            'estado_distribucion': estado_distribucion,
+        }), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
@@ -2166,7 +2221,44 @@ def registrar_pago_proveedor(id):
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
 
-@produccion_bp.route('/api/logistica/<int:id>/pdf-oc', methods=['GET'])
+@produccion_bp.route('/api/logistica/<int:id>/estado-distribucion', methods=['PATCH'])
+def actualizar_estado_distribucion(id):
+    """El operario de telas cambia el estado de distribución de un ítem pagado.
+    Solo aplica a ítems con categoria_insumo = 'TELA'.
+    Body: { "estado": "Listo para recojo" | "En espera" }
+    """
+    data   = request.get_json() or {}
+    estado = (data.get('estado') or '').strip()
+    estados_validos = ('Listo para recojo', 'En espera')
+    if estado not in estados_validos:
+        return jsonify({'error': f'Estado debe ser uno de: {estados_validos}'}), 400
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT categoria_insumo, estado
+            FROM logistica_externa WHERE id = %s
+        """, (id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Ítem no encontrado'}), 404
+        if row[1] != 'Pagado':
+            return jsonify({'error': 'Solo se puede cambiar la distribución de ítems pagados'}), 409
+        cursor.execute("""
+            UPDATE logistica_externa
+            SET estado_distribucion = %s
+            WHERE id = %s
+        """, (estado, id))
+        conexion.commit()
+        return jsonify({'exito': True, 'estado_distribucion': estado}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
 def servir_pdf_oc(id):
     """
     Genera y sirve la Orden de Compra como HTML con diseño corporativo.
