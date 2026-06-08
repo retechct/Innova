@@ -170,7 +170,13 @@ def obtener_cola_recojo():
                    COALESCE(i.foto_url, '') AS foto_url,
                    COALESCE(t.ticket_details_override, i.color_tela, '') AS especificaciones,
                    t.foto_evidencia, v.direccion_cliente, v.fecha_entrega, t.item_id,
-                   COALESCE(ut.nombre, 'Sin asignar') AS tapicero_nombre
+                   COALESCE(ut.nombre, 'Sin asignar') AS tapicero_nombre,
+                   CASE
+                       WHEN tela.id IS NOT NULL
+                            AND tela.estado_ticket NOT IN ('Terminado', 'Listo para Recojo', 'Recogido')
+                       THEN true
+                       ELSE false
+                   END AS bloqueado_por_telas
             FROM tickets_produccion t
             JOIN items_venta i    ON t.item_id  = i.id
             JOIN ventas v         ON i.venta_id = v.id
@@ -179,6 +185,9 @@ def obtener_cola_recojo():
                 ON tap.item_id = t.item_id
                AND tap.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS')
             LEFT JOIN usuarios ut ON tap.trabajador_asignado_id = ut.id
+            LEFT JOIN tickets_produccion tela
+                ON tela.item_id = t.item_id
+               AND tela.area_trabajo = 'CORTE_Y_CONTROL_TELAS'
             WHERE t.area_trabajo IN ('ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS')
               AND t.estado_ticket = 'Listo para Recojo'
             ORDER BY t.fecha_fin DESC;
@@ -192,6 +201,7 @@ def obtener_cola_recojo():
             "foto_evidencia": r[9] if r[9] else '', "direccion": r[10] or '',
             "fecha_entrega": r[11].strftime('%d/%m/%Y') if r[11] else 'S/F',
             "item_id": r[12], "tapicero": r[13],
+            "bloqueado_por_telas": bool(r[14]),
         } for r in cursor.fetchall()]
         return jsonify(resultado), 200
     except Exception as e:
@@ -291,6 +301,61 @@ def confirmar_recojo_estructura(id):
 
     except Exception as e:
         import traceback; traceback.print_exc()
+        if conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/logistica/<int:logistica_id>/confirmar-recojo-tela', methods=['POST'])
+def confirmar_recojo_tela(logistica_id):
+    """Chofer confirma recojo de telas: marca logística como Recibido
+    y pone el ticket de CORTE_Y_CONTROL_TELAS de esa venta en En Proceso."""
+    conexion = None
+    try:
+        conexion = get_db_connection()
+        conexion.autocommit = False
+        cursor = conexion.cursor()
+
+        # Leer estado anterior para evitar doble ejecución
+        cursor.execute("SELECT estado, venta_id FROM logistica_externa WHERE id = %s", (logistica_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Ítem de logística no encontrado'}), 404
+        estado_anterior, venta_id = row
+
+        if estado_anterior != 'Recibido':
+            cursor.execute("""
+                UPDATE logistica_externa
+                SET estado = 'Recibido'
+                WHERE id = %s
+            """, (logistica_id,))
+
+        # Desbloquear / activar ticket de CORTE_Y_CONTROL_TELAS del item de esta venta
+        desbloqueados = 0
+        if venta_id:
+            cursor.execute("""
+                UPDATE tickets_produccion
+                SET estado_ticket = 'En Proceso',
+                    fecha_inicio  = CURRENT_TIMESTAMP
+                WHERE estado_ticket = 'Bloqueado'
+                  AND area_trabajo = 'CORTE_Y_CONTROL_TELAS'
+                  AND item_id IN (
+                      SELECT id FROM items_venta WHERE venta_id = %s
+                  )
+                RETURNING id;
+            """, (venta_id,))
+            desbloqueados = cursor.rowcount
+
+        conexion.commit()
+        return jsonify({
+            'exito': True,
+            'mensaje': f'✅ Recojo de telas confirmado. {desbloqueados} ticket(s) de corte desbloqueado(s).',
+            'desbloqueados': desbloqueados
+        }), 200
+
+    except Exception as e:
         if conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
@@ -891,15 +956,46 @@ def actualizar_logistica():
             """, (logistica_id,))
             venta_row = cursor.fetchone()
             if venta_row:
+                venta_id_check = venta_row[0]
+                # Obtener tickets bloqueados de esta venta
                 cursor.execute("""
-                    UPDATE tickets_produccion
-                    SET estado_ticket = 'En Proceso',
-                        fecha_inicio  = CURRENT_TIMESTAMP
-                    WHERE estado_ticket = 'Bloqueado'
-                      AND item_id IN (
-                          SELECT id FROM items_venta WHERE venta_id = %s
-                      )
-                """, (venta_row[0],))
+                    SELECT t.id, t.area_trabajo, t.item_id
+                    FROM tickets_produccion t
+                    JOIN items_venta i ON t.item_id = i.id
+                    WHERE i.venta_id = %s AND t.estado_ticket = 'Bloqueado'
+                """, (venta_id_check,))
+                tickets_bloqueados = cursor.fetchall()
+
+                for tb_id, tb_area, tb_item_id in tickets_bloqueados:
+                    if tb_area in ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'):
+                        # Requiere estructuras + telas completas antes de desbloquear
+                        areas_req = ['ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS',
+                                     'CORTE_Y_CONTROL_TELAS', 'TELAS']
+                        placeholders_req = ','.join(['%s'] * len(areas_req))
+                        cursor.execute(f"""
+                            SELECT COUNT(*) FROM tickets_produccion
+                            WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
+                              AND estado_ticket IN ('Terminado', 'Listo para Recojo', 'Recogido')
+                        """, (tb_item_id, *areas_req))
+                        terminados_req = cursor.fetchone()[0]
+                        cursor.execute(f"""
+                            SELECT COUNT(*) FROM tickets_produccion
+                            WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
+                        """, (tb_item_id, *areas_req))
+                        total_req = cursor.fetchone()[0]
+                        if total_req > 0 and terminados_req >= total_req:
+                            cursor.execute("""
+                                UPDATE tickets_produccion
+                                SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
+                                WHERE id = %s AND estado_ticket = 'Bloqueado'
+                            """, (tb_id,))
+                    else:
+                        # Para áreas no-tapicería (cojines, despacho, etc.), desbloquear directamente
+                        cursor.execute("""
+                            UPDATE tickets_produccion
+                            SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
+                            WHERE id = %s AND estado_ticket = 'Bloqueado'
+                        """, (tb_id,))
 
         conexion.commit()
         return jsonify({'exito': True}), 200

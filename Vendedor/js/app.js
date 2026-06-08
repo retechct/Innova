@@ -1498,6 +1498,7 @@ function changeView(view) {
         if (typeof filtroAdminTaller !== 'undefined' && filtroAdminTaller === 'stock_produccion') {
             filtroAdminTaller = 'pendientes';
         }
+        if (mainTitleContainer) mainTitleContainer.style.display = 'none';
         mostrar('view-taller');
         cargarTicketsTaller();
     }
@@ -1529,6 +1530,7 @@ function changeView(view) {
     }
     else if (view === 'stock-produccion') {              // ← nuevo bloque
         filtroAdminTaller = 'stock_produccion';          // setear ANTES de mostrar y cargar
+        if (mainTitleContainer) mainTitleContainer.style.display = 'none';
         mostrar('view-taller');
         cargarTicketsTaller();
     }
