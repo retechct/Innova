@@ -1021,8 +1021,11 @@ async function _abrirEditarLogistica(item, proveedores) {
 
     // ETAPA 4 → Orden Enviada / En Tránsito: marcar recibido o actualizar estado
     if (['Orden Enviada', 'En Tránsito', 'Confirmado', 'Pagado'].includes(estado)) {
-        const opsEstado = ['Orden Enviada','Confirmado','En Tránsito','Pagado','Recibido','Cancelado']
-            .map(e => `<option value="${e}" ${e === estado ? 'selected' : ''}>${e}</option>`).join('');
+        let estadosPosibles = ['Orden Enviada','Confirmado','En Tránsito','Pagado','Listo para Recojo','Recibido','Cancelado'];
+        const opsEstado = estadosPosibles.map(e => {
+            const label = e === 'Listo para Recojo' ? '📢 Enviar a Cola de Recojo' : e;
+            return `<option value="${e}" ${e === estado ? 'selected' : ''}>${label}</option>`;
+        }).join('');
 
         const tienePago = !!item.url_comprobante_pago;
 

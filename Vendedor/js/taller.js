@@ -384,8 +384,9 @@ async function cargarVistaColaRecojoChofer(contenedor) {
         const res  = await apiFetch(`${API_URL}/api/taller/cola-recojo`);
         const data = await res.json();
         const estructuras = Array.isArray(data) ? data : (data.estructuras || []);
+        const compras     = Array.isArray(data) ? []   : (data.compras_externas || []);
 
-        if (estructuras.length === 0) {
+        if (estructuras.length === 0 && compras.length === 0) {
             contenedor.innerHTML = `
                 <div style="text-align:center; padding:60px 20px; color:#94a3b8;">
                     <i class="fa-solid fa-circle-check" style="font-size:3rem; color:#22c55e; display:block; margin-bottom:15px;"></i>
@@ -394,9 +395,51 @@ async function cargarVistaColaRecojoChofer(contenedor) {
                 </div>`;
             return;
         }
+    
 
-        let html = `
-            <div style="margin-bottom:16px; padding:14px 18px; background:linear-gradient(135deg,#fff5f5,#fee2e2); border-radius:12px; border:2px solid #fca5a5;">
+        let html = '';
+
+        // ── SECCIÓN COMPRAS EXTERNAS (Chofer) ──────────────────────────────
+        if (compras.length > 0) {
+            html += `
+            <div style="margin-bottom:20px; padding:14px 18px; background:linear-gradient(135deg,#faf5ff,#ede9fe); border-radius:12px; border:2px solid #ddd6fe;">
+                <h3 style="margin:0 0 4px; color:#7c3aed; font-size:15px; font-weight:900;">
+                    <i class="fa-solid fa-boxes-packing"></i> 📦 ${compras.length} compra(s) lista(s) para recoger
+                </h3>
+                <p style="margin:0; font-size:12px; color:#64748b;">Insumos o productos pagados que debes traer del proveedor.</p>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px; margin-bottom:24px;">`;
+            compras.forEach(t => {
+                html += `
+                <div style="background:white; border-radius:14px; border:2px solid #ddd6fe; box-shadow:0 4px 12px rgba(124,58,237,0.07); overflow:hidden;">
+                    <div style="background:linear-gradient(135deg,#faf5ff,#ede9fe); padding:14px 18px; border-bottom:2px solid #ddd6fe; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <span style="font-size:10px; font-weight:900; color:#7c3aed; text-transform:uppercase; letter-spacing:1px;">COMPRA EXTERNA · Ref. ${t.codigo_venta}</span>
+                            <h4 style="margin:4px 0 2px 0; font-size:15px; font-weight:900; color:#0f172a;">${t.insumo} ${t.sku ? `<span style="font-size:11px;color:#94a3b8;font-weight:600;">(${t.sku})</span>` : ''}</h4>
+                            <p style="margin:0; font-size:12px; color:#64748b;">
+                                <b>Proveedor:</b> ${t.proveedor} ${t.telefono_proveedor ? `· 📞 ${t.telefono_proveedor}` : ''}<br>
+                                <b>Cliente:</b> ${t.cliente}
+                            </p>
+                        </div>
+                        <button onclick="_confirmarRecojoExterno(${t.logistica_id}, '${t.insumo.replace(/'/g,"\\'")}', this)"
+                            style="background:#7c3aed; color:white; border:none; padding:12px 20px; border-radius:9px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px; box-shadow:0 2px 8px rgba(124,58,237,0.2);">
+                            <i class="fa-solid fa-check"></i> Confirmar Recojo
+                        </button>
+                    </div>
+                    <div style="padding:12px 18px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                        ${t.cantidad ? `<span style="font-size:11px;color:#64748b;background:#f8fafc;padding:4px 8px;border-radius:6px;font-weight:bold;"><i class="fa-solid fa-hashtag"></i> Cantidad: ${t.cantidad} ${t.unidad || ''}</span>` : ''}
+                        ${t.fecha_entrega_proveedor ? `<span style="font-size:11px;color:#64748b;background:#f8fafc;padding:4px 8px;border-radius:6px;font-weight:bold;"><i class="fa-regular fa-calendar"></i> Promesa prov: ${t.fecha_entrega_proveedor}</span>` : ''}
+                        ${t.notas_proveedor ? `<div style="width:100%;font-size:11px;color:#475569;background:#faf5ff;border-left:3px solid #a78bfa;padding:6px 10px;border-radius:0 6px 6px 0;margin-top:4px;">${t.notas_proveedor}</div>` : ''}
+                    </div>
+                </div>`;
+            });
+            html += `</div>`;
+        }
+
+        // ── SECCIÓN ESTRUCTURAS (Chofer) ───────────────────────────────────
+        if (estructuras.length > 0) {
+            html += `
+            <div style="margin-bottom:16px; padding:14px 18px; background:linear-gradient(135deg,#fff5f5,#fee2e2); border-radius:12px; border:2px solid #fca5a5; margin-top:${compras.length>0?'20px':'0'};">
                 <h3 style="margin:0 0 4px; color:#991b1b; font-size:15px; font-weight:900;">
                     🔴 ${estructuras.length} estructura${estructuras.length>1?'s':''} lista${estructuras.length>1?'s':''} para recoger
                 </h3>
@@ -438,6 +481,7 @@ async function cargarVistaColaRecojoChofer(contenedor) {
             </div>`;
         });
         html += `</div>`;
+        }
         contenedor.innerHTML = html;
     } catch(e) {
         console.error('Error cargando cola de recojo chofer:', e);
@@ -506,40 +550,40 @@ async function cargarVistaColaRecojo(contenedor) {
         // Soporte retrocompatible: si el backend devuelve array plano (versión vieja),
         // lo convertimos al nuevo formato.
         const estructuras = Array.isArray(data) ? data : (data.estructuras || []);
-        const telas       = Array.isArray(data) ? []   : (data.telas       || []);
+        const compras     = Array.isArray(data) ? []   : (data.compras_externas || data.telas || []);
 
         // Guardar para los PDF masivos (sección A)
         window._colaRecojoData = estructuras;
 
-        if (estructuras.length === 0 && telas.length === 0) {
+        if (estructuras.length === 0 && compras.length === 0) {
             contenedor.innerHTML = `
                 <div style="text-align:center; padding:60px 20px; color:#94a3b8;">
                     <i class="fa-solid fa-circle-check" style="font-size:3rem; color:#22c55e; display:block; margin-bottom:15px;"></i>
                     <p style="font-weight:800; font-size:16px; color:#475569;">Sin recojos pendientes</p>
-                    <p style="font-size:13px;">Todas las estructuras terminadas ya fueron recogidas o no hay tapicería esperando.</p>
+                    <p style="font-size:13px;">Todas las estructuras terminadas o compras externas ya fueron recogidas.</p>
                 </div>`;
             return;
         }
 
         let html = '';
 
-        // ── SECCIÓN B: Telas listas para recoger del proveedor ─────────────────
-        if (telas.length > 0) {
+        // ── SECCIÓN B: Compras Externas listas para recoger del proveedor ─────────────────
+        if (compras.length > 0) {
             html += `
             <div style="margin-bottom:28px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
                     <div>
                         <h3 style="margin:0; color:#7c3aed; font-size:15px; font-weight:900;">
-                            <i class="fa-solid fa-scissors"></i> 🧵 ${telas.length} tela${telas.length>1?'s':''} lista${telas.length>1?'s':''} para recoger del proveedor
+                            <i class="fa-solid fa-boxes-packing"></i> 📦 ${compras.length} compra(s) lista(s) para recoger del proveedor
                         </h3>
-                        <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">El operario de telas debe ir a buscarlas físicamente</p>
+                        <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">El chofer o responsable debe ir a buscar estos insumos o productos</p>
                     </div>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:12px;">`;
 
-            telas.forEach(t => {
+            compras.forEach(t => {
                 const fechaProv = t.fecha_entrega_proveedor
-                    ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;">📅 Disponible desde ${t.fecha_entrega_proveedor}</span>`
+                    ? `<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;">📅 ${t.fecha_entrega_proveedor}</span>`
                     : '';
                 const tel = t.telefono_proveedor
                     ? `<a href="tel:${t.telefono_proveedor}" style="color:#7c3aed;font-weight:700;text-decoration:none;"><i class="fa-solid fa-phone"></i> ${t.telefono_proveedor}</a>`
@@ -558,7 +602,7 @@ async function cargarVistaColaRecojo(contenedor) {
                 <div style="background:white; border-radius:14px; border:1.5px solid #ddd6fe; box-shadow:0 4px 12px rgba(124,58,237,0.07); overflow:hidden;">
                     <div style="background:linear-gradient(135deg,#faf5ff,#ede9fe); padding:13px 18px; border-bottom:2px solid #ddd6fe; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
                         <div>
-                            <span style="font-size:10px; font-weight:900; color:#7c3aed; text-transform:uppercase; letter-spacing:1px;">Tela · Ref. ${t.codigo_venta}</span>
+                            <span style="font-size:10px; font-weight:900; color:#7c3aed; text-transform:uppercase; letter-spacing:1px;">COMPRA EXTERNA · Ref. ${t.codigo_venta}</span>
                             <h4 style="margin:4px 0 2px 0; font-size:15px; font-weight:900; color:#0f172a;">${t.insumo}${t.sku ? ` <span style="font-size:11px;color:#94a3b8;font-weight:600;">(${t.sku})</span>` : ''}</h4>
                             <p style="margin:0; font-size:12px; color:#64748b;"><b>Cliente:</b> ${t.cliente}</p>
                             <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; align-items:center;">
@@ -568,7 +612,7 @@ async function cargarVistaColaRecojo(contenedor) {
                                 ${tel} ${dir} ${fechaProv}
                             </div>
                         </div>
-                        <button onclick="_confirmarRecojoTela(${t.logistica_id}, '${t.insumo.replace(/'/g,"\\'")}', this)"
+                        <button onclick="_confirmarRecojoExterno(${t.logistica_id}, '${t.insumo.replace(/'/g,"\\'")}', this)"
                             style="background:#7c3aed; color:white; border:none; padding:10px 16px; border-radius:9px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px;">
                             <i class="fa-solid fa-circle-check"></i> Confirmar recojo
                         </button>
@@ -672,15 +716,15 @@ async function cargarVistaColaRecojo(contenedor) {
     }
 }
 
-async function _confirmarRecojoTela(logisticaId, insumoNombre, btnEl) {
+async function _confirmarRecojoExterno(logisticaId, insumoNombre, btnEl) {
     const conf = await Swal.fire({
         icon: 'question',
         title: '¿Confirmar recojo?',
-        html: `<p style="font-size:14px;color:#374151;">Confirma que fuiste a buscar:<br><b>${insumoNombre}</b><br><br>El ticket de telas seguirá en proceso hasta que termines el corte.</p>`,
+        html: `<p style="font-size:14px;color:#374151;">Confirma que recogiste físicamente:<br><b>${insumoNombre}</b><br><br>Se marcará como Recibido y habilitará la producción o el despacho del ítem.</p>`,
         showCancelButton: true,
         confirmButtonColor: '#7c3aed',
         cancelButtonColor: 'transparent',
-        confirmButtonText: '✅ Sí, recogí la tela',
+        confirmButtonText: '✅ Sí, lo recogí',
         cancelButtonText: 'Cancelar',
     });
     if (!conf.isConfirmed) return;
@@ -689,14 +733,13 @@ async function _confirmarRecojoTela(logisticaId, insumoNombre, btnEl) {
     btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
 
     try {
-        const res = await apiFetch(`${API_URL}/api/logistica/${logisticaId}/confirmar-recojo-tela`, { method: 'POST' });
+        const res = await apiFetch(`${API_URL}/api/logistica/${logisticaId}/confirmar-recojo-externo`, { method: 'POST' });
         const d   = await res.json();
         if (d.exito) {
             Swal.fire({ icon: 'success', title: '¡Recojo confirmado!', text: d.mensaje, timer: 2500, showConfirmButton: false });
             // Recargar la cola para que el item desaparezca
-            const cont = btnEl.closest('[id]') || document.getElementById('contenedor-cola-recojo') || btnEl.closest('div[style*="flex-direction:column"]')?.parentElement?.parentElement;
-            const contFinal = document.getElementById('contenedor-cola-recojo') || document.querySelector('.cola-recojo-wrapper');
-            if (contFinal) await cargarVistaColaRecojo(contFinal);
+            const contFinal = document.getElementById('contenedor-cola-recojo') || document.querySelector('.cola-recojo-wrapper') || document.getElementById('contenedor-tickets-taller');
+            if (contFinal) await cargarTicketsTaller();
         } else {
             Swal.fire({ icon: 'error', title: 'Error', text: d.error || 'No se pudo confirmar' });
             btnEl.disabled = false;
@@ -1361,26 +1404,23 @@ async function cargarTicketsTaller() {
         let ticketsFiltrados = tickets;
 
         if (esAdmin) {
-            // Admin ve:
-            // Admin ve tickets no terminados.
-            // DESPACHO_CENTRAL Terminado va al historial de Entregados, no aquí.
-            ticketsFiltrados = tickets.filter(t => t.estado !== 'Terminado' && t.estado !== 'Recogido');
+            // Admin ve tickets no terminados, no listos para recojo ni recogidos.
+            ticketsFiltrados = tickets.filter(t => t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido');
         } else if (esOperario) {
             // Operario: solo los asignados a él
             ticketsFiltrados = tickets.filter(t => Number(t.trabajador) === Number(usuarioActivo.id));
             // Luego aplica filtro de tab
             if (filtroTaller === 'Pendientes') {
-                // 'Listo para Recojo' se muestra aquí con badge especial para el carpintero
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado' && t.estado !== 'Recogido');
+                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido');
             } else {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado' || t.estado === 'Recogido');
+                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado' || t.estado === 'Listo para Recojo' || t.estado === 'Recogido');
             }
         } else {
             // Jefe de taller: ve todos, con tabs
             if (filtroTaller === 'Pendientes') {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado' && t.estado !== 'Recogido');
+                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido');
             } else {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado' || t.estado === 'Recogido');
+                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado' || t.estado === 'Listo para Recojo' || t.estado === 'Recogido');
             }
         }
 
@@ -1400,7 +1440,7 @@ async function cargarTicketsTaller() {
             areas[key].push(t);
         });
 
-        contenedor.style.gridTemplateColumns = '1fr';
+        contenedor.style.display = 'block';
         let html = '';
 
         for (const [areaId, listaTickets] of Object.entries(areas)) {
@@ -1417,7 +1457,7 @@ async function cargarTicketsTaller() {
                     <span style="color:${colorCab === '#22c55e' ? '#166534' : '#0f172a'};">${cfg.icono} ${cfg.nombre}</span>
                     <span style="background:#1e293b; color:white; padding:3px 10px; border-radius:20px; font-size:11px;">${listaTickets.length}</span>
                 </h3>
-                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%, 280px),1fr)); gap:15px;">`;
+                <div class="tickets-area-grid">`;
 
             listaTickets.forEach(t => {
                 const isBloqueado       = t.estado === 'Bloqueado';
@@ -2547,7 +2587,7 @@ async function cargarOrdenesProduccion(contenedor) {
 
         html += '</div>';
         contenedor.innerHTML = html;
-        contenedor.style.gridTemplateColumns = '1fr';
+        contenedor.style.display = 'block';
 
     } catch (e) {
         console.error('Error cargando órdenes:', e);

@@ -308,10 +308,10 @@ def confirmar_recojo_estructura(id):
             cursor.close(); release_db_connection(conexion)
 
 
-@produccion_bp.route('/api/logistica/<int:logistica_id>/confirmar-recojo-tela', methods=['POST'])
-def confirmar_recojo_tela(logistica_id):
-    """Chofer confirma recojo de telas: marca logística como Recibido
-    y pone el ticket de CORTE_Y_CONTROL_TELAS de esa venta en En Proceso."""
+@produccion_bp.route('/api/logistica/<int:logistica_id>/confirmar-recojo-externo', methods=['POST'])
+def confirmar_recojo_externo(logistica_id):
+    """Chofer o Tapicero confirma recojo externo: marca logística como Recibido
+    y desbloquea las áreas de producción que correspondan."""
     conexion = None
     try:
         conexion = get_db_connection()
@@ -332,26 +332,42 @@ def confirmar_recojo_tela(logistica_id):
                 WHERE id = %s
             """, (logistica_id,))
 
-        # Desbloquear / activar ticket de CORTE_Y_CONTROL_TELAS del item de esta venta
         desbloqueados = 0
-        if venta_id:
+        if venta_id and estado_anterior != 'Recibido':
             cursor.execute("""
-                UPDATE tickets_produccion
-                SET estado_ticket = 'En Proceso',
-                    fecha_inicio  = CURRENT_TIMESTAMP
-                WHERE estado_ticket = 'Bloqueado'
-                  AND area_trabajo = 'CORTE_Y_CONTROL_TELAS'
-                  AND item_id IN (
-                      SELECT id FROM items_venta WHERE venta_id = %s
-                  )
-                RETURNING id;
+                SELECT t.id, t.area_trabajo, t.item_id
+                FROM tickets_produccion t
+                JOIN items_venta i ON t.item_id = i.id
+                WHERE i.venta_id = %s AND t.estado_ticket = 'Bloqueado'
             """, (venta_id,))
-            desbloqueados = cursor.rowcount
+            tickets_bloqueados = cursor.fetchall()
+
+            for tb_id, tb_area, tb_item_id in tickets_bloqueados:
+                if tb_area in ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'):
+                    areas_req = ['ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS', 'CORTE_Y_CONTROL_TELAS', 'TELAS']
+                    placeholders_req = ','.join(['%s'] * len(areas_req))
+                    cursor.execute(f"""
+                        SELECT COUNT(*) FROM tickets_produccion
+                        WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
+                          AND estado_ticket IN ('Terminado', 'Listo para Recojo', 'Recogido')
+                    """, (tb_item_id, *areas_req))
+                    terminados_req = cursor.fetchone()[0]
+                    cursor.execute(f"""
+                        SELECT COUNT(*) FROM tickets_produccion
+                        WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
+                    """, (tb_item_id, *areas_req))
+                    total_req = cursor.fetchone()[0]
+                    if total_req > 0 and terminados_req >= total_req:
+                        cursor.execute("UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP WHERE id = %s", (tb_id,))
+                        desbloqueados += cursor.rowcount
+                else:
+                    cursor.execute("UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP WHERE id = %s", (tb_id,))
+                    desbloqueados += cursor.rowcount
 
         conexion.commit()
         return jsonify({
             'exito': True,
-            'mensaje': f'✅ Recojo de telas confirmado. {desbloqueados} ticket(s) de corte desbloqueado(s).',
+            'mensaje': f'✅ Material recogido y recibido. {desbloqueados} ticket(s) desbloqueado(s) para continuar su proceso.',
             'desbloqueados': desbloqueados
         }), 200
 
@@ -1655,7 +1671,26 @@ def despacho_entregados():
                 'sede':           r[14] or '',
             })
 
-        return jsonify(resultado), 200
+        # 2. Compras externas (Logística)
+        cursor.execute("""
+            SELECT l.id, v.codigo_venta, v.nombre_cliente, l.insumo_nombre, l.sku,
+                   COALESCE(p.nombre, l.proveedor_informal, 'Sin proveedor') AS proveedor,
+                   COALESCE(p.telefono, '') AS telefono_proveedor,
+                   l.url_cotizacion_adjunta, l.notas_proveedor,
+                   l.cantidad, l.unidad, l.fecha_entrega_proveedor
+            FROM logistica_externa l
+            JOIN ventas v ON l.venta_id = v.id
+            LEFT JOIN proveedores p ON l.proveedor_id = p.id
+            WHERE l.estado = 'Listo para Recojo'
+            ORDER BY l.id DESC;
+        """)
+        compras_externas = [{
+            "logistica_id": r[0], "codigo_venta": r[1], "cliente": r[2], "insumo": r[3], "sku": r[4],
+            "proveedor": r[5], "telefono_proveedor": r[6], "url_cotizacion_adjunta": r[7], "notas_proveedor": r[8],
+            "cantidad": float(r[9]) if r[9] else None, "unidad": r[10], "fecha_entrega_proveedor": r[11].strftime('%d/%m/%Y') if r[11] else ''
+        } for r in cursor.fetchall()]
+
+        return jsonify({"estructuras": resultado, "compras_externas": compras_externas}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -2601,80 +2636,6 @@ def servir_pdf_oc(id):
         return jsonify({'error': str(e)}), 500
     finally:
         if conexion:
-            cursor.close(); release_db_connection(conexion)
-
-@produccion_bp.route('/api/logistica/<int:id>/listo-para-recojo', methods=['PUT'])
-def marcar_listo_para_recojo(id):
-    """
-    Marca la logística externa como 'Listo para Recojo' y desbloquea
-    automáticamente los tickets de TELAS/CORTE_Y_CONTROL_TELAS de la venta
-    para que el encargado de telas vaya a recoger el material al proveedor.
-    """
-    try:
-        conexion = get_db_connection()
-        conexion.autocommit = False
-        cursor = conexion.cursor()
-
-        # 1. Verificar que existe y obtener venta_id
-        cursor.execute("""
-            SELECT id, venta_id, estado, insumo_nombre
-            FROM logistica_externa
-            WHERE id = %s
-        """, (id,))
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({'error': 'Logística no encontrada'}), 404
-
-        _, venta_id, estado_actual, insumo_nombre = row
-
-        if estado_actual == 'Listo para Recojo':
-            return jsonify({'error': 'Esta logística ya está marcada como Listo para Recojo'}), 400
-
-        # 2. Actualizar estado de logística externa
-        cursor.execute("""
-            UPDATE logistica_externa
-            SET estado = 'Listo para Recojo'
-            WHERE id = %s
-        """, (id,))
-
-        # 3. Desbloquear tickets de TELAS de la venta si hay venta_id
-        tickets_desbloqueados = 0
-        if venta_id:
-            cursor.execute("""
-                UPDATE tickets_produccion
-                SET estado_ticket = 'En Proceso',
-                    fecha_inicio  = CURRENT_TIMESTAMP
-                WHERE id IN (
-                    SELECT t.id
-                    FROM tickets_produccion t
-                    JOIN items_venta i ON t.item_id = i.id
-                    WHERE i.venta_id = %s
-                      AND t.area_trabajo IN ('TELAS', 'CORTE_Y_CONTROL_TELAS')
-                      AND t.estado_ticket = 'Bloqueado'
-                )
-            """, (venta_id,))
-            tickets_desbloqueados = cursor.rowcount
-
-        conexion.commit()
-
-        msg = 'Logística marcada como Listo para Recojo.'
-        if tickets_desbloqueados > 0:
-            msg += f' {tickets_desbloqueados} ticket(s) de Telas desbloqueado(s) — el encargado puede ir a recoger.'
-        else:
-            msg += ' No se encontraron tickets de Telas bloqueados para esta venta.'
-
-        return jsonify({
-            'exito': True,
-            'mensaje': msg,
-            'tickets_desbloqueados': tickets_desbloqueados,
-            'insumo': insumo_nombre,
-        }), 200
-
-    except Exception as e:
-        if 'conexion' in locals() and conexion: conexion.rollback()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
             # ─── STOCK ESTRUCTURAS SOFÁ ───────────────────────────────────────────────────
 
