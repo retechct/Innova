@@ -264,6 +264,9 @@ function openConfig(name, img) {
     const prevCont = document.getElementById('preview-multiples-sofa');
     if (prevCont) prevCont.innerHTML = '';
 
+    const nombreLibreEl = document.getElementById('sofa-nombre-libre');
+    if (nombreLibreEl) nombreLibreEl.value = '';
+
     document.getElementById('modal-config').style.display = 'flex';
     document.getElementById('sofa-modelo').value = 'multi3'; 
     actualizarVistaSofa(); 
@@ -703,8 +706,11 @@ async function confirmarPersonalizadoSofa() {
           &nbsp;&nbsp;Cara A (diseño): [SKU: ${skuRevDiseno}] ${nombreRevDiseno}${provRevDiseno ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provRevDiseno}]</span>` : ''}${notas['cojin-rev-diseno']}<br>
           &nbsp;&nbsp;Cara B (entero): [SKU: ${skuRevEntero}] ${nombreRevEntero}${provRevEntero ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provRevEntero}]</span>` : ''}${notas['cojin-rev-entero']}${notaReversible ? `<br>&nbsp;&nbsp;💬 ${notaReversible}` : ''}<br>` : '';
 
+    // Nombre libre para contrato (Feature 4)
+    const nombreLibre = (document.getElementById('sofa-nombre-libre')?.value || '').trim();
+
     const specs = `
-        <b>MOD:</b> ${modeloBase} ${medidasText}<br>
+        ${nombreLibre ? `<b style="color:var(--accent);">📋 ${nombreLibre}</b><br>` : ''}<b>MOD:</b> ${modeloBase} ${medidasText}<br>
         <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${provTela ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provTela}]</span>` : ''}${notas['tela']}<br>
         <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm${notas['espuma']}<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>

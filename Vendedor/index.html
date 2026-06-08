@@ -630,6 +630,12 @@
                             </button>
                         </div>
                     </div>
+                    <div class="form-group" style="margin-top:6px;">
+                        <label style="font-size:10px;color:#64748b;font-weight:600;">NOMBRE PARA EL CONTRATO <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
+                        <input type="text" id="sofa-nombre-libre" class="form-input"
+                               placeholder="Ej: Seccional esquinero beige para sala"
+                               style="font-size:12px;">
+                    </div>
                     <div class="img-preview-container">
                         <img id="preview-sofa" src="imagenes/sin_foto.jpg" alt="Vista Previa">
                     </div>
@@ -1831,6 +1837,11 @@ function abrirGestorModelos() {
 }
 function cerrarGestorModelos() {
   document.getElementById('modal-gestор-modelos').style.display = 'none';
+  // Si fue abierto desde el modal de stock, refrescar el select de modelo base
+  if (window._gestorAbiertoDesdeStock) {
+    window._gestorAbiertoDesdeStock = false;
+    if (typeof _refreshSelectModeloBase === 'function') _refreshSelectModeloBase();
+  }
 }
 
 // ─── Renderizar listas dentro del modal ───────────────────────

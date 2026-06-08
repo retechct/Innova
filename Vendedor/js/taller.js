@@ -3020,7 +3020,16 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
 
             <!-- ── Bloque SOLO para Estructura ── -->
             <div id="bloque-solo-estructura">
-              <label style="font-size:12px;font-weight:700;color:#475569;">MODELO BASE *</label>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <label style="font-size:12px;font-weight:700;color:#475569;">MODELO BASE *</label>
+                <button type="button" onclick="_abrirGestorDesdeStock()"
+                    title="Agregar o editar modelos"
+                    style="background:#f5f3ff;border:1.5px solid #ddd6fe;color:#7c3aed;
+                           border-radius:7px;padding:4px 10px;cursor:pointer;
+                           font-size:12px;font-weight:700;display:flex;align-items:center;gap:5px;">
+                  ⚙️ Gestionar
+                </button>
+              </div>
               <div style="font-size:11px;color:#64748b;margin-bottom:5px;">Tipo de sofá de las plantillas del catálogo</div>
               <select id="se-modelo-base"
                   style="width:100%;padding:9px;border:1.5px solid #7c3aed;border-radius:8px;margin-bottom:10px;font-size:13px;">
@@ -3201,27 +3210,58 @@ function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
     const selTipo = document.getElementById('se-tipo');
     if (selTipo) { selTipo.value = 'estructura'; _onChangeTipoEstructura(); }
 
-    // Cargar modelos base desde el configurador de Sofás
-    const selModelo = document.getElementById('se-modelo-base');
-    if (selModelo) {
-        const sofaModeloOrig = document.getElementById('sofa-modelo');
-        if (sofaModeloOrig && sofaModeloOrig.options.length > 0) {
-            selModelo.innerHTML = '<option value="">— Seleccionar modelo base —</option>' +
-                Array.from(sofaModeloOrig.options)
-                     .filter(o => o.value !== '')
-                     .map(o => `<option value="${o.text}">${o.text}</option>`)
-                     .join('');
-        } else {
-            selModelo.innerHTML = '<option value="">Escríbelo a mano abajo</option>';
-        }
-        // Campo libre para modelo no listado
-        if (!document.getElementById('se-modelo-base-txt')) {
-            selModelo.insertAdjacentHTML('afterend',
-                `<input id="se-modelo-base-txt" placeholder="O escribe otro modelo (Ej: Seccional curvo)..."
-                    style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;font-size:13px;">`);
-        } else {
-            document.getElementById('se-modelo-base-txt').value = '';
-        }
+    // Poblar select de modelos con optgroups (base del sistema + personalizados)
+    _refreshSelectModeloBase();
+}
+
+
+// ── Poblar #se-modelo-base con optgroups ─────────────────────────────────────
+function _refreshSelectModeloBase() {
+    const sel = document.getElementById('se-modelo-base');
+    if (!sel) return;
+
+    // Modelos base del sistema (hardcoded — mismos que GM_MODELOS_BASE en index.html)
+    const BASE = [
+        'Multifuncional (3 Piezas)',
+        'Multifuncional (4 Piezas)',
+        'Seccional Normal',
+        'Seccional Invertido',
+        'Curvo',
+        'En U',
+        'Juego de Sala (3-2-1)',
+    ];
+
+    // Modelos personalizados del localStorage
+    let custom = [];
+    try { custom = JSON.parse(localStorage.getItem('innova_modelos_sofa') || '[]'); } catch(e) {}
+
+    let html = '<option value="">— Seleccionar modelo base —</option>';
+    html += '<optgroup label="📐 Modelos del sistema">';
+    BASE.forEach(label => { html += `<option value="${label}">${label}</option>`; });
+    html += '</optgroup>';
+
+    if (custom.length > 0) {
+        html += '<optgroup label="✏️ Modelos personalizados">';
+        custom.forEach(m => { html += `<option value="${m.label}">${m.label}</option>`; });
+        html += '</optgroup>';
+    }
+
+    sel.innerHTML = html;
+
+    // Eliminar el input de texto libre si quedó de una versión anterior
+    const txt = document.getElementById('se-modelo-base-txt');
+    if (txt) txt.remove();
+}
+
+
+// ── Abrir gestor de modelos desde el modal de stock ───────────────────────────
+function _abrirGestorDesdeStock() {
+    // Guardar referencia para que al cerrar el gestor se refresque el select
+    window._gestorAbiertoDesdeStock = true;
+    if (typeof abrirGestorModelos === 'function') {
+        abrirGestorModelos();
+    } else {
+        Swal.fire({ icon: 'warning', text: 'El gestor de modelos no está disponible en esta pantalla.' });
     }
 }
 
@@ -3271,7 +3311,7 @@ function _renderListaEstructuras(lista) {
                        background:${e.estado==='disponible'?'#dcfce7':'#f1f5f9'};
                        color:${e.estado==='disponible'?'#15803d':'#64748b'};
                        border-radius:20px;padding:3px 10px;font-size:11px;font-weight:800;">
-            ${e.estado==='disponible'?'✓ Disponible':'Entregado'}
+            ${e.estado==='disponible'?'✓ Disponible':'✓ Entregado'}
           </span>
         </div>
         <div style="padding:12px 14px;">
@@ -3285,6 +3325,20 @@ function _renderListaEstructuras(lista) {
           </div>
           ${e.ancho ? `<div style="font-size:12px;color:#475569;margin-top:6px;"><i class="fa-solid fa-ruler-combined" style="color:#94a3b8;"></i> ${e.ancho}×${e.profundidad}×${e.alto} cm</div>` : ''}
           ${e.precio ? `<div style="font-size:14px;color:#15803d;font-weight:800;margin-top:6px;">S/ ${parseFloat(e.precio).toFixed(2)}</div>` : ''}
+
+          ${e.estado === 'disponible'
+            ? `<button onclick="marcarEstructuraEntregada(${e.id}, '${(e.nombre_modelo||'').replace(/'/g,"\\'")}', this)"
+                   style="width:100%;margin-top:10px;padding:9px;background:#0f172a;color:white;
+                          border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;
+                          display:flex;align-items:center;justify-content:center;gap:6px;">
+                <i class="fa-solid fa-truck"></i> Entregar al chofer
+               </button>`
+            : `<div style="margin-top:10px;padding:8px 10px;background:#f0fdf4;border-radius:8px;
+                           font-size:11px;color:#15803d;display:flex;align-items:center;gap:6px;">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>Chofer: <b>${e.chofer_nombre || '—'}</b></span>
+               </div>`
+          }
         </div>
       </div>`).join('') + `</div>`;
 }
@@ -3309,11 +3363,10 @@ async function guardarEstructura() {
 
     // Validaciones específicas por tipo
     if (!esDestrokes) {
-        const modeloBase = (document.getElementById('se-modelo-base')?.value ||
-                            document.getElementById('se-modelo-base-txt')?.value || '').trim();
+        const modeloBase = (document.getElementById('se-modelo-base')?.value || '').trim();
         if (!modeloBase) {
             return Swal.fire({ icon:'warning', title:'Falta el modelo base',
-                text:'Selecciona o escribe el modelo base (Seccional, Multifuncional, etc.).' });
+                text:'Selecciona el modelo base. Si no está en la lista, usa ⚙️ Gestionar para agregarlo.' });
         }
     } else {
         const cant = document.getElementById('se-cantidad').value;
@@ -3338,8 +3391,7 @@ async function guardarEstructura() {
         fd.append('modelo_base', '');
         fd.append('medida_estandar', 'false');
     } else {
-        const modeloBase = (document.getElementById('se-modelo-base')?.value ||
-                            document.getElementById('se-modelo-base-txt')?.value || '').trim();
+        const modeloBase = (document.getElementById('se-modelo-base')?.value || '').trim();
         fd.append('modelo_base',     modeloBase);
         fd.append('ancho',           document.getElementById('se-ancho').value || 0);
         fd.append('profundidad',     document.getElementById('se-prof').value || 0);
@@ -3365,5 +3417,94 @@ async function guardarEstructura() {
         }
     } catch(e) {
         Swal.fire({ icon:'error', title:'Sin conexión', text:'Verifica tu red e intenta de nuevo.' });
+    }
+}
+
+
+// ── Entregar estructura al chofer (flujo del carpintero) ──────────────────────
+async function marcarEstructuraEntregada(estructuraId, nombreEstructura, btnEl) {
+    // 1. Cargar lista de choferes
+    let opcionesHTML = '<option value="">— Selecciona al chofer —</option>';
+    try {
+        const res = await apiFetch(`${API_URL}/api/usuarios/choferes`);
+        const choferes = await res.json();
+        if (Array.isArray(choferes) && choferes.length > 0) {
+            opcionesHTML += choferes
+                .map(c => `<option value="${c.nombre}">${c.nombre}</option>`)
+                .join('');
+        }
+    } catch(e) {
+        // Si falla la carga, igual se puede escribir manualmente abajo
+    }
+
+    const { value: choferNombre, isConfirmed } = await Swal.fire({
+        title: '¿Qué chofer se la llevó?',
+        html: `
+            <p style="font-size:13px;color:#475569;margin:0 0 14px;">
+                <b>${nombreEstructura}</b><br>
+                <span style="font-size:11px;">Esta estructura quedará registrada como entregada.</span>
+            </p>
+            <select id="swal-chofer-select"
+                style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;
+                       font-size:13px;margin-bottom:10px;">
+                ${opcionesHTML}
+            </select>
+            <input id="swal-chofer-manual" type="text"
+                placeholder="O escribe el nombre si no aparece en la lista"
+                style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;
+                       font-size:13px;box-sizing:border-box;">
+        `,
+        showCancelButton: true,
+        confirmButtonColor: '#15803d',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: '✅ Confirmar entrega',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const sel    = document.getElementById('swal-chofer-select').value.trim();
+            const manual = document.getElementById('swal-chofer-manual').value.trim();
+            const nombre = manual || sel;
+            if (!nombre) {
+                Swal.showValidationMessage('Selecciona o escribe el nombre del chofer.');
+                return false;
+            }
+            return nombre;
+        }
+    });
+
+    if (!isConfirmed || !choferNombre) return;
+
+    if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...'; }
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/stock-estructuras/${estructuraId}/entregar`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chofer_nombre: choferNombre })
+        });
+        const d = await res.json();
+
+        if (d.exito) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Entregado!',
+                html: `Registrado que <b>${choferNombre}</b> se llevó la estructura.`,
+                timer: 2200,
+                showConfirmButton: false
+            });
+            // Refrescar la vista
+            const ctx = window._modalEstructuraCtx || {};
+            const contenedorId = ctx.contenedorId || window._stockSofaContenedorActivo;
+            if (contenedorId) {
+                await _cargarContenidoStockSofa(contenedorId, ctx.esAdminCtx || false);
+            } else {
+                cargarTicketsTaller();
+            }
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: d.error || 'No se pudo registrar la entrega.' });
+            if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fa-solid fa-truck"></i> Entregar al chofer'; }
+        }
+    } catch(e) {
+        Swal.fire({ icon: 'error', title: 'Sin conexión', text: 'Verifica tu red e intenta de nuevo.' });
+        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fa-solid fa-truck"></i> Entregar al chofer'; }
     }
 }

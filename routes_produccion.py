@@ -2645,11 +2645,16 @@ def listar_stock_estructuras():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        # Agregar chofer_nombre si la columna ya existe (migración segura)
+        cursor.execute("""
+            ALTER TABLE stock_estructuras_sofa
+            ADD COLUMN IF NOT EXISTS chofer_nombre VARCHAR(150);
+        """)
         cursor.execute("""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
                    medida_estandar, foto_url, tipo, cantidad, estado,
                    ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY'), COALESCE(precio, 0),
-                   COALESCE(modelo_base, '')
+                   COALESCE(modelo_base, ''), COALESCE(chofer_nombre, '')
             FROM stock_estructuras_sofa
             ORDER BY fecha_registro DESC
         """)
@@ -2660,7 +2665,7 @@ def listar_stock_estructuras():
             'medida_estandar': r[5], 'foto_url': r[6], 'tipo': r[7],
             'cantidad': r[8], 'estado': r[9], 'ticket_id': r[10], 'fecha': r[11],
             'precio': float(r[12] or 0),
-            'modelo_base': r[13]
+            'modelo_base': r[13], 'chofer_nombre': r[14]
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2841,6 +2846,57 @@ def sugerir_estructura():
         } for r in rows]), 200
 
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/stock-estructuras/<int:stock_id>/entregar', methods=['PATCH'])
+def entregar_estructura(stock_id):
+    """
+    El carpintero marca una estructura como entregada al chofer.
+    Recibe: { "chofer_nombre": "Juan Quispe" }
+    Registra quién la recogió para historial.
+    """
+    data          = request.get_json() or {}
+    chofer_nombre = (data.get('chofer_nombre') or '').strip()
+
+    if not chofer_nombre:
+        return jsonify({'error': 'Debes indicar el nombre del chofer.'}), 400
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        # Asegurar columna (idempotente)
+        cursor.execute("""
+            ALTER TABLE stock_estructuras_sofa
+            ADD COLUMN IF NOT EXISTS chofer_nombre VARCHAR(150);
+        """)
+
+        # Verificar que la estructura existe y está disponible
+        cursor.execute(
+            "SELECT id, estado FROM stock_estructuras_sofa WHERE id = %s;",
+            (stock_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Estructura no encontrada.'}), 404
+        if row[1] != 'disponible':
+            return jsonify({'error': 'Esta estructura ya fue entregada o no está disponible.'}), 409
+
+        cursor.execute("""
+            UPDATE stock_estructuras_sofa
+            SET estado = 'entregado', chofer_nombre = %s
+            WHERE id = %s
+        """, (chofer_nombre, stock_id))
+        conexion.commit()
+        return jsonify({'exito': True, 'chofer_nombre': chofer_nombre}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
