@@ -182,8 +182,25 @@ async function imEntrarAlSistema() {
       if (wrapper) wrapper.classList.remove('visible');
       imPanelActivo = null;
 
-      // Abrir modal de sede (bloqueante)
-      imMostrarModalSede();
+      // Solo Vendedores eligen la tienda/sede
+      if (usuarioActivo.rol === 'Vendedor') {
+          imMostrarModalSede();
+      } else {
+          // Otros roles entran directamente sin elegir sede
+          configurarInterfazPorRol();
+          mostrarUsuarioEnHeader();
+
+          const esOperario = ['Operario','Jefe_Taller','JEFE_TALLER'].includes(usuarioActivo.rol);
+          const esChofer   = usuarioActivo.rol === 'Chofer';
+          const esAlmacen  = usuarioActivo.rol === 'ALMACEN';
+          changeView(esChofer ? 'taller' : esOperario ? 'taller' : esAlmacen ? 'inventario' : 'catalogo');
+
+          Swal.fire({
+            background:'#14100a', color:'#f5f0e8', icon:'success',
+            title:`¡Hola, ${usuarioActivo.nombre.split(' ')[0]}!`,
+            timer: 2200, showConfirmButton: false
+          });
+      }
       return;
     } else {
       document.getElementById('login-pin').value = '';

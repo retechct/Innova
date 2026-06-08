@@ -1568,6 +1568,20 @@ async function cargarDatosInicialesLogin() {
             usuarios.forEach(u => {
                 selectUser.innerHTML += `<option value="${u.id}">${u.nombre} (${u.rol})</option>`;
             });
+            
+            // Ocultar selector de tienda si no es Vendedor
+            selectUser.addEventListener('change', (e) => {
+                const selectedOpt = e.target.options[e.target.selectedIndex];
+                const selectTienda = document.getElementById('login-tienda');
+                if (selectTienda) {
+                    if (selectedOpt.text.includes('(Vendedor)')) {
+                        selectTienda.style.display = '';
+                    } else {
+                        selectTienda.style.display = 'none';
+                        selectTienda.value = '';
+                    }
+                }
+            });
         }
     } catch (error) {
         console.error("No hay conexión con el servidor para cargar usuarios", error);
@@ -1652,10 +1666,15 @@ async function entrarAlSistema() {
                 changeView('catalogo');
             }
 
-            // Mensaje de bienvenida actualizado con su tienda
+            // Solo mostrar tienda si es vendedor
+            let textoBienvenida = `Rol: ${usuarioActivo.rol}`;
+            if (usuarioActivo.rol === 'Vendedor') {
+                textoBienvenida += ` | Sede: ${usuarioActivo.tienda}`;
+            }
+
             Swal.fire({
                 title: `¡Hola, ${usuarioActivo.nombre}!`,
-                text: `Rol: ${usuarioActivo.rol} | Sede: ${usuarioActivo.tienda}`,
+                text: textoBienvenida,
                 icon: 'success',
                 timer: 2000,
                 showConfirmButton: false
