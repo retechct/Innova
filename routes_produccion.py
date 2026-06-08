@@ -192,7 +192,7 @@ def obtener_cola_recojo():
               AND t.estado_ticket = 'Listo para Recojo'
             ORDER BY t.fecha_fin DESC;
         """)
-        resultado = [{
+        estructuras = [{
             "ticket_id": r[0], "area": r[1], "producto": r[2], "codigo_venta": r[3],
             "cliente": r[4], "operario": r[5],
             "fecha_fin": r[6].strftime('%d/%m/%Y %H:%M') if r[6] else 'S/F',
@@ -203,7 +203,27 @@ def obtener_cola_recojo():
             "item_id": r[12], "tapicero": r[13],
             "bloqueado_por_telas": bool(r[14]),
         } for r in cursor.fetchall()]
-        return jsonify(resultado), 200
+
+        # 2. Compras externas (Logística)
+        cursor.execute("""
+            SELECT l.id, v.codigo_venta, v.nombre_cliente, l.insumo_nombre, l.sku,
+                   COALESCE(p.nombre, l.proveedor_informal, 'Sin proveedor') AS proveedor,
+                   COALESCE(p.telefono, '') AS telefono_proveedor,
+                   l.url_cotizacion_adjunta, l.notas_proveedor,
+                   l.cantidad, l.unidad, l.fecha_entrega_proveedor
+            FROM logistica_externa l
+            JOIN ventas v ON l.venta_id = v.id
+            LEFT JOIN proveedores p ON l.proveedor_id = p.id
+            WHERE l.estado = 'Listo para Recojo'
+            ORDER BY l.id DESC;
+        """)
+        compras_externas = [{
+            "logistica_id": r[0], "codigo_venta": r[1], "cliente": r[2], "insumo": r[3], "sku": r[4],
+            "proveedor": r[5], "telefono_proveedor": r[6], "url_cotizacion_adjunta": r[7], "notas_proveedor": r[8],
+            "cantidad": float(r[9]) if r[9] else None, "unidad": r[10], "fecha_entrega_proveedor": r[11].strftime('%d/%m/%Y') if r[11] else ''
+        } for r in cursor.fetchall()]
+
+        return jsonify({"estructuras": estructuras, "compras_externas": compras_externas}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -1671,26 +1691,7 @@ def despacho_entregados():
                 'sede':           r[14] or '',
             })
 
-        # 2. Compras externas (Logística)
-        cursor.execute("""
-            SELECT l.id, v.codigo_venta, v.nombre_cliente, l.insumo_nombre, l.sku,
-                   COALESCE(p.nombre, l.proveedor_informal, 'Sin proveedor') AS proveedor,
-                   COALESCE(p.telefono, '') AS telefono_proveedor,
-                   l.url_cotizacion_adjunta, l.notas_proveedor,
-                   l.cantidad, l.unidad, l.fecha_entrega_proveedor
-            FROM logistica_externa l
-            JOIN ventas v ON l.venta_id = v.id
-            LEFT JOIN proveedores p ON l.proveedor_id = p.id
-            WHERE l.estado = 'Listo para Recojo'
-            ORDER BY l.id DESC;
-        """)
-        compras_externas = [{
-            "logistica_id": r[0], "codigo_venta": r[1], "cliente": r[2], "insumo": r[3], "sku": r[4],
-            "proveedor": r[5], "telefono_proveedor": r[6], "url_cotizacion_adjunta": r[7], "notas_proveedor": r[8],
-            "cantidad": float(r[9]) if r[9] else None, "unidad": r[10], "fecha_entrega_proveedor": r[11].strftime('%d/%m/%Y') if r[11] else ''
-        } for r in cursor.fetchall()]
-
-        return jsonify({"estructuras": resultado, "compras_externas": compras_externas}), 200
+        return jsonify(resultado), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
