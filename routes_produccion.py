@@ -2795,16 +2795,33 @@ def registrar_stock_estructura():
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        cursor.execute("""
-            INSERT INTO stock_estructuras_sofa
-                (nombre_modelo, modelo_base, ancho, profundidad, alto,
-                 medida_estandar, foto_url, tipo, cantidad, precio,
-                 tipo_base, medida_base, medida_base_estandar)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-        """, (nombre, modelo_base, ancho, profundidad, alto,
-              medida_estandar, foto_url, tipo, cantidad, precio,
-              tipo_base, medida_base, medida_base_estandar))
-        new_id = cursor.fetchone()[0]
+
+        if tipo == 'estructura' and cantidad > 1:
+            new_ids = []
+            for _ in range(cantidad):
+                cursor.execute("""
+                    INSERT INTO stock_estructuras_sofa
+                        (nombre_modelo, modelo_base, ancho, profundidad, alto,
+                         medida_estandar, foto_url, tipo, cantidad, precio,
+                         tipo_base, medida_base, medida_base_estandar)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1,%s,%s,%s,%s) RETURNING id
+                """, (nombre, modelo_base, ancho, profundidad, alto,
+                      medida_estandar, foto_url, tipo, precio,
+                      tipo_base, medida_base, medida_base_estandar))
+                new_ids.append(cursor.fetchone()[0])
+            new_id = new_ids[0]
+        else:
+            cursor.execute("""
+                INSERT INTO stock_estructuras_sofa
+                    (nombre_modelo, modelo_base, ancho, profundidad, alto,
+                     medida_estandar, foto_url, tipo, cantidad, precio,
+                     tipo_base, medida_base, medida_base_estandar)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+            """, (nombre, modelo_base, ancho, profundidad, alto,
+                  medida_estandar, foto_url, tipo, cantidad, precio,
+                  tipo_base, medida_base, medida_base_estandar))
+            new_id = cursor.fetchone()[0]
+
         conexion.commit()
         return jsonify({'exito': True, 'id': new_id}), 201
     except Exception as e:

@@ -3038,6 +3038,10 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             <input id="se-nombre" placeholder="Ej: Seccional 3+2 · Gris Perla"
                 style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
 
+            <label style="font-size:12px;font-weight:700;color:#475569;">CANTIDAD *</label>
+            <input id="se-cantidad" type="number" placeholder="Ej: 1" min="1" step="1" value="1"
+                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
+
             <!-- ── Bloque SOLO para Estructura ── -->
             <div id="bloque-solo-estructura">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
@@ -3056,14 +3060,9 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
                 <option value="">— Seleccionar modelo base —</option>
               </select>
 
-              <!-- A8: Medidas estructura sofa - botón para toggle + inputs -->
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <!-- A8: Medidas estructura sofa -->
+            <div style="margin-bottom:6px;">
             <label style="font-size:12px;font-weight:700;color:#475569;">MEDIDAS (cm)</label>
-            <button id="btn-medidas-estandar" onclick="_toggleMedidasEstandar()"
-                style="font-size:11px;padding:4px 10px;border-radius:6px;border:1.5px solid #7c3aed;
-                        background:#f5f3ff;color:#7c3aed;cursor:pointer;font-weight:700;">
-                📐 Mostrar campos de medida
-            </button>
             </div>
             <div id="bloque-medidas" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
             <input id="se-ancho" type="number" placeholder="Ancho"
@@ -3077,12 +3076,12 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;cursor:pointer;
                         background:#f9f5ff;padding:8px 10px;border-radius:6px;border:1px solid #ede9fe;">
             <input type="checkbox" id="se-estandar"> 
-            <span style="font-weight:500;">Guardar como medida estándar en catálogo</span>
+            <span style="font-weight:500;">Es una medida estándar de catálogo</span>
             </label>
             </div><!-- A8: Bloque PATA/ZÓCALO para estructura sofa -->
 <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">
   <label style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;display:block;">TIPO DE BASE</label>
-  <select id="se-tipo-base"
+  <select id="se-tipo-base" onchange="_actualizarVisibilidadBase()"
       style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;font-size:13px;background:white;">
     <option value="">— Sin base (solo estructura) —</option>
     <option value="patas">Patas</option>
@@ -3095,17 +3094,11 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
     <div style="display:flex;gap:6px;margin-bottom:10px;">
       <input id="se-medida-base" type="number" placeholder="Ej: 15" step="0.1"
           style="flex:1;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
-      <button id="btn-medida-base-estandar" type="button" onclick="_toggleMedidaBaseEstandar()"
-          style="padding:8px 12px;border-radius:6px;border:1.5px solid #cbd5e1;
-                 background:#f5f3ff;color:#7c3aed;cursor:pointer;font-weight:700;
-                 font-size:11px;white-space:nowrap;">
-          📐 Estándar
-      </button>
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;
                   background:#f9f5ff;padding:8px 10px;border-radius:6px;border:1px solid #ede9fe;">
       <input type="checkbox" id="se-medida-base-estandar"> 
-      <span style="font-weight:500;">Medida estándar de base</span>
+      <span style="font-weight:500;">Es una medida estándar de base</span>
     </label>
   </div>
 </div>
@@ -3114,9 +3107,6 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
 
             <!-- ── Bloque SOLO para Destrokes ── -->
             <div id="bloque-solo-destrokes" style="display:none;">
-              <label style="font-size:12px;font-weight:700;color:#475569;">CANTIDAD *</label>
-              <input id="se-cantidad" type="number" placeholder="Ej: 10" min="1" step="1"
-                  style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
             </div>
             <!-- ── fin bloque destrokes ── -->
 
@@ -3290,25 +3280,6 @@ function _actualizarEstiloRadios(contenedorId, activo) {
     });
 }
 
-function _toggleMedidasEstandar() {
-    const bloque = document.getElementById('bloque-medidas');
-    const btn    = document.getElementById('btn-medidas-estandar');
-    if (!bloque) return;
-    const oculto = bloque.style.display === 'none';
-    bloque.style.display = oculto ? 'grid' : 'none';
-    btn.style.background  = oculto ? '#f5f3ff' : '#7c3aed';
-    btn.style.color       = oculto ? '#7c3aed' : 'white';
-}
-// A8: Toggle para mostrar/ocultar input de medida de pata/zócalo
-function _toggleMedidaBaseEstandar() {
-    const btn = document.getElementById('btn-medida-base-estandar');
-    const cb = document.getElementById('se-medida-base-estandar');
-    if (!btn) return;
-    const estaOculto = cb.checked;
-    btn.style.background = estaOculto ? '#7c3aed' : '#f5f3ff';
-    btn.style.color = estaOculto ? 'white' : '#7c3aed';
-}
-
 // A8: Mostrar/ocultar inputs de medida de base cuando cambia el tipo
 function _actualizarVisibilidadBase() {
     const tipoBase = document.getElementById('se-tipo-base');
@@ -3322,8 +3293,6 @@ function _actualizarVisibilidadBase() {
         // Limpiar campos cuando se selecciona "Sin base"
         document.getElementById('se-medida-base').value = '';
         document.getElementById('se-medida-base-estandar').checked = false;
-        document.getElementById('btn-medida-base-estandar').style.background = '#f5f3ff';
-        document.getElementById('btn-medida-base-estandar').style.color = '#7c3aed';
     }
 }
 
@@ -3345,16 +3314,12 @@ function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
     const selTipo = document.getElementById('se-tipo');
     if (selTipo) { selTipo.value = 'estructura'; _onChangeTipoEstructura(); }
 
+    const selTipoBase = document.getElementById('se-tipo-base');
+    if (selTipoBase) { selTipoBase.value = ''; _actualizarVisibilidadBase(); }
+
     // Poblar select de modelos con optgroups (base del sistema + personalizados)
     _refreshSelectModeloBase();
 }
-// A8: Event listener para dropdown tipo-base
-const tipoBaseSelect = document.getElementById('se-tipo-base');
-if (tipoBaseSelect) {
-    tipoBaseSelect.addEventListener('change', _actualizarVisibilidadBase);
-    tipoBaseSelect.value = ''; // Reset
-}
-_actualizarVisibilidadBase(); // Estado inicial
 
 // ── Poblar #se-modelo-base con optgroups ─────────────────────────────────────
 function _refreshSelectModeloBase() {
@@ -3538,7 +3503,7 @@ async function guardarEstructura() {
         fd.append('profundidad',     document.getElementById('se-prof').value || 0);
         fd.append('alto',            document.getElementById('se-alto').value || 0);
         fd.append('medida_estandar', document.getElementById('se-estandar').checked ? 'true' : 'false');
-        fd.append('cantidad',        1);
+        fd.append('cantidad',        document.getElementById('se-cantidad').value || 1);
         // A8: campos pata/zócalo
         fd.append('tipo_base',            document.getElementById('se-tipo-base')?.value || '');
         fd.append('medida_base',          document.getElementById('se-medida-base')?.value || '');
