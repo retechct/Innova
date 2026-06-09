@@ -2737,11 +2737,18 @@ def listar_stock_estructuras():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        # Agregar chofer_nombre si la columna ya existe (migración segura)
+        # --- Migración segura: agregar columnas si no existen ---
+        # Es crucial comitear los cambios de esquema antes de usarlos.
         cursor.execute("""
             ALTER TABLE stock_estructuras_sofa
-            ADD COLUMN IF NOT EXISTS chofer_nombre VARCHAR(150);
+            ADD COLUMN IF NOT EXISTS chofer_nombre VARCHAR(150),
+            ADD COLUMN IF NOT EXISTS tipo_base VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS medida_base VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS medida_base_estandar BOOLEAN DEFAULT FALSE;
         """)
+        conexion.commit()
+        # ---------------------------------------------------------
+
         cursor.execute("""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
                    medida_estandar, foto_url, tipo, cantidad, estado,
