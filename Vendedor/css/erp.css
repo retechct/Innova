@@ -111,11 +111,16 @@ header {
 .sidebar-item--danger { color: var(--danger) !important; }
 
 /* ─── MAIN CONTENT ───────────────────────────────────────── */
+/* ─── MAIN CONTENT ───────────────────────────────────────── */
 .main-content {
   padding: 1.5rem;
   width: 100%;
   box-sizing: border-box;
   min-height: 100vh;
+  
+  /* A8: Responsive improvement para pantallas grandes */
+  max-width: 1400px;
+  margin: 0 auto;
 }
 .view-title-container {
   display: flex;

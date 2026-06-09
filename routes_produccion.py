@@ -2770,15 +2770,23 @@ def listar_stock_estructuras():
 def registrar_stock_estructura():
     import cloudinary.uploader
     try:
-        nombre          = request.form.get('nombre_modelo')
-        modelo_base     = request.form.get('modelo_base', '')
-        ancho           = request.form.get('ancho') or 0
-        profundidad     = request.form.get('profundidad') or 0
-        alto            = request.form.get('alto') or 0
-        medida_estandar = request.form.get('medida_estandar') == 'true'
-        tipo            = request.form.get('tipo', 'estructura')
-        cantidad        = int(request.form.get('cantidad', 1))
-        precio          = float(request.form.get('precio') or 0)
+        nombre              = request.form.get('nombre_modelo')
+        modelo_base         = request.form.get('modelo_base', '')
+        ancho               = request.form.get('ancho') or 0
+        profundidad         = request.form.get('profundidad') or 0
+        alto                = request.form.get('alto') or 0
+        medida_estandar     = request.form.get('medida_estandar') == 'true'
+        tipo                = request.form.get('tipo', 'estructura')
+        cantidad            = int(request.form.get('cantidad', 1))
+        precio              = float(request.form.get('precio') or 0)
+        # A8: Campos nuevos para pata/zócalo
+        tipo_base           = request.form.get('tipo_base', '')  # 'patas', 'zocalo', o vacío
+        medida_base         = request.form.get('medida_base') or None
+        medida_base_estandar = request.form.get('medida_base_estandar') == 'true'
+
+        # Validar que si hay tipo_base, también hay medida_base
+        if tipo_base and not medida_base:
+            return jsonify({'error': 'Si selecciona un tipo de base, debe ingresar la medida'}), 400
 
         foto_url = None
         if 'foto' in request.files and request.files['foto'].filename:
@@ -2790,10 +2798,12 @@ def registrar_stock_estructura():
         cursor.execute("""
             INSERT INTO stock_estructuras_sofa
                 (nombre_modelo, modelo_base, ancho, profundidad, alto,
-                 medida_estandar, foto_url, tipo, cantidad, precio)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                 medida_estandar, foto_url, tipo, cantidad, precio,
+                 tipo_base, medida_base, medida_base_estandar)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """, (nombre, modelo_base, ancho, profundidad, alto,
-              medida_estandar, foto_url, tipo, cantidad, precio))
+              medida_estandar, foto_url, tipo, cantidad, precio,
+              tipo_base, medida_base, medida_base_estandar))
         new_id = cursor.fetchone()[0]
         conexion.commit()
         return jsonify({'exito': True, 'id': new_id}), 201
@@ -2803,7 +2813,6 @@ def registrar_stock_estructura():
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
-
 
 @produccion_bp.route('/api/stock-estructuras/<int:stock_id>/usar', methods=['POST'])
 def usar_stock_estructura(stock_id):
