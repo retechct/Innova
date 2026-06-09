@@ -9,10 +9,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
 
+<!-- ── BASE ── -->
     <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/utilities.css">
+    
+    <!-- ── MÓDULOS ── -->
     <link rel="stylesheet" href="css/landing.css">
     <link rel="stylesheet" href="css/erp.css">
     <link rel="stylesheet" href="css/seguimiento.css">
+    
+    <!-- ── COMPONENTES ── -->
+    <link rel="stylesheet" href="css/modals.css">
+    <link rel="stylesheet" href="css/forms.css">
+    <link rel="stylesheet" href="css/tables.css">
+    <link rel="stylesheet" href="css/print.css">
 </head>
 
 <body>
@@ -1683,17 +1693,7 @@
     </div>
 </div>
 
-    <!-- Módulos JS (orden importa: config primero, app al final) -->
-    <script src="js/config.js"></script>
-    <script src="js/catalogo.js"></script>
-    <script src="js/carrito.js"></script>
-    <script src="js/materiales.js"></script>
-    <script src="js/taller.js"></script>
-    <script src="js/inventario.js"></script>
-    <script src="js/app.js"></script>
-    <script src="js/landing.js"></script>
-    <script src="js/seguimiento.js"></script>
-    <script src="js/busqueda_filtros.js"></script>
+    
 <!-- ═══════════════════════════════════════════════════════════
      MODAL — GESTIÓN DE MODELOS DE SOFÁ
      ═══════════════════════════════════════════════════════════ -->
@@ -2170,7 +2170,6 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
-<script src="js/gestores_modelos.js"></script>
 
 <!-- ── MODAL OBLIGATORIO DE SEDE (aparece tras login de rol ERP) ──────── -->
 <div id="modal-sede" style="
@@ -2216,4 +2215,21 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
+    <!-- ── CORE ── -->
+    <script src="js/config.js"></script>
+    <script src="js/helpers.js"></script>
+
+    <!-- ── MÓDULOS ── -->
+    <script src="js/landing.js"></script>
+    <script src="js/catalogo.js"></script>
+    <script src="js/carrito.js"></script>
+    <script src="js/materiales.js"></script>
+    <script src="js/taller.js"></script>
+    <script src="js/inventario.js"></script>
+    <script src="js/seguimiento.js"></script>
+    <script src="js/busqueda_filtros.js"></script>
+    <script src="js/gestores_modelos.js"></script>
+
+    <!-- ── APP (siempre al final) ── -->
+    <script src="js/app.js"></script>
 </body>

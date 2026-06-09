@@ -1,0 +1,448 @@
+/* ============================================================
+   INNOVA MÖBILI — Tables: Datos, listados, tablas
+   ============================================================ */
+
+/* ─── WRAPPER DE TABLA ────────────────────────────────────── */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--white);
+}
+
+.table-wrapper::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+  background: var(--gray-100);
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: 3px;
+}
+
+/* ─── TABLA BASE ────────────────────────────────────────────– */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: var(--primary);
+}
+
+.table th,
+.table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+/* ─── TABLA HEADER (ENCABEZADO) ────────────────────────────– */
+.table thead {
+  background: var(--primary);
+  color: var(--white);
+}
+
+.table th {
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 11px;
+  padding: 14px;
+  border-bottom: none;
+}
+
+.table th i {
+  margin-right: 4px;
+  opacity: 0.7;
+}
+
+/* ─── TABLA FILA ────────────────────────────────────────────– */
+.table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.table tbody tr:hover {
+  background: var(--gray-50);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table td {
+  padding: 12px 14px;
+  vertical-align: middle;
+}
+
+/* ─── TABLA STRIPED (RAYAS ALTERNADAS) ──────────────────────– */
+.table--striped tbody tr:nth-child(even) {
+  background: var(--gray-50);
+}
+
+.table--striped tbody tr:nth-child(even):hover {
+  background: var(--gray-100);
+}
+
+/* ─── TABLA COMPACT ────────────────────────────────────────– */
+.table--compact th,
+.table--compact td {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+/* ─── TABLA BORDEADA ────────────────────────────────────────– */
+.table--bordered {
+  border: 1px solid var(--border);
+}
+
+.table--bordered th,
+.table--bordered td {
+  border: 1px solid var(--border);
+}
+
+/* ─── TIPOS DE CELDAS ──────────────────────────────────────– */
+.table-cell-numeric {
+  text-align: right;
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+}
+
+.table-cell-icon {
+  text-align: center;
+  width: 40px;
+  font-size: 14px;
+}
+
+.table-cell-action {
+  text-align: center;
+  width: 80px;
+  white-space: nowrap;
+}
+
+.table-cell-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ─── BADGES / PILLS EN TABLAS ────────────────────────────– */
+.table-badge--success {
+  background: #ecfdf5;
+  color: #15803d;
+  border: 1px solid #d1fae5;
+}
+
+.table-badge--danger {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.table-badge--warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.table-badge--info {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.table-badge--accent {
+  background: rgba(201, 168, 76, 0.12);
+  color: var(--caramel);
+  border: 1px solid rgba(201, 168, 76, 0.25);
+}
+
+/* ─── BOTONES EN TABLA ────────────────────────────────────– */
+.table-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: var(--accent);
+  font-size: 12px;
+  transition: all 0.2s;
+  border-radius: 4px;
+}
+
+.table-btn:hover {
+  background: rgba(201, 168, 76, 0.1);
+  color: var(--caramel);
+}
+
+.table-btn--danger {
+  color: var(--danger);
+}
+
+.table-btn--danger:hover {
+  background: rgba(192, 57, 43, 0.1);
+  color: #a02820;
+}
+
+.table-btn--success {
+  color: var(--success);
+}
+
+.table-btn--success:hover {
+  background: rgba(90, 158, 114, 0.1);
+  color: #4a7c59;
+}
+
+/* ─── TABLA CON EXPANSIÓN ──────────────────────────────────– */
+.table-row--expandable {
+  cursor: pointer;
+}
+
+.table-row--expandable:hover {
+  background: var(--gray-100);
+}
+
+.table-row--expandable td:first-child {
+  position: relative;
+  padding-left: 24px;
+}
+
+.table-row--expandable::before {
+  content: '▶';
+  position: absolute;
+  left: 8px;
+  color: var(--accent);
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.table-row--expandable.expanded::before {
+  transform: rotate(90deg);
+}
+
+.table-row-expanded {
+  display: none;
+}
+
+.table-row--expandable.expanded + .table-row-expanded {
+  display: table-row;
+  background: var(--gray-50);
+}
+
+.table-row-expanded td {
+  padding: 12px 14px 12px 40px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+/* ─── TABLA CON CHECKBOX SELECTORA ────────────────────────– */
+.table-check-col {
+  width: 40px;
+  text-align: center;
+}
+
+.table-check-col input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.table tbody tr.table-row--selected {
+  background: rgba(201, 168, 76, 0.08);
+}
+
+/* ─── TABLA VACÍA ──────────────────────────────────────────– */
+.table-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px;
+}
+
+.table-empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.table-empty-text {
+  font-size: 13px;
+  margin: 0;
+}
+
+/* ─── TABLA CON SCROLL HORIZONTAL RESPONSIVE ───────────────– */
+.table-responsive {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .table-wrapper {
+    border-radius: 0;
+    border: none;
+  }
+
+  .table {
+    font-size: 12px;
+  }
+
+  .table th,
+  .table td {
+    padding: 8px 10px;
+  }
+
+  .table-cell-action {
+    width: auto;
+  }
+
+  /* Convertir tabla a cards en mobile */
+  .table--mobile-cards {
+    display: block;
+  }
+
+  .table--mobile-cards thead {
+    display: none;
+  }
+
+  .table--mobile-cards tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .table--mobile-cards tr {
+    display: block;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .table--mobile-cards td {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 8px;
+    border: none;
+    padding: 6px 0;
+    border-bottom: none;
+  }
+
+  .table--mobile-cards td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .table--mobile-cards td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .table--mobile-cards td:first-child::before {
+    display: none;
+  }
+}
+
+/* ─── TABLA PAGINADA ────────────────────────────────────────– */
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 12px 0;
+}
+
+.table-pagination-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--primary);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.table-pagination-btn:hover:not(:disabled) {
+  background: var(--gray-50);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.table-pagination-btn--active {
+  background: var(--accent);
+  color: var(--white);
+  border-color: var(--accent);
+}
+
+.table-pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.table-pagination-info {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 12px;
+}
+
+/* ─── TABLA CON FILTROS ────────────────────────────────────– */
+.table-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.table-filter-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--primary);
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.table-filter-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.table-filter-btn--active {
+  background: var(--accent);
+  color: var(--white);
+  border-color: var(--accent);
+}
+
+/* ─── TABLA CON BÚSQUEDA ────────────────────────────────────– */
+.table-search {
+  margin-bottom: 16px;
+}
+
+.table-search input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+.table-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}

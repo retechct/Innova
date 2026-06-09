@@ -1,0 +1,423 @@
+/* ============================================================
+   INNOVA MÖBILI — Print: Impresión, orden de taller, reportes
+   ============================================================ */
+
+/* ─── RESET PARA IMPRESIÓN ────────────────────────────────── */
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  /* Ocultar elementos que no deben imprimir */
+  .no-print,
+  .btn,
+  button,
+  nav,
+  .navbar,
+  .sidebar,
+  .modal-backdrop {
+    display: none !important;
+  }
+}
+
+/* ─── PÁGINA DE IMPRESIÓN ──────────────────────────────────– */
+.print-page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 15mm;
+  margin: auto;
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: white;
+  page-break-after: always;
+}
+
+.print-page + .print-page {
+  margin-top: 10mm;
+}
+
+/* ─── CONTENIDO IMPRIMIBLE ────────────────────────────────– */
+.print-content {
+  position: relative;
+  z-index: 10;
+}
+
+/* ─── DECORACIÓN GEOMÉTRICA (ESTILO INNOVA) ───────────────– */
+.print-corner-top {
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 250px;
+  height: 250px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--caramel) 100%);
+  transform: rotate(45deg);
+  z-index: 0;
+  opacity: 0.9;
+}
+
+.print-corner-bottom {
+  position: absolute;
+  bottom: -80px;
+  left: -80px;
+  width: 280px;
+  height: 280px;
+  background: var(--primary);
+  transform: rotate(45deg);
+  z-index: 0;
+}
+
+.print-corner-accent {
+  position: absolute;
+  bottom: 40px;
+  left: 80px;
+  width: 40px;
+  height: 200px;
+  background: var(--accent);
+  transform: rotate(45deg);
+  z-index: -1;
+}
+
+/* ─── HEADER / ENCABEZADO ──────────────────────────────────– */
+.print-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 20px;
+}
+
+.print-logo {
+  height: 80px;
+  filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.print-title {
+  text-align: right;
+}
+
+.print-title h1 {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 400;
+  margin: 0;
+  color: var(--primary);
+  letter-spacing: 1px;
+}
+
+.print-title p {
+  margin: 4px 0 0 0;
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ─── SECCIÓN DE CLIENTE ────────────────────────────────────– */
+.print-client-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 30px;
+  background: rgba(245, 240, 232, 0.5);
+  padding: 20px;
+  border-radius: 4px;
+  border-left: 5px solid var(--primary);
+}
+
+.print-info-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.print-info-box div {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.print-info-label {
+  color: var(--primary);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  display: inline-block;
+  width: 100px;
+}
+
+.print-info-value {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+/* ─── TABLA DE IMPRESIÓN ────────────────────────────────────– */
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-size: 11px;
+}
+
+.print-table thead {
+  background: var(--primary);
+  color: white;
+}
+
+.print-table thead th {
+  padding: 12px;
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  border: 1px solid var(--primary);
+}
+
+.print-table tbody td {
+  padding: 12px;
+  border-bottom: 1px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.print-table tbody td:last-child {
+  border-right: none;
+}
+
+.print-table tbody tr:last-child td {
+  border-bottom: 1px solid var(--primary);
+}
+
+/* ─── TABLA PRODUCTO / ITEMS ────────────────────────────────– */
+.print-item-name {
+  font-weight: 900;
+  color: var(--primary);
+  font-size: 13px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.print-item-details {
+  background: #f8fafc;
+  border-left: 3px solid var(--accent);
+  padding: 10px;
+  font-size: 10px;
+  color: #334155;
+  line-height: 1.6;
+  border-radius: 0 4px 4px 0;
+}
+
+/* ─── TABLA FIRMA / APROBACIÓN ────────────────────────────– */
+.print-signature-box {
+  border: 2px dashed #cbd5e1;
+  height: 100%;
+  min-height: 110px;
+  border-radius: 5px;
+  background: white;
+  padding: 5px;
+  font-size: 9px;
+  color: #94a3b8;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.print-signature-line {
+  border-top: 1px solid #cbd5e1;
+  padding-top: 5px;
+  width: 80%;
+  margin: 0 auto;
+}
+
+/* ─── RESUMEN FINANCIERO ────────────────────────────────────– */
+.print-summary {
+  margin-top: 40px;
+  border: 1px solid var(--border);
+  background: rgba(201, 168, 76, 0.04);
+  padding: 20px;
+  border-radius: 4px;
+}
+
+.print-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.1);
+  font-size: 12px;
+}
+
+.print-summary-row:last-child {
+  border-bottom: none;
+  padding-top: 12px;
+  padding-bottom: 0;
+}
+
+.print-summary-label {
+  color: var(--primary);
+}
+
+.print-summary-value {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.print-summary-row.total .print-summary-label {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.print-summary-row.total .print-summary-value {
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+/* ─── FOOTER / PIE DE PÁGINA ────────────────────────────────– */
+.print-footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.print-footer p {
+  margin: 4px 0;
+}
+
+/* ─── NOTA / AVISO IMPORTANTE ──────────────────────────────– */
+.print-note {
+  background: #fef3c7;
+  border-left: 4px solid #d97706;
+  border-radius: 4px;
+  padding: 12px;
+  margin: 20px 0;
+  font-size: 11px;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+.print-note strong {
+  color: #92400e;
+}
+
+/* ─── CÓDIGO QR / BARCODE ──────────────────────────────────– */
+.print-qr-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 20px 0;
+  gap: 20px;
+}
+
+.print-qr-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.print-qr-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.print-qr-code {
+  border: 1px solid var(--border);
+  padding: 4px;
+  background: white;
+}
+
+.print-qr-code img {
+  width: 100px;
+  height: 100px;
+}
+
+/* ─── BREAKPAGE FORZADO ────────────────────────────────────– */
+.print-page-break {
+  page-break-after: always;
+  margin-bottom: 20px;
+}
+
+@media print {
+  .print-page-break {
+    page-break-after: always;
+  }
+
+  .print-page {
+    margin: 0;
+    padding: 15mm;
+    width: 100%;
+  }
+
+  /* Prevenir corte de elementos */
+  .print-table {
+    page-break-inside: avoid;
+  }
+
+  .print-client-section {
+    page-break-inside: avoid;
+  }
+
+  .print-summary {
+    page-break-inside: avoid;
+  }
+}
+
+/* ─── VISTA PREVIA (ANTES DE IMPRIMIR) ─────────────────────– */
+.print-preview {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+
+.print-preview .print-page {
+  margin-bottom: 30px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* ─── RESPONSIVE PARA PRINT ────────────────────────────────– */
+@media print and (max-width: 800px) {
+  .print-page {
+    padding: 10mm;
+  }
+
+  .print-client-section {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .print-table {
+    font-size: 10px;
+  }
+
+  .print-table thead th,
+  .print-table tbody td {
+    padding: 8px;
+  }
+
+  .print-header {
+    margin-bottom: 20px;
+  }
+
+  .print-title h1 {
+    font-size: 20px;
+  }
+}

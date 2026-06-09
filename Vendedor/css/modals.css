@@ -1,0 +1,397 @@
+/* ============================================================
+   INNOVA MÖBILI — Modals: SweetAlert, paneles, overlays
+   ============================================================ */
+
+/* ─── SWEETALERT CUSTOMIZADO ────────────────────────────────– */
+.swal2-popup {
+  background: var(--white) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border-radius: 12px !important;
+  font-family: var(--font-ui) !important;
+}
+
+.swal2-title {
+  color: var(--primary) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  margin-bottom: 12px !important;
+}
+
+.swal2-html-container {
+  color: var(--primary) !important;
+  font-size: 13px !important;
+  line-height: 1.6;
+}
+
+.swal2-confirm {
+  background: var(--primary) !important;
+  color: var(--white) !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  padding: 10px 24px !important;
+}
+
+.swal2-confirm:hover {
+  background: var(--accent) !important;
+}
+
+.swal2-cancel {
+  background: var(--gray-100) !important;
+  color: var(--primary) !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  padding: 10px 24px !important;
+}
+
+.swal2-cancel:hover {
+  background: var(--gray-200) !important;
+}
+
+.swal2-close {
+  color: var(--primary) !important;
+}
+
+/* ─── OVERLAY / BACKDROP ────────────────────────────────────– */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9000;
+  backdrop-filter: blur(2px);
+}
+
+.modal-backdrop--light {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* ─── PANEL FLOTANTE (GLASS EFFECT) ────────────────────────– */
+.modal-glass {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  background: var(--white);
+  border-radius: 16px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
+  padding: 28px;
+  width: 90%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-glass--sm {
+  max-width: 380px;
+  padding: 24px;
+}
+
+.modal-glass--lg {
+  max-width: 600px;
+}
+
+/* ─── ESQUINAS DECORATIVAS ────────────────────────────────── */
+.modal-glass .modal-corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--accent);
+  z-index: 1;
+}
+
+.modal-glass .modal-corner.tl {
+  top: 12px;
+  left: 12px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.modal-glass .modal-corner.tr {
+  top: 12px;
+  right: 12px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.modal-glass .modal-corner.bl {
+  bottom: 12px;
+  left: 12px;
+  border-right: none;
+  border-top: none;
+}
+
+.modal-glass .modal-corner.br {
+  bottom: 12px;
+  right: 12px;
+  border-left: none;
+  border-top: none;
+}
+
+/* ─── MODAL TÍTULO ────────────────────────────────────────── */
+.modal-title {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--primary);
+  margin: 0 0 8px 0;
+  letter-spacing: 0.05em;
+}
+
+.modal-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 20px 0;
+}
+
+/* ─── MODAL FORMULARIO ────────────────────────────────────– */
+.modal-form-group {
+  margin-bottom: 16px;
+}
+
+.modal-form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.modal-form-input,
+.modal-form-select,
+.modal-form-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--primary);
+  background: var(--white);
+  transition: border-color 0.2s;
+}
+
+.modal-form-input:focus,
+.modal-form-select:focus,
+.modal-form-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
+.modal-form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ─── MODAL BOTONES ────────────────────────────────────────– */
+.modal-btn-group {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.modal-btn--primary {
+  background: var(--primary);
+  color: var(--white);
+}
+
+.modal-btn--primary:hover {
+  background: var(--accent);
+}
+
+.modal-btn--secondary {
+  background: var(--gray-100);
+  color: var(--primary);
+}
+
+.modal-btn--secondary:hover {
+  background: var(--gray-200);
+}
+
+.modal-btn--danger {
+  background: var(--danger);
+  color: var(--white);
+}
+
+.modal-btn--danger:hover {
+  background: #a02820;
+}
+
+/* ─── MODAL CERRAR (X) ────────────────────────────────────– */
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--text-muted);
+  transition: color 0.2s;
+  z-index: 10;
+}
+
+.modal-close:hover {
+  color: var(--primary);
+}
+
+/* ─── MODAL CONTENIDO ESPECIAL ────────────────────────────– */
+.modal-alert-box {
+  background: #fef3c7;
+  color: #78350f;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  border-left: 4px solid #d97706;
+}
+
+.modal-success-box {
+  background: #ecfdf5;
+  color: #15803d;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  border-left: 4px solid #10b981;
+}
+
+.modal-error-box {
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  border-left: 4px solid #dc2626;
+}
+
+/* ─── MODAL ITEMS / LISTA ──────────────────────────────────– */
+.modal-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  background: var(--gray-50);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.modal-item-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.modal-item-content {
+  flex: 1;
+}
+
+.modal-item-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 0 0 2px 0;
+}
+
+.modal-item-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ─── OVERLAY LOADING ──────────────────────────────────────– */
+.modal-loading {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  backdrop-filter: blur(2px);
+}
+
+.modal-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(201, 168, 76, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin-modal 0.8s linear infinite;
+}
+
+@keyframes spin-modal {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── ANIMACIONES MODAL ────────────────────────────────────– */
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-slide-up {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -40%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+.modal-glass {
+  animation: modal-fade-in 0.2s, modal-slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-backdrop {
+  animation: modal-fade-in 0.3s;
+}
+
+/* ─── RESPONSIVE ────────────────────────────────────────────– */
+@media (max-width: 600px) {
+  .modal-glass {
+    width: 95%;
+    max-width: 95%;
+    max-height: 95vh;
+    padding: 20px;
+  }
+
+  .modal-glass--sm {
+    padding: 16px;
+  }
+
+  .modal-btn-group {
+    flex-direction: column;
+  }
+
+  .modal-btn {
+    width: 100%;
+  }
+}

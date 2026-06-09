@@ -1192,11 +1192,17 @@ async function cargarTicketsTaller() {
 
     if (esAdmin && typeof filtroAdminTaller !== 'undefined' && filtroAdminTaller === 'stock_produccion') {
         tabsHeader.style.display = 'none';
+        // Resetear el grid del contenedor para que el stock ocupe todo el ancho
+        contenedor.style.display = 'block';
+        contenedor.style.gridTemplateColumns = '';
         contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando stock de producción...</p>';
         await cargarVistaStockProduccion(contenedor);
         return;
     } else {
         tabsHeader.style.display = 'flex';
+        // Restaurar el grid del contenedor para las vistas de tickets
+        contenedor.style.display = 'grid';
+        contenedor.style.gridTemplateColumns = 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))';
     }
 
     if (esAdmin) {
@@ -1237,6 +1243,8 @@ async function cargarTicketsTaller() {
 
         // Si está en vista RECOJO, mostrar esa sección y salir
         if (filtroAdminTaller === 'recojo') {
+            contenedor.style.display = 'block';
+            contenedor.style.gridTemplateColumns = '';
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando cola de recojo...</p>';
             await cargarVistaColaRecojo(contenedor);
             return;
@@ -1244,6 +1252,8 @@ async function cargarTicketsTaller() {
 
         // Si está en vista ENTREGADOS, mostrar historial y salir
         if (filtroAdminTaller === 'entregados') {
+            contenedor.style.display = 'block';
+            contenedor.style.gridTemplateColumns = '';
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando historial de entregas...</p>';
             await cargarVistaEntregados(contenedor, null);
             return;
@@ -1251,6 +1261,8 @@ async function cargarTicketsTaller() {
 
         // Si está en vista ÓRDENES POR PEDIDO, mostrar esa sección y salir
         if (filtroAdminTaller === 'ordenes') {
+            contenedor.style.display = 'block';
+            contenedor.style.gridTemplateColumns = '';
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:20px;">Cargando órdenes de producción...</p>';
             await cargarOrdenesProduccion(contenedor);
             return;
@@ -1291,6 +1303,8 @@ async function cargarTicketsTaller() {
 
         // ── Tab "Cola de Recojo" del chofer ──────────────────────────────────
         if (filtroChofer === 'cola_recojo_chofer') {
+            contenedor.style.display = 'block';
+            contenedor.style.gridTemplateColumns = '';
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:30px;">Cargando cola de recojo...</p>';
             await cargarVistaColaRecojoChofer(contenedor);
             return;
@@ -1298,11 +1312,15 @@ async function cargarTicketsTaller() {
 
         // ── Tab "Mis Entregados" del chofer ──────────────────────────────────
         if (filtroChofer === 'entregados_chofer') {
+            contenedor.style.display = 'block';
+            contenedor.style.gridTemplateColumns = '';
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:30px;">Cargando historial...</p>';
             await cargarVistaEntregados(contenedor, usuarioActivo.id);
             return;
         }
 
+        contenedor.style.display = 'block';
+        contenedor.style.gridTemplateColumns = '';
         contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:30px;">Cargando tus entregas...</p>';
 
         try {
@@ -2938,7 +2956,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
         const entregados  = data.filter(e => e.estado === 'entregado');
 
         document.getElementById(contenedorId).innerHTML = `
-        <div style="max-width:1000px;width:100%;box-sizing:border-box;margin:0 auto;">
+        <div style="width:100%;box-sizing:border-box;">
           <!-- Header: título área + botón registrar -->
           <div style="display:flex;justify-content:space-between;align-items:center;
                       margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #e2e8f0;flex-wrap:wrap;gap:10px;">
@@ -2952,7 +2970,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             <button onclick="abrirModalRegistrarEstructura('${contenedorId}', ${esAdmin})"
                 style="background:#7c3aed;color:white;border:none;border-radius:8px;
                        padding:10px 20px;cursor:pointer;font-size:13px;font-weight:700;
-                       display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                       display:flex;align-items:center;gap:6px;white-space:nowrap;margin-left:auto;">
                 <i class="fa-solid fa-plus"></i> Registrar
             </button>
           </div>
@@ -3417,7 +3435,7 @@ function _renderListaEstructuras(lista) {
             <p style="font-weight:700;font-size:14px;color:#475569;margin:0;">Sin registros</p>
             <p style="font-size:12px;margin:4px 0 0;">Registra la primera estructura con el botón de arriba.</p>
         </div>`;
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,240px));gap:14px;max-width:1400px;margin:0 auto;">` +
+    return `<div class="estructuras-grid">` +
     lista.map(e => `
       <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;
                   overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
@@ -3523,9 +3541,21 @@ async function guardarEstructura() {
         fd.append('medida_estandar', document.getElementById('se-estandar').checked ? 'true' : 'false');
         fd.append('cantidad',        document.getElementById('se-cantidad').value || 1);
         // A8: campos pata/zócalo
-        fd.append('tipo_base',            document.getElementById('se-tipo-base')?.value || '');
-        fd.append('medida_base',          document.getElementById('se-medida-base')?.value || '');
-        fd.append('medida_base_estandar', document.getElementById('se-medida-base-estandar')?.checked ? 'true' : 'false');
+        const tipoBase          = document.getElementById('se-tipo-base')?.value || '';
+        const medidaBaseEst     = document.getElementById('se-medida-base-estandar')?.checked || false;
+        const medidaBaseValor   = document.getElementById('se-medida-base')?.value || '';
+
+        // Validación frontend: si eligió tipo de base pero no marcó estándar ni puso medida
+        if (tipoBase && !medidaBaseEst && !medidaBaseValor) {
+            Swal.close();
+            return Swal.fire({ icon:'warning', title:'Falta la medida de base',
+                text:'Ingresa la medida de la pata/zócalo, o marca "Es una medida estándar de base".' });
+        }
+
+        fd.append('tipo_base',            tipoBase);
+        // Si es estándar enviamos "0" para que el backend no rechace campo vacío
+        fd.append('medida_base',          medidaBaseEst ? '0' : medidaBaseValor);
+        fd.append('medida_base_estandar', medidaBaseEst ? 'true' : 'false');
     }
 
     try {

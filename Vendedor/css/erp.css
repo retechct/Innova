@@ -111,7 +111,6 @@ header {
 .sidebar-item--danger { color: var(--danger) !important; }
 
 /* ─── MAIN CONTENT ───────────────────────────────────────── */
-/* ─── MAIN CONTENT ───────────────────────────────────────── */
 .main-content {
   padding: 1.5rem;
   width: 100%;
@@ -694,11 +693,49 @@ header {
   }
 }
 
-/* ── Stock Producción: el grid de tarjetas de estructuras ─────────
-   _renderListaEstructuras usa inline style; sobreescribimos con
-   max-width para que no se estire infinito en pantallas grandes    */
-#sp-sofa-contenido > div > div[style*="grid"] {
-  max-width: 1400px;
+/* ─── VIEW SECTIONS: base ────────────────────────────────── */
+.view-section {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ─── STOCK PRODUCCIÓN: grid de estructuras ──────────────── */
+/* Reemplaza el inline style de _renderListaEstructuras       */
+.estructuras-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+@media (min-width: 1400px) {
+  .estructuras-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1399px) {
+  .estructuras-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .estructuras-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .estructuras-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .estructuras-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ─── RESPONSIVE: MAIN CONTENT ─────────────────────────────────── */
