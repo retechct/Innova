@@ -3639,9 +3639,10 @@ async function marcarEstructuraEntregada(idsStr, nombreEstructura, btnEl) {
             if (maxCant > 1) {
                 cantidad = parseInt(document.getElementById('swal-cantidad-entregar').value);
                 if (isNaN(cantidad) || cantidad < 1 || cantidad > maxCant) {
-                    Swal.showValidationMessage(\`Ingresa una cantidad entre 1 y \${maxCant}.\`);
+                    Swal.showValidationMessage(`Ingresa una cantidad entre 1 y ${maxCant}.`);
                     return false;
                 }
+            
             }
             return { choferNombre: nombre, cantidad };
         }
