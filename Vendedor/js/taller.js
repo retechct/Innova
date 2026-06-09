@@ -3012,7 +3012,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
           </div>
 
           <div id="lista-est-${contenedorId}">
-            ${_renderListaEstructuras(disponibles)}
+            ${_renderListaEstructuras(_groupEstructuras(disponibles))}
           </div>
         </div>
 
@@ -3250,7 +3250,7 @@ function _filtrarStockSofa(estado, contenedorId) {
 
     const lista = data.filter(e => e.estado === estado);
     document.getElementById(`lista-est-${contenedorId}`).innerHTML =
-        _renderListaEstructuras(lista);
+        _renderListaEstructuras(_groupEstructuras(lista));
 }
 
 function _filtrarSubtipoSofa(contenedorId) {
@@ -3266,7 +3266,7 @@ function _filtrarSubtipoSofa(contenedorId) {
     if (subtipo === 'personalizada') lista = lista.filter(e => !e.medida_estandar);
 
     document.getElementById(`lista-est-${contenedorId}`).innerHTML =
-        _renderListaEstructuras(lista);
+        _renderListaEstructuras(_groupEstructuras(lista));
 }
 
 function _actualizarEstiloRadios(contenedorId, activo) {
@@ -3439,17 +3439,21 @@ function _renderListaEstructuras(lista) {
             <span style="font-size:11px;color:#64748b;background:#f8fafc;padding:3px 8px;border-radius:6px;">
               ${e.tipo === 'destrokes' ? '🔧 Destrokes' : '🪵 Estructura'}
             </span>
+            <span style="font-size:11px;color:#475569;background:#f1f5f9;padding:3px 8px;border-radius:6px;">
+              📦 Cant: <b>${e.cantidad || 1}</b>
+            </span>
             ${e.medida_estandar ? `<span style="font-size:11px;color:#7c3aed;background:#f5f3ff;padding:3px 8px;border-radius:6px;font-weight:700;">⭐ Estándar</span>` : ''}
+            ${e.tipo_base ? `<span style="font-size:11px;color:#0f172a;background:#e2e8f0;padding:3px 8px;border-radius:6px;">${e.tipo_base === 'zocalo' ? '🪵 Zócalo' : '🦵 Patas'}: <b>${e.medida_base_estandar ? 'Estándar' : e.medida_base + ' cm'}</b></span>` : ''}
           </div>
           ${e.ancho ? `<div style="font-size:12px;color:#475569;margin-top:6px;"><i class="fa-solid fa-ruler-combined" style="color:#94a3b8;"></i> ${e.ancho}×${e.profundidad}×${e.alto} cm</div>` : ''}
           ${e.precio ? `<div style="font-size:14px;color:#15803d;font-weight:800;margin-top:6px;">S/ ${parseFloat(e.precio).toFixed(2)}</div>` : ''}
 
           ${e.estado === 'disponible'
-            ? `<button onclick="marcarEstructuraEntregada(${e.id}, '${(e.nombre_modelo||'').replace(/'/g,"\\'")}', this)"
+            ? `<button onclick="marcarEstructuraEntregada('${e.ids ? e.ids.join(',') : e.id}', '${(e.nombre_modelo||'').replace(/'/g,"\\'")}', this)"
                    style="width:100%;margin-top:10px;padding:9px;background:#0f172a;color:white;
                           border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;
                           display:flex;align-items:center;justify-content:center;gap:6px;">
-                <i class="fa-solid fa-truck"></i> Entregar al chofer
+                <i class="fa-solid fa-truck"></i> Entregar al chofer${e.cantidad > 1 ? ` (Máx: ${e.cantidad})` : ''}
                </button>`
             : `<div style="margin-top:10px;padding:8px 10px;background:#f0fdf4;border-radius:8px;
                            font-size:11px;color:#15803d;display:flex;align-items:center;gap:6px;">
@@ -3493,6 +3497,8 @@ async function guardarEstructura() {
                 text:'Ingresa cuántas piezas de destrokes registras.' });
         }
     }
+
+    Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
     const fd = new FormData();
     fd.append('nombre_modelo', nombre);
@@ -3543,8 +3549,40 @@ async function guardarEstructura() {
 }
 
 
+// ── Función para agrupar estructuras similares en la vista de stock ──
+function _groupEstructuras(lista) {
+    let grouped = [];
+    lista.forEach(e => {
+        let existing = grouped.find(g => 
+            g.nombre_modelo === e.nombre_modelo && 
+            g.modelo_base === e.modelo_base &&
+            g.ancho === e.ancho &&
+            g.profundidad === e.profundidad &&
+            g.alto === e.alto &&
+            g.tipo === e.tipo &&
+            g.tipo_base === e.tipo_base &&
+            g.medida_base === e.medida_base &&
+            g.medida_base_estandar === e.medida_base_estandar &&
+            g.medida_estandar === e.medida_estandar &&
+            g.estado === e.estado &&
+            g.chofer_nombre === e.chofer_nombre
+        );
+        if (existing) {
+            existing.cantidad = (existing.cantidad || 1) + (e.cantidad || 1);
+            if (!existing.ids) existing.ids = [existing.id];
+            existing.ids.push(e.id);
+        } else {
+            grouped.push({ ...e, cantidad: e.cantidad || 1, ids: [e.id] });
+        }
+    });
+    return grouped;
+}
+
 // ── Entregar estructura al chofer (flujo del carpintero) ──────────────────────
-async function marcarEstructuraEntregada(estructuraId, nombreEstructura, btnEl) {
+async function marcarEstructuraEntregada(idsStr, nombreEstructura, btnEl) {
+    const ids = idsStr.toString().split(',').map(id => parseInt(id.trim()));
+    const maxCant = ids.length;
+
     // 1. Cargar lista de choferes
     let opcionesHTML = '<option value="">— Selecciona al chofer —</option>';
     try {
@@ -3559,12 +3597,12 @@ async function marcarEstructuraEntregada(estructuraId, nombreEstructura, btnEl) 
         // Si falla la carga, igual se puede escribir manualmente abajo
     }
 
-    const { value: choferNombre, isConfirmed } = await Swal.fire({
+    const { value: datos, isConfirmed } = await Swal.fire({
         title: '¿Qué chofer se la llevó?',
         html: `
             <p style="font-size:13px;color:#475569;margin:0 0 14px;">
                 <b>${nombreEstructura}</b><br>
-                <span style="font-size:11px;">Esta estructura quedará registrada como entregada.</span>
+                <span style="font-size:11px;">Quedará registrada como entregada.</span>
             </p>
             <select id="swal-chofer-select"
                 style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;
@@ -3575,6 +3613,14 @@ async function marcarEstructuraEntregada(estructuraId, nombreEstructura, btnEl) 
                 placeholder="O escribe el nombre si no aparece en la lista"
                 style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;
                        font-size:13px;box-sizing:border-box;">
+            ${maxCant > 1 ? `
+            <div style="margin-top:14px;text-align:left;">
+                <label style="font-size:12px;font-weight:700;color:#475569;">¿Cuántas unidades se lleva?</label>
+                <input id="swal-cantidad-entregar" type="number" min="1" max="${maxCant}" value="${maxCant}"
+                    style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;
+                           font-size:13px;box-sizing:border-box;margin-top:4px;">
+                <p style="font-size:10px;color:#94a3b8;margin:4px 0 0;">Máximo disponible: ${maxCant}</p>
+            </div>` : ''}
         `,
         showCancelButton: true,
         confirmButtonColor: '#15803d',
@@ -3589,27 +3635,43 @@ async function marcarEstructuraEntregada(estructuraId, nombreEstructura, btnEl) 
                 Swal.showValidationMessage('Selecciona o escribe el nombre del chofer.');
                 return false;
             }
-            return nombre;
+            let cantidad = 1;
+            if (maxCant > 1) {
+                cantidad = parseInt(document.getElementById('swal-cantidad-entregar').value);
+                if (isNaN(cantidad) || cantidad < 1 || cantidad > maxCant) {
+                    Swal.showValidationMessage(\`Ingresa una cantidad entre 1 y \${maxCant}.\`);
+                    return false;
+                }
+            }
+            return { choferNombre: nombre, cantidad };
         }
     });
 
-    if (!isConfirmed || !choferNombre) return;
+    if (!isConfirmed || !datos) return;
 
     if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...'; }
 
     try {
-        const res = await apiFetch(`${API_URL}/api/stock-estructuras/${estructuraId}/entregar`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chofer_nombre: choferNombre })
-        });
-        const d = await res.json();
+        let exitoCount = 0;
+        let lastError = null;
+        const idsToDeliver = ids.slice(0, datos.cantidad);
 
-        if (d.exito) {
+        for (const id of idsToDeliver) {
+            const res = await apiFetch(`${API_URL}/api/stock-estructuras/${id}/entregar`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chofer_nombre: datos.choferNombre })
+            });
+            const d = await res.json();
+            if (d.exito) exitoCount++;
+            else lastError = d.error;
+        }
+
+        if (exitoCount > 0) {
             Swal.fire({
                 icon: 'success',
                 title: '¡Entregado!',
-                html: `Registrado que <b>${choferNombre}</b> se llevó la estructura.`,
+                html: `Registrado que <b>${datos.choferNombre}</b> se llevó ${exitoCount} estructura(s).`,
                 timer: 2200,
                 showConfirmButton: false
             });

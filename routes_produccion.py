@@ -2746,7 +2746,8 @@ def listar_stock_estructuras():
             SELECT id, nombre_modelo, ancho, profundidad, alto,
                    medida_estandar, foto_url, tipo, cantidad, estado,
                    ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY'), COALESCE(precio, 0),
-                   COALESCE(modelo_base, ''), COALESCE(chofer_nombre, '')
+                   COALESCE(modelo_base, ''), COALESCE(chofer_nombre, ''),
+                   COALESCE(tipo_base, ''), COALESCE(medida_base, ''), medida_base_estandar
             FROM stock_estructuras_sofa
             ORDER BY fecha_registro DESC
         """)
@@ -2757,7 +2758,8 @@ def listar_stock_estructuras():
             'medida_estandar': r[5], 'foto_url': r[6], 'tipo': r[7],
             'cantidad': r[8], 'estado': r[9], 'ticket_id': r[10], 'fecha': r[11],
             'precio': float(r[12] or 0),
-            'modelo_base': r[13], 'chofer_nombre': r[14]
+            'modelo_base': r[13], 'chofer_nombre': r[14],
+            'tipo_base': r[15], 'medida_base': r[16], 'medida_base_estandar': r[17]
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
