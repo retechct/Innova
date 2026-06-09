@@ -3075,7 +3075,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             <!-- A8: Checkbox para marcar como medida estándar en BD -->
             <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;cursor:pointer;
                         background:#f9f5ff;padding:8px 10px;border-radius:6px;border:1px solid #ede9fe;">
-            <input type="checkbox" id="se-estandar"> 
+            <input type="checkbox" id="se-estandar" onchange="document.getElementById('bloque-medidas').style.display = this.checked ? 'none' : 'flex'; if(this.checked){document.getElementById('se-ancho').value='';document.getElementById('se-prof').value='';document.getElementById('se-alto').value='';}"> 
             <span style="font-weight:500;">Es una medida estándar de catálogo</span>
             </label>
             </div><!-- A8: Bloque PATA/ZÓCALO para estructura sofa -->
@@ -3091,13 +3091,13 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
   <!-- Inputs de medida para pata/zócalo, mostrados condicionalmente -->
   <div id="bloque-medida-base" style="display:none;">
     <label style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;display:block;">MEDIDA DE BASE (cm)</label>
-    <div style="display:flex;gap:6px;margin-bottom:10px;">
+    <div id="bloque-inputs-medida-base" style="display:flex;gap:6px;margin-bottom:10px;">
       <input id="se-medida-base" type="number" placeholder="Ej: 15" step="0.1"
           style="flex:1;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;
                   background:#f9f5ff;padding:8px 10px;border-radius:6px;border:1px solid #ede9fe;">
-      <input type="checkbox" id="se-medida-base-estandar"> 
+      <input type="checkbox" id="se-medida-base-estandar" onchange="document.getElementById('bloque-inputs-medida-base').style.display = this.checked ? 'none' : 'flex'; if(this.checked){document.getElementById('se-medida-base').value='';}"> 
       <span style="font-weight:500;">Es una medida estándar de base</span>
     </label>
   </div>
@@ -3293,6 +3293,8 @@ function _actualizarVisibilidadBase() {
         // Limpiar campos cuando se selecciona "Sin base"
         document.getElementById('se-medida-base').value = '';
         document.getElementById('se-medida-base-estandar').checked = false;
+        const bBase = document.getElementById('bloque-inputs-medida-base');
+        if (bBase) bBase.style.display = 'flex';
     }
 }
 
@@ -3303,12 +3305,22 @@ function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
     modal.style.display = 'flex';
 
     // Reset todos los campos
-    ['se-nombre','se-precio','se-ancho','se-prof','se-alto','se-cantidad'].forEach(id => {
+    ['se-nombre','se-precio','se-ancho','se-prof','se-alto','se-cantidad','se-medida-base'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
     const cb = document.getElementById('se-estandar');
-    if (cb) cb.checked = false;
+    if (cb) {
+        cb.checked = false;
+        const b = document.getElementById('bloque-medidas');
+        if (b) b.style.display = 'flex';
+    }
+    const cbBase = document.getElementById('se-medida-base-estandar');
+    if (cbBase) {
+        cbBase.checked = false;
+        const bBase = document.getElementById('bloque-inputs-medida-base');
+        if (bBase) bBase.style.display = 'flex';
+    }
 
     // Resetear tipo a "estructura" y disparar el cambio de UI
     const selTipo = document.getElementById('se-tipo');
