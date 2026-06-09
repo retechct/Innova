@@ -235,6 +235,8 @@ class ItemVenta(db.Model):
     stock_pieza_id   = db.Column(db.Integer, nullable=True)
     precio_unitario  = db.Column(db.Numeric(10, 2), nullable=True)
 
+    fotos_referencia = db.Column(db.Text, nullable=True)   # URLs separadas por '|'
+
     tickets = db.relationship('TicketProduccion', backref='item', lazy=True)
 
 
@@ -543,3 +545,26 @@ class CotizacionLoteItem(db.Model):
     fecha_entrega_proveedor = db.Column(db.Date, nullable=True)
     notas_item              = db.Column(db.Text, nullable=True)
     respondido              = db.Column(db.Boolean, default=False)
+
+# ── Stock de estructuras de sofá (taller) ────────────────────
+
+class StockEstructuraSofa(db.Model):
+    __tablename__ = 'stock_estructuras_sofa'
+    id                   = db.Column(db.Integer, primary_key=True)
+    nombre_modelo        = db.Column(db.String(150), nullable=False)
+    modelo_base          = db.Column(db.String(100), nullable=True)
+    ancho                = db.Column(db.Numeric(8, 2), nullable=True)
+    profundidad          = db.Column(db.Numeric(8, 2), nullable=True)
+    alto                 = db.Column(db.Numeric(8, 2), nullable=True)
+    medida_estandar      = db.Column(db.Boolean, default=True)
+    foto_url             = db.Column(db.Text, nullable=True)
+    tipo                 = db.Column(db.String(50), nullable=True)   # 'estructura', 'brazo', etc.
+    cantidad             = db.Column(db.Integer, default=1)
+    estado               = db.Column(db.String(50), default='disponible')
+    ticket_id            = db.Column(db.Integer, db.ForeignKey('tickets_produccion.id'), nullable=True)
+    fecha_registro       = db.Column(db.DateTime, default=lambda: datetime.now(tz_peru))
+    precio               = db.Column(db.Numeric(10, 2), nullable=True)
+    chofer_nombre        = db.Column(db.String(150), nullable=True)
+    tipo_base            = db.Column(db.String(50), nullable=True)   # 'patas', 'zocalo', o vacío
+    medida_base          = db.Column(db.Numeric(8, 2), nullable=True)
+    medida_base_estandar = db.Column(db.Boolean, default=False)

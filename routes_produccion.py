@@ -2737,24 +2737,15 @@ def listar_stock_estructuras():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        # --- Migración segura: agregar columnas si no existen ---
-        # Es crucial comitear los cambios de esquema antes de usarlos.
-        cursor.execute("""
-            ALTER TABLE stock_estructuras_sofa
-            ADD COLUMN IF NOT EXISTS chofer_nombre VARCHAR(150),
-            ADD COLUMN IF NOT EXISTS tipo_base VARCHAR(50),
-            ADD COLUMN IF NOT EXISTS medida_base VARCHAR(50),
-            ADD COLUMN IF NOT EXISTS medida_base_estandar BOOLEAN DEFAULT FALSE;
-        """)
-        conexion.commit()
-        # ---------------------------------------------------------
 
         cursor.execute("""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
                    medida_estandar, foto_url, tipo, cantidad, estado,
                    ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY'), COALESCE(precio, 0),
                    COALESCE(modelo_base, ''), COALESCE(chofer_nombre, ''),
-                   COALESCE(tipo_base, ''), COALESCE(medida_base, ''), medida_base_estandar
+                   COALESCE(tipo_base, ''),
+                   COALESCE(medida_base::numeric, 0),
+                   COALESCE(medida_base_estandar, FALSE)
             FROM stock_estructuras_sofa
             ORDER BY fecha_registro DESC
         """)
@@ -2766,7 +2757,9 @@ def listar_stock_estructuras():
             'cantidad': r[8], 'estado': r[9], 'ticket_id': r[10], 'fecha': r[11],
             'precio': float(r[12] or 0),
             'modelo_base': r[13], 'chofer_nombre': r[14],
-            'tipo_base': r[15], 'medida_base': r[16], 'medida_base_estandar': r[17]
+            'tipo_base': r[15],
+            'medida_base': float(r[16] or 0),
+            'medida_base_estandar': r[17]
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
