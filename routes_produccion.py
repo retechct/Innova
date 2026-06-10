@@ -2738,10 +2738,12 @@ def listar_stock_estructuras():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        # A9: migración segura — asegura columna pagado
+        # A9: migración segura — asegura columnas pagado y fecha_entrega_chofer
         cursor.execute("""
             ALTER TABLE stock_estructuras_sofa
             ADD COLUMN IF NOT EXISTS pagado BOOLEAN DEFAULT FALSE;
+            ALTER TABLE stock_estructuras_sofa
+            ADD COLUMN IF NOT EXISTS fecha_entrega_chofer TIMESTAMP;
         """)
 
         cursor.execute("""
@@ -2752,7 +2754,8 @@ def listar_stock_estructuras():
                    COALESCE(tipo_base, ''),
                    COALESCE(medida_base::numeric, 0),
                    COALESCE(medida_base_estandar, FALSE),
-                   COALESCE(pagado, FALSE)
+                   COALESCE(pagado, FALSE),
+                   TO_CHAR(fecha_entrega_chofer, 'DD/MM/YYYY HH24:MI')
             FROM stock_estructuras_sofa
             ORDER BY fecha_registro DESC
         """)
@@ -2767,7 +2770,8 @@ def listar_stock_estructuras():
             'tipo_base': r[15],
             'medida_base': float(r[16] or 0),
             'medida_base_estandar': r[17],
-            'pagado': bool(r[18])
+            'pagado': bool(r[18]),
+            'fecha_entrega_chofer': r[19] or ''
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -3016,7 +3020,8 @@ def entregar_estructura(stock_id):
 
         cursor.execute("""
             UPDATE stock_estructuras_sofa
-            SET estado = 'entregado', chofer_nombre = %s
+            SET estado = 'entregado', chofer_nombre = %s,
+                fecha_entrega_chofer = NOW()
             WHERE id = %s
         """, (chofer_nombre, stock_id))
         conexion.commit()

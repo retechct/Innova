@@ -3466,6 +3466,12 @@ function _renderListaEstructuras(lista) {
           ${e.ancho ? `<div style="font-size:12px;color:#475569;margin-top:6px;"><i class="fa-solid fa-ruler-combined" style="color:#94a3b8;"></i> ${e.ancho}×${e.profundidad}×${e.alto} cm</div>` : ''}
           ${e.precio ? `<div style="font-size:14px;color:#15803d;font-weight:800;margin-top:6px;">S/ ${parseFloat(e.precio).toFixed(2)}</div>` : ''}
 
+          <!-- A9b: fechas -->
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:2px;">
+            ${e.fecha ? `<div style="font-size:11px;color:#94a3b8;"><i class="fa-regular fa-calendar" style="margin-right:4px;"></i>Registrado: <b style="color:#64748b;">${e.fecha}</b></div>` : ''}
+            ${e.fecha_entrega_chofer ? `<div style="font-size:11px;color:#94a3b8;"><i class="fa-solid fa-truck" style="margin-right:4px;color:#15803d;"></i>Entregado: <b style="color:#15803d;">${e.fecha_entrega_chofer}</b></div>` : ''}
+          </div>
+
           <!-- A9: badge de pago + botón toggle -->
           <div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:6px;">
             <button onclick="togglePagoEstructura(${e.ids && e.ids.length === 1 ? e.ids[0] : e.id}, ${!!e.pagado}, this)"
