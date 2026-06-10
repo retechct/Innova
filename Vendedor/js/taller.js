@@ -3466,6 +3466,25 @@ function _renderListaEstructuras(lista) {
           ${e.ancho ? `<div style="font-size:12px;color:#475569;margin-top:6px;"><i class="fa-solid fa-ruler-combined" style="color:#94a3b8;"></i> ${e.ancho}×${e.profundidad}×${e.alto} cm</div>` : ''}
           ${e.precio ? `<div style="font-size:14px;color:#15803d;font-weight:800;margin-top:6px;">S/ ${parseFloat(e.precio).toFixed(2)}</div>` : ''}
 
+          <!-- A9: badge de pago + botón toggle -->
+          <div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:6px;">
+            <button onclick="togglePagoEstructura(${e.ids && e.ids.length === 1 ? e.ids[0] : e.id}, ${!!e.pagado}, this)"
+                style="flex:1;padding:6px 10px;border-radius:7px;font-size:11px;font-weight:800;
+                       cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;
+                       border:${e.pagado ? '1.5px solid #15803d' : '1.5px solid #f59e0b'};
+                       background:${e.pagado ? '#dcfce7' : '#fef3c7'};
+                       color:${e.pagado ? '#15803d' : '#92400e'};"
+                title="${e.pagado ? 'Marcar como no pagado' : 'Marcar como pagado'}">
+              ${e.pagado ? '✓ Pagado' : '⏳ No pagado'}
+            </button>
+            <button onclick="abrirModalEditarEstructura(${e.ids && e.ids.length === 1 ? e.ids[0] : e.id})"
+                style="padding:6px 10px;border-radius:7px;font-size:11px;font-weight:800;
+                       cursor:pointer;border:1.5px solid #cbd5e1;background:#f8fafc;color:#475569;
+                       display:flex;align-items:center;gap:4px;" title="Editar datos">
+              ✏️ Editar
+            </button>
+          </div>
+
           ${e.estado === 'disponible'
             ? `<button onclick="marcarEstructuraEntregada('${e.ids ? e.ids.join(',') : e.id}', '${(e.nombre_modelo||'').replace(/'/g,"\\'")}', this)"
                    style="width:100%;margin-top:10px;padding:9px;background:#0f172a;color:white;
@@ -3721,5 +3740,185 @@ async function marcarEstructuraEntregada(idsStr, nombreEstructura, btnEl) {
     } catch(e) {
         Swal.fire({ icon: 'error', title: 'Sin conexión', text: 'Verifica tu red e intenta de nuevo.' });
         if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="fa-solid fa-truck"></i> Entregar al chofer'; }
+    }
+}
+
+// ── A9: Toggle pago de estructura ─────────────────────────────────────────────
+async function togglePagoEstructura(id, pagadoActual, btnEl) {
+    const nuevoPagado = !pagadoActual;
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = '...';
+    }
+    try {
+        const res = await apiFetch(`${API_URL}/api/stock-estructuras/${id}/pago`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pagado: nuevoPagado })
+        });
+        const d = await res.json();
+        if (d.exito) {
+            // Refrescar la vista completa para sincronizar estados
+            const ctx = window._modalEstructuraCtx || {};
+            const contenedorId = window._stockSofaContenedorActivo || (ctx.contenedorId);
+            if (contenedorId) {
+                const esAdmin = contenedorId === 'sp-sofa-contenido';
+                await _cargarContenidoStockSofa(contenedorId, esAdmin);
+            } else {
+                cargarTicketsTaller();
+            }
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: d.error });
+            if (btnEl) { btnEl.disabled = false; }
+        }
+    } catch(e) {
+        Swal.fire({ icon: 'error', title: 'Sin conexión', text: 'Intenta de nuevo.' });
+        if (btnEl) { btnEl.disabled = false; }
+    }
+}
+
+// ── A9: Modal de edición de estructura ───────────────────────────────────────
+async function abrirModalEditarEstructura(id) {
+    const data = window._stockEstructurasData || [];
+    const e = data.find(x => x.id === id);
+    if (!e) {
+        return Swal.fire({ icon: 'warning', title: 'No encontrado', text: 'Recarga la página e intenta de nuevo.' });
+    }
+
+    let opcionesModelo = '<option value="">— Seleccionar modelo base —</option>';
+    try {
+        const res = await apiFetch(`${API_URL}/api/catalogo`);
+        const productos = await res.json();
+        if (Array.isArray(productos)) {
+            productos.filter(p => p.es_plantilla).forEach(p => {
+                const sel = p.nombre === e.modelo_base ? 'selected' : '';
+                opcionesModelo += `<option value="${p.nombre}" ${sel}>${p.nombre}</option>`;
+            });
+        }
+    } catch(err) {}
+
+    const tipoBaseOpts = ['', 'patas', 'zocalo'].map(v => {
+        const label = v === '' ? '— Sin base —' : (v === 'patas' ? 'Patas' : 'Zócalo');
+        return `<option value="${v}" ${e.tipo_base === v ? 'selected' : ''}>${label}</option>`;
+    }).join('');
+
+    const resultado = await Swal.fire({
+        title: 'Editar estructura',
+        width: 520,
+        html: `
+<div style="text-align:left;font-family:Jost,sans-serif;font-size:13px;">
+  <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">NOMBRE / DESCRIPCIÓN</label>
+  <input id="ed-nombre" value="${(e.nombre_modelo||'').replace(/"/g,'&quot;')}"
+      style="width:100%;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:7px;margin-bottom:12px;font-size:13px;box-sizing:border-box;">
+
+  <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">MODELO BASE</label>
+  <select id="ed-modelo-base"
+      style="width:100%;padding:8px 10px;border:1.5px solid #7c3aed;border-radius:7px;margin-bottom:12px;font-size:13px;box-sizing:border-box;">
+    ${opcionesModelo}
+  </select>
+
+  <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">MEDIDAS (cm)</label>
+  <div style="display:flex;gap:6px;margin-bottom:4px;">
+    <input id="ed-ancho" type="number" placeholder="Ancho" value="${e.ancho||''}"
+        style="flex:1;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:13px;">
+    <input id="ed-prof" type="number" placeholder="Prof." value="${e.profundidad||''}"
+        style="flex:1;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:13px;">
+    <input id="ed-alto" type="number" placeholder="Alto" value="${e.alto||''}"
+        style="flex:1;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:13px;">
+  </div>
+  <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;
+                margin-bottom:12px;background:#f9f5ff;padding:7px 10px;border-radius:6px;border:1px solid #ede9fe;">
+    <input type="checkbox" id="ed-estandar" ${e.medida_estandar ? 'checked' : ''}
+           onchange="['ed-ancho','ed-prof','ed-alto'].forEach(id=>document.getElementById(id).disabled=this.checked);">
+    <span style="font-weight:500;">Es medida estándar de catálogo</span>
+  </label>
+
+  <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">TIPO DE BASE</label>
+  <select id="ed-tipo-base"
+      style="width:100%;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:7px;margin-bottom:8px;font-size:13px;box-sizing:border-box;"
+      onchange="document.getElementById('ed-bloque-base').style.display=this.value?'block':'none';">
+    ${tipoBaseOpts}
+  </select>
+  <div id="ed-bloque-base" style="display:${e.tipo_base ? 'block' : 'none'};margin-bottom:12px;">
+    <input id="ed-medida-base" type="number" placeholder="Medida base (cm)" value="${e.medida_base||''}"
+        style="width:100%;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;margin-bottom:6px;">
+    <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;
+                  background:#f9f5ff;padding:7px 10px;border-radius:6px;border:1px solid #ede9fe;">
+      <input type="checkbox" id="ed-medida-base-est" ${e.medida_base_estandar ? 'checked' : ''}
+             onchange="document.getElementById('ed-medida-base').disabled=this.checked;">
+      <span style="font-weight:500;">Medida estándar de base</span>
+    </label>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:12px;">
+    <div style="flex:1;">
+      <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">PRECIO (S/)</label>
+      <input id="ed-precio" type="number" step="0.01" placeholder="0.00" value="${e.precio||''}"
+          style="width:100%;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;">
+    </div>
+    <div style="flex:1;">
+      <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">CANTIDAD</label>
+      <input id="ed-cantidad" type="number" min="1" step="1" value="${e.cantidad||1}"
+          style="width:100%;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;">
+    </div>
+  </div>
+
+  <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">NUEVA FOTO (opcional)</label>
+  <input type="file" id="ed-foto" accept="image/*" style="font-size:12px;">
+</div>`,
+        confirmButtonText: '<i class="fa-solid fa-floppy-disk"></i> Guardar cambios',
+        confirmButtonColor: '#7c3aed',
+        cancelButtonText: 'Cancelar',
+        showCancelButton: true,
+        preConfirm: () => {
+            const nombre = (document.getElementById('ed-nombre')?.value || '').trim();
+            if (!nombre) { Swal.showValidationMessage('El nombre es obligatorio'); return false; }
+            return {
+                nombre_modelo:        nombre,
+                modelo_base:          document.getElementById('ed-modelo-base')?.value || '',
+                ancho:                document.getElementById('ed-ancho')?.value || 0,
+                profundidad:          document.getElementById('ed-prof')?.value || 0,
+                alto:                 document.getElementById('ed-alto')?.value || 0,
+                medida_estandar:      document.getElementById('ed-estandar')?.checked || false,
+                tipo_base:            document.getElementById('ed-tipo-base')?.value || '',
+                medida_base:          document.getElementById('ed-medida-base')?.value || '',
+                medida_base_estandar: document.getElementById('ed-medida-base-est')?.checked || false,
+                precio:               document.getElementById('ed-precio')?.value || 0,
+                cantidad:             document.getElementById('ed-cantidad')?.value || 1,
+                foto:                 document.getElementById('ed-foto')?.files[0] || null,
+            };
+        }
+    });
+
+    if (!resultado.isConfirmed || !resultado.value) return;
+
+    const captured = resultado.value;
+    const fd = new FormData();
+    Object.entries(captured).forEach(([k, v]) => {
+        if (k === 'foto') { if (v) fd.append('foto', v); }
+        else { fd.append(k, v); }
+    });
+
+    Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        const res = await fetch(`${API_URL}/api/stock-estructuras/${id}/editar`, {
+            method: 'PATCH',
+            body: fd
+        });
+        const d = await res.json();
+        if (d.exito) {
+            Swal.fire({ icon: 'success', title: '¡Guardado!', timer: 1300, showConfirmButton: false });
+            const contenedorId = window._stockSofaContenedorActivo;
+            if (contenedorId) {
+                await _cargarContenidoStockSofa(contenedorId, contenedorId === 'sp-sofa-contenido');
+            } else {
+                cargarTicketsTaller();
+            }
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error al guardar', text: d.error });
+        }
+    } catch(err) {
+        Swal.fire({ icon: 'error', title: 'Sin conexión', text: 'Intenta de nuevo.' });
     }
 }

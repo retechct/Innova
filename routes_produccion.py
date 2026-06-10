@@ -2738,6 +2738,12 @@ def listar_stock_estructuras():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
+        # A9: migración segura — asegura columna pagado
+        cursor.execute("""
+            ALTER TABLE stock_estructuras_sofa
+            ADD COLUMN IF NOT EXISTS pagado BOOLEAN DEFAULT FALSE;
+        """)
+
         cursor.execute("""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
                    medida_estandar, foto_url, tipo, cantidad, estado,
@@ -2745,7 +2751,8 @@ def listar_stock_estructuras():
                    COALESCE(modelo_base, ''), COALESCE(chofer_nombre, ''),
                    COALESCE(tipo_base, ''),
                    COALESCE(medida_base::numeric, 0),
-                   COALESCE(medida_base_estandar, FALSE)
+                   COALESCE(medida_base_estandar, FALSE),
+                   COALESCE(pagado, FALSE)
             FROM stock_estructuras_sofa
             ORDER BY fecha_registro DESC
         """)
@@ -2759,7 +2766,8 @@ def listar_stock_estructuras():
             'modelo_base': r[13], 'chofer_nombre': r[14],
             'tipo_base': r[15],
             'medida_base': float(r[16] or 0),
-            'medida_base_estandar': r[17]
+            'medida_base_estandar': r[17],
+            'pagado': bool(r[18])
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -3013,6 +3021,127 @@ def entregar_estructura(stock_id):
         """, (chofer_nombre, stock_id))
         conexion.commit()
         return jsonify({'exito': True, 'chofer_nombre': chofer_nombre}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+# A9: Toggle pago y edición de estructura de sofá ─────────────────────────────
+
+@produccion_bp.route('/api/stock-estructuras/<int:stock_id>/pago', methods=['PATCH'])
+def toggle_pago_estructura(stock_id):
+    """
+    Alterna el estado de pago (pagado / no pagado) de una estructura.
+    Crea la columna si no existe (migración segura).
+    """
+    data   = request.get_json() or {}
+    pagado = bool(data.get('pagado', False))
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        # Migración segura: asegurar columna
+        cursor.execute("""
+            ALTER TABLE stock_estructuras_sofa
+            ADD COLUMN IF NOT EXISTS pagado BOOLEAN DEFAULT FALSE;
+        """)
+
+        cursor.execute(
+            "UPDATE stock_estructuras_sofa SET pagado = %s WHERE id = %s RETURNING id;",
+            (pagado, stock_id)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Estructura no encontrada.'}), 404
+
+        conexion.commit()
+        return jsonify({'exito': True, 'pagado': pagado}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/stock-estructuras/<int:stock_id>/editar', methods=['PATCH'])
+def editar_estructura(stock_id):
+    """
+    Edita los campos de una estructura existente.
+    Acepta multipart/form-data (puede incluir nueva foto) o JSON.
+    Campos actualizables: nombre_modelo, modelo_base, ancho, profundidad, alto,
+    medida_estandar, tipo_base, medida_base, medida_base_estandar, precio, cantidad.
+    """
+    import cloudinary.uploader as cl_uploader
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        cursor.execute(
+            "SELECT id FROM stock_estructuras_sofa WHERE id = %s;",
+            (stock_id,)
+        )
+        if not cursor.fetchone():
+            return jsonify({'error': 'Estructura no encontrada.'}), 404
+
+        # Leer campos (soporta form-data o JSON)
+        if request.content_type and 'multipart' in request.content_type:
+            get = lambda k, d=None: request.form.get(k, d)
+        else:
+            body = request.get_json() or {}
+            get = lambda k, d=None: body.get(k, d)
+
+        nombre          = get('nombre_modelo')
+        modelo_base     = get('modelo_base', '')
+        ancho           = get('ancho')
+        profundidad     = get('profundidad')
+        alto            = get('alto')
+        medida_estandar = get('medida_estandar')
+        tipo_base       = get('tipo_base', '')
+        medida_base     = get('medida_base')
+        medida_base_est = get('medida_base_estandar')
+        precio          = get('precio')
+        cantidad        = get('cantidad')
+
+        # Foto opcional
+        foto_url = None
+        if request.files and 'foto' in request.files and request.files['foto'].filename:
+            res      = cl_uploader.upload(request.files['foto'], folder='stock_estructuras')
+            foto_url = res.get('secure_url')
+
+        # Construir SET dinámico solo con campos enviados
+        sets, vals = [], []
+        if nombre          is not None: sets.append('nombre_modelo = %s');       vals.append(nombre)
+        if modelo_base     is not None: sets.append('modelo_base = %s');         vals.append(modelo_base)
+        if ancho           is not None: sets.append('ancho = %s');               vals.append(float(ancho) if ancho else 0)
+        if profundidad     is not None: sets.append('profundidad = %s');         vals.append(float(profundidad) if profundidad else 0)
+        if alto            is not None: sets.append('alto = %s');                vals.append(float(alto) if alto else 0)
+        if medida_estandar is not None: sets.append('medida_estandar = %s');     vals.append(str(medida_estandar).lower() == 'true')
+        if tipo_base       is not None: sets.append('tipo_base = %s');           vals.append(tipo_base)
+        if medida_base     is not None: sets.append('medida_base = %s');         vals.append(float(medida_base) if medida_base else None)
+        if medida_base_est is not None: sets.append('medida_base_estandar = %s');vals.append(str(medida_base_est).lower() == 'true')
+        if precio          is not None: sets.append('precio = %s');              vals.append(float(precio) if precio else 0)
+        if cantidad        is not None: sets.append('cantidad = %s');            vals.append(int(cantidad) if cantidad else 1)
+        if foto_url        is not None: sets.append('foto_url = %s');            vals.append(foto_url)
+
+        if not sets:
+            return jsonify({'error': 'No se enviaron campos para actualizar.'}), 400
+
+        vals.append(stock_id)
+        cursor.execute(
+            f"UPDATE stock_estructuras_sofa SET {', '.join(sets)} WHERE id = %s;",
+            vals
+        )
+        conexion.commit()
+        return jsonify({'exito': True}), 200
 
     except Exception as e:
         if 'conexion' in locals() and conexion:
