@@ -987,12 +987,13 @@ def actualizar_logistica():
     proveedor_id            = data.get('proveedor_id')
     precio_cotizado         = data.get('precio_cotizado')
     fecha_entrega_proveedor = data.get('fecha_entrega_proveedor')
-    tipo_gestion              = data.get('tipo_gestion')
-    cantidad                  = data.get('cantidad')
-    unidad                    = data.get('unidad')
-    proveedor_informal        = data.get('proveedor_informal')
-    notas_proveedor           = data.get('notas_proveedor')           # ← respuesta WA
-    url_cotizacion_adjunta    = data.get('url_cotizacion_adjunta')    # ← foto/PDF del proveedor
+    tipo_gestion            = data.get('tipo_gestion')
+    cantidad                = data.get('cantidad')
+    unidad                  = data.get('unidad')
+    proveedor_informal      = data.get('proveedor_informal')
+    notas_proveedor         = data.get('notas_proveedor')           # ← respuesta WA
+    url_cotizacion_adjunta  = data.get('url_cotizacion_adjunta')    # ← foto/PDF del proveedor
+    estado                  = data.get('estado')                    # ← cambio de etapa del flujo
     if not logistica_id:
         return jsonify({'error': 'id es obligatorio'}), 400
     try:
@@ -1009,11 +1010,14 @@ def actualizar_logistica():
                 unidad                   = COALESCE(%s, unidad),
                 proveedor_informal       = COALESCE(%s, proveedor_informal),
                 notas_proveedor          = COALESCE(%s, notas_proveedor),
-                url_cotizacion_adjunta   = COALESCE(%s, url_cotizacion_adjunta)
+                url_cotizacion_adjunta   = COALESCE(%s, url_cotizacion_adjunta),
+                estado                   = COALESCE(%s, estado)
             WHERE id = %s;
         """, (proveedor_id, precio_cotizado, fecha_entrega_proveedor,
               tipo_gestion, cantidad, unidad, proveedor_informal,
-              notas_proveedor, url_cotizacion_adjunta, logistica_id))
+              notas_proveedor, url_cotizacion_adjunta,
+              estado,
+              logistica_id))
 
         conexion.commit()
         return jsonify({'exito': True}), 200
