@@ -162,6 +162,12 @@ def serve_frontend(filename):
     return send_from_directory('Vendedor', filename)
 
 
+@app.before_request
+def log_request():
+    from flask import request
+    if 'pdf' in request.path or 'oc' in request.path:
+        print(f"[REQUEST] {request.method} {request.path}")
+
 # ─── Arranque ─────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

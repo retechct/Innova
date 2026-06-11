@@ -2272,6 +2272,7 @@ def actualizar_estado_distribucion(id):
             cursor.close(); release_db_connection(conexion)
 
 
+@produccion_bp.route('/api/logistica/<int:id>/pdf-oc', methods=['GET'])
 def servir_pdf_oc(id):
     """
     Genera y sirve la Orden de Compra como HTML con diseño corporativo.
