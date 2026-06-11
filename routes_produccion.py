@@ -10,8 +10,8 @@ from datetime import datetime
 from io import BytesIO
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
-from database import get_db_connection, release_db_connection
-from auth_middleware import requiere_login, requiere_rol, limpiar_foto
+from database import get_db_connection, release_db_connection, limpiar_foto
+from auth_middleware import requiere_login, requiere_rol
 
 # pip install reportlab==4.2.2
 from reportlab.pdfgen import canvas as rl_canvas
