@@ -262,6 +262,22 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
     }
 
     // ── OPERARIO / JEFE (no admin) ──
+    
+    // Botones especiales para los tickets inyectados de Logística (Telas Externas)
+    if (t.trabajador_nombre === 'Logística Externa' && t.area === 'CORTE_Y_CONTROL_TELAS') {
+        if (t.estado === 'En Recojo') {
+            return `<button onclick="confirmarRecojoLogistica(${t.id})"
+                        style="width:100%; background:#f59e0b; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                        <i class="fa-solid fa-truck-ramp-box"></i> Confirmar Llegada de Tela
+                    </button>`;
+        } else if (t.estado === 'Recogido') {
+            return `<button onclick="confirmarDistribucionTela(${t.id})"
+                        style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                        <i class="fa-solid fa-people-carry-box"></i> Distribuir a Tapicería
+                    </button>`;
+        }
+    }
+
     if (isBloqueado) {
         return `<button disabled style="width:100%; background:#e2e8f0; color:#94a3b8; border:none; padding:8px; border-radius:6px; font-size:12px; font-weight:bold; cursor:not-allowed;">
                     <i class="fa-solid fa-hourglass-half"></i> Esperando áreas previas
@@ -2063,6 +2079,50 @@ async function abrirModalDerivar(ticketId) {
         console.error('Error en derivación:', e);
         Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
     }
+}
+
+/* --- CONFIRMAR LLEGADA DE TELA DESDE LOGÍSTICA --- */
+async function confirmarRecojoLogistica(id) {
+    const conf = await Swal.fire({
+        title: 'Confirmar recepción de Tela',
+        html: '<p style="font-size:12px;color:#64748b;">La tela ya llegó al taller físicamente.</p><input id="swal-monto" type="number" class="swal2-input" placeholder="Monto pagado al recibir (opcional)"><select id="swal-metodo" class="swal2-input"><option value="">Método de pago (opcional)</option><option value="Efectivo">Efectivo</option><option value="Yape/Plin">Yape/Plin</option></select>',
+        showCancelButton: true,
+        confirmButtonText: '✅ Confirmar'
+    });
+    if (!conf.isConfirmed) return;
+    
+    const monto = document.getElementById('swal-monto').value;
+    const metodo_pago = document.getElementById('swal-metodo').value;
+
+    Swal.fire({ title: 'Guardando...', didOpen: () => Swal.showLoading() });
+    const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-recojo`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ monto, metodo_pago })
+    });
+    const d = await res.json();
+    if (d.exito) {
+        Swal.fire('¡Recibido!', d.mensaje, 'success');
+        cargarTicketsTaller();
+    } else { Swal.fire('Error', d.error, 'error'); }
+}
+
+/* --- DISTRIBUIR TELA A TAPICERÍA --- */
+async function confirmarDistribucionTela(id) {
+    const conf = await Swal.fire({
+        title: '¿Distribuir tela a Tapicería?',
+        text: 'Esto desbloqueará los tickets de tapicería y les notificará que la tela está lista.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, distribuir'
+    });
+    if (!conf.isConfirmed) return;
+
+    Swal.fire({ title: 'Actualizando...', didOpen: () => Swal.showLoading() });
+    const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-distribucion`, { method: 'POST' });
+    const d = await res.json();
+    if (d.exito) { Swal.fire('¡Distribuida!', `Tela entregada. ${d.desbloqueados} tickets desbloqueados.`, 'success'); cargarTicketsTaller(); }
+    else { Swal.fire('Error', d.error, 'error'); }
 }
 
 /* --- NUEVA FUNCIÓN: ASIGNAR TRABAJADOR REAL --- */

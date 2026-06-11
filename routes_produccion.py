@@ -198,7 +198,7 @@ def obtener_cola_recojo():
                 ON tela.item_id = t.item_id
                AND tela.area_trabajo = 'CORTE_Y_CONTROL_TELAS'
             LEFT JOIN logistica_externa log_tela
-                ON log_tela.item_id = t.item_id
+                ON log_tela.venta_id = v.id
                AND log_tela.categoria_insumo = 'TELA'
             WHERE t.area_trabajo IN ('ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS')
               AND t.estado_ticket = 'Listo para Recojo'
@@ -490,6 +490,28 @@ def obtener_tickets_taller():
                 "trabajador_nombre": row[11] if row[11] else 'Sin asignar',
                 "item_id":         row[8]
             })
+            
+        # Inyectar elementos de Logística Externa para la cola de Telas
+        if not area_filtro or area_filtro in ('TELAS', 'CORTE_Y_CONTROL_TELAS'):
+            cursor.execute("""
+                SELECT l.id, v.codigo_venta, l.insumo_nombre, l.sku, l.estado_distribucion, v.id
+                FROM logistica_externa l
+                JOIN ventas v ON l.venta_id = v.id
+                WHERE l.categoria_insumo = 'TELA' AND l.estado_distribucion IN ('En Recojo', 'Recogido')
+            """)
+            for r in cursor.fetchall():
+                tickets.append({
+                    "id": r[0],
+                    "producto": f"TELA EXTERNA: {r[2]}",
+                    "estado": r[4],
+                    "area": "CORTE_Y_CONTROL_TELAS",
+                    "trabajador": None,
+                    "especificaciones": f"Ref: {r[1]} | SKU: {r[3] or 'N/A'}",
+                    "foto": "imagenes/sin_foto.jpg",
+                    "trabajador_nombre": "Logística Externa",
+                    "item_id": r[5]
+                })
+                
         return jsonify(tickets), 200
     except Exception as e:
         print("Error en tickets taller:", e)
@@ -965,7 +987,6 @@ def actualizar_logistica():
     proveedor_id            = data.get('proveedor_id')
     precio_cotizado         = data.get('precio_cotizado')
     fecha_entrega_proveedor = data.get('fecha_entrega_proveedor')
-    estado                  = data.get('estado')
     tipo_gestion              = data.get('tipo_gestion')
     cantidad                  = data.get('cantidad')
     unidad                    = data.get('unidad')
@@ -978,18 +999,11 @@ def actualizar_logistica():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        # Leer estado anterior ANTES del UPDATE para evitar doble desbloqueo
-        # si el frontend llama dos veces con estado='Recibido' (bug conocido A1)
-        cursor.execute("SELECT estado FROM logistica_externa WHERE id = %s", (logistica_id,))
-        row_prev = cursor.fetchone()
-        estado_anterior = row_prev[0] if row_prev else None
-
         cursor.execute("""
             UPDATE logistica_externa
             SET proveedor_id             = COALESCE(%s, proveedor_id),
                 precio_cotizado          = COALESCE(%s, precio_cotizado),
                 fecha_entrega_proveedor  = COALESCE(%s::date, fecha_entrega_proveedor),
-                estado                   = COALESCE(%s, estado),
                 tipo_gestion             = COALESCE(%s, tipo_gestion),
                 cantidad                 = COALESCE(%s, cantidad),
                 unidad                   = COALESCE(%s, unidad),
@@ -998,57 +1012,8 @@ def actualizar_logistica():
                 url_cotizacion_adjunta   = COALESCE(%s, url_cotizacion_adjunta)
             WHERE id = %s;
         """, (proveedor_id, precio_cotizado, fecha_entrega_proveedor,
-              estado, tipo_gestion, cantidad, unidad, proveedor_informal,
+              tipo_gestion, cantidad, unidad, proveedor_informal,
               notas_proveedor, url_cotizacion_adjunta, logistica_id))
-
-        # Solo desbloquear si la transición ES NUEVA: estado anterior != 'Recibido'
-        # Esto evita el conflicto con el trigger de "Listo para recojo" (bug A1)
-        if estado == 'Recibido' and estado_anterior != 'Recibido':
-            cursor.execute("""
-                SELECT l.venta_id FROM logistica_externa l WHERE l.id = %s
-            """, (logistica_id,))
-            venta_row = cursor.fetchone()
-            if venta_row:
-                venta_id_check = venta_row[0]
-                # Obtener tickets bloqueados de esta venta
-                cursor.execute("""
-                    SELECT t.id, t.area_trabajo, t.item_id
-                    FROM tickets_produccion t
-                    JOIN items_venta i ON t.item_id = i.id
-                    WHERE i.venta_id = %s AND t.estado_ticket = 'Bloqueado'
-                """, (venta_id_check,))
-                tickets_bloqueados = cursor.fetchall()
-
-                for tb_id, tb_area, tb_item_id in tickets_bloqueados:
-                    if tb_area in ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'):
-                        # Requiere estructuras + telas completas antes de desbloquear
-                        areas_req = ['ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS',
-                                     'CORTE_Y_CONTROL_TELAS', 'TELAS']
-                        placeholders_req = ','.join(['%s'] * len(areas_req))
-                        cursor.execute(f"""
-                            SELECT COUNT(*) FROM tickets_produccion
-                            WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
-                              AND estado_ticket IN ('Terminado', 'Listo para Recojo', 'Recogido')
-                        """, (tb_item_id, *areas_req))
-                        terminados_req = cursor.fetchone()[0]
-                        cursor.execute(f"""
-                            SELECT COUNT(*) FROM tickets_produccion
-                            WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
-                        """, (tb_item_id, *areas_req))
-                        total_req = cursor.fetchone()[0]
-                        if total_req > 0 and terminados_req >= total_req:
-                            cursor.execute("""
-                                UPDATE tickets_produccion
-                                SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
-                                WHERE id = %s AND estado_ticket = 'Bloqueado'
-                            """, (tb_id,))
-                    else:
-                        # Para áreas no-tapicería (cojines, despacho, etc.), desbloquear directamente
-                        cursor.execute("""
-                            UPDATE tickets_produccion
-                            SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
-                            WHERE id = %s AND estado_ticket = 'Bloqueado'
-                        """, (tb_id,))
 
         conexion.commit()
         return jsonify({'exito': True}), 200
@@ -1123,6 +1088,64 @@ def enviar_al_taller(logistica_id):
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
 
+
+# ==========================================
+# NUEVOS ENDPOINTS LOGÍSTICA (RECOJO / DISTRIBUCIÓN)
+# ==========================================
+
+@produccion_bp.route('/api/logistica/<int:id>/confirmar-recojo', methods=['POST'])
+def logistica_confirmar_recojo(id):
+    data = request.json or {}
+    url_comprobante = data.get('comprobante_url')
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            UPDATE logistica_externa
+            SET estado = 'Recogido',
+                estado_distribucion = 'Recogido',
+                fecha_recojo_fisico = NOW(),
+                url_comprobante_pago = COALESCE(%s, url_comprobante_pago)
+            WHERE id = %s
+        """, (url_comprobante, id))
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': 'Recojo confirmado. Tela en taller.'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
+
+@produccion_bp.route('/api/logistica/<int:id>/confirmar-distribucion', methods=['POST'])
+def logistica_confirmar_distribucion(id):
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            UPDATE logistica_externa
+            SET estado = 'Distribuido', estado_distribucion = 'Distribuido'
+            WHERE id = %s RETURNING venta_id
+        """, (id,))
+        row = cursor.fetchone()
+        if not row: return jsonify({'error': 'No encontrado'}), 404
+        
+        # Desbloquear tapicería
+        cursor.execute("""
+            UPDATE tickets_produccion t
+            SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
+            FROM items_venta i
+            WHERE t.item_id = i.id AND i.venta_id = %s
+              AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS')
+              AND t.estado_ticket = 'Bloqueado'
+        """, (row[0],))
+        desbloqueados = cursor.rowcount
+        conexion.commit()
+        return jsonify({'exito': True, 'desbloqueados': desbloqueados}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 # ==========================================
 # 11. RECETAS DE MUEBLES (BOM)
@@ -2026,10 +2049,9 @@ def generar_orden_compra(id):
         # Encabezado tabla
         draw_rect(margin_x, y_tabla - 8*mm, w - 2*margin_x, 8*mm, fill=COLOR_OSCURO)
         headers = [('DESCRIPCIÓN', margin_x + 3*mm),
-                   ('SKU',         margin_x + 90*mm),
-                   ('CANT.',       margin_x + 115*mm),
-                   ('P. UNIT.',    margin_x + 132*mm),
-                   ('SUBTOTAL',    margin_x + 152*mm)]
+                   ('CANT.',       margin_x + 95*mm),
+                   ('P. UNIT.',    margin_x + 120*mm),
+                   ('SUBTOTAL',    margin_x + 145*mm)]
         for txt, xh in headers:
             draw_text(txt, xh, y_tabla - 5*mm, 'Helvetica-Bold', 8, rl_colors.white)
 
@@ -2039,10 +2061,9 @@ def generar_orden_compra(id):
         # Nombre truncado si es muy largo
         nombre_corto = insumo[:48] if insumo else '—'
         draw_text(nombre_corto, margin_x + 3*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
-        draw_text(sku or '—',   margin_x + 90*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
-        draw_text(f'{float(cantidad):.0f} {unidad}', margin_x + 115*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
-        draw_text(f'S/ {precio_unit:.2f}', margin_x + 132*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
-        draw_text(f'S/ {subtotal:.2f}',    margin_x + 152*mm, y_fila + 4*mm, 'Helvetica-Bold', 9, COLOR_OSCURO)
+        draw_text(f'{float(cantidad):.0f} {unidad}', margin_x + 95*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
+        draw_text(f'S/ {precio_unit:.2f}', margin_x + 120*mm, y_fila + 4*mm, 'Helvetica', 9, COLOR_TEXTO)
+        draw_text(f'S/ {subtotal:.2f}',    margin_x + 145*mm, y_fila + 4*mm, 'Helvetica-Bold', 9, COLOR_OSCURO)
 
         # ── TOTALES ───────────────────────────────────────────────────
         y_tot = y_fila - 6*mm
@@ -2132,7 +2153,9 @@ def generar_orden_compra(id):
         # ── Actualizar estado logística ────────────────────────────────
         try:
             cursor.execute("""
-                UPDATE logistica_externa SET estado = 'Orden Enviada' WHERE id = %s
+                UPDATE logistica_externa SET estado = 'Orden Enviada',
+                    estado_distribucion = CASE WHEN categoria_insumo = 'TELA' THEN 'En Recojo' ELSE estado_distribucion END
+                WHERE id = %s
             """, (id,))
             conexion.commit()
         except Exception as e_upd:
@@ -2689,7 +2712,6 @@ def servir_pdf_oc(id):
       <thead>
         <tr>
           <th>Descripción</th>
-          <th>SKU</th>
           <th>Cant.</th>
           <th>P. Unit.</th>
           <th>Subtotal</th>
@@ -2698,7 +2720,6 @@ def servir_pdf_oc(id):
       <tbody>
         <tr>
           <td>{insumo or '—'}</td>
-          <td class="td-sku">{sku or '—'}</td>
           <td>{int(float(cantidad))} {unidad}</td>
           <td>S/ {precio_unit:.2f}</td>
           <td>S/ {subtotal:.2f}</td>
