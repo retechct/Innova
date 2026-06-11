@@ -5,7 +5,7 @@ Blueprint: usuarios_bp  (sin prefijo de URL)
 
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection
-from auth_middleware import generar_token
+from auth_middleware import generar_token, requiere_login, requiere_rol
 
 usuarios_bp = Blueprint('usuarios', __name__)
 
@@ -15,6 +15,7 @@ usuarios_bp = Blueprint('usuarios', __name__)
 # ==========================================
 
 @usuarios_bp.route('/api/usuarios', methods=['GET'])
+@requiere_login
 def obtener_usuarios():
     try:
         conexion = get_db_connection()
@@ -33,6 +34,7 @@ def obtener_usuarios():
 
 
 @usuarios_bp.route('/api/usuarios/detalle', methods=['GET'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def obtener_usuarios_detalle():
     try:
         conexion = get_db_connection()
@@ -55,6 +57,7 @@ def obtener_usuarios_detalle():
 
 
 @usuarios_bp.route('/api/usuarios/nuevo', methods=['POST'])
+@requiere_rol('Admin')
 def crear_usuario():
     data = request.json
     try:
@@ -195,6 +198,7 @@ def verificar_pin():
 # ==========================================
 
 @usuarios_bp.route('/api/proveedores', methods=['GET'])
+@requiere_login
 def obtener_proveedores():
     try:
         conexion = get_db_connection()
@@ -213,6 +217,7 @@ def obtener_proveedores():
 
 
 @usuarios_bp.route('/api/proveedores/nuevo', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def crear_proveedor():
     data = request.json
     try:

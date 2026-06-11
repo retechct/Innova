@@ -19,6 +19,7 @@ MIGRACIÓN SQL REQUERIDA (solo una vez):
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto
+from auth_middleware import requiere_login, requiere_rol
 
 materiales_bp = Blueprint('materiales', __name__)
 
@@ -28,6 +29,7 @@ materiales_bp = Blueprint('materiales', __name__)
 # ==========================================
 
 @materiales_bp.route('/api/materiales/nuevo', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def agregar_nuevo_material():
     try:
         tipo_material = request.form.get('tipo_material')
@@ -151,6 +153,7 @@ def agregar_nuevo_material():
 
 
 @materiales_bp.route('/api/materiales/listas', methods=['GET'])
+@requiere_login
 def obtener_listas_materiales():
     """
     B3: Devuelve 'id' en todos los registros (necesario para actualizarEstadoInsumo).
@@ -290,6 +293,7 @@ def obtener_listas_materiales():
 # ==========================================
 
 @materiales_bp.route('/api/creaciones', methods=['POST'])
+@requiere_login
 def guardar_creacion():
     try:
         vendedor_id       = request.form.get('vendedor_id', 1)
@@ -331,6 +335,7 @@ def guardar_creacion():
 
 
 @materiales_bp.route('/api/creaciones', methods=['GET'])
+@requiere_login
 def obtener_creaciones():
     try:
         conexion = get_db_connection()
@@ -359,6 +364,7 @@ def obtener_creaciones():
 
 
 @materiales_bp.route('/api/creaciones/aprobar', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def aprobar_creacion():
     data        = request.json
     creacion_id = data.get('creacion_id')
@@ -394,6 +400,7 @@ def aprobar_creacion():
 
 
 @materiales_bp.route('/api/creaciones/rechazar', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def rechazar_creacion():
     data        = request.json
     creacion_id = data.get('creacion_id')
@@ -452,6 +459,7 @@ def _actualizar_tabla(tabla: str, sku_columna: str, sku: str, campos_permitidos:
 
 
 @materiales_bp.route('/api/materiales/telas/<string:sku>', methods=['PUT'])
+@requiere_login
 def editar_tela(sku):
     """B3: Actualiza una tela por SKU. Campos: proveedor, coleccion, color, foto_url, estado, proveedor_id"""
     resp, status = _actualizar_tabla(
@@ -462,6 +470,7 @@ def editar_tela(sku):
 
 
 @materiales_bp.route('/api/materiales/cojines/<string:sku>', methods=['PUT'])
+@requiere_login
 def editar_cojin(sku):
     """B3: Actualiza un diseño de cojín por SKU. Campos: nombre_diseno, tipo_tela, foto_url, estado"""
     resp, status = _actualizar_tabla(
@@ -472,6 +481,7 @@ def editar_cojin(sku):
 
 
 @materiales_bp.route('/api/materiales/bases/<string:sku>', methods=['PUT'])
+@requiere_login
 def editar_base(sku):
     """
     B3: Actualiza una base de sofá por SKU.
@@ -491,6 +501,7 @@ def editar_base(sku):
 
 
 @materiales_bp.route('/api/materiales/bases-comedor/<string:sku>', methods=['PUT'])
+@requiere_login
 def editar_base_comedor(sku):
     """
     B3: Actualiza una base de comedor por SKU.
@@ -504,6 +515,7 @@ def editar_base_comedor(sku):
 
 
 @materiales_bp.route('/api/materiales/tableros/<string:sku>', methods=['PUT'])
+@requiere_login
 def editar_tablero(sku):
     """B3: Actualiza un tablero por SKU. Campos: material_base, nombre_modelo, color_veta, acabado, foto_url, estado"""
     resp, status = _actualizar_tabla(
@@ -515,6 +527,7 @@ def editar_tablero(sku):
 
 
 @materiales_bp.route('/api/materiales/sillas/<string:sku>', methods=['PUT'])
+@requiere_login
 def editar_silla(sku):
     """
     B3: Actualiza una estructura de silla por SKU.
@@ -532,6 +545,7 @@ def editar_silla(sku):
 
 
 @materiales_bp.route('/api/materiales/butacas/<string:sku>', methods=['PUT'])
+@requiere_login
 def editar_butaca(sku):
     """
     B3: Actualiza una estructura de butaca por SKU.

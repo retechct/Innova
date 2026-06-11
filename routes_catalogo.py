@@ -6,6 +6,7 @@ Blueprint: catalogo_bp  (sin prefijo de URL)
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto
+from auth_middleware import requiere_login, requiere_rol
 
 catalogo_bp = Blueprint('catalogo', __name__)
 
@@ -46,6 +47,7 @@ def obtener_catalogo():
 
 
 @catalogo_bp.route('/api/catalogo/nuevo', methods=['POST'])
+@requiere_login
 def agregar_producto_directo():
     """Agrega un producto ya terminado (en stock) directo al catálogo."""
     try:
@@ -106,6 +108,7 @@ def obtener_insumos():
 # ==========================================
 
 @catalogo_bp.route('/api/upload-voucher', methods=['POST'])
+@requiere_login
 def upload_voucher():
     if 'archivo' not in request.files or request.files['archivo'].filename == '':
         return jsonify({'error': 'No se recibió ningún archivo'}), 400
@@ -123,6 +126,7 @@ def upload_voucher():
 # ==========================================
 
 @catalogo_bp.route('/api/upload-foto', methods=['POST'])
+@requiere_login
 def upload_foto():
     if 'foto' not in request.files or request.files['foto'].filename == '':
         return jsonify({'error': 'No se recibió ningún archivo'}), 400

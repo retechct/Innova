@@ -48,7 +48,12 @@ cloudinary.config(
 
 # ─── Aplicación Flask ─────────────────────────────────────────────────────────
 app = Flask(__name__, static_folder='Vendedor', static_url_path='')
-CORS(app)
+
+# Restringir CORS al dominio de producción.
+# En desarrollo local, agregar también: 'http://localhost:5000'
+CORS(app, origins=[
+    os.getenv('FRONTEND_URL', 'https://innova-4cnn.onrender.com'),
+])
 
 app.config['SQLALCHEMY_DATABASE_URI']        = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -103,6 +108,7 @@ init_taller_pool()
 # ─── Rutas de infraestructura (sedes, archivos estáticos) ────────────────────
 from flask import jsonify, request
 from database import get_db_connection, release_db_connection
+from auth_middleware import requiere_login, requiere_rol
 
 
 @app.route('/api/sedes', methods=['GET'])
@@ -121,6 +127,7 @@ def obtener_sedes():
 
 
 @app.route('/api/inicializar-sedes', methods=['POST'])
+@requiere_rol('Admin')
 def inicializar_sedes():
     try:
         conexion = get_db_connection()

@@ -28,6 +28,7 @@ from flask import Blueprint, jsonify, request, send_file
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from database import get_db_connection, release_db_connection, enviar_notificacion_venta
+from auth_middleware import requiere_login, requiere_rol
 
 ventas_bp = Blueprint('ventas', __name__)
 
@@ -193,6 +194,7 @@ def _liberar_unidades(cursor, venta_id, estado_destino, evento_nombre):
 # ==========================================
 
 @ventas_bp.route('/api/ventas', methods=['GET', 'POST'])
+@requiere_login
 def guardar_venta():
     if request.method == 'GET':
         return listar_ventas()
@@ -641,6 +643,7 @@ def listar_ventas():
 # ==========================================
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])
+@requiere_login
 def cambiar_estado_venta(venta_id):
     nuevo_estado = request.json.get('estado')
     if not nuevo_estado:
@@ -670,6 +673,7 @@ def cambiar_estado_venta(venta_id):
 
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/anular', methods=['POST'])
+@requiere_login
 def anular_venta_completa(venta_id):
     try:
         conexion = get_db_connection()
@@ -728,6 +732,7 @@ def anular_venta_completa(venta_id):
 # ==========================================
 
 @ventas_bp.route('/api/mis-ventas/<int:vendedor_id>', methods=['GET'])
+@requiere_login
 def obtener_mis_ventas(vendedor_id):
     try:
         conexion = get_db_connection()
@@ -766,6 +771,7 @@ def obtener_mis_ventas(vendedor_id):
 
 
 @ventas_bp.route('/api/produccion/<area>', methods=['GET'])
+@requiere_login
 def ver_tickets_area(area):
     try:
         conexion = get_db_connection()
@@ -823,6 +829,7 @@ def obtener_detalle_pedido(codigo):
 # ==========================================
 
 @ventas_bp.route('/api/ventas/<codigo>/proponer-cambio-precio', methods=['POST'])
+@requiere_login
 def proponer_cambio_precio(codigo):
     data = request.json
     precio_nuevo    = data.get('precio_nuevo')
@@ -876,6 +883,7 @@ def proponer_cambio_precio(codigo):
 
 
 @ventas_bp.route('/api/cambios-precio/pendientes', methods=['GET'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def listar_cambios_precio_pendientes():
     try:
         conexion = get_db_connection()
@@ -906,6 +914,7 @@ def listar_cambios_precio_pendientes():
 
 
 @ventas_bp.route('/api/cambios-precio/<int:cambio_id>/aprobar', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def aprobar_cambio_precio(cambio_id):
     data         = request.json
     admin_id     = data.get('admin_id')
@@ -939,6 +948,7 @@ def aprobar_cambio_precio(cambio_id):
 
 
 @ventas_bp.route('/api/cambios-precio/<int:cambio_id>/rechazar', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def rechazar_cambio_precio(cambio_id):
     data         = request.json
     admin_id     = data.get('admin_id')
@@ -966,6 +976,7 @@ def rechazar_cambio_precio(cambio_id):
 
 
 @ventas_bp.route('/api/ventas/<codigo>/historial-precios', methods=['GET'])
+@requiere_login
 def historial_precios_venta(codigo):
     try:
         conexion = get_db_connection()
@@ -996,6 +1007,7 @@ def historial_precios_venta(codigo):
 # ==========================================
 
 @ventas_bp.route('/api/ventas/exportar', methods=['GET'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def exportar_ventas_excel():
     try:
         conexion = get_db_connection()

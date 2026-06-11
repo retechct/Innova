@@ -21,6 +21,7 @@ from datetime import datetime
 import pytz
 from flask import Blueprint, request, jsonify, Response
 from database import get_db_connection, release_db_connection
+from auth_middleware import requiere_login, requiere_rol
 
 inventario_bp = Blueprint('inventario', __name__)
 tz_peru = pytz.timezone('America/Lima')
@@ -92,6 +93,7 @@ def _registrar_historial(cur, tipo, reg_id, barcode, evento,
 # 1. RESUMEN DE PRODUCTOS ENTEROS (pivot por sede)
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/resumen', methods=['GET'])
+@requiere_login
 def resumen_productos():
     categoria = request.args.get('categoria', '')
     q         = request.args.get('q', '').strip().lower()
@@ -172,6 +174,7 @@ def resumen_productos():
 # 2. RESUMEN DE PIEZAS A MEDIDA (pivot por sede)
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/piezas/resumen', methods=['GET'])
+@requiere_login
 def resumen_piezas():
     categoria = request.args.get('categoria', '')
     q         = request.args.get('q', '').strip().lower()
@@ -247,6 +250,7 @@ def resumen_piezas():
 # 3. BUSCAR POR CÓDIGO DE BARRAS
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/buscar/<barcode>', methods=['GET'])
+@requiere_login
 def buscar_por_barcode(barcode):
     conn = None
     try:
@@ -323,6 +327,7 @@ def buscar_por_barcode(barcode):
 # 4. REGISTRAR PRODUCTO ENTERO
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/producto/nuevo', methods=['POST'])
+@requiere_login
 def registrar_producto():
     data = request.json or {}
 
@@ -387,6 +392,7 @@ def registrar_producto():
 # 5. REGISTRAR PIEZA A MEDIDA
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/pieza/nueva', methods=['POST'])
+@requiere_login
 def registrar_pieza():
     data = request.json or {}
 
@@ -456,6 +462,7 @@ def registrar_pieza():
 # 6. CAMBIAR ESTADO (Traslado, Venta, Baja, Reserva, etc.)
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/<tipo>/<int:reg_id>/estado', methods=['PUT'])
+@requiere_login
 def cambiar_estado(tipo, reg_id):
     """
     tipo: 'producto' o 'pieza'
@@ -528,6 +535,7 @@ def cambiar_estado(tipo, reg_id):
 # 7. HISTORIAL DE UNA UNIDAD
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/historial/<tipo>/<int:reg_id>', methods=['GET'])
+@requiere_login
 def historial_unidad(tipo, reg_id):
     conn = None
     try:
@@ -560,6 +568,7 @@ def historial_unidad(tipo, reg_id):
 # 8. MOVIMIENTOS DE UNA SEDE
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/historial/sede/<int:sede_id>', methods=['GET'])
+@requiere_login
 def historial_sede(sede_id):
     limite = int(request.args.get('limite', 50))
     conn   = None
@@ -595,6 +604,7 @@ def historial_sede(sede_id):
 # 9. EXPORTAR CSV COMPLETO
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/exportar', methods=['GET'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def exportar_inventario():
     conn = None
     try:
@@ -646,6 +656,7 @@ def exportar_inventario():
 # 10. UNIDADES DISPONIBLES POR CATÁLOGO (para el picker del carrito)
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/disponibles/<int:catalogo_id>', methods=['GET'])
+@requiere_login
 def unidades_disponibles_por_catalogo(catalogo_id):
     """
     Devuelve todas las unidades de stock_productos con estado='Disponible'

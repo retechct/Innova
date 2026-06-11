@@ -10,7 +10,8 @@ from datetime import datetime
 from io import BytesIO
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
-from database import get_db_connection, release_db_connection, limpiar_foto
+from database import get_db_connection, release_db_connection
+from auth_middleware import requiere_login, requiere_rol, limpiar_foto
 
 # pip install reportlab==4.2.2
 from reportlab.pdfgen import canvas as rl_canvas
@@ -39,6 +40,7 @@ AREA_ALIASES = {
 # ==========================================
 
 @produccion_bp.route('/api/taller/ticket/<int:id>/finalizar', methods=['POST'])
+@requiere_login
 def finalizar_ticket(id):
     try:
         if 'foto' not in request.files or request.files['foto'].filename == '':
@@ -413,6 +415,7 @@ def confirmar_recojo_externo(logistica_id):
 
 
 @produccion_bp.route('/api/taller/tickets', methods=['GET'])
+@requiere_login
 def obtener_tickets_taller():
     area_filtro = request.args.get('area')
     operario_id = request.args.get('operario_id')
@@ -522,6 +525,7 @@ def obtener_tickets_taller():
 
 
 @produccion_bp.route('/api/taller/tickets_pendientes', methods=['GET'])
+@requiere_login
 def obtener_tickets_pendientes():
     try:
         conexion = get_db_connection()
@@ -550,6 +554,7 @@ def obtener_tickets_pendientes():
 
 
 @produccion_bp.route('/api/taller/asignar', methods=['POST'])
+@requiere_login
 def asignar_maestro_ticket():
     data          = request.json
     ticket_id     = data.get('ticket_id')
@@ -579,6 +584,7 @@ def asignar_maestro_ticket():
 
 
 @produccion_bp.route('/api/taller/ticket/<int:ticket_id>/derivar', methods=['POST'])
+@requiere_login
 def derivar_ticket_con_foto(ticket_id):
     nueva_area          = request.form.get('nueva_area')
     nuevo_trabajador_id = request.form.get('nuevo_trabajador_id')
@@ -612,6 +618,7 @@ def derivar_ticket_con_foto(ticket_id):
 
 
 @produccion_bp.route('/api/taller/ticket/derivar', methods=['POST'])
+@requiere_login
 def derivar_ticket():
     data            = request.json
     ticket_padre_id = data.get('ticket_padre_id')
@@ -665,6 +672,7 @@ def derivar_ticket():
             cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/taller/stats', methods=['GET'])
+@requiere_login
 def obtener_taller_stats():
     try:
         conexion = get_db_connection()
@@ -695,6 +703,7 @@ def obtener_taller_stats():
             cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/taller/ordenes', methods=['GET'])
+@requiere_login
 def obtener_ordenes_produccion():
     estado = request.args.get('estado', 'activas')
     try:
@@ -765,6 +774,7 @@ def obtener_ordenes_produccion():
 # ==========================================
 
 @produccion_bp.route('/api/taller/fichatecnica-skus', methods=['GET'])
+@requiere_login
 def obtener_fotos_skus():
     skus_param = request.args.get('skus', '')
     if not skus_param:
@@ -826,6 +836,7 @@ def obtener_fotos_skus():
             cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/taller/ticket/<int:ticket_id>/nota', methods=['POST'])
+@requiere_login
 def agregar_nota_ticket(ticket_id):
     data = request.json
     nota = data.get('nota')
@@ -850,6 +861,7 @@ def agregar_nota_ticket(ticket_id):
 
 
 @produccion_bp.route('/api/taller/inventario', methods=['GET'])
+@requiere_login
 def obtener_inventario():
     try:
         conexion = get_db_connection()
@@ -877,6 +889,7 @@ def obtener_inventario():
 
 
 @produccion_bp.route('/api/inventario/actualizar', methods=['POST'])
+@requiere_login
 def actualizar_estado_inventario():
     data         = request.json
     item_id      = data.get('id')
@@ -908,6 +921,7 @@ def actualizar_estado_inventario():
 # ==========================================
 
 @produccion_bp.route('/api/logistica', methods=['GET'])
+@requiere_login
 def obtener_logistica():
     try:
         conexion = get_db_connection()
@@ -947,7 +961,8 @@ def obtener_logistica():
                        (SELECT nombre_diseno FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1)
                    ) AS detalle_insumo,
                    COALESCE(l.categoria_insumo, 'OTRO')  AS categoria_insumo,
-                   l.estado_distribucion
+                   l.estado_distribucion,
+                   COALESCE(p.telefono, '')           AS telefono_proveedor
             FROM logistica_externa l
             JOIN ventas v           ON l.venta_id    = v.id
             LEFT JOIN proveedores p ON l.proveedor_id = p.id
@@ -971,6 +986,7 @@ def obtener_logistica():
             "url_cotizacion_adjunta":  r[19] if len(r) > 19 else None,
             "categoria_insumo":        r[20] if len(r) > 20 else 'OTRO',
             "estado_distribucion":     r[21] if len(r) > 21 else None,
+            "telefono_proveedor":      r[22] if len(r) > 22 else "",
         } for r in cursor.fetchall()]
         return jsonify(items), 200
     except Exception as e:
@@ -981,6 +997,7 @@ def obtener_logistica():
 
 
 @produccion_bp.route('/api/logistica/actualizar', methods=['POST'])
+@requiere_login
 def actualizar_logistica():
     data                    = request.json
     logistica_id            = data.get('id')
@@ -1030,6 +1047,7 @@ def actualizar_logistica():
 
 
 @produccion_bp.route('/api/logistica/<int:logistica_id>/enviar-al-taller', methods=['POST'])
+@requiere_login
 def enviar_al_taller(logistica_id):
     """
     Flujo 'Informal': el jefe de taller consiguió el material por su cuenta
@@ -1156,6 +1174,7 @@ def logistica_confirmar_distribucion(id):
 # ==========================================
 
 @produccion_bp.route('/api/recetas/<int:producto_id>', methods=['GET'])
+@requiere_login
 def obtener_receta(producto_id):
     try:
         conexion = get_db_connection()
@@ -1179,6 +1198,7 @@ def obtener_receta(producto_id):
 
 
 @produccion_bp.route('/api/recetas/nueva', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def agregar_ingrediente_receta():
     data               = request.json
     producto_id        = data.get('producto_id')
@@ -1209,6 +1229,7 @@ def agregar_ingrediente_receta():
 # ==========================================
 
 @produccion_bp.route('/api/sugerencias', methods=['POST'])
+@requiere_login
 def guardar_sugerencia():
     try:
         nombre     = request.form.get('nombre')
@@ -1238,6 +1259,7 @@ def guardar_sugerencia():
 
 
 @produccion_bp.route('/api/sugerencias', methods=['GET'])
+@requiere_login
 def obtener_sugerencias():
     try:
         conexion = get_db_connection()
@@ -1262,6 +1284,7 @@ def obtener_sugerencias():
 
 
 @produccion_bp.route('/api/sugerencias/aprobar', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def aprobar_sugerencia_insumo():
     data          = request.json
     sugerencia_id = data.get('sugerencia_id')
@@ -1302,6 +1325,7 @@ def aprobar_sugerencia_insumo():
         if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/sugerencias/rechazar', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def rechazar_sugerencia_insumo():
     data          = request.json
     sugerencia_id = data.get('sugerencia_id')
@@ -1323,6 +1347,7 @@ def rechazar_sugerencia_insumo():
 # ==========================================
 
 @produccion_bp.route('/api/despacho/asignar-chofer', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def asignar_chofer_despacho():
     data      = request.json
     ticket_id = data.get('ticket_id')
@@ -1363,6 +1388,7 @@ def asignar_chofer_despacho():
 
 
 @produccion_bp.route('/api/logistica/pendientes-por-proveedor', methods=['GET'])
+@requiere_login
 def logistica_pendientes_por_proveedor():
     """Agrupa filas pendientes de logística externa por proveedor."""
     conexion = None
@@ -1451,6 +1477,7 @@ def logistica_pendientes_por_proveedor():
 
 
 @produccion_bp.route('/api/logistica/crear-lote-cotizacion', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def crear_lote_cotizacion():
     try:
         datos = request.get_json()
@@ -1672,6 +1699,7 @@ def ficha_chofer(item_id):
 # ==========================================
 
 @produccion_bp.route('/api/despacho/entregados', methods=['GET'])
+@requiere_login
 def despacho_entregados():
     """
     Devuelve todos los tickets DESPACHO_CENTRAL ya Terminados (= entregados).
@@ -1747,6 +1775,7 @@ def despacho_entregados():
 # ──────────────────────────────────────────────────────────
 
 @produccion_bp.route('/api/logistica/<int:id>/enviar-cotizacion', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def enviar_cotizacion_proveedor(id):
     """Genera token y devuelve el link + datos para abrir WhatsApp desde el frontend."""
     try:
@@ -1879,6 +1908,7 @@ def responder_cotizacion(token):
 
 
 @produccion_bp.route('/api/logistica/<int:id>/generar-orden', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def generar_orden_compra(id):
     """Genera PDF de Orden de Compra con diseño corporativo y lo sube a Cloudinary."""
     try:
@@ -2184,6 +2214,7 @@ def generar_orden_compra(id):
 
 
 @produccion_bp.route('/api/logistica/<int:id>/registrar-pago', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def registrar_pago_proveedor(id):
     """Sube voucher de pago a Cloudinary y actualiza estado.
     Detecta automáticamente si el insumo es TELA o ESTRUCTURAL
@@ -2262,6 +2293,7 @@ def registrar_pago_proveedor(id):
             cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/logistica/<int:id>/estado-distribucion', methods=['PATCH'])
+@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
 def actualizar_estado_distribucion(id):
     """El operario de telas cambia el estado de distribución de un ítem pagado.
     Solo aplica a ítems con categoria_insumo = 'TELA'.
@@ -2300,6 +2332,7 @@ def actualizar_estado_distribucion(id):
 
 
 @produccion_bp.route('/api/logistica/<int:id>/pdf-oc', methods=['GET'])
+@requiere_login
 def servir_pdf_oc(id):
     """
     Genera y sirve la Orden de Compra como HTML con diseño corporativo.
@@ -2772,6 +2805,7 @@ def servir_pdf_oc(id):
             # ─── STOCK ESTRUCTURAS SOFÁ ───────────────────────────────────────────────────
 
 @produccion_bp.route('/api/stock-estructuras', methods=['GET'])
+@requiere_login
 def listar_stock_estructuras():
     try:
         conexion = get_db_connection()
@@ -2820,6 +2854,7 @@ def listar_stock_estructuras():
 
 
 @produccion_bp.route('/api/stock-estructuras', methods=['POST'])
+@requiere_login
 def registrar_stock_estructura():
     import cloudinary.uploader
     try:
@@ -2885,6 +2920,7 @@ def registrar_stock_estructura():
             cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/stock-estructuras/<int:stock_id>/usar', methods=['POST'])
+@requiere_login
 def usar_stock_estructura(stock_id):
     """Marca una estructura como entregada, la vincula al ticket y termina el ticket."""
     data      = request.get_json()
@@ -2922,6 +2958,7 @@ def usar_stock_estructura(stock_id):
 
 
 @produccion_bp.route('/api/stock-estructuras/sugerir', methods=['GET'])
+@requiere_login
 def sugerir_estructura():
     """
     Devuelve estructuras disponibles ordenadas: primero por modelo exacto,
@@ -3024,6 +3061,7 @@ def sugerir_estructura():
 
 
 @produccion_bp.route('/api/stock-estructuras/<int:stock_id>/entregar', methods=['PATCH'])
+@requiere_login
 def entregar_estructura(stock_id):
     """
     El carpintero marca una estructura como entregada al chofer.
@@ -3077,6 +3115,7 @@ def entregar_estructura(stock_id):
 # A9: Toggle pago y edición de estructura de sofá ─────────────────────────────
 
 @produccion_bp.route('/api/stock-estructuras/<int:stock_id>/pago', methods=['PATCH'])
+@requiere_login
 def toggle_pago_estructura(stock_id):
     """
     Alterna el estado de pago (pagado / no pagado) de una estructura.
@@ -3116,6 +3155,7 @@ def toggle_pago_estructura(stock_id):
 
 
 @produccion_bp.route('/api/stock-estructuras/<int:stock_id>/editar', methods=['PATCH'])
+@requiere_login
 def editar_estructura(stock_id):
     """
     Edita los campos de una estructura existente.
