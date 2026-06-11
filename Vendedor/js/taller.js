@@ -3667,7 +3667,7 @@ async function guardarEstructura() {
     }
 
     try {
-        const res = await fetch(`${API_URL}/api/stock-estructuras`, { method:'POST', body: fd });
+        const res = await apiFetch(`${API_URL}/api/stock-estructuras`, { method:'POST', body: fd });
         const d   = await res.json();
         if (d.exito) {
             cerrarModalEstructura();
@@ -3991,7 +3991,7 @@ async function abrirModalEditarEstructura(id) {
     Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
     try {
-        const res = await fetch(`${API_URL}/api/stock-estructuras/${id}/editar`, {
+        const res = await apiFetch(`${API_URL}/api/stock-estructuras/${id}/editar`, {
             method: 'PATCH',
             body: fd
         });
