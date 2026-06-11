@@ -449,11 +449,20 @@ async function cargarVistaColaRecojoChofer(contenedor) {
 
         estructuras.forEach(c => {
             const fotoEstructura = c.foto_url && !c.foto_url.includes('sin_foto') ? c.foto_url.split('|')[0] : null;
+            const telaLista = c.tela_distribuida !== false; // true si campo ausente (retrocompat)
+            const semColor  = telaLista ? '#16a34a' : '#f59e0b';
+            const semIcon   = telaLista ? '🟢' : '🟡';
+            const semLabel  = telaLista
+                ? 'Tela lista — recojo habilitado'
+                : 'Tela pendiente de distribución — recojo bloqueado';
+            const btnStyle  = telaLista
+                ? 'background:#dc2626; color:white; border:none; padding:12px 20px; border-radius:9px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px; box-shadow:0 2px 8px rgba(220,38,38,0.3);'
+                : 'background:#d1d5db; color:#6b7280; border:none; padding:12px 20px; border-radius:9px; font-size:12px; font-weight:800; cursor:not-allowed; white-space:nowrap; display:flex; align-items:center; gap:7px;';
             html += `
-            <div style="background:white; border-radius:14px; border:2px solid #fca5a5; box-shadow:0 4px 12px rgba(220,38,38,0.10); overflow:hidden;">
-                <div style="background:linear-gradient(135deg,#fff5f5,#fee2e2); padding:14px 18px; border-bottom:2px solid #fca5a5; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+            <div style="background:white; border-radius:14px; border:2px solid ${semColor}33; box-shadow:0 4px 12px rgba(220,38,38,0.10); overflow:hidden;">
+                <div style="background:linear-gradient(135deg,#fff5f5,#fee2e2); padding:14px 18px; border-bottom:2px solid ${semColor}44; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
                     <div>
-                        <span style="font-size:10px; font-weight:900; color:#dc2626; text-transform:uppercase; letter-spacing:1px;">🔴 ${c.area.replace(/_/g,' ')} · Listo desde ${c.fecha_fin}</span>
+                        <span style="font-size:10px; font-weight:900; color:#dc2626; text-transform:uppercase; letter-spacing:1px;">${semIcon} ${c.area.replace(/_/g,' ')} · Listo desde ${c.fecha_fin}</span>
                         <h4 style="margin:4px 0 2px 0; font-size:15px; font-weight:900; color:#0f172a;">${c.producto}</h4>
                         <p style="margin:0; font-size:12px; color:#64748b;">
                             <b>Ref:</b> ${c.codigo_venta} &nbsp;|&nbsp; <b>Cliente:</b> ${c.cliente}
@@ -462,9 +471,10 @@ async function cargarVistaColaRecojoChofer(contenedor) {
                             <i class="fa-solid fa-user-gear"></i> <b>Carpintero:</b> ${c.operario}
                             ${c.tapicero && c.tapicero !== 'Sin asignar' ? `&nbsp;|&nbsp; <i class="fa-solid fa-couch"></i> <b>Tapicero:</b> <span style="color:#0369a1; font-weight:bold;">${c.tapicero}</span>` : ''}
                         </p>
+                        <p style="margin:4px 0 0 0; font-size:11px; font-weight:700; color:${semColor};">${semLabel}</p>
                     </div>
-                    <button onclick="confirmarRecojoEstructura(${c.ticket_id}, '${(c.producto||'').replace(/'/g,"\\'")}', this)"
-                        style="background:#dc2626; color:white; border:none; padding:12px 20px; border-radius:9px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px; box-shadow:0 2px 8px rgba(220,38,38,0.3);">
+                    <button ${telaLista ? `onclick="confirmarRecojoEstructura(${c.ticket_id}, '${(c.producto||'').replace(/'/g,"\\'")}', this)"` : 'disabled title="Esperando que la tela sea distribuida al tapicero"'}
+                        style="${btnStyle}">
                         ✅ Confirmar Recojo
                     </button>
                 </div>
@@ -649,22 +659,29 @@ async function cargarVistaColaRecojo(contenedor) {
             estructuras.forEach((c, idx) => {
                 const fotoEstructura = c.foto_url && !c.foto_url.includes('sin_foto') ? c.foto_url.split('|')[0] : null;
                 const fotoEvidencia  = c.foto_evidencia || null;
+                const telaLista = c.tela_distribuida !== false; // true si campo ausente (retrocompat)
+                const semColor  = telaLista ? '#16a34a' : '#f59e0b';
+                const semIcon   = telaLista ? '🟢' : '🟡';
+                const semLabel  = telaLista
+                    ? '<span style="color:#16a34a; font-weight:800; font-size:11px;">🟢 Tela lista — recojo habilitado</span>'
+                    : '<span style="color:#f59e0b; font-weight:800; font-size:11px;">🟡 Tela pendiente de distribución al tapicero</span>';
 
                 html += `
-                <div style="background:white; border-radius:14px; border:1px solid #fed7aa; box-shadow:0 4px 12px rgba(249,115,22,0.08); overflow:hidden;">
+                <div style="background:white; border-radius:14px; border:1px solid ${semColor}55; box-shadow:0 4px 12px rgba(249,115,22,0.08); overflow:hidden;">
                     <!-- Cabecera naranja -->
-                    <div style="background:linear-gradient(135deg,#fff7ed,#ffedd5); padding:14px 18px; border-bottom:2px solid #fed7aa; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                    <div style="background:linear-gradient(135deg,#fff7ed,#ffedd5); padding:14px 18px; border-bottom:2px solid ${semColor}44; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
                         <div>
-                            <span style="font-size:10px; font-weight:900; color:#f97316; text-transform:uppercase; letter-spacing:1px;">${c.area.replace(/_/g,' ')} · Terminado el ${c.fecha_fin}</span>
+                            <span style="font-size:10px; font-weight:900; color:#f97316; text-transform:uppercase; letter-spacing:1px;">${semIcon} ${c.area.replace(/_/g,' ')} · Terminado el ${c.fecha_fin}</span>
                             <h4 style="margin:4px 0 2px 0; font-size:15px; font-weight:900; color:#0f172a;">${c.producto}</h4>
                             <p style="margin:0; font-size:12px; color:#64748b;">
                                 <b>Ref:</b> ${c.codigo_venta} &nbsp;|&nbsp; <b>Cliente:</b> ${c.cliente}
                                 ${c.direccion ? `&nbsp;|&nbsp; <b>Entrega:</b> ${c.fecha_entrega}` : ''}
                             </p>
-                            <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">
+                            <p style="margin:4px 0 2px 0; font-size:11px; color:#64748b;">
                                 <i class="fa-solid fa-user-gear"></i> <b>Carpintero:</b> ${c.operario} &nbsp;
                                 <i class="fa-solid fa-couch"></i> <b>Tapicero:</b> <span style="color:#0369a1; font-weight:bold;">${c.tapicero}</span>
                             </p>
+                            ${semLabel}
                         </div>
                         <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
                             <button onclick="imprimirPDFRecojoUnitario(${idx})" 
@@ -673,10 +690,15 @@ async function cargarVistaColaRecojo(contenedor) {
                                 <i class="fa-solid fa-file-pdf"></i> PDF Unitario
                             </button>
                             ${(typeof usuarioActivo !== 'undefined' && (usuarioActivo.rol === 'Chofer' || usuarioActivo.rol === 'Admin' || usuarioActivo.rol === 'Jefe_Taller'))
-                                ? `<button onclick="confirmarRecojoEstructura(${c.ticket_id}, '${(c.producto||'').replace(/'/g,"\\'")}', this)"
-                                    style="background:#dc2626; color:white; border:none; padding:9px 16px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;">
-                                    ✅ Confirmar Recojo
-                                </button>`
+                                ? (telaLista
+                                    ? `<button onclick="confirmarRecojoEstructura(${c.ticket_id}, '${(c.producto||'').replace(/'/g,"\\'")}', this)"
+                                        style="background:#dc2626; color:white; border:none; padding:9px 16px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;">
+                                        ✅ Confirmar Recojo
+                                    </button>`
+                                    : `<button disabled title="Esperando que la tela sea distribuida al tapicero"
+                                        style="background:#d1d5db; color:#6b7280; border:none; padding:9px 16px; border-radius:8px; font-size:11px; font-weight:800; cursor:not-allowed; white-space:nowrap;">
+                                        🟡 Esperando tela
+                                    </button>`)
                                 : ''}
                         </div>
                     </div>
@@ -1566,7 +1588,8 @@ async function cargarTicketsTaller() {
 
         // Cargar sugerencias para estructuras — buscar por modelo base + medidas
         ticketsFiltrados.forEach(t => {
-    if (t.area === 'ESTRUCTURAS_MUEBLES' && t.estado !== 'Terminado') {
+    if (t.area === 'ESTRUCTURAS_MUEBLES' && t.estado !== 'Terminado'
+        && esOperario && usuarioActivo.area_asignada === 'ESTRUCTURAS_MUEBLES') {
  
         let l = 0, p = 0, h = 0;
         const spec = t.especificaciones || '';

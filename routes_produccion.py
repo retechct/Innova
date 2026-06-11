@@ -176,7 +176,16 @@ def obtener_cola_recojo():
                             AND tela.estado_ticket NOT IN ('Terminado', 'Listo para Recojo', 'Recogido')
                        THEN true
                        ELSE false
-                   END AS bloqueado_por_telas
+                   END AS bloqueado_por_telas,
+                   CASE
+                       -- Sin tela asociada por ninguna vía → verde (no bloquea)
+                       WHEN tela.id IS NULL AND log_tela.id IS NULL THEN true
+                       -- Ticket de corte terminado → verde
+                       WHEN tela.estado_ticket = 'Terminado' THEN true
+                       -- Logística externa de tela distribuida al tapicero → verde
+                       WHEN log_tela.estado_distribucion = 'Distribuido' THEN true
+                       ELSE false
+                   END AS tela_distribuida
             FROM tickets_produccion t
             JOIN items_venta i    ON t.item_id  = i.id
             JOIN ventas v         ON i.venta_id = v.id
@@ -188,6 +197,9 @@ def obtener_cola_recojo():
             LEFT JOIN tickets_produccion tela
                 ON tela.item_id = t.item_id
                AND tela.area_trabajo = 'CORTE_Y_CONTROL_TELAS'
+            LEFT JOIN logistica_externa log_tela
+                ON log_tela.item_id = t.item_id
+               AND log_tela.categoria_insumo = 'TELA'
             WHERE t.area_trabajo IN ('ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS')
               AND t.estado_ticket = 'Listo para Recojo'
             ORDER BY t.fecha_fin DESC;
@@ -202,6 +214,7 @@ def obtener_cola_recojo():
             "fecha_entrega": r[11].strftime('%d/%m/%Y') if r[11] else 'S/F',
             "item_id": r[12], "tapicero": r[13],
             "bloqueado_por_telas": bool(r[14]),
+            "tela_distribuida": bool(r[15]),
         } for r in cursor.fetchall()]
 
         # 2. Compras externas (Logística)
