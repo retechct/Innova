@@ -182,6 +182,41 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
     const isRecogido        = t.estado === 'Recogido';
     const esAreaEstructura  = t.area === 'ESTRUCTURAS_MUEBLES' || t.area === 'ESTRUCTURAS_SILLAS';
 
+    // ── LOGÍSTICA EXTERNA (TELAS): se evalúa ANTES del bloque esAdmin,
+    // porque ese bloque hace return temprano y nunca llegaría aquí ──
+    if (t.es_logistica) {
+        if (esAdmin) {
+            const trabajadorInfo = t.trabajador
+                ? `<div style="background:#f0fdf4; color:#166534; padding:6px; border-radius:6px; text-align:center; font-size:10px; margin-bottom:6px;"><i class="fa-solid fa-user-check"></i> Asignado: <b>${t.trabajador_nombre}</b></div>`
+                : '';
+            return `${trabajadorInfo}
+                <button onclick="asignarTrabajadorLogistica(${t.id})"
+                    style="width:100%; background:#94a3b8; color:white; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">
+                    <i class="fa-solid fa-user-clock"></i> ${t.trabajador ? 'Reasignar' : 'Asignar'} Operario de Telas
+                </button>`;
+        } else {
+            if (t.estado === 'En Recojo') {
+                return `<div style="margin-top:10px; padding:10px; background:#fef9c3; border-radius:8px; border:1px solid #fde047;">
+                            <label style="font-size:9px; font-weight:900; color:#854d0e; display:block; margin-bottom:6px;">📷 SUBIR VOUCHER / RECIBO DE PAGO:</label>
+                            <input type="file" id="foto-voucher-${t.id}" accept="image/*,application/pdf" style="width:100%; margin-bottom:8px; font-size:11px;">
+                            <button onclick="confirmarRecojoLogistica(${t.id}, document.getElementById('foto-voucher-${t.id}'))"
+                                style="width:100%; background:#f59e0b; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                                <i class="fa-solid fa-truck-ramp-box"></i> Pagar y Confirmar Recojo
+                            </button>
+                        </div>`;
+            } else if (t.estado === 'Recogido') {
+                return `<button onclick="confirmarDistribucionTela(${t.id})"
+                            style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                            <i class="fa-solid fa-people-carry-box"></i> Entregar a Tapicería
+                        </button>`;
+            }
+            // Sin asignar (no admin) — informativo, el admin debe asignar primero
+            return `<div style="background:#fef3c7; color:#92400e; padding:8px; border-radius:8px; text-align:center; font-size:11px;">
+                        <i class="fa-solid fa-user-clock"></i> Esperando asignación de operario
+                    </div>`;
+        }
+    }
+
     // ── ADMIN: solo ve botón para ASIGNAR, nunca para terminar ──
     if (esAdmin) {
         if (t.area === 'DESPACHO_CENTRAL') {
@@ -259,35 +294,6 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                     style="width:100%; background:#558fc5; color:white; border:none; padding:10px; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer;">
                     <i class="fa-solid fa-user-plus"></i> Asignar Maestro
                 </button>`;
-    }
-
-    if (t.es_logistica) {
-        if (esAdmin) {
-            const trabajadorInfo = t.trabajador
-                ? `<div style="background:#f0fdf4; color:#166534; padding:6px; border-radius:6px; text-align:center; font-size:10px; margin-bottom:6px;"><i class="fa-solid fa-user-check"></i> Asignado: <b>${t.trabajador_nombre}</b></div>`
-                : '';
-            return `${trabajadorInfo}
-                <button onclick="asignarTrabajadorLogistica(${t.id})"
-                    style="width:100%; background:#94a3b8; color:white; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">
-                    <i class="fa-solid fa-user-clock"></i> ${t.trabajador ? 'Reasignar' : 'Asignar'} Operario de Telas
-                </button>`;
-        } else {
-            if (t.estado === 'En Recojo') {
-                return `<div style="margin-top:10px; padding:10px; background:#fef9c3; border-radius:8px; border:1px solid #fde047;">
-                            <label style="font-size:9px; font-weight:900; color:#854d0e; display:block; margin-bottom:6px;">📷 SUBIR VOUCHER / RECIBO DE PAGO:</label>
-                            <input type="file" id="foto-voucher-${t.id}" accept="image/*,application/pdf" style="width:100%; margin-bottom:8px; font-size:11px;">
-                            <button onclick="confirmarRecojoLogistica(${t.id}, document.getElementById('foto-voucher-${t.id}'))"
-                                style="width:100%; background:#f59e0b; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
-                                <i class="fa-solid fa-truck-ramp-box"></i> Pagar y Confirmar Recojo
-                            </button>
-                        </div>`;
-            } else if (t.estado === 'Recogido') {
-                return `<button onclick="confirmarDistribucionTela(${t.id})"
-                            style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
-                            <i class="fa-solid fa-people-carry-box"></i> Entregar a Tapicería
-                        </button>`;
-            }
-        }
     }
 
     // ── OPERARIO / JEFE (no admin) ──
