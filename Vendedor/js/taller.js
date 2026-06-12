@@ -2742,17 +2742,17 @@ async function cargarOrdenesProduccion(contenedor) {
                         const nombre = AREA_NOMBRES[t.area] || t.area.replace(/_/g,' ');
                         // Para logística de tela: mostrar operario asignado y tapicero destino
                         if (t.es_logistica) {
-                            const operarioInfo = t.trabajador && t.trabajador !== 'Sin asignar'
-                                ? `<span style="opacity:0.75">· ${t.trabajador}</span>`
-                                : `<span style="opacity:0.6;color:#dc2626;"> · Sin operario</span>`;
-                            const tapiceroInfo = t.tapicero_destino && t.tapicero_destino !== 'Sin asignar'
-                                ? `<span style="opacity:0.75"> → ${t.tapicero_destino}</span>`
-                                : `<span style="opacity:0.6;color:#dc2626;"> → Sin tapicero</span>`;
-                            const insumoLabel = t.insumo_nombre ? ` (${t.insumo_nombre})` : '';
-                            return \`<span title="Tela externa${insumoLabel}" style="font-size:10px; background:\${b.bg}; color:\${b.color}; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap; display:inline-flex; align-items:center; gap:3px;">
-                                        \${b.icon} Tela ext.\${insumoLabel ? \` · \${t.insumo_nombre}\` : ''}
-                                        \${operarioInfo}\${tapiceroInfo}
-                                    </span>\`;
+                            const operarioInfo = (t.trabajador && t.trabajador !== 'Sin asignar')
+                                ? '<span style="opacity:0.75">· ' + t.trabajador + '</span>'
+                                : '<span style="opacity:0.6;color:#dc2626;"> · Sin operario</span>';
+                            const tapiceroInfo = (t.tapicero_destino && t.tapicero_destino !== 'Sin asignar')
+                                ? '<span style="opacity:0.75"> → ' + t.tapicero_destino + '</span>'
+                                : '<span style="opacity:0.6;color:#dc2626;"> → Sin tapicero</span>';
+                            const insumoLabel = t.insumo_nombre ? ' · ' + t.insumo_nombre : '';
+                            return '<span title="Tela externa' + (t.insumo_nombre || '') + '" style="font-size:10px; background:' + b.bg + '; color:' + b.color + '; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap; display:inline-flex; align-items:center; gap:3px;">'
+                                + b.icon + ' Tela ext.' + insumoLabel
+                                + ' ' + operarioInfo + tapiceroInfo
+                                + '</span>';
                         }
                         return `<span style="font-size:10px; background:${b.bg}; color:${b.color}; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap;">
                                     ${b.icon} ${nombre}
