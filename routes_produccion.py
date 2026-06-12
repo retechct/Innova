@@ -3321,4 +3321,4 @@ def editar_estructura(stock_id):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion)
+            cursor.close(); release_db_connection(conexion) 
