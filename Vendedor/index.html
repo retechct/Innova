@@ -1850,7 +1850,14 @@ function gmRenderListas() {
   const listaBase = document.getElementById('gm-lista-base');
   listaBase.innerHTML = GM_MODELOS_BASE.map(m =>
     `<span style="background:#e2e8f0;color:#374151;padding:4px 10px;border-radius:20px;
-                  font-size:11px;font-weight:700;">${m.label}</span>`
+                  font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px;">
+       ${m.label}
+       <label title="Cambiar foto de este modelo" style="cursor:pointer;font-size:12px;opacity:0.6;line-height:1;" tabindex="0">
+         🖼
+         <input type="file" accept="image/*" style="display:none;"
+                onchange="gmCambiarFotoBase('${m.key}', this)">
+       </label>
+     </span>`
   ).join('');
 
   // Custom
@@ -1875,6 +1882,12 @@ function gmRenderListas() {
                     overflow:hidden;text-overflow:ellipsis;">${m.label}</div>
         <div style="font-size:10px;color:#7c3aed;">Medidas: ${_gmLabelTipo(m.medidas)}</div>
       </div>
+      <label title="Cambiar foto" style="cursor:pointer;background:#eff6ff;border:1px solid #bfdbfe;
+                    color:#1d4ed8;border-radius:7px;padding:5px 9px;font-size:13px;flex-shrink:0;display:flex;align-items:center;">
+        🖼
+        <input type="file" accept="image/*" style="display:none;"
+               onchange="gmCambiarFotoCustom(${i}, this)">
+      </label>
       <button onclick="gmEliminarModelo(${i})"
               style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;
                      border-radius:7px;padding:5px 9px;cursor:pointer;font-size:13px;flex-shrink:0;"
@@ -1956,6 +1969,53 @@ function gmAgregarModelo() {
   reader.readAsDataURL(file);
 }
 
+// ─── Cambiar foto de modelo base ──────────────────────────────
+function gmCambiarFotoBase(key, inputEl) {
+  const file = inputEl?.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const fotoData = e.target.result;
+    // Actualizar en imagenesSofa en memoria
+    if (typeof imagenesSofa !== 'undefined') imagenesSofa[key] = fotoData;
+    // Guardar override en localStorage
+    try {
+      const overrides = JSON.parse(localStorage.getItem('innova_fotos_base_sofa') || '{}');
+      overrides[key] = fotoData;
+      localStorage.setItem('innova_fotos_base_sofa', JSON.stringify(overrides));
+    } catch(e) {}
+    // Refrescar vista si este modelo está seleccionado
+    const sel = document.getElementById('sofa-modelo');
+    if (sel && sel.value === key && typeof actualizarVistaSofa === 'function') actualizarVistaSofa();
+    // Feedback
+    inputEl.value = '';
+    Swal && Swal.fire({ icon:'success', title:'Foto actualizada', text:'La imagen de referencia del modelo fue cambiada.', timer:1800, showConfirmButton:false });
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── Cambiar foto de modelo personalizado ─────────────────────
+function gmCambiarFotoCustom(index, inputEl) {
+  const file = inputEl?.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const fotoData = e.target.result;
+    const custom = gmGetCustom();
+    if (!custom[index]) return;
+    custom[index].foto = fotoData;
+    gmSaveCustom(custom);
+    // Actualizar imagenesSofa en memoria
+    if (typeof imagenesSofa !== 'undefined') imagenesSofa[custom[index].key] = fotoData;
+    inputEl.value = '';
+    gmRenderListas();
+    // Refrescar vista si está seleccionado
+    const sel = document.getElementById('sofa-modelo');
+    if (sel && sel.value === custom[index].key && typeof actualizarVistaSofa === 'function') actualizarVistaSofa();
+  };
+  reader.readAsDataURL(file);
+}
+
 // ─── Eliminar modelo personalizado ───────────────────────────
 function gmEliminarModelo(index) {
   if (!confirm('¿Eliminar este modelo?')) return;
@@ -1987,6 +2047,13 @@ document.addEventListener('DOMContentLoaded', () => {
     guardados.forEach(m => {
       if (typeof imagenesSofa !== 'undefined' && m.key && m.foto)
         imagenesSofa[m.key] = m.foto;
+    });
+  } catch(e) {}
+  // Cargar overrides de fotos de modelos base
+  try {
+    const overrides = JSON.parse(localStorage.getItem('innova_fotos_base_sofa') || '{}');
+    Object.entries(overrides).forEach(([key, foto]) => {
+      if (typeof imagenesSofa !== 'undefined') imagenesSofa[key] = foto;
     });
   } catch(e) {}
   gmPopularSelect();
