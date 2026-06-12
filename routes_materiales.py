@@ -29,7 +29,7 @@ materiales_bp = Blueprint('materiales', __name__)
 # ==========================================
 
 @materiales_bp.route('/api/materiales/nuevo', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def agregar_nuevo_material():
     try:
         tipo_material = request.form.get('tipo_material')
@@ -364,7 +364,7 @@ def obtener_creaciones():
 
 
 @materiales_bp.route('/api/creaciones/aprobar', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def aprobar_creacion():
     data        = request.json
     creacion_id = data.get('creacion_id')
@@ -400,7 +400,7 @@ def aprobar_creacion():
 
 
 @materiales_bp.route('/api/creaciones/rechazar', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def rechazar_creacion():
     data        = request.json
     creacion_id = data.get('creacion_id')

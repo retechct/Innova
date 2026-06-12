@@ -883,7 +883,7 @@ def proponer_cambio_precio(codigo):
 
 
 @ventas_bp.route('/api/cambios-precio/pendientes', methods=['GET'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def listar_cambios_precio_pendientes():
     try:
         conexion = get_db_connection()
@@ -914,7 +914,7 @@ def listar_cambios_precio_pendientes():
 
 
 @ventas_bp.route('/api/cambios-precio/<int:cambio_id>/aprobar', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def aprobar_cambio_precio(cambio_id):
     data         = request.json
     admin_id     = data.get('admin_id')
@@ -948,7 +948,7 @@ def aprobar_cambio_precio(cambio_id):
 
 
 @ventas_bp.route('/api/cambios-precio/<int:cambio_id>/rechazar', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def rechazar_cambio_precio(cambio_id):
     data         = request.json
     admin_id     = data.get('admin_id')
@@ -1007,7 +1007,7 @@ def historial_precios_venta(codigo):
 # ==========================================
 
 @ventas_bp.route('/api/ventas/exportar', methods=['GET'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def exportar_ventas_excel():
     try:
         conexion = get_db_connection()

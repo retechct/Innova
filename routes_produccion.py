@@ -1198,7 +1198,7 @@ def obtener_receta(producto_id):
 
 
 @produccion_bp.route('/api/recetas/nueva', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def agregar_ingrediente_receta():
     data               = request.json
     producto_id        = data.get('producto_id')
@@ -1284,7 +1284,7 @@ def obtener_sugerencias():
 
 
 @produccion_bp.route('/api/sugerencias/aprobar', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def aprobar_sugerencia_insumo():
     data          = request.json
     sugerencia_id = data.get('sugerencia_id')
@@ -1325,7 +1325,7 @@ def aprobar_sugerencia_insumo():
         if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/sugerencias/rechazar', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def rechazar_sugerencia_insumo():
     data          = request.json
     sugerencia_id = data.get('sugerencia_id')
@@ -1347,7 +1347,7 @@ def rechazar_sugerencia_insumo():
 # ==========================================
 
 @produccion_bp.route('/api/despacho/asignar-chofer', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def asignar_chofer_despacho():
     data      = request.json
     ticket_id = data.get('ticket_id')
@@ -1477,7 +1477,7 @@ def logistica_pendientes_por_proveedor():
 
 
 @produccion_bp.route('/api/logistica/crear-lote-cotizacion', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def crear_lote_cotizacion():
     try:
         datos = request.get_json()
@@ -1775,7 +1775,7 @@ def despacho_entregados():
 # ──────────────────────────────────────────────────────────
 
 @produccion_bp.route('/api/logistica/<int:id>/enviar-cotizacion', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def enviar_cotizacion_proveedor(id):
     """Genera token y devuelve el link + datos para abrir WhatsApp desde el frontend."""
     try:
@@ -1908,7 +1908,7 @@ def responder_cotizacion(token):
 
 
 @produccion_bp.route('/api/logistica/<int:id>/generar-orden', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def generar_orden_compra(id):
     """Genera PDF de Orden de Compra con diseño corporativo y lo sube a Cloudinary."""
     try:
@@ -2214,7 +2214,7 @@ def generar_orden_compra(id):
 
 
 @produccion_bp.route('/api/logistica/<int:id>/registrar-pago', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def registrar_pago_proveedor(id):
     """Sube voucher de pago a Cloudinary y actualiza estado.
     Detecta automáticamente si el insumo es TELA o ESTRUCTURAL
@@ -2293,7 +2293,7 @@ def registrar_pago_proveedor(id):
             cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/logistica/<int:id>/estado-distribucion', methods=['PATCH'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def actualizar_estado_distribucion(id):
     """El operario de telas cambia el estado de distribución de un ítem pagado.
     Solo aplica a ítems con categoria_insumo = 'TELA'.

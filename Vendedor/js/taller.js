@@ -1215,7 +1215,7 @@ async function cargarTicketsTaller() {
     // ── Actualizar badge de stats siempre que se cargue el taller ──
     cargarStatsTaller();
 
-    const esAdmin      = ['Admin', 'Jefe_Taller', 'JEFE_TALLER'].includes(usuarioActivo.rol);
+    const esAdmin      = ['Admin', 'Jefe_Taller'].includes(usuarioActivo.rol);
     const esOperario   = usuarioActivo.rol === 'Operario';
     const esChofer     = usuarioActivo.rol === 'Chofer';
 

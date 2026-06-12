@@ -90,7 +90,7 @@ async function init() {
             configurarInterfazPorRol();
             mostrarUsuarioEnHeader();
             document.getElementById('pantalla-login').style.display = 'none';
-            if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER' || usuarioActivo.rol === 'Chofer') {
+            if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'Chofer') {
                 changeView('taller');
             } else {
                 changeView('catalogo');
@@ -133,7 +133,7 @@ function configurarInterfazPorRol() {
     const rol = usuarioActivo.rol;
     const esAdmin       = rol === 'Admin';
     const esVendedor    = rol === 'Vendedor';
-    const esJefeTaller  = ['Jefe_Taller', 'JEFE_TALLER'].includes(rol);
+    const esJefeTaller  = rol === 'Jefe_Taller';
     const esOperario    = rol === 'Operario';
     const esChofer      = rol === 'Chofer';
     const esAlmacen     = rol === 'ALMACEN';
@@ -1660,7 +1660,7 @@ async function entrarAlSistema() {
             mostrarUsuarioEnHeader();
 
             // Lógica de ruteo inicial después del login
-            if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'JEFE_TALLER' || usuarioActivo.rol === 'Chofer') {
+            if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'Chofer') {
                 changeView('taller');
             } else {
                 changeView('catalogo');
@@ -1703,7 +1703,6 @@ function mostrarUsuarioEnHeader() {
         'Vendedor':    'Vendedor',
         'Operario':    'Operario',
         'Jefe_Taller': 'Jefe Taller',
-        'JEFE_TALLER': 'Jefe Taller',
         'ALMACEN':     'Almacén',
     };
     const rolLabel = ROL_LABELS[usuarioActivo.rol] || usuarioActivo.rol;

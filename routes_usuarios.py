@@ -34,7 +34,7 @@ def obtener_usuarios():
 
 
 @usuarios_bp.route('/api/usuarios/detalle', methods=['GET'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def obtener_usuarios_detalle():
     try:
         conexion = get_db_connection()
@@ -104,7 +104,7 @@ def obtener_usuarios_por_area(area):
                 CASE WHEN UPPER(COALESCE(area_asignada,'')) IN ({placeholders}) THEN 0 ELSE 1 END AS orden
             FROM usuarios
             WHERE UPPER(COALESCE(area_asignada,'')) IN ({placeholders})
-               OR rol IN ('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+               OR rol IN ('Admin', 'Jefe_Taller')
             ORDER BY orden ASC, nombre ASC;
         """, (*areas_buscar_set, *areas_buscar_set))
         usuarios = [
@@ -217,7 +217,7 @@ def obtener_proveedores():
 
 
 @usuarios_bp.route('/api/proveedores/nuevo', methods=['POST'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def crear_proveedor():
     data = request.json
     try:

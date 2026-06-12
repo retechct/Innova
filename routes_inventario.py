@@ -27,7 +27,7 @@ inventario_bp = Blueprint('inventario', __name__)
 tz_peru = pytz.timezone('America/Lima')
 
 # Roles autorizados para modificar stock
-ROLES_INVENTARIO = ('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+ROLES_INVENTARIO = ('Admin', 'Jefe_Taller')
 
 # Prefijos por categoría para el código de barras
 PREFIJOS = {
@@ -604,7 +604,7 @@ def historial_sede(sede_id):
 # 9. EXPORTAR CSV COMPLETO
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/exportar', methods=['GET'])
-@requiere_rol('Admin', 'Jefe_Taller', 'JEFE_TALLER')
+@requiere_rol('Admin', 'Jefe_Taller')
 def exportar_inventario():
     conn = None
     try:
