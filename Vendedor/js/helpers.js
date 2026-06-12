@@ -206,10 +206,14 @@ function setFormSuccess(input, success = true) {
 function setFormDisabled(input, disabled = true) {
   if (disabled) {
     input?.classList.add('form-input--disabled');
-    input?.disabled = true;
+    if (input) {
+      input.disabled = true;
+    }
   } else {
     input?.classList.remove('form-input--disabled');
-    input?.disabled = false;
+    if (input) {
+      input.disabled = false;
+    }
   }
 }
 

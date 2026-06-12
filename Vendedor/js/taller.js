@@ -261,23 +261,37 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                 </button>`;
     }
 
-    // ── OPERARIO / JEFE (no admin) ──
-    
-    // Botones especiales para los tickets inyectados de Logística (Telas Externas)
-    if (t.trabajador_nombre === 'Logística Externa' && t.area === 'CORTE_Y_CONTROL_TELAS') {
-        if (t.estado === 'En Recojo') {
-            return `<button onclick="confirmarRecojoLogistica(${t.id})"
-                        style="width:100%; background:#f59e0b; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
-                        <i class="fa-solid fa-truck-ramp-box"></i> Confirmar Llegada de Tela
-                    </button>`;
-        } else if (t.estado === 'Recogido') {
-            return `<button onclick="confirmarDistribucionTela(${t.id})"
-                        style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
-                        <i class="fa-solid fa-people-carry-box"></i> Distribuir a Tapicería
-                    </button>`;
+    if (t.es_logistica) {
+        if (esAdmin) {
+            const trabajadorInfo = t.trabajador
+                ? `<div style="background:#f0fdf4; color:#166534; padding:6px; border-radius:6px; text-align:center; font-size:10px; margin-bottom:6px;"><i class="fa-solid fa-user-check"></i> Asignado: <b>${t.trabajador_nombre}</b></div>`
+                : '';
+            return `${trabajadorInfo}
+                <button onclick="asignarTrabajadorLogistica(${t.id})"
+                    style="width:100%; background:#94a3b8; color:white; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">
+                    <i class="fa-solid fa-user-clock"></i> ${t.trabajador ? 'Reasignar' : 'Asignar'} Operario de Telas
+                </button>`;
+        } else {
+            if (t.estado === 'En Recojo') {
+                return `<div style="margin-top:10px; padding:10px; background:#fef9c3; border-radius:8px; border:1px solid #fde047;">
+                            <label style="font-size:9px; font-weight:900; color:#854d0e; display:block; margin-bottom:6px;">📷 SUBIR VOUCHER / RECIBO DE PAGO:</label>
+                            <input type="file" id="foto-voucher-${t.id}" accept="image/*,application/pdf" style="width:100%; margin-bottom:8px; font-size:11px;">
+                            <button onclick="confirmarRecojoLogistica(${t.id}, document.getElementById('foto-voucher-${t.id}'))"
+                                style="width:100%; background:#f59e0b; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                                <i class="fa-solid fa-truck-ramp-box"></i> Pagar y Confirmar Recojo
+                            </button>
+                        </div>`;
+            } else if (t.estado === 'Recogido') {
+                return `<button onclick="confirmarDistribucionTela(${t.id})"
+                            style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                            <i class="fa-solid fa-people-carry-box"></i> Entregar a Tapicería
+                        </button>`;
+            }
         }
     }
 
+    // ── OPERARIO / JEFE (no admin) ──
+    
     if (isBloqueado) {
         return `<button disabled style="width:100%; background:#e2e8f0; color:#94a3b8; border:none; padding:8px; border-radius:6px; font-size:12px; font-weight:bold; cursor:not-allowed;">
                     <i class="fa-solid fa-hourglass-half"></i> Esperando áreas previas
@@ -1461,22 +1475,37 @@ async function cargarTicketsTaller() {
 
         if (esAdmin) {
             // Admin ve tickets no terminados, no listos para recojo ni recogidos.
-            ticketsFiltrados = tickets.filter(t => t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido');
+            ticketsFiltrados = tickets.filter(t => 
+                (t.es_logistica && t.estado !== 'Distribuido') ||
+                (!t.es_logistica && t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido')
+            );
         } else if (esOperario) {
             // Operario: solo los asignados a él
             ticketsFiltrados = tickets.filter(t => Number(t.trabajador) === Number(usuarioActivo.id));
             // Luego aplica filtro de tab
             if (filtroTaller === 'Pendientes') {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido');
+                ticketsFiltrados = ticketsFiltrados.filter(t => 
+                    (t.es_logistica && t.estado !== 'Distribuido') ||
+                    (!t.es_logistica && t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido')
+                );
             } else {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado' || t.estado === 'Listo para Recojo' || t.estado === 'Recogido');
+                ticketsFiltrados = ticketsFiltrados.filter(t => 
+                    (t.es_logistica && t.estado === 'Distribuido') ||
+                    (!t.es_logistica && (t.estado === 'Terminado' || t.estado === 'Listo para Recojo' || t.estado === 'Recogido'))
+                );
             }
         } else {
             // Jefe de taller: ve todos, con tabs
             if (filtroTaller === 'Pendientes') {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido');
+                ticketsFiltrados = ticketsFiltrados.filter(t => 
+                    (t.es_logistica && t.estado !== 'Distribuido') ||
+                    (!t.es_logistica && t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido')
+                );
             } else {
-                ticketsFiltrados = ticketsFiltrados.filter(t => t.estado === 'Terminado' || t.estado === 'Listo para Recojo' || t.estado === 'Recogido');
+                ticketsFiltrados = ticketsFiltrados.filter(t => 
+                    (t.es_logistica && t.estado === 'Distribuido') ||
+                    (!t.es_logistica && (t.estado === 'Terminado' || t.estado === 'Listo para Recojo' || t.estado === 'Recogido'))
+                );
             }
         }
 
@@ -1553,6 +1582,12 @@ async function cargarTicketsTaller() {
                              : isListoParaRecojo  ? '🔴 LISTO PARA RECOJO'
                              : isRecogido         ? '✅ RECOGIDO'
                              : '🟡 PENDIENTE';
+
+                if (t.es_logistica) {
+                    if (t.estado === 'En Recojo') { badgeBg = '#fef9c3'; badgeCol = '#854d0e'; badgeTxt = '🟡 EN RECOJO'; }
+                    else if (t.estado === 'Recogido') { badgeBg = '#dcfce7'; badgeCol = '#166534'; badgeTxt = '✅ RECOGIDO (POR DISTRIBUIR)'; }
+                    else if (t.estado === 'Distribuido') { badgeBg = '#dcfce7'; badgeCol = '#166534'; badgeTxt = '✅ DISTRIBUIDO'; }
+                }
 
                 // Asignado a quién
                 const asignadoA = t.trabajador_nombre && t.trabajador_nombre !== 'Sin asignar'
@@ -2082,32 +2117,97 @@ async function abrirModalDerivar(ticketId) {
 }
 
 /* --- CONFIRMAR LLEGADA DE TELA DESDE LOGÍSTICA --- */
-async function confirmarRecojoLogistica(id) {
+async function confirmarRecojoLogistica(id, fileInput) {
+    const file = fileInput ? fileInput.files[0] : null;
+
     const conf = await Swal.fire({
-        title: 'Confirmar recepción de Tela',
-        html: '<p style="font-size:12px;color:#64748b;">La tela ya llegó al taller físicamente.</p><input id="swal-monto" type="number" class="swal2-input" placeholder="Monto pagado al recibir (opcional)"><select id="swal-metodo" class="swal2-input"><option value="">Método de pago (opcional)</option><option value="Efectivo">Efectivo</option><option value="Yape/Plin">Yape/Plin</option></select>',
+        title: 'Confirmar recepción y pago',
+        html: '<p style="font-size:12px;color:#64748b;">¿Confirmas que la tela ya fue pagada y está en el taller?</p>',
         showCancelButton: true,
-        confirmButtonText: '✅ Confirmar'
+        confirmButtonText: '✅ Confirmar',
+        confirmButtonColor: '#f59e0b'
     });
     if (!conf.isConfirmed) return;
     
-    const monto = document.getElementById('swal-monto').value;
-    const metodo_pago = document.getElementById('swal-metodo').value;
-
     Swal.fire({ title: 'Guardando...', didOpen: () => Swal.showLoading() });
-    const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-recojo`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ monto, metodo_pago })
-    });
-    const d = await res.json();
-    if (d.exito) {
-        Swal.fire('¡Recibido!', d.mensaje, 'success');
-        cargarTicketsTaller();
-    } else { Swal.fire('Error', d.error, 'error'); }
+    try {
+        const formData = new FormData();
+        if (file) formData.append('comprobante', file);
+        
+        const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-recojo`, {
+            method: 'POST',
+            body: formData
+        });
+        const d = await res.json();
+        if (d.exito) {
+            Swal.fire('¡Recibido!', d.mensaje, 'success');
+            cargarTicketsTaller();
+        } else { Swal.fire('Error', d.error, 'error'); }
+    } catch(e) {
+        Swal.fire('Error', 'Error de conexión', 'error');
+    }
 }
 
 /* --- DISTRIBUIR TELA A TAPICERÍA --- */
+
+async function asignarTrabajadorLogistica(logisticaId) {
+    try {
+        Swal.fire({ title: 'Buscando personal...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+        const res = await apiFetch(`${API_URL}/api/usuarios/por-area/CORTE_Y_CONTROL_TELAS`);
+        const usuarios = await res.json();
+        Swal.close();
+
+        if (!Array.isArray(usuarios) || usuarios.length === 0) {
+            return Swal.fire({
+                title: 'Sin personal registrado',
+                html: `No hay operarios asignados al área <b style="color:#558fc5;">CORTE Y CONTROL TELAS</b>.`,
+                icon: 'info',
+                confirmButtonColor: '#0f172a'
+            });
+        }
+
+        let selectHtml = `<select id="swal-select-trabajador-log" class="swal2-input" style="width:100%; font-size:14px; border-radius:8px;">
+            <option value="">-- Selecciona un operario --</option>`;
+        usuarios.forEach(u => {
+            selectHtml += `<option value="${u.id}">${u.nombre} (${u.rol})</option>`;
+        });
+        selectHtml += `</select>`;
+
+        const { isConfirmed } = await Swal.fire({
+            title: 'Asignar Operario de Telas',
+            html: selectHtml,
+            showCancelButton: true,
+            confirmButtonColor: '#0f172a',
+            cancelButtonText: 'Cancelar',
+            confirmButtonText: 'Confirmar Asignación',
+            preConfirm: () => {
+                const val = document.getElementById('swal-select-trabajador-log').value;
+                if (!val) { Swal.showValidationMessage('Debes seleccionar un trabajador'); return false; }
+                return val;
+            }
+        });
+
+        if (isConfirmed) {
+            const trabajadorId = document.getElementById('swal-select-trabajador-log').value;
+            Swal.fire({ title: 'Asignando...', didOpen: () => Swal.showLoading() });
+            const resp = await apiFetch(`${API_URL}/api/logistica/${logisticaId}/asignar-operario`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trabajador_id: trabajadorId })
+            });
+            const data = await resp.json();
+            if (data.exito) {
+                Swal.fire('¡Asignado!', 'El operario ya puede ver la recolección en su bandeja.', 'success');
+                cargarTicketsTaller();
+            } else {
+                Swal.fire('Error', data.error, 'error');
+            }
+        }
+    } catch (e) {
+        Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
+    }
+}
 async function confirmarDistribucionTela(id) {
     const conf = await Swal.fire({
         title: '¿Distribuir tela a Tapicería?',

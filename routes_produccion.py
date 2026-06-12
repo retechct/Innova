@@ -422,6 +422,10 @@ def obtener_tickets_taller():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+
+        # Migración segura
+        cursor.execute("ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS operario_id INTEGER REFERENCES usuarios(id);")
+        conexion.commit()
         query = """
             SELECT t.id, i.producto, t.estado_ticket, t.area_trabajo, t.ticket_details_override,
                    t.trabajador_asignado_id, v.codigo_venta, i.color_tela, t.item_id,
@@ -496,23 +500,33 @@ def obtener_tickets_taller():
             
         # Inyectar elementos de Logística Externa para la cola de Telas
         if not area_filtro or area_filtro in ('TELAS', 'CORTE_Y_CONTROL_TELAS'):
-            cursor.execute("""
-                SELECT l.id, v.codigo_venta, l.insumo_nombre, l.sku, l.estado_distribucion, v.id
+            log_query = """
+                SELECT l.id, v.codigo_venta, l.insumo_nombre, l.sku, l.estado_distribucion, v.id,
+                       l.operario_id, COALESCE(u.nombre, 'Sin asignar')
                 FROM logistica_externa l
                 JOIN ventas v ON l.venta_id = v.id
-                WHERE l.categoria_insumo = 'TELA' AND l.estado_distribucion IN ('En Recojo', 'Recogido')
-            """)
+                LEFT JOIN usuarios u ON l.operario_id = u.id
+                WHERE (l.categoria_insumo = 'TELA' OR LOWER(l.insumo_nombre) LIKE '%tela%' OR LOWER(l.unidad) = 'mts')
+                  AND l.estado_distribucion IN ('En Recojo', 'Recogido', 'Distribuido')
+            """
+            log_params = []
+            if operario_id:
+                log_query += " AND l.operario_id = %s"
+                log_params.append(int(operario_id))
+                
+            cursor.execute(log_query, log_params)
             for r in cursor.fetchall():
                 tickets.append({
                     "id": r[0],
                     "producto": f"TELA EXTERNA: {r[2]}",
                     "estado": r[4],
                     "area": "CORTE_Y_CONTROL_TELAS",
-                    "trabajador": None,
+                    "trabajador": r[6],
                     "especificaciones": f"Ref: {r[1]} | SKU: {r[3] or 'N/A'}",
                     "foto": "imagenes/sin_foto.jpg",
-                    "trabajador_nombre": "Logística Externa",
-                    "item_id": r[5]
+                    "trabajador_nombre": r[7],
+                    "item_id": r[5],
+                    "es_logistica": True
                 })
                 
         return jsonify(tickets), 200
@@ -1116,17 +1130,27 @@ def enviar_al_taller(logistica_id):
 # ==========================================
 
 @produccion_bp.route('/api/logistica/<int:id>/confirmar-recojo', methods=['POST'])
+@requiere_login
 def logistica_confirmar_recojo(id):
-    data = request.json or {}
-    url_comprobante = data.get('comprobante_url')
     try:
+        url_comprobante = None
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            if 'comprobante' in request.files and request.files['comprobante'].filename:
+                import cloudinary.uploader
+                res = cloudinary.uploader.upload(request.files['comprobante'], folder='pagos_proveedores')
+                url_comprobante = res.get('secure_url')
+        else:
+            data = request.json or {}
+            url_comprobante = data.get('comprobante_url')
+            
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("""
             UPDATE logistica_externa
-            SET estado = 'Recogido',
+            SET estado = 'Pagado',
                 estado_distribucion = 'Recogido',
                 fecha_recojo_fisico = NOW(),
+                fecha_pago = NOW(),
                 url_comprobante_pago = COALESCE(%s, url_comprobante_pago)
             WHERE id = %s
         """, (url_comprobante, id))
@@ -1139,28 +1163,48 @@ def logistica_confirmar_recojo(id):
         if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/logistica/<int:id>/confirmar-distribucion', methods=['POST'])
+@requiere_login
 def logistica_confirmar_distribucion(id):
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("""
             UPDATE logistica_externa
-            SET estado = 'Distribuido', estado_distribucion = 'Distribuido'
+            SET estado = 'Recibido', estado_distribucion = 'Distribuido'
             WHERE id = %s RETURNING venta_id
         """, (id,))
         row = cursor.fetchone()
         if not row: return jsonify({'error': 'No encontrado'}), 404
         
-        # Desbloquear tapicería
+        venta_id = row[0]
+        
         cursor.execute("""
-            UPDATE tickets_produccion t
-            SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
-            FROM items_venta i
-            WHERE t.item_id = i.id AND i.venta_id = %s
-              AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS')
-              AND t.estado_ticket = 'Bloqueado'
-        """, (row[0],))
-        desbloqueados = cursor.rowcount
+            SELECT t.id, t.area_trabajo, t.item_id
+            FROM tickets_produccion t
+            JOIN items_venta i ON t.item_id = i.id
+            WHERE i.venta_id = %s AND t.estado_ticket = 'Bloqueado'
+              AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS', 'ARMADO_COJINES')
+        """, (venta_id,))
+        tickets_bloqueados = cursor.fetchall()
+        
+        desbloqueados = 0
+        for tb_id, tb_area, tb_item_id in tickets_bloqueados:
+            if tb_area in ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'):
+                areas_req = ['ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS']
+                placeholders_req = ','.join(['%s'] * len(areas_req))
+                cursor.execute(f"""
+                    SELECT COUNT(*) FROM tickets_produccion
+                    WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
+                      AND estado_ticket NOT IN ('Terminado', 'Listo para Recojo', 'Recogido')
+                """, (tb_item_id,))
+                pendientes = cursor.fetchone()[0]
+                if pendientes == 0:
+                    cursor.execute("UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP WHERE id = %s", (tb_id,))
+                    desbloqueados += cursor.rowcount
+            elif tb_area == 'ARMADO_COJINES':
+                cursor.execute("UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP WHERE id = %s", (tb_id,))
+                desbloqueados += cursor.rowcount
+
         conexion.commit()
         return jsonify({'exito': True, 'desbloqueados': desbloqueados}), 200
     except Exception as e:
@@ -1168,6 +1212,24 @@ def logistica_confirmar_distribucion(id):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
+
+@produccion_bp.route('/api/logistica/<int:id>/asignar-operario', methods=['POST'])
+@requiere_login
+def asignar_operario_logistica(id):
+    data = request.json
+    operario_id = data.get('trabajador_id')
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        cursor.execute("UPDATE logistica_externa SET operario_id = %s WHERE id = %s", (operario_id, id))
+        conexion.commit()
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
 
 # ==========================================
 # 11. RECETAS DE MUEBLES (BOM)
@@ -2186,11 +2248,22 @@ def generar_orden_compra(id):
 
         # ── Actualizar estado logística ────────────────────────────────
         try:
+            cursor.execute("SELECT sku, insumo_nombre, unidad FROM logistica_externa WHERE id = %s", (id,))
+            sku_cat, insumo_nombre_cat, unidad_cat = cursor.fetchone()
+            cat_insumo = 'OTRO'
+            if sku_cat:
+                cursor.execute("SELECT 1 FROM maestro_telas WHERE sku = %s LIMIT 1", (sku_cat,))
+                if cursor.fetchone():
+                    cat_insumo = 'TELA'
+            if cat_insumo == 'OTRO' and ('tela' in (insumo_nombre_cat or '').lower() or (unidad_cat or '').lower() == 'mts'):
+                cat_insumo = 'TELA'
+                
             cursor.execute("""
                 UPDATE logistica_externa SET estado = 'Orden Enviada',
-                    estado_distribucion = CASE WHEN categoria_insumo = 'TELA' THEN 'En Recojo' ELSE estado_distribucion END
+                    categoria_insumo = %s,
+                    estado_distribucion = CASE WHEN %s = 'TELA' THEN 'En Recojo' ELSE estado_distribucion END
                 WHERE id = %s
-            """, (id,))
+            """, (cat_insumo, cat_insumo, id))
             conexion.commit()
         except Exception as e_upd:
             conexion.rollback()
