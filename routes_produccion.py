@@ -525,7 +525,32 @@ def obtener_tickets_taller():
                 log_params.append(int(operario_id))
                 
             cursor.execute(log_query, log_params)
-            for r in cursor.fetchall():
+            log_rows = cursor.fetchall()
+
+            # Para cada venta de estos insumos, averiguar qué tapicero (sofás/sillas)
+            # y qué cojinero ya tienen asignado, para que el operario de telas
+            # sepa a quién debe entregarle la tela/cojín.
+            destinos_por_venta = {}
+            venta_ids = {r[5] for r in log_rows}
+            if venta_ids:
+                placeholders_v = ','.join(['%s'] * len(venta_ids))
+                cursor.execute(f"""
+                    SELECT i.venta_id, t.area_trabajo, COALESCE(u.nombre, 'Sin asignar')
+                    FROM tickets_produccion t
+                    JOIN items_venta i ON t.item_id = i.id
+                    LEFT JOIN usuarios u ON t.trabajador_asignado_id = u.id
+                    WHERE i.venta_id IN ({placeholders_v})
+                      AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS', 'ARMADO_COJINES')
+                """, tuple(venta_ids))
+                for venta_id, area, nombre in cursor.fetchall():
+                    d = destinos_por_venta.setdefault(venta_id, {'tapicero': None, 'cojinero': None})
+                    if area in ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'):
+                        d['tapicero'] = nombre
+                    elif area == 'ARMADO_COJINES':
+                        d['cojinero'] = nombre
+
+            for r in log_rows:
+                destino = destinos_por_venta.get(r[5], {})
                 tickets.append({
                     "id": r[0],
                     "producto": f"TELA EXTERNA: {r[2]}",
@@ -536,7 +561,9 @@ def obtener_tickets_taller():
                     "foto": "imagenes/sin_foto.jpg",
                     "trabajador_nombre": r[7],
                     "item_id": r[5],
-                    "es_logistica": True
+                    "es_logistica": True,
+                    "tapicero_destino": destino.get('tapicero'),
+                    "cojinero_destino": destino.get('cojinero'),
                 })
                 
         return jsonify(tickets), 200
@@ -678,15 +705,38 @@ def derivar_ticket():
                 )
             """, (item_id, area_tapiceria, tapicero_id, item_id, area_tapiceria))
 
-        if cojinero_id:
+        # Cojines: como solo hay un cojinero registrado, se asigna automáticamente
+        # (el jefe no necesita seleccionarlo). Si el item ya tenía un ticket de
+        # ARMADO_COJINES (creado al registrar la venta porque el mueble lleva cojines),
+        # se le asigna directo. Si el jefe envió cojinero_id explícito y no existía
+        # ticket, se crea uno nuevo (compatibilidad con flujo anterior).
+        cojinero_final = cojinero_id
+        if not cojinero_final:
             cursor.execute("""
-                INSERT INTO tickets_produccion (item_id, area_trabajo, trabajador_asignado_id, estado_ticket, etapa)
-                SELECT %s, 'ARMADO_COJINES', %s, 'En Proceso', 2
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM tickets_produccion
-                    WHERE item_id = %s AND area_trabajo = 'ARMADO_COJINES' AND estado_ticket != 'Terminado'
-                )
-            """, (item_id, cojinero_id, item_id))
+                SELECT id FROM usuarios
+                WHERE area_asignada = 'ARMADO_COJINES' AND rol = 'Operario'
+                LIMIT 1
+            """)
+            row_cojinero = cursor.fetchone()
+            if row_cojinero:
+                cojinero_final = row_cojinero[0]
+
+        if cojinero_final:
+            cursor.execute("""
+                UPDATE tickets_produccion
+                SET trabajador_asignado_id = %s, estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
+                WHERE item_id = %s AND area_trabajo = 'ARMADO_COJINES' AND estado_ticket IN ('Bloqueado', 'Pendiente')
+            """, (cojinero_final, item_id))
+
+            if cursor.rowcount == 0 and cojinero_id:
+                cursor.execute("""
+                    INSERT INTO tickets_produccion (item_id, area_trabajo, trabajador_asignado_id, estado_ticket, etapa)
+                    SELECT %s, 'ARMADO_COJINES', %s, 'En Proceso', 2
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM tickets_produccion
+                        WHERE item_id = %s AND area_trabajo = 'ARMADO_COJINES' AND estado_ticket != 'Terminado'
+                    )
+                """, (item_id, cojinero_final, item_id))
 
         conexion.commit()
         return jsonify({'exito': True}), 201
