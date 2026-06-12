@@ -1848,17 +1848,65 @@ function cerrarGestorModelos() {
 function gmRenderListas() {
   // Base
   const listaBase = document.getElementById('gm-lista-base');
-  listaBase.innerHTML = GM_MODELOS_BASE.map(m =>
-    `<span style="background:#e2e8f0;color:#374151;padding:4px 10px;border-radius:20px;
-                  font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px;">
-       ${m.label}
-       <label title="Cambiar foto de este modelo" style="cursor:pointer;font-size:12px;opacity:0.6;line-height:1;" tabindex="0">
-         🖼
-         <input type="file" accept="image/*" style="display:none;"
-                onchange="gmCambiarFotoBase('${m.key}', this)">
-       </label>
-     </span>`
-  ).join('');
+  // Obtener overrides guardados para mostrar foto actual
+  let baseOverrides = {};
+  try { baseOverrides = JSON.parse(localStorage.getItem('innova_fotos_base_sofa') || '{}'); } catch(e) {}
+
+  listaBase.innerHTML = GM_MODELOS_BASE.map(m => {
+    const fotoActual = baseOverrides[m.key] || (typeof imagenesSofa !== 'undefined' ? imagenesSofa[m.key] : '') || '';
+    const tieneOverride = !!baseOverrides[m.key];
+    return `
+    <div style="display:inline-block;vertical-align:top;">
+      <span onclick="gmToggleEditBase('${m.key}')"
+            id="gm-chip-${m.key}"
+            title="Clic para editar foto"
+            style="background:${tieneOverride ? '#dcfce7' : '#e2e8f0'};color:#374151;
+                   padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;
+                   cursor:pointer;display:inline-flex;align-items:center;gap:4px;
+                   border:2px solid ${tieneOverride ? '#86efac' : 'transparent'};
+                   user-select:none;transition:background 0.15s;">
+        ${m.label} ✏️
+      </span>
+      <div id="gm-edit-base-${m.key}" style="display:none;position:absolute;z-index:999;
+           background:white;border:1.5px solid #cbd5e1;border-radius:12px;
+           padding:12px;box-shadow:0 8px 24px rgba(0,0,0,0.15);min-width:220px;margin-top:4px;">
+        <div style="font-size:11px;font-weight:800;color:#0f172a;margin-bottom:8px;">
+          ✏️ ${m.label}
+        </div>
+        ${fotoActual ? `<img src="${fotoActual}" alt="foto actual"
+             style="width:100%;max-height:90px;object-fit:contain;border-radius:6px;
+                    border:1px solid #e2e8f0;margin-bottom:8px;"
+             onerror="this.style.display='none'">` : 
+          `<div style="width:100%;height:60px;background:#f1f5f9;border-radius:6px;
+                       display:flex;align-items:center;justify-content:center;
+                       font-size:11px;color:#94a3b8;margin-bottom:8px;">Sin foto personalizada</div>`}
+        <div style="display:flex;gap:6px;">
+          <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:7px 6px;
+                        border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                        align-items:center;justify-content:center;gap:4px;">
+            📷 Foto
+            <input type="file" accept="image/*" capture="environment" style="display:none;"
+                   onchange="gmCambiarFotoBase('${m.key}', this)">
+          </label>
+          <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:7px 6px;
+                        border-radius:7px;font-size:11px;font-weight:700;display:flex;
+                        align-items:center;justify-content:center;gap:4px;">
+            📁 Galería
+            <input type="file" accept="image/*" style="display:none;"
+                   onchange="gmCambiarFotoBase('${m.key}', this)">
+          </label>
+          ${tieneOverride ? `<button onclick="gmResetFotoBase('${m.key}')"
+                  style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;
+                         border-radius:7px;padding:7px 8px;cursor:pointer;font-size:12px;"
+                  title="Restaurar foto original">↩</button>` : ''}
+        </div>
+        <button onclick="gmToggleEditBase('${m.key}')"
+                style="width:100%;margin-top:8px;background:#f1f5f9;border:none;
+                       color:#475569;padding:6px;border-radius:7px;font-size:11px;
+                       font-weight:700;cursor:pointer;">Cerrar</button>
+      </div>
+    </div>`;
+  }).join('');
 
   // Custom
   const custom = gmGetCustom();
@@ -1969,6 +2017,30 @@ function gmAgregarModelo() {
   reader.readAsDataURL(file);
 }
 
+// ─── Toggle panel edición foto base ───────────────────────────
+function gmToggleEditBase(key) {
+  // Cerrar todos los paneles abiertos excepto el clickeado
+  GM_MODELOS_BASE.forEach(m => {
+    if (m.key !== key) {
+      const p = document.getElementById('gm-edit-base-' + m.key);
+      if (p) p.style.display = 'none';
+    }
+  });
+  const panel = document.getElementById('gm-edit-base-' + key);
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+// Cerrar paneles al hacer clic fuera
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#gm-lista-base')) {
+    GM_MODELOS_BASE && GM_MODELOS_BASE.forEach(m => {
+      const p = document.getElementById('gm-edit-base-' + m.key);
+      if (p) p.style.display = 'none';
+    });
+  }
+}, true);
+
 // ─── Cambiar foto de modelo base ──────────────────────────────
 function gmCambiarFotoBase(key, inputEl) {
   const file = inputEl?.files[0];
@@ -1976,22 +2048,37 @@ function gmCambiarFotoBase(key, inputEl) {
   const reader = new FileReader();
   reader.onload = e => {
     const fotoData = e.target.result;
-    // Actualizar en imagenesSofa en memoria
     if (typeof imagenesSofa !== 'undefined') imagenesSofa[key] = fotoData;
-    // Guardar override en localStorage
     try {
       const overrides = JSON.parse(localStorage.getItem('innova_fotos_base_sofa') || '{}');
       overrides[key] = fotoData;
       localStorage.setItem('innova_fotos_base_sofa', JSON.stringify(overrides));
-    } catch(e) {}
-    // Refrescar vista si este modelo está seleccionado
+    } catch(err) {}
     const sel = document.getElementById('sofa-modelo');
     if (sel && sel.value === key && typeof actualizarVistaSofa === 'function') actualizarVistaSofa();
-    // Feedback
     inputEl.value = '';
-    Swal && Swal.fire({ icon:'success', title:'Foto actualizada', text:'La imagen de referencia del modelo fue cambiada.', timer:1800, showConfirmButton:false });
+    // Cerrar panel y re-render para mostrar nueva foto
+    gmRenderListas();
+    Swal && Swal.fire({ icon:'success', title:'Foto actualizada', timer:1600, showConfirmButton:false });
   };
   reader.readAsDataURL(file);
+}
+
+// ─── Restaurar foto original de modelo base ───────────────────
+function gmResetFotoBase(key) {
+  try {
+    const overrides = JSON.parse(localStorage.getItem('innova_fotos_base_sofa') || '{}');
+    delete overrides[key];
+    localStorage.setItem('innova_fotos_base_sofa', JSON.stringify(overrides));
+  } catch(e) {}
+  // Restaurar en imagenesSofa desde la ruta original
+  const original = { multi3:'imagenes/multi3.jpg', multi4:'imagenes/multi4.jpg',
+    seccional:'imagenes/seccional.jpg', seccional_inv:'imagenes/seccional_inv.jpg',
+    curvo:'imagenes/curvo.jpg', u:'imagenes/u.jpg', juego:'imagenes/3.jpg' };
+  if (typeof imagenesSofa !== 'undefined' && original[key]) imagenesSofa[key] = original[key];
+  const sel = document.getElementById('sofa-modelo');
+  if (sel && sel.value === key && typeof actualizarVistaSofa === 'function') actualizarVistaSofa();
+  gmRenderListas();
 }
 
 // ─── Cambiar foto de modelo personalizado ─────────────────────
