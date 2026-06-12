@@ -2891,6 +2891,7 @@ def listar_stock_estructuras():
             ALTER TABLE stock_estructuras_sofa
             ADD COLUMN IF NOT EXISTS fecha_entrega_chofer TIMESTAMP;
         """)
+        conexion.commit()
 
         cursor.execute("""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
@@ -3155,6 +3156,8 @@ def entregar_estructura(stock_id):
         cursor.execute("""
             ALTER TABLE stock_estructuras_sofa
             ADD COLUMN IF NOT EXISTS chofer_nombre VARCHAR(150);
+            ALTER TABLE stock_estructuras_sofa
+            ADD COLUMN IF NOT EXISTS fecha_entrega_chofer TIMESTAMP;
         """)
 
         # Verificar que la estructura existe y está disponible

@@ -221,13 +221,14 @@ function setFormDisabled(input, disabled = true) {
  * BOTONES
  */
 function setButtonLoading(button, loading = true) {
+  if (!button) return;
   if (loading) {
-    button?.disabled = true;
-    button?.classList.add('is-loading');
-    button?.innerHTML = '<span class="spinner"></span> Cargando...';
+    button.disabled = true;
+    button.classList.add('is-loading');
+    button.innerHTML = '<span class="spinner"></span> Cargando...';
   } else {
-    button?.disabled = false;
-    button?.classList.remove('is-loading');
+    button.disabled = false;
+    button.classList.remove('is-loading');
   }
 }
 
