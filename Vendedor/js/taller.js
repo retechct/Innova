@@ -205,19 +205,7 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                             </button>
                         </div>`;
             } else if (t.estado === 'Recogido') {
-                const tapiceroOk = t.tapicero_destino && t.tapicero_destino !== 'Sin asignar';
-                if (!tapiceroOk) {
-                    return `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px;text-align:center;">
-                                <div style="font-size:11px;font-weight:900;color:#dc2626;margin-bottom:4px;">
-                                    <i class="fa-solid fa-triangle-exclamation"></i> Sin tapicero asignado
-                                </div>
-                                <div style="font-size:10px;color:#7f1d1d;line-height:1.4;">
-                                    El Jefe/Admin aún no asignó un tapicero a este contrato.<br>
-                                    Sin tapicero no se puede distribuir la tela.
-                                </div>
-                            </div>`;
-                }
-                return `<button onclick="confirmarDistribucionTela(${t.id}, '${(t.tapicero_destino||'').replace(/'/g,"\\'")}')"
+                return `<button onclick="confirmarDistribucionTela(${t.id})"
                             style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
                             <i class="fa-solid fa-people-carry-box"></i> Entregar a Tapicería
                         </button>`;
@@ -2226,18 +2214,10 @@ async function asignarTrabajadorLogistica(logisticaId) {
         Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
     }
 }
-async function confirmarDistribucionTela(id, tapiceroNombre) {
-    if (!tapiceroNombre || tapiceroNombre === 'Sin asignar') {
-        return Swal.fire({
-            icon: 'warning',
-            title: 'Sin tapicero asignado',
-            html: 'El Jefe o Admin aún no asignó un tapicero a este contrato.<br><br>Pídele que asigne el tapicero primero desde el panel de producción.',
-            confirmButtonColor: '#dc2626'
-        });
-    }
+async function confirmarDistribucionTela(id) {
     const conf = await Swal.fire({
         title: '¿Distribuir tela a Tapicería?',
-        html: `La tela será entregada a <b>${tapiceroNombre}</b>.<br>Esto desbloqueará sus tickets de tapicería.`,
+        text: 'Esto desbloqueará los tickets de tapicería y les notificará que la tela está lista.',
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: 'Sí, distribuir'
@@ -2723,10 +2703,14 @@ async function cargarOrdenesProduccion(contenedor) {
         };
 
         const ESTADO_BADGE = {
-            'Pendiente':  { bg:'#fef3c7', color:'#b45309', icon:'🟡' },
-            'Bloqueado':  { bg:'#e2e8f0', color:'#64748b', icon:'🔒' },
-            'En Proceso': { bg:'#dbeafe', color:'#1e40af', icon:'🔵' },
-            'Terminado':  { bg:'#dcfce7', color:'#166534', icon:'✅' },
+            'Pendiente':    { bg:'#fef3c7', color:'#b45309', icon:'🟡' },
+            'Bloqueado':    { bg:'#e2e8f0', color:'#64748b', icon:'🔒' },
+            'En Proceso':   { bg:'#dbeafe', color:'#1e40af', icon:'🔵' },
+            'Terminado':    { bg:'#dcfce7', color:'#166534', icon:'✅' },
+            // Logística de tela externa
+            'En Recojo':    { bg:'#fef9c3', color:'#854d0e', icon:'🚛' },
+            'Recogido':     { bg:'#e0f2fe', color:'#0369a1', icon:'📦' },
+            'Distribuido':  { bg:'#dcfce7', color:'#166534', icon:'✅' },
         };
 
         let html = `
@@ -2756,6 +2740,20 @@ async function cargarOrdenesProduccion(contenedor) {
                     .map(t => {
                         const b = ESTADO_BADGE[t.estado] || { bg:'#f1f5f9', color:'#64748b', icon:'?' };
                         const nombre = AREA_NOMBRES[t.area] || t.area.replace(/_/g,' ');
+                        // Para logística de tela: mostrar operario asignado y tapicero destino
+                        if (t.es_logistica) {
+                            const operarioInfo = t.trabajador && t.trabajador !== 'Sin asignar'
+                                ? `<span style="opacity:0.75">· ${t.trabajador}</span>`
+                                : `<span style="opacity:0.6;color:#dc2626;"> · Sin operario</span>`;
+                            const tapiceroInfo = t.tapicero_destino && t.tapicero_destino !== 'Sin asignar'
+                                ? `<span style="opacity:0.75"> → ${t.tapicero_destino}</span>`
+                                : `<span style="opacity:0.6;color:#dc2626;"> → Sin tapicero</span>`;
+                            const insumoLabel = t.insumo_nombre ? ` (${t.insumo_nombre})` : '';
+                            return \`<span title="Tela externa${insumoLabel}" style="font-size:10px; background:\${b.bg}; color:\${b.color}; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap; display:inline-flex; align-items:center; gap:3px;">
+                                        \${b.icon} Tela ext.\${insumoLabel ? \` · \${t.insumo_nombre}\` : ''}
+                                        \${operarioInfo}\${tapiceroInfo}
+                                    </span>\`;
+                        }
                         return `<span style="font-size:10px; background:${b.bg}; color:${b.color}; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap;">
                                     ${b.icon} ${nombre}
                                     ${t.trabajador !== 'Sin asignar' ? `<span style="opacity:0.7">· ${t.trabajador}</span>` : ''}

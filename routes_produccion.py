@@ -798,24 +798,47 @@ def obtener_ordenes_produccion():
         resultado = []
         for v in ventas:
             venta_id = v[0]
-            
+
             cursor.execute("SELECT id, producto, foto_url FROM items_venta WHERE venta_id = %s", (venta_id,))
             items = cursor.fetchall()
-            
+
+            # Logística externa de TELA para esta venta (una fila por registro)
+            cursor.execute("""
+                SELECT l.id, l.insumo_nombre, l.estado_distribucion,
+                       COALESCE(u.nombre, 'Sin asignar') AS operario_nombre,
+                       -- Tapicero destino: primer tapicero asignado en esta venta
+                       (SELECT COALESCE(u2.nombre, 'Sin asignar')
+                        FROM tickets_produccion tp2
+                        JOIN items_venta iv2 ON tp2.item_id = iv2.id
+                        LEFT JOIN usuarios u2 ON tp2.trabajador_asignado_id = u2.id
+                        WHERE iv2.venta_id = l.venta_id
+                          AND tp2.area_trabajo IN ('TAPICERIA_SOFAS','TAPICERIA_SILLAS')
+                        LIMIT 1) AS tapicero_destino
+                FROM logistica_externa l
+                LEFT JOIN usuarios u ON l.operario_id = u.id
+                WHERE l.venta_id = %s
+                  AND (l.categoria_insumo = 'TELA'
+                       OR LOWER(l.insumo_nombre) LIKE '%%tela%%'
+                       OR LOWER(l.unidad) = 'mts')
+                  AND l.estado_distribucion IS NOT NULL
+                ORDER BY l.id
+            """, (venta_id,))
+            logistica_telas = cursor.fetchall()
+
             items_list = []
             tickets_term = 0
             tickets_total = 0
-            
+
             for item in items:
                 item_id = item[0]
                 cursor.execute("""
-                    SELECT id, area_trabajo, estado_ticket, 
-                           COALESCE((SELECT nombre FROM usuarios WHERE id = trabajador_asignado_id), 'Sin asignar') 
-                    FROM tickets_produccion 
+                    SELECT id, area_trabajo, estado_ticket,
+                           COALESCE((SELECT nombre FROM usuarios WHERE id = trabajador_asignado_id), 'Sin asignar')
+                    FROM tickets_produccion
                     WHERE item_id = %s
                 """, (item_id,))
                 tickets = cursor.fetchall()
-                
+
                 tickets_list = []
                 for t in tickets:
                     tickets_total += 1
@@ -825,19 +848,58 @@ def obtener_ordenes_produccion():
                         'id': t[0],
                         'area': t[1],
                         'estado': t[2],
-                        'trabajador': t[3]
+                        'trabajador': t[3],
+                        'es_logistica': False,
                     })
-                
+
                 items_list.append({
                     'id': item_id,
                     'producto': item[1],
                     'foto': limpiar_foto(item[2].split('|')[0] if item[2] else ''),
-                    'tickets': tickets_list
+                    'tickets': tickets_list,
                 })
-                
+
+            # Agregar filas de logística de tela al primer item (afecta a toda la venta)
+            for lg in logistica_telas:
+                log_id, insumo_nombre, estado_dist, operario_nombre, tapicero_destino = lg
+                # Mapear estado_distribucion a algo legible
+                estado_display = {
+                    'En Recojo':   'En Recojo',
+                    'Recogido':    'Recogido',
+                    'Distribuido': 'Distribuido',
+                }.get(estado_dist or '', estado_dist or 'Pendiente')
+                tickets_total += 1
+                if estado_dist == 'Distribuido':
+                    tickets_term += 1
+                # Adjuntar al primer item si existe, o crear entrada suelta
+                entrada_logistica = {
+                    'id': log_id,
+                    'area': 'CORTE_Y_CONTROL_TELAS',
+                    'estado': estado_display,
+                    'trabajador': operario_nombre,
+                    'tapicero_destino': tapicero_destino,
+                    'insumo_nombre': insumo_nombre,
+                    'es_logistica': True,
+                }
+                if items_list:
+                    items_list[0]['tickets'].append(entrada_logistica)
+                else:
+                    items_list.append({
+                        'id': None,
+                        'producto': f'TELA EXTERNA: {insumo_nombre}',
+                        'foto': limpiar_foto(''),
+                        'tickets': [entrada_logistica],
+                    })
+
             progreso = round((tickets_term / tickets_total * 100)) if tickets_total > 0 else 0
-            resultado.append({'id': venta_id, 'codigo': v[1], 'cliente': v[2], 'fecha_entrega': v[3].strftime('%d/%m/%Y') if v[3] else 'S/F', 'vendedor': v[4], 'sede': v[5], 'estado': v[6], 'progreso': progreso, 'tickets_term': tickets_term, 'tickets_total': tickets_total, 'items': items_list})
-            
+            resultado.append({
+                'id': venta_id, 'codigo': v[1], 'cliente': v[2],
+                'fecha_entrega': v[3].strftime('%d/%m/%Y') if v[3] else 'S/F',
+                'vendedor': v[4], 'sede': v[5], 'estado': v[6],
+                'progreso': progreso, 'tickets_term': tickets_term,
+                'tickets_total': tickets_total, 'items': items_list,
+            })
+
         return jsonify(resultado), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1227,95 +1289,53 @@ def logistica_confirmar_recojo(id):
 @produccion_bp.route('/api/logistica/<int:id>/confirmar-distribucion', methods=['POST'])
 @requiere_login
 def logistica_confirmar_distribucion(id):
-    conexion = None
     try:
         conexion = get_db_connection()
-        conexion.autocommit = False
-        cursor = conexion.cursor()
-
-        # 1. Leer el registro — sin tocar nada aún
-        cursor.execute(
-            "SELECT venta_id FROM logistica_externa WHERE id = %s",
-            (id,)
-        )
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({'error': 'Registro de logística no encontrado'}), 404
-        venta_id = row[0]
-
-        # 2. Verificar que hay tapicero asignado en este contrato
-        cursor.execute("""
-            SELECT COUNT(*)
-            FROM tickets_produccion t
-            JOIN items_venta i ON t.item_id = i.id
-            WHERE i.venta_id = %s
-              AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS')
-              AND t.trabajador_asignado_id IS NOT NULL
-        """, (venta_id,))
-        if cursor.fetchone()[0] == 0:
-            conexion.rollback()
-            return jsonify({
-                'error': 'No hay tapicero asignado en este contrato. '
-                         'El Jefe o Admin debe asignar un tapicero antes de distribuir la tela.'
-            }), 400
-
-        # 3. Solo actualizar estado_distribucion — NO tocar el estado principal
+        cursor   = conexion.cursor()
         cursor.execute("""
             UPDATE logistica_externa
-            SET estado_distribucion = 'Distribuido'
-            WHERE id = %s
+            SET estado = 'Recibido', estado_distribucion = 'Distribuido'
+            WHERE id = %s RETURNING venta_id
         """, (id,))
-
-        # 4. Desbloquear tickets de tapicería/cojines bloqueados
+        row = cursor.fetchone()
+        if not row: return jsonify({'error': 'No encontrado'}), 404
+        
+        venta_id = row[0]
+        
         cursor.execute("""
             SELECT t.id, t.area_trabajo, t.item_id
             FROM tickets_produccion t
             JOIN items_venta i ON t.item_id = i.id
-            WHERE i.venta_id = %s
-              AND t.estado_ticket = 'Bloqueado'
+            WHERE i.venta_id = %s AND t.estado_ticket = 'Bloqueado'
               AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS', 'ARMADO_COJINES')
         """, (venta_id,))
         tickets_bloqueados = cursor.fetchall()
-
+        
         desbloqueados = 0
         for tb_id, tb_area, tb_item_id in tickets_bloqueados:
             if tb_area in ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'):
-                # Solo desbloquear si la estructura también está lista
-                cursor.execute("""
+                areas_req = ['ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS']
+                placeholders_req = ','.join(['%s'] * len(areas_req))
+                cursor.execute(f"""
                     SELECT COUNT(*) FROM tickets_produccion
-                    WHERE item_id = %s
-                      AND area_trabajo IN ('ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS')
+                    WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
                       AND estado_ticket NOT IN ('Terminado', 'Listo para Recojo', 'Recogido')
                 """, (tb_item_id,))
-                if cursor.fetchone()[0] == 0:
-                    cursor.execute("""
-                        UPDATE tickets_produccion
-                        SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
-                        WHERE id = %s
-                    """, (tb_id,))
+                pendientes = cursor.fetchone()[0]
+                if pendientes == 0:
+                    cursor.execute("UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP WHERE id = %s", (tb_id,))
                     desbloqueados += cursor.rowcount
             elif tb_area == 'ARMADO_COJINES':
-                cursor.execute("""
-                    UPDATE tickets_produccion
-                    SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
-                    WHERE id = %s
-                """, (tb_id,))
+                cursor.execute("UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP WHERE id = %s", (tb_id,))
                 desbloqueados += cursor.rowcount
 
         conexion.commit()
         return jsonify({'exito': True, 'desbloqueados': desbloqueados}), 200
-
     except Exception as e:
-        import traceback; traceback.print_exc()
-        if conexion:
-            try: conexion.rollback()
-            except: pass
+        if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
-        if conexion:
-            try: cursor.close()
-            except: pass
-            release_db_connection(conexion)
+        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/logistica/<int:id>/asignar-operario', methods=['POST'])
 @requiere_login
