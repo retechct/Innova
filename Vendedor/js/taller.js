@@ -205,7 +205,19 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                             </button>
                         </div>`;
             } else if (t.estado === 'Recogido') {
-                return `<button onclick="confirmarDistribucionTela(${t.id})"
+                const tapiceroOk = t.tapicero_destino && t.tapicero_destino !== 'Sin asignar';
+                if (!tapiceroOk) {
+                    return `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px;text-align:center;">
+                                <div style="font-size:11px;font-weight:900;color:#dc2626;margin-bottom:4px;">
+                                    <i class="fa-solid fa-triangle-exclamation"></i> Sin tapicero asignado
+                                </div>
+                                <div style="font-size:10px;color:#7f1d1d;line-height:1.4;">
+                                    El Jefe/Admin aún no asignó un tapicero a este contrato.<br>
+                                    Sin tapicero no se puede distribuir la tela.
+                                </div>
+                            </div>`;
+                }
+                return `<button onclick="confirmarDistribucionTela(${t.id}, '${(t.tapicero_destino||'').replace(/'/g,"\\'")}')"
                             style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
                             <i class="fa-solid fa-people-carry-box"></i> Entregar a Tapicería
                         </button>`;
@@ -2214,10 +2226,18 @@ async function asignarTrabajadorLogistica(logisticaId) {
         Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
     }
 }
-async function confirmarDistribucionTela(id) {
+async function confirmarDistribucionTela(id, tapiceroNombre) {
+    if (!tapiceroNombre || tapiceroNombre === 'Sin asignar') {
+        return Swal.fire({
+            icon: 'warning',
+            title: 'Sin tapicero asignado',
+            html: 'El Jefe o Admin aún no asignó un tapicero a este contrato.<br><br>Pídele que asigne el tapicero primero desde el panel de producción.',
+            confirmButtonColor: '#dc2626'
+        });
+    }
     const conf = await Swal.fire({
         title: '¿Distribuir tela a Tapicería?',
-        text: 'Esto desbloqueará los tickets de tapicería y les notificará que la tela está lista.',
+        html: `La tela será entregada a <b>${tapiceroNombre}</b>.<br>Esto desbloqueará sus tickets de tapicería.`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: 'Sí, distribuir'

@@ -1230,6 +1230,30 @@ def logistica_confirmar_distribucion(id):
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+
+        # Verificar que existe y obtener venta_id
+        cursor.execute("SELECT venta_id FROM logistica_externa WHERE id = %s", (id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Registro de logística no encontrado'}), 404
+        venta_id = row[0]
+
+        # Verificar que hay al menos un tapicero asignado en este contrato
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM tickets_produccion t
+            JOIN items_venta i ON t.item_id = i.id
+            WHERE i.venta_id = %s
+              AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS')
+              AND t.trabajador_asignado_id IS NOT NULL
+        """, (venta_id,))
+        tapiceros_asignados = cursor.fetchone()[0]
+        if tapiceros_asignados == 0:
+            return jsonify({
+                'error': 'No hay tapicero asignado en este contrato. '
+                         'El Jefe o Admin debe asignar un tapicero antes de distribuir la tela.'
+            }), 400
+
         cursor.execute("""
             UPDATE logistica_externa
             SET estado = 'Recibido', estado_distribucion = 'Distribuido'
@@ -1237,8 +1261,6 @@ def logistica_confirmar_distribucion(id):
         """, (id,))
         row = cursor.fetchone()
         if not row: return jsonify({'error': 'No encontrado'}), 404
-        
-        venta_id = row[0]
         
         cursor.execute("""
             SELECT t.id, t.area_trabajo, t.item_id
