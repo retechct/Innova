@@ -541,8 +541,10 @@ def obtener_tickets_taller():
                 
         return jsonify(tickets), 200
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print("Error en tickets taller:", e)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e), 'tipo': type(e).__name__}), 500
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
