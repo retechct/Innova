@@ -423,9 +423,12 @@ def obtener_tickets_taller():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        # Migración segura
-        cursor.execute("ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS operario_id INTEGER REFERENCES usuarios(id);")
-        conexion.commit()
+        # Migración segura — transacción propia para no abortar el SELECT si la columna ya existe
+        try:
+            cursor.execute("ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS operario_id INTEGER;")
+            conexion.commit()
+        except Exception:
+            conexion.rollback()  # columna ya existe o constraint distinto — se ignora
         query = """
             SELECT t.id, i.producto, t.estado_ticket, t.area_trabajo, t.ticket_details_override,
                    t.trabajador_asignado_id, v.codigo_venta, i.color_tela, t.item_id,
@@ -1221,7 +1224,16 @@ def asignar_operario_logistica(id):
     try:
         conexion = get_db_connection()
         cursor = conexion.cursor()
-        cursor.execute("UPDATE logistica_externa SET operario_id = %s WHERE id = %s", (operario_id, id))
+        cursor.execute("""
+            UPDATE logistica_externa
+            SET operario_id = %s,
+                estado_distribucion = CASE
+                    WHEN estado_distribucion IS NULL OR estado_distribucion NOT IN ('En Recojo','Recogido','Distribuido')
+                    THEN 'En Recojo'
+                    ELSE estado_distribucion
+                END
+            WHERE id = %s
+        """, (operario_id, id))
         conexion.commit()
         return jsonify({'exito': True}), 200
     except Exception as e:
