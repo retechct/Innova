@@ -426,9 +426,16 @@ def obtener_tickets_taller():
         # Migración segura — transacción propia para no abortar el SELECT si la columna ya existe
         try:
             cursor.execute("ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS operario_id INTEGER;")
+            cursor.execute("ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS categoria_insumo VARCHAR(50);")
+            cursor.execute("ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS estado_distribucion VARCHAR(50);")
+            cursor.execute("""
+                UPDATE logistica_externa
+                SET estado_distribucion = estado
+                WHERE estado_distribucion IS NULL;
+            """)
             conexion.commit()
         except Exception:
-            conexion.rollback()  # columna ya existe o constraint distinto — se ignora
+            conexion.rollback()  # columnas ya existen o constraint distinto — se ignora
         query = """
             SELECT t.id, i.producto, t.estado_ticket, t.area_trabajo, t.ticket_details_override,
                    t.trabajador_asignado_id, v.codigo_venta, i.color_tela, t.item_id,
@@ -3321,4 +3328,4 @@ def editar_estructura(stock_id):
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
-            cursor.close(); release_db_connection(conexion) 
+            cursor.close(); release_db_connection(conexion)
