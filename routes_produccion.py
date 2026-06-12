@@ -167,7 +167,8 @@ def obtener_cola_recojo():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("""
-            SELECT t.id, t.area_trabajo, i.producto, v.codigo_venta, v.nombre_cliente,
+            SELECT DISTINCT ON (t.id)
+                   t.id, t.area_trabajo, i.producto, v.codigo_venta, v.nombre_cliente,
                    COALESCE(u.nombre, 'Sin asignar') AS operario, t.fecha_fin,
                    COALESCE(i.foto_url, '') AS foto_url,
                    COALESCE(t.ticket_details_override, i.color_tela, '') AS especificaciones,
@@ -181,7 +182,7 @@ def obtener_cola_recojo():
                    END AS bloqueado_por_telas,
                    CASE
                        -- Sin tela asociada por ninguna vía → verde (no bloquea)
-                       WHEN tela.id IS NULL AND log_tela.id IS NULL THEN true
+                       WHEN tela.id IS NULL AND log_tela.venta_id IS NULL THEN true
                        -- Ticket de corte terminado → verde
                        WHEN tela.estado_ticket = 'Terminado' THEN true
                        -- Logística externa de tela distribuida al tapicero → verde
@@ -199,12 +200,15 @@ def obtener_cola_recojo():
             LEFT JOIN tickets_produccion tela
                 ON tela.item_id = t.item_id
                AND tela.area_trabajo = 'CORTE_Y_CONTROL_TELAS'
-            LEFT JOIN logistica_externa log_tela
-                ON log_tela.venta_id = v.id
-               AND log_tela.categoria_insumo = 'TELA'
+            LEFT JOIN (
+                SELECT DISTINCT ON (venta_id) venta_id, estado_distribucion
+                FROM logistica_externa
+                WHERE categoria_insumo = 'TELA'
+                ORDER BY venta_id, id DESC
+            ) log_tela ON log_tela.venta_id = v.id
             WHERE t.area_trabajo IN ('ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS')
               AND t.estado_ticket = 'Listo para Recojo'
-            ORDER BY t.fecha_fin DESC;
+            ORDER BY t.id, t.fecha_fin DESC;
         """)
         estructuras = [{
             "ticket_id": r[0], "area": r[1], "producto": r[2], "codigo_venta": r[3],

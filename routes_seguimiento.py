@@ -30,7 +30,7 @@ def _progreso_tickets(cursor, venta_id):
         cursor.execute("""
             SELECT
                 SUM(CASE WHEN t.area_trabajo != 'DESPACHO_CENTRAL' THEN 1 ELSE 0 END),
-                SUM(CASE WHEN t.estado_ticket IN ('Terminado', 'Recogido')
+                SUM(CASE WHEN t.estado_ticket IN ('Terminado', 'Recogido', 'Listo para Recojo')
                           AND t.area_trabajo != 'DESPACHO_CENTRAL' THEN 1 ELSE 0 END)
             FROM items_venta i
             LEFT JOIN tickets_produccion t ON i.id = t.item_id
