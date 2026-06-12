@@ -1227,18 +1227,23 @@ def logistica_confirmar_recojo(id):
 @produccion_bp.route('/api/logistica/<int:id>/confirmar-distribucion', methods=['POST'])
 @requiere_login
 def logistica_confirmar_distribucion(id):
+    conexion = None
     try:
         conexion = get_db_connection()
-        cursor   = conexion.cursor()
+        conexion.autocommit = False
+        cursor = conexion.cursor()
 
-        # Verificar que existe y obtener venta_id
-        cursor.execute("SELECT venta_id FROM logistica_externa WHERE id = %s", (id,))
+        # 1. Leer el registro — sin tocar nada aún
+        cursor.execute(
+            "SELECT venta_id FROM logistica_externa WHERE id = %s",
+            (id,)
+        )
         row = cursor.fetchone()
         if not row:
             return jsonify({'error': 'Registro de logística no encontrado'}), 404
         venta_id = row[0]
 
-        # Verificar que hay al menos un tapicero asignado en este contrato
+        # 2. Verificar que hay tapicero asignado en este contrato
         cursor.execute("""
             SELECT COUNT(*)
             FROM tickets_produccion t
@@ -1247,55 +1252,70 @@ def logistica_confirmar_distribucion(id):
               AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS')
               AND t.trabajador_asignado_id IS NOT NULL
         """, (venta_id,))
-        tapiceros_asignados = cursor.fetchone()[0]
-        if tapiceros_asignados == 0:
+        if cursor.fetchone()[0] == 0:
+            conexion.rollback()
             return jsonify({
                 'error': 'No hay tapicero asignado en este contrato. '
                          'El Jefe o Admin debe asignar un tapicero antes de distribuir la tela.'
             }), 400
 
+        # 3. Solo actualizar estado_distribucion — NO tocar el estado principal
         cursor.execute("""
             UPDATE logistica_externa
-            SET estado = 'Recibido', estado_distribucion = 'Distribuido'
-            WHERE id = %s RETURNING venta_id
+            SET estado_distribucion = 'Distribuido'
+            WHERE id = %s
         """, (id,))
-        row = cursor.fetchone()
-        if not row: return jsonify({'error': 'No encontrado'}), 404
-        
+
+        # 4. Desbloquear tickets de tapicería/cojines bloqueados
         cursor.execute("""
             SELECT t.id, t.area_trabajo, t.item_id
             FROM tickets_produccion t
             JOIN items_venta i ON t.item_id = i.id
-            WHERE i.venta_id = %s AND t.estado_ticket = 'Bloqueado'
+            WHERE i.venta_id = %s
+              AND t.estado_ticket = 'Bloqueado'
               AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS', 'ARMADO_COJINES')
         """, (venta_id,))
         tickets_bloqueados = cursor.fetchall()
-        
+
         desbloqueados = 0
         for tb_id, tb_area, tb_item_id in tickets_bloqueados:
             if tb_area in ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'):
-                areas_req = ['ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS']
-                placeholders_req = ','.join(['%s'] * len(areas_req))
-                cursor.execute(f"""
+                # Solo desbloquear si la estructura también está lista
+                cursor.execute("""
                     SELECT COUNT(*) FROM tickets_produccion
-                    WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
+                    WHERE item_id = %s
+                      AND area_trabajo IN ('ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS')
                       AND estado_ticket NOT IN ('Terminado', 'Listo para Recojo', 'Recogido')
                 """, (tb_item_id,))
-                pendientes = cursor.fetchone()[0]
-                if pendientes == 0:
-                    cursor.execute("UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP WHERE id = %s", (tb_id,))
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute("""
+                        UPDATE tickets_produccion
+                        SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                    """, (tb_id,))
                     desbloqueados += cursor.rowcount
             elif tb_area == 'ARMADO_COJINES':
-                cursor.execute("UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP WHERE id = %s", (tb_id,))
+                cursor.execute("""
+                    UPDATE tickets_produccion
+                    SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (tb_id,))
                 desbloqueados += cursor.rowcount
 
         conexion.commit()
         return jsonify({'exito': True, 'desbloqueados': desbloqueados}), 200
+
     except Exception as e:
-        if 'conexion' in locals() and conexion: conexion.rollback()
+        import traceback; traceback.print_exc()
+        if conexion:
+            try: conexion.rollback()
+            except: pass
         return jsonify({'error': str(e)}), 500
     finally:
-        if 'conexion' in locals() and conexion: cursor.close(); release_db_connection(conexion)
+        if conexion:
+            try: cursor.close()
+            except: pass
+            release_db_connection(conexion)
 
 @produccion_bp.route('/api/logistica/<int:id>/asignar-operario', methods=['POST'])
 @requiere_login
