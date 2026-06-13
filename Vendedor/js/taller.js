@@ -3950,6 +3950,13 @@ function _renderListaEstructuras(lista) {
                        display:flex;align-items:center;gap:4px;" title="Editar datos">
               ✏️ Editar
             </button>
+            ${(usuarioActivo?.rol === 'Admin') ? `
+            <button onclick="eliminarCardEstructura(${e.ids && e.ids.length === 1 ? e.ids[0] : e.id})"
+                style="padding:6px 9px;border-radius:7px;font-size:13px;
+                       cursor:pointer;border:1.5px solid #fca5a5;background:#fff1f2;color:#b91c1c;
+                       display:flex;align-items:center;" title="Eliminar estructura">
+              <i class="fa-solid fa-trash"></i>
+            </button>` : ''}
           </div>
 
           ${e.estado === 'disponible'
@@ -4259,6 +4266,39 @@ async function togglePagoEstructura(id, pagadoActual, btnEl) {
     } catch(e) {
         Swal.fire({ icon: 'error', title: 'Sin conexión', text: 'Intenta de nuevo.' });
         if (btnEl) { btnEl.disabled = false; }
+    }
+}
+
+// ── Eliminar estructura desde las cards (solo Admin) ─────────────────────────
+async function eliminarCardEstructura(id) {
+    const conf = await Swal.fire({
+        title: '¿Eliminar esta estructura?',
+        text: 'Se borrará permanentemente del stock. Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+    if (!conf.isConfirmed) return;
+    try {
+        const res  = await apiFetch(`${API_URL}/api/stock-estructuras/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) { Swal.fire('Error', data.error || 'No se pudo eliminar', 'error'); return; }
+        // Quitar del cache y re-renderizar
+        if (window._stockEstructurasData) {
+            window._stockEstructurasData = window._stockEstructurasData.filter(e => e.id !== id);
+        }
+        const ctx = window._modalEstructuraCtx || {};
+        const contenedorId = window._stockSofaContenedorActivo || ctx.contenedorId;
+        if (contenedorId) {
+            const esAdmin = contenedorId === 'sp-sofa-contenido';
+            await _cargarContenidoStockSofa(contenedorId, esAdmin);
+        }
+        Swal.fire({ icon: 'success', title: 'Eliminado', timer: 1200, showConfirmButton: false });
+    } catch(e) {
+        Swal.fire('Error', 'Error de conexión', 'error');
     }
 }
 

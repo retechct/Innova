@@ -1,97 +1,96 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // EGRESOS Y PAGOS DE PRODUCCIÓN — Innova Möbili ERP  (solo Admin)
 //
-// SECCIÓN 1: Stock Estructuras  → lista todo lo subido por carpinteros,
-//            permite marcar pagado/no-pagado y ELIMINAR registros
-// SECCIÓN 2: Pagos semanales   → cierra semana de un carpintero y muestra
-//            historial con filtro por nombre y fecha
-// SECCIÓN 3: Logística externa → gastos a proveedores (telas, bases, etc.)
-//            filtro por fechas y categoría
+// PESTAÑA 1: Pagos a Carpinteros → lista individual de estructuras por
+//            carpintero con filtro de fecha y estado pagado/no pagado.
+//            Permite registrar el pago con voucher (llama a cerrar-semana).
+// PESTAÑA 2: Historial de Pagos → historial de cierres semanales ya hechos.
+// PESTAÑA 3: Compras a Proveedores → gastos a proveedores (sin cambios).
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── Estado interno ──────────────────────────────────────────────────────────
-let _egTab = 'estructuras';          // pestaña activa
-let _egEstructuras = [];             // cache de estructuras para filtros
-let _egCarpinteros = [];             // lista de carpinteros conocidos
+let _egTab          = 'pagos-carpinteros';
+let _egEstructuras  = [];
+let _egCarpinteros  = [];
 
 // ════════════════════════════════════════════════════════════════════════════
-//  INIT — se llama desde changeView('egresos') en app.js
+//  INIT
 // ════════════════════════════════════════════════════════════════════════════
 function initEgresos() {
-    egresosTab('estructuras');
+    egresosTab('pagos-carpinteros');
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  NAVEGACIÓN DE PESTAÑAS
+//  NAVEGACIÓN
 // ════════════════════════════════════════════════════════════════════════════
 function egresosTab(tab) {
     _egTab = tab;
-
-    // resaltar pestaña activa
-    ['estructuras','pagos-semanales','logistica'].forEach(t => {
-        const btn = document.getElementById(`eg-tab-${t}`);
-        if (btn) btn.style.background = (t === tab) ? 'var(--primary)' : '#94a3b8';
-    });
-
-    // mostrar/ocultar paneles
-    ['estructuras','pagos-semanales','logistica'].forEach(t => {
+    const tabs = ['pagos-carpinteros','historial-pagos','logistica'];
+    tabs.forEach(t => {
+        const btn   = document.getElementById(`eg-tab-${t}`);
         const panel = document.getElementById(`eg-panel-${t}`);
-        if (panel) panel.style.display = (t === tab) ? 'block' : 'none';
+        const active = (t === tab);
+        if (btn)   btn.style.background   = active ? 'var(--primary)' : '#94a3b8';
+        if (panel) panel.style.display    = active ? 'block' : 'none';
     });
-
-    // cargar datos según pestaña
-    if (tab === 'estructuras')     cargarStockEstructuras();
-    if (tab === 'pagos-semanales') cargarPagosSemanales();
-    if (tab === 'logistica')       cargarLogistica();
+    if (tab === 'pagos-carpinteros') cargarPagosCarpinteros();
+    if (tab === 'historial-pagos')   cargarHistorialPagos();
+    if (tab === 'logistica')         cargarLogistica();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  PESTAÑA 1 — STOCK DE ESTRUCTURAS
+//  PESTAÑA 1 — PAGOS A CARPINTEROS
+//  Muestra todas las estructuras individuales con su estado de pago.
 // ════════════════════════════════════════════════════════════════════════════
-async function cargarStockEstructuras() {
-    const cont = document.getElementById('eg-tabla-estructuras');
+async function cargarPagosCarpinteros() {
+    const cont = document.getElementById('eg-tabla-carpinteros');
     if (!cont) return;
     cont.innerHTML = _egLoading();
 
-    try {
-        const res  = await apiFetch(`${API_URL}/api/stock-estructuras`);
-        const data = await res.json();
+    const filtroEstado     = document.getElementById('eg-pc-estado')?.value || '';
+    const filtroCarpintero = document.getElementById('eg-pc-carpintero')?.value || '';
+    const filtroDesde      = document.getElementById('eg-pc-desde')?.value || '';
+    const filtroHasta      = document.getElementById('eg-pc-hasta')?.value || '';
 
+    try {
+        // Cargar carpinteros para el select (solo primera vez)
+        if (!_egCarpinteros.length) {
+            try {
+                const rc = await apiFetch(`${API_URL}/api/stock-estructuras/carpinteros`);
+                _egCarpinteros = await rc.json();
+                const sel = document.getElementById('eg-pc-carpintero');
+                if (sel) {
+                    sel.innerHTML = '<option value="">Todos los carpinteros</option>' +
+                        _egCarpinteros.map(c => `<option value="${c}">${c}</option>`).join('');
+                }
+            } catch(_) {}
+        }
+
+        // Construir URL con filtros
+        let url = `${API_URL}/api/stock-estructuras`;
+        const params = [];
+        if (filtroDesde)  params.push(`desde=${filtroDesde}`);
+        if (filtroHasta)  params.push(`hasta=${filtroHasta}`);
+        if (filtroCarpintero) params.push(`carpintero=${encodeURIComponent(filtroCarpintero)}`);
+        if (filtroEstado === 'pagado')   params.push('pago=pagado');
+        if (filtroEstado === 'pendiente') params.push('pago=pendiente');
+        if (params.length) url += '?' + params.join('&');
+
+        const res  = await apiFetch(url);
+        const data = await res.json();
         if (!res.ok) { cont.innerHTML = _egError(data.error); return; }
         _egEstructuras = data;
-
-        // cargar carpinteros para el select de filtro
-        try {
-            const rc = await apiFetch(`${API_URL}/api/stock-estructuras/carpinteros`);
-            _egCarpinteros = await rc.json();
-            const sel = document.getElementById('eg-filtro-carpintero');
-            if (sel) {
-                sel.innerHTML = '<option value="">Todos los carpinteros</option>' +
-                    _egCarpinteros.map(c => `<option value="${c}">${c}</option>`).join('');
-            }
-        } catch(_) {}
-
-        _egRenderEstructuras();
+        _egRenderCarpinteros();
     } catch(e) {
         cont.innerHTML = _egError('Error de conexión: ' + e.message);
     }
 }
 
-function _egRenderEstructuras() {
-    const cont = document.getElementById('eg-tabla-estructuras');
-    const filtroEstado    = document.getElementById('eg-filtro-estado')?.value || '';
-    const filtroCarpintero = document.getElementById('eg-filtro-carpintero')?.value || '';
+function _egRenderCarpinteros() {
+    const cont = document.getElementById('eg-tabla-carpinteros');
+    const data = _egEstructuras;
 
-    let data = [..._egEstructuras];
-    if (filtroEstado === 'pagado')   data = data.filter(e => e.pagado);
-    if (filtroEstado === 'pendiente') data = data.filter(e => !e.pagado);
-    if (filtroCarpintero) data = data.filter(e =>
-        (e.chofer_nombre || '').toLowerCase().includes(filtroCarpintero.toLowerCase()) ||
-        (e.carpintero_nombre || '').toLowerCase().includes(filtroCarpintero.toLowerCase())
-    );
-
-    const totalPendiente = data.filter(e => !e.pagado).reduce((s,e) => s + e.precio, 0);
-    const totalPagado    = data.filter(e =>  e.pagado).reduce((s,e) => s + e.precio, 0);
+    const totalPendiente = data.filter(e => !e.pagado).reduce((s,e) => s + (e.precio||0), 0);
+    const totalPagado    = data.filter(e =>  e.pagado).reduce((s,e) => s + (e.precio||0), 0);
 
     if (data.length === 0) {
         cont.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">Sin estructuras con ese filtro</div>';
@@ -103,12 +102,12 @@ function _egRenderEstructuras() {
         <div style="${_egCardStyle('#dc2626')}">
             <div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:1px;">Pendiente de pago</div>
             <div style="font-size:20px;font-weight:800;margin-top:4px;">S/ ${totalPendiente.toFixed(2)}</div>
-            <div style="font-size:11px;opacity:.6;">${data.filter(e=>!e.pagado).length} estructuras</div>
+            <div style="font-size:11px;opacity:.6;">${data.filter(e=>!e.pagado).length} estructura(s)</div>
         </div>
         <div style="${_egCardStyle('#16a34a')}">
             <div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:1px;">Ya pagado</div>
             <div style="font-size:20px;font-weight:800;margin-top:4px;">S/ ${totalPagado.toFixed(2)}</div>
-            <div style="font-size:11px;opacity:.6;">${data.filter(e=>e.pagado).length} estructuras</div>
+            <div style="font-size:11px;opacity:.6;">${data.filter(e=>e.pagado).length} estructura(s)</div>
         </div>
     </div>
     <div style="overflow-x:auto;">
@@ -118,26 +117,28 @@ function _egRenderEstructuras() {
                 <th style="${_egTh()}">Fecha</th>
                 <th style="${_egTh()}">Modelo</th>
                 <th style="${_egTh()}">Carpintero</th>
+                <th style="${_egTh()}">Entregado a (chofer)</th>
                 <th style="${_egTh()}">Tipo</th>
                 <th style="${_egTh()}">Medidas</th>
                 <th style="${_egTh('right')}">Precio</th>
                 <th style="${_egTh('center')}">Estado</th>
                 <th style="${_egTh('center')}">Foto</th>
-                <th style="${_egTh('center')}">Acciones</th>
+                <th style="${_egTh('center')}">Acción</th>
             </tr>
         </thead>
         <tbody>
-            ${data.map(e => _egFilaEstructura(e)).join('')}
+            ${data.map(e => _egFilaCarpintero(e)).join('')}
         </tbody>
     </table>
     </div>`;
 }
 
-function _egFilaEstructura(e) {
-    const carpintero = e.carpintero_nombre || e.chofer_nombre || '—';
-    const medidas = e.medida_estandar
+function _egFilaCarpintero(e) {
+    const carpintero  = e.carpintero_nombre || '—';
+    const chofer      = e.chofer_nombre     || '—';
+    const medidas     = e.medida_estandar
         ? 'Estándar'
-        : `${e.ancho||'?'}×${e.profundidad||'?'}×${e.alto||'?'}`;
+        : (e.ancho ? `${e.ancho}×${e.profundidad}×${e.alto}` : '—');
     const estadoBadge = e.pagado
         ? `<span style="background:#dcfce7;color:#166534;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;">✓ Pagado</span>`
         : `<span style="background:#fee2e2;color:#991b1b;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;">Pendiente</span>`;
@@ -148,7 +149,8 @@ function _egFilaEstructura(e) {
         <td style="padding:10px;font-weight:600;color:#0f172a;">${e.nombre_modelo || '—'}<br>
             <span style="font-size:11px;color:#94a3b8;">${e.modelo_base || ''}</span>
         </td>
-        <td style="padding:10px;color:#374151;">${carpintero}</td>
+        <td style="padding:10px;color:#374151;font-weight:600;">${carpintero}</td>
+        <td style="padding:10px;color:#64748b;">${chofer}</td>
         <td style="padding:10px;color:#64748b;">${e.tipo || '—'}</td>
         <td style="padding:10px;color:#64748b;">${medidas}</td>
         <td style="padding:10px;text-align:right;font-weight:700;color:#0f172a;">S/ ${(e.precio||0).toFixed(2)}</td>
@@ -159,152 +161,47 @@ function _egFilaEstructura(e) {
                 : `<span style="color:#cbd5e1;">—</span>`}
         </td>
         <td style="padding:10px;text-align:center;white-space:nowrap;">
-            <button onclick="egTogglePago(${e.id}, ${!e.pagado})"
-                style="border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;margin-right:4px;
+            <button onclick="egTogglePagoCarpintero(${e.id}, ${!e.pagado})"
+                style="border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;
                        background:${e.pagado ? '#fef9c3' : '#dcfce7'};color:${e.pagado ? '#854d0e' : '#166534'};">
                 ${e.pagado ? '✗ Desmarcar' : '✓ Marcar pagado'}
-            </button>
-            <button onclick="egEliminarEstructura(${e.id})"
-                style="border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;
-                       background:#fee2e2;color:#991b1b;">
-                <i class="fa-solid fa-trash"></i>
             </button>
         </td>
     </tr>`;
 }
 
-// Marcar / desmarcar pagado
-async function egTogglePago(id, nuevoPagado) {
+// Toggle pago individual desde la tabla de Egresos
+async function egTogglePagoCarpintero(id, nuevoPagado) {
     try {
-        const res = await apiFetch(`${API_URL}/api/stock-estructuras/${id}/pago`, {
+        const res  = await apiFetch(`${API_URL}/api/stock-estructuras/${id}/pago`, {
             method: 'PATCH',
             body: JSON.stringify({ pagado: nuevoPagado })
         });
         const data = await res.json();
         if (!res.ok) { Swal.fire('Error', data.error || 'No se pudo actualizar', 'error'); return; }
-
-        // actualizar cache local y re-renderizar
         const idx = _egEstructuras.findIndex(e => e.id === id);
         if (idx >= 0) _egEstructuras[idx].pagado = nuevoPagado;
-        _egRenderEstructuras();
+        _egRenderCarpinteros();
     } catch(e) {
         Swal.fire('Error', 'Error de conexión', 'error');
     }
 }
 
-// Eliminar estructura
-async function egEliminarEstructura(id) {
-    const confirmacion = await Swal.fire({
-        title: '¿Eliminar este registro?',
-        text: 'Se borrará permanentemente del stock. Esta acción no se puede deshacer.',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#94a3b8',
-        confirmButtonText: 'Sí, eliminar',
-        cancelButtonText: 'Cancelar'
-    });
-    if (!confirmacion.isConfirmed) return;
-
-    try {
-        const res = await apiFetch(`${API_URL}/api/stock-estructuras/${id}`, { method: 'DELETE' });
-        const data = await res.json();
-        if (!res.ok) { Swal.fire('Error', data.error || 'No se pudo eliminar', 'error'); return; }
-
-        _egEstructuras = _egEstructuras.filter(e => e.id !== id);
-        _egRenderEstructuras();
-        Swal.fire({ icon: 'success', title: 'Eliminado', timer: 1200, showConfirmButton: false });
-    } catch(e) {
-        Swal.fire('Error', 'Error de conexión', 'error');
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  PESTAÑA 2 — PAGOS SEMANALES A CARPINTEROS
-// ════════════════════════════════════════════════════════════════════════════
-async function cargarPagosSemanales() {
-    const cont = document.getElementById('eg-tabla-pagos');
-    if (!cont) return;
-    cont.innerHTML = _egLoading();
-
-    const carpintero = document.getElementById('eg-ps-carpintero')?.value || '';
-    const semana     = document.getElementById('eg-ps-semana')?.value || '';
-
-    try {
-        let url = `${API_URL}/api/stock-estructuras/historial-pagos`;
-        const params = [];
-        if (carpintero) params.push(`carpintero=${encodeURIComponent(carpintero)}`);
-        if (semana)     params.push(`semana=${semana}`);
-        if (params.length) url += '?' + params.join('&');
-
-        const res  = await apiFetch(url);
-        const data = await res.json();
-
-        if (!res.ok) { cont.innerHTML = _egError(data.error); return; }
-        if (!data.length) {
-            cont.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">Sin pagos registrados</div>';
-            return;
-        }
-
-        const totalGeneral = data.reduce((s, p) => s + p.monto_total, 0);
-
-        cont.innerHTML = `
-        <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead>
-                <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
-                    <th style="${_egTh()}">Fecha cierre</th>
-                    <th style="${_egTh()}">Carpintero</th>
-                    <th style="${_egTh()}">Semana</th>
-                    <th style="${_egTh('center')}">Estructuras</th>
-                    <th style="${_egTh('right')}">Monto</th>
-                    <th style="${_egTh()}">Registrado por</th>
-                    <th style="${_egTh()}">Notas</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${data.map(p => `
-                <tr style="border-bottom:1px solid #f1f5f9;">
-                    <td style="padding:10px;color:#64748b;white-space:nowrap;">${p.fecha_pago}</td>
-                    <td style="padding:10px;font-weight:600;color:#0f172a;">${p.carpintero}</td>
-                    <td style="padding:10px;color:#374151;white-space:nowrap;">${p.semana_inicio} → ${p.semana_fin}</td>
-                    <td style="padding:10px;text-align:center;">
-                        <span style="background:#ede9fe;color:#5b21b6;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;">
-                            ${p.cantidad_estructuras}
-                        </span>
-                    </td>
-                    <td style="padding:10px;text-align:right;font-weight:700;color:#7c3aed;">S/ ${p.monto_total.toFixed(2)}</td>
-                    <td style="padding:10px;color:#64748b;">${p.registrado_por || '—'}</td>
-                    <td style="padding:10px;color:#94a3b8;font-size:12px;">${p.notas || '—'}</td>
-                </tr>`).join('')}
-                <tr style="background:#f8fafc;border-top:2px solid #e2e8f0;font-weight:800;">
-                    <td colspan="4" style="padding:12px;color:#0f172a;">TOTAL</td>
-                    <td style="padding:12px;text-align:right;color:#7c3aed;font-size:15px;">S/ ${totalGeneral.toFixed(2)}</td>
-                    <td colspan="2"></td>
-                </tr>
-            </tbody>
-        </table>
-        </div>`;
-    } catch(e) {
-        cont.innerHTML = _egError('Error de conexión: ' + e.message);
-    }
-}
-
-// Abrir modal para cerrar pago semanal
-function egAbrirCierreSemanal() {
-    // Calcular fechas de lunes a domingo de la semana actual
-    const hoy    = new Date();
-    const dow    = hoy.getDay() || 7;          // 1=lun … 7=dom
-    const lunes  = new Date(hoy); lunes.setDate(hoy.getDate() - dow + 1);
-    const dom    = new Date(lunes); dom.setDate(lunes.getDate() + 6);
-    const fmt    = d => d.toISOString().split('T')[0];
+// Modal para pagar al carpintero (con voucher)
+function egAbrirPagarCarpintero() {
+    const hoy   = new Date();
+    const dow   = hoy.getDay() || 7;
+    const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - dow + 1);
+    const dom   = new Date(lunes); dom.setDate(lunes.getDate() + 6);
+    const fmt   = d => d.toISOString().split('T')[0];
 
     const opcCarpinteros = _egCarpinteros.length
         ? _egCarpinteros.map(c => `<option value="${c}">${c}</option>`).join('')
-        : '<option value="">Escribe el nombre</option>';
+        : '';
 
     Swal.fire({
-        title: 'Cerrar pago semanal',
+        title: 'Registrar pago a carpintero',
+        width: 520,
         html: `
         <div style="text-align:left;">
             <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">CARPINTERO</label>
@@ -312,33 +209,66 @@ function egAbrirCierreSemanal() {
                 <option value="">— Selecciona —</option>
                 ${opcCarpinteros}
             </select>
-            <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">SEMANA DESDE</label>
-            <input type="date" id="sw-desde" class="swal2-input" value="${fmt(lunes)}" style="width:100%;margin:0 0 12px;">
-            <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">SEMANA HASTA</label>
-            <input type="date" id="sw-hasta" class="swal2-input" value="${fmt(dom)}" style="width:100%;margin:0 0 12px;">
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <div style="flex:1;">
+                    <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">DESDE</label>
+                    <input type="date" id="sw-desde" class="swal2-input" value="${fmt(lunes)}" style="width:100%;margin:0;">
+                </div>
+                <div style="flex:1;">
+                    <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">HASTA</label>
+                    <input type="date" id="sw-hasta" class="swal2-input" value="${fmt(dom)}" style="width:100%;margin:0;">
+                </div>
+            </div>
+            <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">VOUCHER DE PAGO (opcional)</label>
+            <input type="file" id="sw-voucher" accept="image/*,application/pdf"
+                   class="swal2-input" style="width:100%;margin:0 0 12px;padding:6px;">
             <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">NOTAS (opcional)</label>
             <input type="text" id="sw-notas" class="swal2-input" placeholder="Ej: pago en efectivo" style="width:100%;margin:0;">
         </div>`,
         showCancelButton: true,
-        confirmButtonText: 'Cerrar semana y pagar',
+        confirmButtonText: 'Registrar pago',
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#7c3aed',
+        showLoaderOnConfirm: true,
         preConfirm: async () => {
-            const carpintero   = document.getElementById('sw-carpintero').value;
+            const carpintero    = document.getElementById('sw-carpintero').value;
             const semana_inicio = document.getElementById('sw-desde').value;
             const semana_fin    = document.getElementById('sw-hasta').value;
             const notas         = document.getElementById('sw-notas').value;
+            const voucherFile   = document.getElementById('sw-voucher').files[0];
+
             if (!carpintero || !semana_inicio || !semana_fin) {
-                Swal.showValidationMessage('Completa todos los campos obligatorios');
+                Swal.showValidationMessage('Selecciona el carpintero y el rango de fechas');
                 return false;
             }
+
+            // Subir voucher primero si hay archivo
+            let voucher_url = '';
+            if (voucherFile) {
+                try {
+                    const fd = new FormData();
+                    fd.append('archivo', voucherFile);
+                    const token = sessionStorage.getItem('token') || localStorage.getItem('token') || '';
+                    const upRes = await fetch(`${API_URL}/api/upload-voucher`, {
+                        method: 'POST',
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                        body: fd
+                    });
+                    const upData = await upRes.json();
+                    if (!upRes.ok) { Swal.showValidationMessage('Error al subir voucher: ' + upData.error); return false; }
+                    voucher_url = upData.url || '';
+                } catch(e) {
+                    Swal.showValidationMessage('Error al subir el voucher'); return false;
+                }
+            }
+
             try {
                 const res = await apiFetch(`${API_URL}/api/stock-estructuras/cerrar-pago-semanal`, {
                     method: 'POST',
-                    body: JSON.stringify({ carpintero_nombre: carpintero, semana_inicio, semana_fin, notas })
+                    body: JSON.stringify({ carpintero_nombre: carpintero, semana_inicio, semana_fin, notas, voucher_url })
                 });
                 const d = await res.json();
-                if (!res.ok) { Swal.showValidationMessage(d.error || 'Error al cerrar'); return false; }
+                if (!res.ok) { Swal.showValidationMessage(d.error || 'Error al registrar pago'); return false; }
                 return d;
             } catch(e) {
                 Swal.showValidationMessage('Error de conexión'); return false;
@@ -354,14 +284,87 @@ function egAbrirCierreSemanal() {
                    ${d.estructuras_pagadas} estructura(s)<br>
                    <span style="font-size:20px;font-weight:800;color:#7c3aed;">S/ ${d.monto_total?.toFixed(2)}</span>`,
         });
-        cargarPagosSemanales();
-        // refrescar cache de estructuras también
-        cargarStockEstructuras();
+        cargarPagosCarpinteros();
     });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  PESTAÑA 3 — LOGÍSTICA EXTERNA (compras a proveedores)
+//  PESTAÑA 2 — HISTORIAL DE PAGOS SEMANALES
+// ════════════════════════════════════════════════════════════════════════════
+async function cargarHistorialPagos() {
+    const cont = document.getElementById('eg-tabla-historial');
+    if (!cont) return;
+    cont.innerHTML = _egLoading();
+
+    const carpintero = document.getElementById('eg-hp-carpintero')?.value || '';
+    const semana     = document.getElementById('eg-hp-semana')?.value || '';
+
+    try {
+        let url = `${API_URL}/api/stock-estructuras/historial-pagos`;
+        const params = [];
+        if (carpintero) params.push(`carpintero=${encodeURIComponent(carpintero)}`);
+        if (semana)     params.push(`semana=${semana}`);
+        if (params.length) url += '?' + params.join('&');
+
+        const res  = await apiFetch(url);
+        const data = await res.json();
+
+        if (!res.ok) { cont.innerHTML = _egError(data.error); return; }
+        if (!data.length) {
+            cont.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">Sin pagos registrados aún</div>';
+            return;
+        }
+
+        const totalGeneral = data.reduce((s, p) => s + p.monto_total, 0);
+
+        cont.innerHTML = `
+        <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+                <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+                    <th style="${_egTh()}">Fecha pago</th>
+                    <th style="${_egTh()}">Carpintero</th>
+                    <th style="${_egTh()}">Período</th>
+                    <th style="${_egTh('center')}">Estructuras</th>
+                    <th style="${_egTh('right')}">Monto</th>
+                    <th style="${_egTh()}">Registrado por</th>
+                    <th style="${_egTh('center')}">Voucher</th>
+                    <th style="${_egTh()}">Notas</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${data.map(p => `
+                <tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:10px;color:#64748b;white-space:nowrap;">${p.fecha_pago}</td>
+                    <td style="padding:10px;font-weight:600;color:#0f172a;">${p.carpintero}</td>
+                    <td style="padding:10px;color:#374151;white-space:nowrap;">${p.semana_inicio} → ${p.semana_fin}</td>
+                    <td style="padding:10px;text-align:center;">
+                        <span style="background:#ede9fe;color:#5b21b6;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;">${p.cantidad_estructuras}</span>
+                    </td>
+                    <td style="padding:10px;text-align:right;font-weight:700;color:#7c3aed;">S/ ${p.monto_total.toFixed(2)}</td>
+                    <td style="padding:10px;color:#64748b;">${p.registrado_por || '—'}</td>
+                    <td style="padding:10px;text-align:center;">
+                        ${p.voucher_url
+                            ? `<a href="${p.voucher_url}" target="_blank" style="color:#16a34a;font-size:16px;" title="Ver voucher"><i class="fa-solid fa-receipt"></i></a>`
+                            : `<span style="color:#cbd5e1;font-size:12px;">—</span>`}
+                    </td>
+                    <td style="padding:10px;color:#94a3b8;font-size:12px;">${p.notas || '—'}</td>
+                </tr>`).join('')}
+                <tr style="background:#f8fafc;border-top:2px solid #e2e8f0;font-weight:800;">
+                    <td colspan="4" style="padding:12px;color:#0f172a;">TOTAL</td>
+                    <td style="padding:12px;text-align:right;color:#7c3aed;font-size:15px;">S/ ${totalGeneral.toFixed(2)}</td>
+                    <td colspan="3"></td>
+                </tr>
+            </tbody>
+        </table>
+        </div>`;
+    } catch(e) {
+        cont.innerHTML = _egError('Error de conexión: ' + e.message);
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PESTAÑA 3 — LOGÍSTICA EXTERNA (sin cambios)
 // ════════════════════════════════════════════════════════════════════════════
 async function cargarLogistica() {
     const cont = document.getElementById('eg-tabla-logistica');
@@ -384,7 +387,6 @@ async function cargarLogistica() {
 
         if (!res.ok) { cont.innerHTML = _egError(data.error || JSON.stringify(data)); return; }
 
-        // data puede ser objeto con movimientos/estadísticas o array directo
         let movimientos = Array.isArray(data) ? data : (data.movimientos || []);
         if (cat) movimientos = movimientos.filter(m => m.categoria === cat);
 
@@ -393,8 +395,8 @@ async function cargarLogistica() {
             return;
         }
 
-        const totalPagado   = movimientos.filter(m => m.estado === 'Pagado').reduce((s,m) => s + m.subtotal, 0);
-        const totalGeneral  = movimientos.reduce((s,m) => s + m.subtotal, 0);
+        const totalPagado  = movimientos.filter(m => m.estado === 'Pagado').reduce((s,m) => s + m.subtotal, 0);
+        const totalGeneral = movimientos.reduce((s,m) => s + m.subtotal, 0);
 
         cont.innerHTML = `
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
@@ -442,9 +444,7 @@ async function cargarLogistica() {
                         <td style="padding:9px;text-align:center;color:#374151;">${m.cantidad || 1}</td>
                         <td style="padding:9px;text-align:right;font-weight:700;color:#0f172a;">S/ ${(m.subtotal||0).toFixed(2)}</td>
                         <td style="padding:9px;text-align:center;">
-                            <span style="background:${estadoColor};border-radius:12px;padding:2px 9px;font-size:11px;font-weight:600;">
-                                ${m.estado || '—'}
-                            </span>
+                            <span style="background:${estadoColor};border-radius:12px;padding:2px 9px;font-size:11px;font-weight:600;">${m.estado || '—'}</span>
                         </td>
                         <td style="padding:9px;text-align:center;">
                             ${m.tiene_comprobante
@@ -467,7 +467,7 @@ async function cargarLogistica() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  HELPERS INTERNOS
+//  HELPERS
 // ════════════════════════════════════════════════════════════════════════════
 function _egLoading() {
     return '<div style="text-align:center;padding:30px;color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
@@ -482,7 +482,6 @@ function _egCardStyle(color) {
     return `background:${color};color:white;border-radius:12px;padding:14px 18px;min-width:160px;`;
 }
 
-// helper apiFetch con token — si ya existe en app.js, esta no se usa
 if (typeof apiFetch === 'undefined') {
     window.apiFetch = function(url, options = {}) {
         const token = sessionStorage.getItem('token') || localStorage.getItem('token') || '';

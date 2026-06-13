@@ -3194,20 +3194,41 @@ def servir_pdf_oc(id):
 @produccion_bp.route('/api/stock-estructuras', methods=['GET'])
 @requiere_login
 def listar_stock_estructuras():
+    # Filtros opcionales
+    desde       = (request.args.get('desde') or '').strip()
+    hasta       = (request.args.get('hasta') or '').strip()
+    carpintero  = (request.args.get('carpintero') or '').strip()
+    estado_pago = (request.args.get('pago') or '').strip()   # 'pagado' | 'pendiente'
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        # A9: migración segura — asegura columnas pagado y fecha_entrega_chofer
+        # Migración segura — asegura todas las columnas necesarias
         cursor.execute("""
             ALTER TABLE stock_estructuras_sofa
-            ADD COLUMN IF NOT EXISTS pagado BOOLEAN DEFAULT FALSE;
-            ALTER TABLE stock_estructuras_sofa
-            ADD COLUMN IF NOT EXISTS fecha_entrega_chofer TIMESTAMP;
+                ADD COLUMN IF NOT EXISTS pagado            BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS fecha_entrega_chofer TIMESTAMP,
+                ADD COLUMN IF NOT EXISTS carpintero_nombre VARCHAR(150);
         """)
         conexion.commit()
 
-        cursor.execute("""
+        conditions, params = [], []
+        if desde:
+            conditions.append("fecha_registro::date >= %s"); params.append(desde)
+        if hasta:
+            conditions.append("fecha_registro::date <= %s"); params.append(hasta)
+        if carpintero:
+            conditions.append("COALESCE(carpintero_nombre,'') ILIKE %s")
+            params.append(f'%{carpintero}%')
+        if estado_pago == 'pagado':
+            conditions.append("COALESCE(pagado, FALSE) = TRUE")
+        elif estado_pago == 'pendiente':
+            conditions.append("COALESCE(pagado, FALSE) = FALSE")
+
+        where_sql = ('WHERE ' + ' AND '.join(conditions)) if conditions else ''
+
+        cursor.execute(f"""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
                    medida_estandar, foto_url, tipo, cantidad, estado,
                    ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY'), COALESCE(precio, 0),
@@ -3216,10 +3237,12 @@ def listar_stock_estructuras():
                    COALESCE(medida_base::numeric, 0),
                    COALESCE(medida_base_estandar, FALSE),
                    COALESCE(pagado, FALSE),
-                   TO_CHAR(fecha_entrega_chofer, 'DD/MM/YYYY HH24:MI')
+                   TO_CHAR(fecha_entrega_chofer, 'DD/MM/YYYY HH24:MI'),
+                   COALESCE(carpintero_nombre, '')
             FROM stock_estructuras_sofa
+            {where_sql}
             ORDER BY fecha_registro DESC
-        """)
+        """, params)
         rows = cursor.fetchall()
         return jsonify([{
             'id': r[0], 'nombre_modelo': r[1],
@@ -3232,7 +3255,8 @@ def listar_stock_estructuras():
             'medida_base': float(r[16] or 0),
             'medida_base_estandar': r[17],
             'pagado': bool(r[18]),
-            'fecha_entrega_chofer': r[19] or ''
+            'fecha_entrega_chofer': r[19] or '',
+            'carpintero_nombre': r[20] or '',
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -3245,6 +3269,7 @@ def listar_stock_estructuras():
 @requiere_login
 def registrar_stock_estructura():
     import cloudinary.uploader
+    from auth_middleware import get_usuario_actual
     try:
         nombre              = request.form.get('nombre_modelo')
         modelo_base         = request.form.get('modelo_base', '')
@@ -3259,6 +3284,13 @@ def registrar_stock_estructura():
         tipo_base           = request.form.get('tipo_base', '')  # 'patas', 'zocalo', o vacío
         medida_base         = request.form.get('medida_base') or None
         medida_base_estandar = request.form.get('medida_base_estandar') == 'true'
+
+        # Guardar quién registró la estructura (el carpintero que la creó)
+        try:
+            u = get_usuario_actual()
+            carpintero_nombre = u.get('nombre', '')
+        except Exception:
+            carpintero_nombre = ''
 
         # Validar que si hay tipo_base, también hay medida_base
         if tipo_base and not medida_base:
@@ -3279,11 +3311,11 @@ def registrar_stock_estructura():
                     INSERT INTO stock_estructuras_sofa
                         (nombre_modelo, modelo_base, ancho, profundidad, alto,
                          medida_estandar, foto_url, tipo, cantidad, precio,
-                         tipo_base, medida_base, medida_base_estandar)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1,%s,%s,%s,%s) RETURNING id
+                         tipo_base, medida_base, medida_base_estandar, carpintero_nombre)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1,%s,%s,%s,%s,%s) RETURNING id
                 """, (nombre, modelo_base, ancho, profundidad, alto,
                       medida_estandar, foto_url, tipo, precio,
-                      tipo_base, medida_base, medida_base_estandar))
+                      tipo_base, medida_base, medida_base_estandar, carpintero_nombre or None))
                 new_ids.append(cursor.fetchone()[0])
             new_id = new_ids[0]
         else:
@@ -3291,11 +3323,11 @@ def registrar_stock_estructura():
                 INSERT INTO stock_estructuras_sofa
                     (nombre_modelo, modelo_base, ancho, profundidad, alto,
                      medida_estandar, foto_url, tipo, cantidad, precio,
-                     tipo_base, medida_base, medida_base_estandar)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                     tipo_base, medida_base, medida_base_estandar, carpintero_nombre)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
             """, (nombre, modelo_base, ancho, profundidad, alto,
                   medida_estandar, foto_url, tipo, cantidad, precio,
-                  tipo_base, medida_base, medida_base_estandar))
+                  tipo_base, medida_base, medida_base_estandar, carpintero_nombre or None))
             new_id = cursor.fetchone()[0]
 
         conexion.commit()
@@ -3695,6 +3727,7 @@ def cerrar_pago_semanal():
     semana_inicio  = (data.get('semana_inicio') or '').strip()
     semana_fin     = (data.get('semana_fin') or '').strip()
     notas          = (data.get('notas') or '').strip()
+    voucher_url    = (data.get('voucher_url') or '').strip() or None
     try:
         registrado_por = flask_g.usuario.get('nombre', 'Sistema')
     except Exception:
@@ -3728,6 +3761,7 @@ def cerrar_pago_semanal():
                 registrado_por       VARCHAR(150),
                 fecha_pago           TIMESTAMP DEFAULT NOW(),
                 notas                TEXT,
+                voucher_url          TEXT,
                 created_at           TIMESTAMP DEFAULT NOW()
             );
         """)
@@ -3736,6 +3770,8 @@ def cerrar_pago_semanal():
             ALTER TABLE stock_estructuras_sofa
                 ADD COLUMN IF NOT EXISTS pagado            BOOLEAN DEFAULT FALSE,
                 ADD COLUMN IF NOT EXISTS carpintero_nombre VARCHAR(150);
+            ALTER TABLE pagos_carpinteros
+                ADD COLUMN IF NOT EXISTS voucher_url TEXT;
         """)
 
         # Buscar estructuras pendientes — primero por carpintero_nombre, luego fallback a chofer_nombre
@@ -3781,14 +3817,14 @@ def cerrar_pago_semanal():
         cursor.execute("""
             INSERT INTO pagos_carpinteros
                 (carpintero_nombre, semana_inicio, semana_fin, estructuras_ids,
-                 cantidad_estructuras, monto_total, registrado_por, notas)
-            VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                 cantidad_estructuras, monto_total, registrado_por, notas, voucher_url)
+            VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s)
             RETURNING id;
         """, (
             carpintero, semana_inicio, semana_fin,
             json.dumps(ids_estructuras),
             len(ids_estructuras), monto_total,
-            registrado_por, notas or None
+            registrado_por, notas or None, voucher_url
         ))
         pago_id = cursor.fetchone()[0]
         conexion.commit()
@@ -3838,9 +3874,11 @@ def historial_pagos_carpinteros():
                 registrado_por       VARCHAR(150),
                 fecha_pago           TIMESTAMP DEFAULT NOW(),
                 notas                TEXT,
+                voucher_url          TEXT,
                 created_at           TIMESTAMP DEFAULT NOW()
             );
         """)
+        cursor.execute("ALTER TABLE pagos_carpinteros ADD COLUMN IF NOT EXISTS voucher_url TEXT;")
         conexion.commit()
 
         conditions, params = [], []
@@ -3855,7 +3893,7 @@ def historial_pagos_carpinteros():
         cursor.execute(f"""
             SELECT id, carpintero_nombre, semana_inicio, semana_fin,
                    estructuras_ids, cantidad_estructuras, monto_total,
-                   registrado_por, fecha_pago, notas
+                   registrado_por, fecha_pago, notas, voucher_url
             FROM pagos_carpinteros
             {where}
             ORDER BY fecha_pago DESC
@@ -3875,6 +3913,7 @@ def historial_pagos_carpinteros():
                 'registrado_por':        r[7] or '',
                 'fecha_pago':            r[8].strftime('%d/%m/%Y %H:%M') if r[8] else '',
                 'notas':                 r[9] or '',
+                'voucher_url':           r[10] or '',
             }
             for r in rows
         ]), 200

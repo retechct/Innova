@@ -641,13 +641,13 @@
 
         <!-- PESTAÑAS -->
         <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
-            <button id="eg-tab-estructuras" class="btn-primary"
-                    onclick="egresosTab('estructuras')" style="background:var(--primary);">
-                <i class="fa-solid fa-cubes"></i> Stock de Estructuras
-            </button>
-            <button id="eg-tab-pagos-semanales" class="btn-primary"
-                    onclick="egresosTab('pagos-semanales')" style="background:#94a3b8;">
+            <button id="eg-tab-pagos-carpinteros" class="btn-primary"
+                    onclick="egresosTab('pagos-carpinteros')" style="background:var(--primary);">
                 <i class="fa-solid fa-hammer"></i> Pagos a Carpinteros
+            </button>
+            <button id="eg-tab-historial-pagos" class="btn-primary"
+                    onclick="egresosTab('historial-pagos')" style="background:#94a3b8;">
+                <i class="fa-solid fa-clock-rotate-left"></i> Historial de Pagos
             </button>
             <button id="eg-tab-logistica" class="btn-primary"
                     onclick="egresosTab('logistica')" style="background:#94a3b8;">
@@ -655,52 +655,53 @@
             </button>
         </div>
 
-        <!-- ══ PANEL 1: STOCK ESTRUCTURAS ══ -->
-        <div id="eg-panel-estructuras" style="display:block;">
-            <!-- Filtros -->
+        <!-- ══ PANEL 1: PAGOS A CARPINTEROS ══ -->
+        <div id="eg-panel-pagos-carpinteros" style="display:block;">
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
-                <select id="eg-filtro-estado" class="form-input-sm" style="max-width:180px;"
-                        onchange="_egRenderEstructuras()">
+                <select id="eg-pc-estado" class="form-input-sm" style="max-width:180px;"
+                        onchange="cargarPagosCarpinteros()">
                     <option value="">Todos</option>
                     <option value="pendiente">Solo pendientes</option>
                     <option value="pagado">Solo pagados</option>
                 </select>
-                <select id="eg-filtro-carpintero" class="form-input-sm" style="max-width:200px;"
-                        onchange="_egRenderEstructuras()">
+                <select id="eg-pc-carpintero" class="form-input-sm" style="max-width:200px;"
+                        onchange="cargarPagosCarpinteros()">
                     <option value="">Todos los carpinteros</option>
                 </select>
-                <button class="btn-primary" onclick="cargarStockEstructuras()" style="background:#0f172a;">
+                <input type="date" id="eg-pc-desde" class="form-input-sm" style="max-width:150px;"
+                       title="Desde fecha" onchange="cargarPagosCarpinteros()">
+                <input type="date" id="eg-pc-hasta" class="form-input-sm" style="max-width:150px;"
+                       title="Hasta fecha" onchange="cargarPagosCarpinteros()">
+                <button class="btn-primary" onclick="cargarPagosCarpinteros()" style="background:#0f172a;">
                     <i class="fa-solid fa-arrows-rotate"></i> Recargar
                 </button>
+                <button class="btn-primary" onclick="egAbrirPagarCarpintero()" style="background:#7c3aed;margin-left:auto;">
+                    <i class="fa-solid fa-money-bill-wave"></i> Registrar pago
+                </button>
             </div>
-            <div id="eg-tabla-estructuras">
+            <div id="eg-tabla-carpinteros">
                 <div style="text-align:center;padding:40px;color:#94a3b8;">Cargando...</div>
             </div>
         </div>
 
-        <!-- ══ PANEL 2: PAGOS SEMANALES ══ -->
-        <div id="eg-panel-pagos-semanales" style="display:none;">
-            <!-- Filtros -->
+        <!-- ══ PANEL 2: HISTORIAL DE PAGOS ══ -->
+        <div id="eg-panel-historial-pagos" style="display:none;">
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
-                <input type="text" id="eg-ps-carpintero" class="form-input-sm"
+                <input type="text" id="eg-hp-carpintero" class="form-input-sm"
                        placeholder="Filtrar por carpintero" style="max-width:200px;">
-                <input type="date" id="eg-ps-semana" class="form-input-sm" style="max-width:160px;"
+                <input type="date" id="eg-hp-semana" class="form-input-sm" style="max-width:160px;"
                        title="Cualquier fecha dentro de la semana">
-                <button class="btn-primary" onclick="cargarPagosSemanales()" style="background:#0f172a;">
+                <button class="btn-primary" onclick="cargarHistorialPagos()" style="background:#0f172a;">
                     <i class="fa-solid fa-filter"></i> Filtrar
                 </button>
-                <button class="btn-primary" onclick="egAbrirCierreSemanal()" style="background:#7c3aed;margin-left:auto;">
-                    <i class="fa-solid fa-plus"></i> Cerrar semana y pagar
-                </button>
             </div>
-            <div id="eg-tabla-pagos">
+            <div id="eg-tabla-historial">
                 <div style="text-align:center;padding:40px;color:#94a3b8;">Cargando...</div>
             </div>
         </div>
 
         <!-- ══ PANEL 3: LOGÍSTICA / COMPRAS ══ -->
         <div id="eg-panel-logistica" style="display:none;">
-            <!-- Filtros -->
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
                 <input type="date" id="eg-log-desde" class="form-input-sm" style="max-width:160px;">
                 <input type="date" id="eg-log-hasta" class="form-input-sm" style="max-width:160px;">
