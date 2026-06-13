@@ -589,9 +589,32 @@ async function cargarPlantilla(id) {
         Swal.fire('Error', 'Hubo un problema al cargar la plantilla.', 'error');
     }
 }
+function pdSyncFoto(input) {
+    // Sincroniza ambos inputs y muestra preview
+    const file = input.files[0];
+    if (!file) return;
+    // Copiar el archivo al otro input no es posible directamente;
+    // guardamos referencia en el input principal (pd-foto) vía DataTransfer
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('pd-foto').files = dt.files;
+    // Preview
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById('pd-foto-preview').src = e.target.result;
+        document.getElementById('pd-foto-nombre').textContent = file.name;
+        document.getElementById('pd-foto-preview-container').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
 function abrirModalProductoDirecto() {
     // Limpiamos la ventana
     document.getElementById('pd-foto').value = '';
+    const cam = document.getElementById('pd-foto-cam');
+    if (cam) cam.value = '';
+    const prev = document.getElementById('pd-foto-preview-container');
+    if (prev) prev.style.display = 'none';
     document.getElementById('pd-nombre').value = '';
     document.getElementById('pd-precio').value = '';
     document.getElementById('pd-cantidad').value = '1';
@@ -601,7 +624,8 @@ function abrirModalProductoDirecto() {
 }
 
 async function guardarProductoDirecto() {
-    const foto = document.getElementById('pd-foto').files[0];
+    const foto = document.getElementById('pd-foto-cam')?.files[0]
+               || document.getElementById('pd-foto').files[0];
     const nombre = document.getElementById('pd-nombre').value;
     const precio = document.getElementById('pd-precio').value;
     const cantidad = document.getElementById('pd-cantidad').value;

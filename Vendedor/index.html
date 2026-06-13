@@ -1448,8 +1448,21 @@
             
             <div style="padding: 10px;">
                 <div class="form-group" style="background:var(--bg); padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
-                    <label style="color:var(--accent);"><i class="fa-solid fa-camera"></i> Subir Foto del Producto</label>
-                    <input type="file" id="pd-foto" class="form-input-sm" accept="image/*" style="margin-top:10px;">
+                    <label style="color:var(--accent); display:block; margin-bottom:10px; font-weight:700;"><i class="fa-solid fa-camera"></i> FOTO *</label>
+                    <div style="display:flex; gap:8px;">
+                        <label style="flex:1; cursor:pointer; background:var(--primary); color:#fff; padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
+                            <i class="fa-solid fa-camera"></i> Tomar foto
+                            <input type="file" id="pd-foto-cam" accept="image/*" capture="environment" style="display:none;" onchange="pdSyncFoto(this)">
+                        </label>
+                        <label style="flex:1; cursor:pointer; background:#e2e8f0; color:var(--primary); padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
+                            <i class="fa-solid fa-folder-open"></i> Subir archivo
+                            <input type="file" id="pd-foto" accept="image/*" style="display:none;" onchange="pdSyncFoto(this)">
+                        </label>
+                    </div>
+                    <div id="pd-foto-preview-container" style="display:none; margin-top:10px;">
+                        <img id="pd-foto-preview" style="max-height:90px; border-radius:8px; border:2px solid var(--accent); object-fit:cover;">
+                        <p id="pd-foto-nombre" style="font-size:11px; color:var(--text-muted); margin:4px 0 0;"></p>
+                    </div>
                 </div>
 
                 <div class="form-group">
