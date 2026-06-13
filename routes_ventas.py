@@ -1096,3 +1096,81 @@ def exportar_ventas_excel():
 # A4: La ruta /api/exportar_ventas (CSV stub) fue eliminada.
 # El único endpoint de exportación es /api/ventas/exportar (Excel completo).
 # El frontend ya apunta correctamente a /api/ventas/exportar.
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  COMISIONES DE VENDEDORES
+#  GET /api/vendedores/comisiones
+#  Query params: desde, hasta, vendedor (nombre)
+#  Respuesta: lista de vendedores con total_ventas, total_contratos, comision
+# ═══════════════════════════════════════════════════════════════════════════
+
+@ventas_bp.route('/api/vendedores/comisiones', methods=['GET'])
+@requiere_rol('Admin')
+def obtener_comisiones_vendedores():
+    desde    = request.args.get('desde', '')
+    hasta    = request.args.get('hasta', '')
+    vendedor = request.args.get('vendedor', '').strip()
+
+    TASA_COMISION = 0.03   # 3 %
+
+    conexion = None
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        conditions = ["vendedor_nombre IS NOT NULL", "vendedor_nombre <> ''"]
+        params     = []
+
+        if desde:
+            conditions.append("fecha_emision::date >= %s")
+            params.append(desde)
+        if hasta:
+            conditions.append("fecha_emision::date <= %s")
+            params.append(hasta)
+        if vendedor:
+            conditions.append("LOWER(vendedor_nombre) = LOWER(%s)")
+            params.append(vendedor)
+
+        where = " AND ".join(conditions)
+
+        cursor.execute(f"""
+            SELECT
+                vendedor_nombre,
+                MAX(sede)                              AS sede,
+                COUNT(DISTINCT id)                     AS total_contratos,
+                COALESCE(SUM(monto_total), 0)          AS total_ventas,
+                COALESCE(SUM(monto_total), 0) * %s     AS comision
+            FROM ventas
+            WHERE {where}
+            GROUP BY vendedor_nombre
+            ORDER BY total_ventas DESC;
+        """, [TASA_COMISION] + params)
+
+        filas = cursor.fetchall()
+
+        resultado = [{
+            'vendedor_nombre':  f[0],
+            'sede':             f[1] or '',
+            'total_contratos':  int(f[2]),
+            'total_ventas':     float(f[3]),
+            'comision':         round(float(f[4]), 2),
+        } for f in filas]
+
+        total_ventas    = sum(r['total_ventas']    for r in resultado)
+        total_contratos = sum(r['total_contratos'] for r in resultado)
+        total_comision  = round(sum(r['comision']  for r in resultado), 2)
+
+        return jsonify({
+            'vendedores':      resultado,
+            'total_ventas':    total_ventas,
+            'total_contratos': total_contratos,
+            'total_comision':  total_comision,
+            'tasa':            TASA_COMISION,
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conexion:
+            cursor.close(); release_db_connection(conexion)
