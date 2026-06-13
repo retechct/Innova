@@ -2432,6 +2432,54 @@ async function cargarInventarioTaller() {
 }
 
 /**
+ * filtrarVistaMaestro — muestra/oculta secciones completas del maestro.
+ * key: 'todos' | 'telas' | 'cojines' | 'tableros' | 'metal' | 'madera'
+ */
+function filtrarVistaMaestro(key) {
+    const secciones = {
+        telas:    'seccion-wrapper-telas',
+        cojines:  'seccion-wrapper-cojines',
+        tableros: 'seccion-wrapper-tableros',
+        metal:    'seccion-wrapper-metal',
+        madera:   'seccion-wrapper-madera',
+    };
+
+    // Mostrar/ocultar secciones
+    Object.entries(secciones).forEach(([k, id]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = (key === 'todos' || key === k) ? '' : 'none';
+    });
+
+    // Resaltar botón activo
+    const colores = {
+        todos:    { bg: 'var(--primary)', color: 'white',   border: 'var(--primary)' },
+        telas:    { bg: '#7c3aed',        color: 'white',   border: '#7c3aed' },
+        cojines:  { bg: '#ec4899',        color: 'white',   border: '#ec4899' },
+        tableros: { bg: '#0284c7',        color: 'white',   border: '#0284c7' },
+        metal:    { bg: '#0369a1',        color: 'white',   border: '#0369a1' },
+        madera:   { bg: '#b45309',        color: 'white',   border: '#b45309' },
+    };
+    const inactivo = { bg: 'white', border: null };
+
+    ['todos','telas','cojines','tableros','metal','madera'].forEach(k => {
+        const btn = document.getElementById('filtro-btn-' + k);
+        if (!btn) return;
+        if (k === key) {
+            const c = colores[k];
+            btn.style.background = c.bg;
+            btn.style.color = c.color;
+            btn.style.borderColor = c.border;
+        } else {
+            const c = colores[k];
+            btn.style.background = 'white';
+            btn.style.color = c.bg;
+            btn.style.borderColor = c.bg;
+        }
+    });
+}
+
+/**
  * filtrarSeccionMaestro — filtra las tarjetas visibles en cada sección del maestro.
  * key: 'telas' | 'cojines' | 'tableros' | 'metal' | 'madera'
  */

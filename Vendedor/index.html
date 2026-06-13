@@ -415,6 +415,36 @@
     </div>
 </div>
 
+    <!-- ── BARRA DE FILTROS POR SECCIÓN ── -->
+    <div id="barra-filtros-maestro" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px;padding:14px 16px;background:#f8f5f0;border-radius:12px;border:1px solid #e5ddd0;">
+      <span style="font-size:11px;font-weight:900;color:#64748b;align-self:center;margin-right:4px;letter-spacing:0.05em;">VER:</span>
+      <button onclick="filtrarVistaMaestro('todos')" id="filtro-btn-todos"
+          style="padding:7px 16px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:var(--primary);color:white;transition:all 0.2s;">
+        🗂️ Todo
+      </button>
+      <button onclick="filtrarVistaMaestro('telas')" id="filtro-btn-telas"
+          style="padding:7px 16px;border-radius:20px;border:2px solid #7c3aed;font-size:12px;font-weight:700;cursor:pointer;background:white;color:#7c3aed;transition:all 0.2s;">
+        🧵 Telas
+      </button>
+      <button onclick="filtrarVistaMaestro('cojines')" id="filtro-btn-cojines"
+          style="padding:7px 16px;border-radius:20px;border:2px solid #ec4899;font-size:12px;font-weight:700;cursor:pointer;background:white;color:#ec4899;transition:all 0.2s;">
+        🛋️ Cojines
+      </button>
+      <button onclick="filtrarVistaMaestro('tableros')" id="filtro-btn-tableros"
+          style="padding:7px 16px;border-radius:20px;border:2px solid #0284c7;font-size:12px;font-weight:700;cursor:pointer;background:white;color:#0284c7;transition:all 0.2s;">
+        🪨 Tableros
+      </button>
+      <button onclick="filtrarVistaMaestro('metal')" id="filtro-btn-metal"
+          style="padding:7px 16px;border-radius:20px;border:2px solid #0369a1;font-size:12px;font-weight:700;cursor:pointer;background:white;color:#0369a1;transition:all 0.2s;">
+        ⚙️ Bases / Patas
+      </button>
+      <button onclick="filtrarVistaMaestro('madera')" id="filtro-btn-madera"
+          style="padding:7px 16px;border-radius:20px;border:2px solid #b45309;font-size:12px;font-weight:700;cursor:pointer;background:white;color:#b45309;transition:all 0.2s;">
+        🪵 Estructuras
+      </button>
+    </div>
+
+    <div id="seccion-wrapper-telas">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
       <h3 style="color:var(--primary);border-bottom:2px solid #7c3aed;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-scroll"></i> MAESTRO DE TELAS
@@ -423,7 +453,10 @@
     </div>
     <div id="contenedor-telas-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;">
         </div>
+    </div>
 
+
+    <div id="seccion-wrapper-cojines">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
       <h3 style="color:var(--primary);border-bottom:2px solid #ec4899;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-palette"></i> DISEÑOS DE COJINES DECORATIVOS
@@ -431,7 +464,10 @@
       <input type="text" id="buscador-cojines" placeholder="Buscar cojín..." oninput="filtrarSeccionMaestro('cojines')" style="padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;min-width:200px;outline:none;">
     </div>
     <div id="contenedor-cojines-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
+    </div>
 
+
+    <div id="seccion-wrapper-tableros">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
       <h3 style="color:var(--primary);border-bottom:2px solid #0284c7;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-table-cells-large"></i> TABLEROS (MÁRMOL / MADERA)
@@ -439,7 +475,10 @@
       <input type="text" id="buscador-tableros" placeholder="Buscar tablero..." oninput="filtrarSeccionMaestro('tableros')" style="padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;min-width:200px;outline:none;">
     </div>
     <div id="contenedor-tableros-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
+    </div>
 
+
+    <div id="seccion-wrapper-metal">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
       <h3 style="color:var(--primary);border-bottom:2px solid #0369a1;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-microchip"></i> BASES Y SOPORTES METÁLICOS
@@ -447,7 +486,10 @@
       <input type="text" id="buscador-metal" placeholder="Buscar base o soporte..." oninput="filtrarSeccionMaestro('metal')" style="padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;min-width:200px;outline:none;">
     </div>
     <div id="contenedor-metal-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
+    </div>
 
+
+    <div id="seccion-wrapper-madera">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
       <h3 style="color:var(--primary);border-bottom:2px solid #b45309;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-hammer"></i> ESTRUCTURAS DE MADERA (SILLERÍA)
@@ -455,6 +497,8 @@
       <input type="text" id="buscador-madera" placeholder="Buscar estructura..." oninput="filtrarSeccionMaestro('madera')" style="padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;min-width:200px;outline:none;">
     </div>
     <div id="contenedor-madera-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
+    </div>
+
     
     <div id="lista-insumos-maestra" class="grid-productos" style="display: none;"></div>
 </div>
