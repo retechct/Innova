@@ -2436,6 +2436,11 @@ async function cargarInventarioTaller() {
  * key: 'todos' | 'telas' | 'cojines' | 'tableros' | 'metal' | 'madera'
  */
 function filtrarVistaMaestro(key) {
+    // Al cambiar de categoría, limpiar el filtro de proveedor de telas
+    if (key !== 'telas' && key !== 'todos') {
+        _proveedorTelaActivo = null;
+    }
+
     const secciones = {
         telas:    'seccion-wrapper-telas',
         cojines:  'seccion-wrapper-cojines',
@@ -2450,6 +2455,17 @@ function filtrarVistaMaestro(key) {
         if (!el) return;
         el.style.display = (key === 'todos' || key === k) ? '' : 'none';
     });
+
+    // Chips de proveedor: solo visibles en vista "telas" o "todos"
+    const barraProveedores = document.getElementById('filtros-proveedor-telas');
+    if (barraProveedores) {
+        if (key === 'telas' || key === 'todos') {
+            _renderChipsProveedoresTelas();
+            barraProveedores.style.display = 'flex';
+        } else {
+            barraProveedores.style.display = 'none';
+        }
+    }
 
     // Resaltar botón activo
     const colores = {
@@ -2484,6 +2500,12 @@ function filtrarVistaMaestro(key) {
  * key: 'telas' | 'cojines' | 'tableros' | 'metal' | 'madera'
  */
 function filtrarSeccionMaestro(key) {
+    // Para telas, delegar al filtro combinado (proveedor + texto)
+    if (key === 'telas') {
+        filtrarPorProveedorTela(_proveedorTelaActivo);
+        return;
+    }
+
     const mapaBuscador = {
         telas:    { input: 'buscador-telas',    contenedor: 'contenedor-telas-admin' },
         cojines:  { input: 'buscador-cojines',  contenedor: 'contenedor-cojines-admin' },
@@ -2526,6 +2548,116 @@ function filtrarSeccionMaestro(key) {
     }
 }
 
+
+/* ================================================================= */
+/* --- FILTRO DE PROVEEDORES EN MAESTRO DE TELAS --- */
+/* ================================================================= */
+
+// Proveedor actualmente seleccionado (null = todos)
+let _proveedorTelaActivo = null;
+
+/**
+ * Genera los chips de proveedor a partir de maestroMateriales.telas.
+ * Opera 100% en memoria, sin llamadas al backend.
+ */
+function _renderChipsProveedoresTelas() {
+    const barra = document.getElementById('filtros-proveedor-telas');
+    if (!barra) return;
+
+    // Extraer proveedores únicos y ordenarlos
+    const proveedores = [...new Set(
+        (maestroMateriales.telas || [])
+            .map(t => (t.proveedor || '').trim())
+            .filter(Boolean)
+    )].sort();
+
+    if (proveedores.length === 0) {
+        barra.style.display = 'none';
+        return;
+    }
+
+    // Estilos base para chips
+    const baseStyle = `
+        padding:5px 13px;border-radius:20px;border:2px solid #7c3aed;
+        font-size:11px;font-weight:700;cursor:pointer;transition:all 0.18s;
+        white-space:nowrap;
+    `;
+
+    // Chip "Todos"
+    const chips = [`
+        <button
+            id="chip-prov-todos"
+            onclick="filtrarPorProveedorTela(null)"
+            style="${baseStyle} background:${_proveedorTelaActivo === null ? '#7c3aed' : 'white'};
+                   color:${_proveedorTelaActivo === null ? 'white' : '#7c3aed'};">
+            Todos
+        </button>
+    `];
+
+    // Un chip por proveedor
+    proveedores.forEach(prov => {
+        const activo = _proveedorTelaActivo === prov;
+        chips.push(`
+            <button
+                onclick="filtrarPorProveedorTela('${prov.replace(/'/g, "\\'")}')"
+                style="${baseStyle} background:${activo ? '#7c3aed' : 'white'};
+                       color:${activo ? 'white' : '#7c3aed'};">
+                ${prov}
+            </button>
+        `);
+    });
+
+    // Mantener el label y reemplazar solo los chips
+    barra.innerHTML = `
+        <span style="font-size:10px;font-weight:900;color:#7c3aed;letter-spacing:0.06em;margin-right:4px;align-self:center;">
+            PROVEEDOR:
+        </span>
+        ${chips.join('')}
+    `;
+}
+
+/**
+ * Filtra las tarjetas de telas combinando proveedor seleccionado + texto del buscador.
+ * @param {string|null} proveedor — null = mostrar todos
+ */
+function filtrarPorProveedorTela(proveedor) {
+    _proveedorTelaActivo = proveedor;
+
+    // Re-renderizar chips para reflejar el activo
+    _renderChipsProveedoresTelas();
+
+    // Aplicar filtro combinado sobre las tarjetas
+    const query = (document.getElementById('buscador-telas')?.value || '').toLowerCase().trim();
+    const contenedor = document.getElementById('contenedor-telas-admin');
+    if (!contenedor) return;
+
+    let visibles = 0;
+    for (const tarjeta of contenedor.children) {
+        if (tarjeta.classList.contains('maestro-sin-resultados')) continue;
+        const texto = tarjeta.innerText?.toLowerCase() || '';
+        const coincideTexto    = !query    || texto.includes(query);
+        const coincideProveedor = !proveedor || texto.includes(proveedor.toLowerCase());
+        const mostrar = coincideTexto && coincideProveedor;
+        tarjeta.style.display = mostrar ? '' : 'none';
+        if (mostrar) visibles++;
+    }
+
+    // Mensaje si no hay resultados
+    let sinRes = contenedor.querySelector('.maestro-sin-resultados');
+    if (visibles === 0) {
+        if (!sinRes) {
+            sinRes = document.createElement('p');
+            sinRes.className = 'maestro-sin-resultados';
+            sinRes.style.cssText = 'color:#94a3b8;font-size:13px;text-align:center;padding:30px 0;grid-column:1/-1;';
+            contenedor.appendChild(sinRes);
+        }
+        const desc = [proveedor, query].filter(Boolean).join(' + ');
+        sinRes.textContent = `Sin resultados para "${desc}"`;
+        sinRes.style.display = '';
+    } else if (sinRes) {
+        sinRes.style.display = 'none';
+    }
+}
 
 /* ================================================================= */
 /* --- LÓGICA DE MESA DE CENTRO Y CONSOLA --- */
