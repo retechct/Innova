@@ -2499,6 +2499,145 @@ def registrar_pago_proveedor(id):
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
 
+@produccion_bp.route('/api/logistica/resumen', methods=['GET'])
+@requiere_login
+def resumen_logistica():
+    """
+    Devuelve resumen de movimientos de logística externa para un rango de fechas.
+    Query params:
+      desde  — fecha inicio  YYYY-MM-DD  (default: lunes de esta semana)
+      hasta  — fecha fin     YYYY-MM-DD  (default: hoy)
+    """
+    from datetime import date, timedelta
+    hoy = date.today()
+    dia_semana = hoy.weekday()           # 0=lun … 6=dom
+    lunes = hoy - timedelta(days=dia_semana)
+
+    desde_str = request.args.get('desde', lunes.isoformat())
+    hasta_str = request.args.get('hasta', hoy.isoformat())
+
+    try:
+        desde = date.fromisoformat(desde_str)
+        hasta = date.fromisoformat(hasta_str)
+    except ValueError:
+        return jsonify({'error': 'Formato de fecha inválido. Usa YYYY-MM-DD.'}), 400
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        # Asegurar columnas opcionales (migración segura)
+        cursor.execute("""
+            ALTER TABLE logistica_externa
+                ADD COLUMN IF NOT EXISTS fecha_pago          TIMESTAMP,
+                ADD COLUMN IF NOT EXISTS categoria_insumo    VARCHAR(30) DEFAULT 'OTRO',
+                ADD COLUMN IF NOT EXISTS estado_distribucion VARCHAR(30) DEFAULT NULL,
+                ADD COLUMN IF NOT EXISTS proveedor_informal  VARCHAR(200);
+        """)
+        conexion.commit()
+
+        # ── Todos los movimientos del período ─────────────────────────────────
+        cursor.execute("""
+            SELECT
+                l.id,
+                v.codigo_venta,
+                l.insumo_nombre,
+                l.sku,
+                COALESCE(p.nombre, l.proveedor_informal, 'Sin asignar') AS proveedor,
+                l.precio_cotizado,
+                l.cantidad,
+                l.unidad,
+                l.estado,
+                COALESCE(l.categoria_insumo, 'OTRO')  AS categoria_insumo,
+                l.estado_distribucion,
+                TO_CHAR(l.fecha_pago,               'DD/MM/YYYY') AS fecha_pago,
+                TO_CHAR(l.fecha_entrega_proveedor,  'DD/MM/YYYY') AS fecha_entrega_est,
+                TO_CHAR(l.fecha_recojo_fisico,      'DD/MM/YYYY') AS fecha_recojo,
+                l.tipo_gestion,
+                l.url_comprobante_pago
+            FROM logistica_externa l
+            JOIN  ventas    v ON l.venta_id     = v.id
+            LEFT JOIN proveedores p ON l.proveedor_id = p.id
+            WHERE
+                (
+                    (l.fecha_pago          IS NOT NULL AND l.fecha_pago::date          BETWEEN %s AND %s)
+                 OR (l.fecha_recojo_fisico IS NOT NULL AND l.fecha_recojo_fisico::date BETWEEN %s AND %s)
+                )
+            ORDER BY COALESCE(l.fecha_pago, l.fecha_recojo_fisico) DESC;
+        """, (desde, hasta, desde, hasta))
+
+        rows = cursor.fetchall()
+
+        movimientos = []
+        for r in rows:
+            precio    = float(r[5] or 0)
+            cantidad  = float(r[6] or 1)
+            subtotal  = precio * cantidad
+            movimientos.append({
+                'id':              r[0],
+                'codigo_venta':    r[1],
+                'insumo':          r[2],
+                'sku':             r[3] or '',
+                'proveedor':       r[4],
+                'precio_unit':     precio,
+                'cantidad':        cantidad,
+                'unidad':          r[7] or '',
+                'subtotal':        subtotal,
+                'estado':          r[8] or '',
+                'categoria':       r[9],
+                'estado_dist':     r[10] or '',
+                'fecha_pago':      r[11] or '',
+                'fecha_entrega_est': r[12] or '',
+                'fecha_recojo':    r[13] or '',
+                'tipo_gestion':    r[14] or 'Externo',
+                'tiene_comprobante': bool(r[15]),
+            })
+
+        # ── Estadísticas agregadas ─────────────────────────────────────────────
+        total_pagado     = sum(m['subtotal'] for m in movimientos if m['estado'] == 'Pagado')
+        total_recibido   = sum(m['subtotal'] for m in movimientos if m['fecha_recojo'])
+        por_categoria    = {}
+        por_proveedor    = {}
+        por_dia          = {}
+
+        for m in movimientos:
+            cat  = m['categoria']
+            prov = m['proveedor']
+            dia  = m['fecha_pago'] or m['fecha_recojo'] or ''
+
+            por_categoria.setdefault(cat,  {'cantidad': 0, 'total': 0.0})
+            por_categoria[cat]['cantidad'] += 1
+            por_categoria[cat]['total']    += m['subtotal']
+
+            por_proveedor.setdefault(prov, {'cantidad': 0, 'total': 0.0})
+            por_proveedor[prov]['cantidad'] += 1
+            por_proveedor[prov]['total']    += m['subtotal']
+
+            if dia:
+                por_dia.setdefault(dia, {'cantidad': 0, 'total': 0.0})
+                por_dia[dia]['cantidad'] += 1
+                por_dia[dia]['total']    += m['subtotal']
+
+        return jsonify({
+            'desde':           desde.strftime('%d/%m/%Y'),
+            'hasta':           hasta.strftime('%d/%m/%Y'),
+            'total_registros': len(movimientos),
+            'total_pagado':    total_pagado,
+            'total_recibido':  total_recibido,
+            'por_categoria':   por_categoria,
+            'por_proveedor':   por_proveedor,
+            'por_dia':         por_dia,
+            'movimientos':     movimientos,
+        }), 200
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
 @produccion_bp.route('/api/logistica/<int:id>/estado-distribucion', methods=['PATCH'])
 @requiere_rol('Admin', 'Jefe_Taller')
 def actualizar_estado_distribucion(id):
