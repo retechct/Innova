@@ -415,30 +415,45 @@
     </div>
 </div>
 
-    <h3 style="color:var(--primary); border-bottom: 2px solid #7c3aed; padding-bottom: 5px; margin-bottom: 15px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <h3 style="color:var(--primary);border-bottom:2px solid #7c3aed;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-scroll"></i> MAESTRO DE TELAS
-    </h3>
+      </h3>
+      <input type="text" id="buscador-telas" placeholder="Buscar tela..." oninput="filtrarSeccionMaestro('telas')" style="padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;min-width:200px;outline:none;">
+    </div>
     <div id="contenedor-telas-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;">
         </div>
 
-    <h3 style="color:var(--primary); border-bottom: 2px solid #ec4899; padding-bottom: 5px; margin-bottom: 15px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <h3 style="color:var(--primary);border-bottom:2px solid #ec4899;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-palette"></i> DISEÑOS DE COJINES DECORATIVOS
-    </h3>
+      </h3>
+      <input type="text" id="buscador-cojines" placeholder="Buscar cojín..." oninput="filtrarSeccionMaestro('cojines')" style="padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;min-width:200px;outline:none;">
+    </div>
     <div id="contenedor-cojines-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
 
-    <h3 style="color:var(--primary); border-bottom: 2px solid #0284c7; padding-bottom: 5px; margin-bottom: 15px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <h3 style="color:var(--primary);border-bottom:2px solid #0284c7;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-table-cells-large"></i> TABLEROS (MÁRMOL / MADERA)
-    </h3>
+      </h3>
+      <input type="text" id="buscador-tableros" placeholder="Buscar tablero..." oninput="filtrarSeccionMaestro('tableros')" style="padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;min-width:200px;outline:none;">
+    </div>
     <div id="contenedor-tableros-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
 
-    <h3 style="color:var(--primary); border-bottom: 2px solid #0369a1; padding-bottom: 5px; margin-bottom: 15px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <h3 style="color:var(--primary);border-bottom:2px solid #0369a1;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-microchip"></i> BASES Y SOPORTES METÁLICOS
-    </h3>
+      </h3>
+      <input type="text" id="buscador-metal" placeholder="Buscar base o soporte..." oninput="filtrarSeccionMaestro('metal')" style="padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;min-width:200px;outline:none;">
+    </div>
     <div id="contenedor-metal-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
 
-    <h3 style="color:var(--primary); border-bottom: 2px solid #b45309; padding-bottom: 5px; margin-bottom: 15px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+      <h3 style="color:var(--primary);border-bottom:2px solid #b45309;padding-bottom:5px;margin:0;flex:1;">
         <i class="fa-solid fa-hammer"></i> ESTRUCTURAS DE MADERA (SILLERÍA)
-    </h3>
+      </h3>
+      <input type="text" id="buscador-madera" placeholder="Buscar estructura..." oninput="filtrarSeccionMaestro('madera')" style="padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;min-width:200px;outline:none;">
+    </div>
     <div id="contenedor-madera-admin" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 40px;"></div>
     
     <div id="lista-insumos-maestra" class="grid-productos" style="display: none;"></div>
@@ -1448,21 +1463,8 @@
             
             <div style="padding: 10px;">
                 <div class="form-group" style="background:var(--bg); padding:15px; border-radius:10px; text-align:center; border:2px dashed #cbd5e1; margin-bottom: 15px;">
-                    <label style="color:var(--accent); display:block; margin-bottom:10px; font-weight:700;"><i class="fa-solid fa-camera"></i> FOTO *</label>
-                    <div style="display:flex; gap:8px;">
-                        <label style="flex:1; cursor:pointer; background:var(--primary); color:#fff; padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
-                            <i class="fa-solid fa-camera"></i> Tomar foto
-                            <input type="file" id="pd-foto-cam" accept="image/*" capture="environment" style="display:none;" onchange="pdSyncFoto(this)">
-                        </label>
-                        <label style="flex:1; cursor:pointer; background:#e2e8f0; color:var(--primary); padding:10px; border-radius:8px; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;">
-                            <i class="fa-solid fa-folder-open"></i> Subir archivo
-                            <input type="file" id="pd-foto" accept="image/*" style="display:none;" onchange="pdSyncFoto(this)">
-                        </label>
-                    </div>
-                    <div id="pd-foto-preview-container" style="display:none; margin-top:10px;">
-                        <img id="pd-foto-preview" style="max-height:90px; border-radius:8px; border:2px solid var(--accent); object-fit:cover;">
-                        <p id="pd-foto-nombre" style="font-size:11px; color:var(--text-muted); margin:4px 0 0;"></p>
-                    </div>
+                    <label style="color:var(--accent);"><i class="fa-solid fa-camera"></i> Subir Foto del Producto</label>
+                    <input type="file" id="pd-foto" class="form-input-sm" accept="image/*" style="margin-top:10px;">
                 </div>
 
                 <div class="form-group">

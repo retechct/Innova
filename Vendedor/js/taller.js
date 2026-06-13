@@ -2420,10 +2420,65 @@ async function cargarInventarioTaller() {
         setHtml('contenedor-metal-admin',    metal.map(i=>dibujarTarjetaMaterial(i, i.categoria==='BASE'?'base':'base-comedor')).join(''));
         setHtml('contenedor-madera-admin',   madera.map(i=>dibujarTarjetaMaterial(i, i.categoria==='SILLA'?'silla':'butaca')).join(''));
 
+        // Reaplicar filtros activos si el usuario estaba buscando
+        ['telas','cojines','tableros','metal','madera'].forEach(k => {
+            const inp = document.getElementById('buscador-' + k);
+            if (inp && inp.value.trim()) filtrarSeccionMaestro(k);
+        });
+
     } catch (error) {
         console.error("Error al cargar inventario:", error);
     }
 }
+
+/**
+ * filtrarSeccionMaestro — filtra las tarjetas visibles en cada sección del maestro.
+ * key: 'telas' | 'cojines' | 'tableros' | 'metal' | 'madera'
+ */
+function filtrarSeccionMaestro(key) {
+    const mapaBuscador = {
+        telas:    { input: 'buscador-telas',    contenedor: 'contenedor-telas-admin' },
+        cojines:  { input: 'buscador-cojines',  contenedor: 'contenedor-cojines-admin' },
+        tableros: { input: 'buscador-tableros',  contenedor: 'contenedor-tableros-admin' },
+        metal:    { input: 'buscador-metal',    contenedor: 'contenedor-metal-admin' },
+        madera:   { input: 'buscador-madera',   contenedor: 'contenedor-madera-admin' },
+    };
+
+    const cfg = mapaBuscador[key];
+    if (!cfg) return;
+
+    const query = (document.getElementById(cfg.input)?.value || '').toLowerCase().trim();
+    const contenedor = document.getElementById(cfg.contenedor);
+    if (!contenedor) return;
+
+    // Cada tarjeta es un div directo hijo del contenedor
+    const tarjetas = contenedor.children;
+    let visibles = 0;
+
+    for (const tarjeta of tarjetas) {
+        const texto = tarjeta.innerText?.toLowerCase() || '';
+        const mostrar = !query || texto.includes(query);
+        tarjeta.style.display = mostrar ? '' : 'none';
+        if (mostrar) visibles++;
+    }
+
+    // Mostrar mensaje si no hay resultados
+    let sinResultados = contenedor.querySelector('.maestro-sin-resultados');
+    if (visibles === 0 && query) {
+        if (!sinResultados) {
+            sinResultados = document.createElement('p');
+            sinResultados.className = 'maestro-sin-resultados';
+            sinResultados.style.cssText = 'color:#94a3b8;font-size:13px;text-align:center;padding:30px 0;grid-column:1/-1;';
+            contenedor.appendChild(sinResultados);
+        }
+        sinResultados.textContent = `Sin resultados para "${query}"`;
+        sinResultados.style.display = '';
+    } else if (sinResultados) {
+        sinResultados.style.display = 'none';
+    }
+}
+
+
 /* ================================================================= */
 /* --- LÓGICA DE MESA DE CENTRO Y CONSOLA --- */
 /* ================================================================= */
@@ -3339,9 +3394,21 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             <input id="se-precio" type="number" placeholder="Ej: 350.00" step="0.01"
                 style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
 
-            <label style="font-size:12px;font-weight:700;color:#475569;">FOTO *</label>
-            <input type="file" id="se-foto" accept="image/*"
-                style="width:100%;margin-bottom:16px;font-size:13px;">
+            <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:8px;">FOTO *</label>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <label style="flex:1;cursor:pointer;background:#7c3aed;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;">
+                <i class="fa-solid fa-camera"></i> Tomar foto
+                <input type="file" id="se-foto-cam" accept="image/*" capture="environment" style="display:none;" onchange="seSyncFoto(this)">
+              </label>
+              <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#1e293b;padding:10px;border-radius:8px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;">
+                <i class="fa-solid fa-folder-open"></i> Subir archivo
+                <input type="file" id="se-foto" accept="image/*" style="display:none;" onchange="seSyncFoto(this)">
+              </label>
+            </div>
+            <div id="se-foto-preview-container" style="display:none;margin-bottom:14px;text-align:center;">
+              <img id="se-foto-preview" style="max-height:90px;border-radius:8px;border:2px solid #7c3aed;object-fit:cover;">
+              <p id="se-foto-nombre" style="font-size:11px;color:#64748b;margin:4px 0 0;"></p>
+            </div>
 
             <div style="display:flex;gap:8px;">
               <button onclick="cerrarModalEstructura()"
@@ -3633,6 +3700,13 @@ function _onChangeTipoEstructura() {
 function cerrarModalEstructura() {
     const modal = document.getElementById('modal-registro-estructura');
     if (modal) modal.style.display = 'none';
+    // Limpiar foto inputs y preview al cerrar
+    const cam = document.getElementById('se-foto-cam');
+    const arc = document.getElementById('se-foto');
+    const prev = document.getElementById('se-foto-preview-container');
+    if (cam) cam.value = '';
+    if (arc) arc.value = '';
+    if (prev) prev.style.display = 'none';
 }
 
 function _renderListaEstructuras(lista) {
@@ -3719,9 +3793,27 @@ function _renderListaEstructuras(lista) {
 // Nota: abrirModalRegistrarEstructura y cerrarModalEstructura están definidas arriba
 // con la lógica completa (carga de plantillas del catálogo)
 
+function seSyncFoto(input) {
+    const file = input.files[0];
+    if (!file) return;
+    // Copiar al input principal para que guardarEstructura lo encuentre
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('se-foto').files = dt.files;
+    // Mostrar preview
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById('se-foto-preview').src = e.target.result;
+        document.getElementById('se-foto-nombre').textContent = file.name;
+        document.getElementById('se-foto-preview-container').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
 async function guardarEstructura() {
     const nombre = document.getElementById('se-nombre').value.trim();
-    const foto   = document.getElementById('se-foto').files[0];
+    const foto   = document.getElementById('se-foto-cam')?.files[0]
+               || document.getElementById('se-foto').files[0];
     const tipo   = document.getElementById('se-tipo').value;
 
     if (!nombre) {
