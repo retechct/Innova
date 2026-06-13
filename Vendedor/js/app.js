@@ -116,6 +116,7 @@ function configurarInterfazPorRol() {
     const btnUsuarios    = document.getElementById('btn-menu-usuarios');
     const btnProv        = document.getElementById('btn-menu-proveedores');
     const btnContratos   = document.getElementById('btn-menu-contratos');
+    const btnEgresos     = document.getElementById('btn-menu-egresos');
 
     // Ítems exclusivos de Vendedor / Admin
     const btnStock       = document.getElementById('btn-menu-stock');
@@ -127,7 +128,7 @@ function configurarInterfazPorRol() {
     // Ocultar todo por defecto
     [btnTaller, btnStockProduccion, btnInventario, btnInvTienda, btnGestor, btnAddProd,
     btnLogistica, btnUsuarios, btnProv, btnContratos,
-    btnStock, btnCatalogo, btnContrato, btnPedidos, btnCreaciones
+    btnStock, btnCatalogo, btnContrato, btnPedidos, btnCreaciones, btnEgresos
     ].forEach(b => { if (b) b.style.display = 'none'; });
 
     const rol = usuarioActivo.rol;
@@ -170,6 +171,7 @@ if (esAdmin) {
     if (btnUsuarios)        btnUsuarios.style.display        = 'flex';
     if (btnProv)            btnProv.style.display            = 'flex';
     if (btnContratos)       btnContratos.style.display       = 'block';
+    if (btnEgresos)         btnEgresos.style.display         = 'flex';
 }
 
 // Si también quieres que el Jefe de Taller lo vea:
@@ -1434,6 +1436,7 @@ function changeView(view) {
         'logistica':    'LOGÍSTICA EXTERNA',
         'usuarios-admin': 'GESTIÓN DE PERSONAL',
         'proveedores':  'PROVEEDORES',
+        'egresos':      'EGRESOS Y PAGOS',
     };
 
     // Restaurar el header estático si veníamos de inv-tienda
@@ -1456,7 +1459,7 @@ function changeView(view) {
         'view-productos', 'view-plantillas', 'view-pedidos',
         'view-taller', 'view-inventario', 'view-gestor-aprobacion',
         'view-logistica', 'view-usuarios-admin', 'view-proveedores',
-        'vista-contratos'
+        'vista-contratos', 'view-egresos'
     ];
     secciones.forEach(id => {
         const el = document.getElementById(id);
@@ -1536,6 +1539,10 @@ function changeView(view) {
         if (mainTitleContainer) mainTitleContainer.style.display = 'none';
         mostrar('view-taller');
         cargarTicketsTaller();
+    }
+    else if (view === 'egresos') {
+        mostrar('view-egresos');
+        if (typeof initEgresos === 'function') initEgresos();
     }
     else {
         console.warn(`changeView: vista desconocida → '${view}'`);

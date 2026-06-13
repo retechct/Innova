@@ -3626,6 +3626,54 @@ def editar_estructura(stock_id):
             cursor.close(); release_db_connection(conexion)
 
 # ══════════════════════════════════════════════════════════════════════════════
+# DELETE: ELIMINAR ESTRUCTURA DE STOCK (solo Admin)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@produccion_bp.route('/api/stock-estructuras/<int:stock_id>', methods=['DELETE'])
+@requiere_rol('Admin')
+def eliminar_stock_estructura(stock_id):
+    """
+    Elimina permanentemente un registro de stock_estructuras_sofa.
+    Solo el Admin puede hacerlo.
+    No elimina si la estructura ya fue usada en un ticket (estado='entregado' y ticket_id no nulo),
+    para preservar la trazabilidad.
+    """
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        # Verificar que existe y que no está vinculada a un ticket activo
+        cursor.execute(
+            "SELECT id, estado, ticket_id FROM stock_estructuras_sofa WHERE id = %s;",
+            (stock_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Estructura no encontrada.'}), 404
+
+        estado    = row[1]
+        ticket_id = row[2]
+
+        if estado == 'entregado' and ticket_id:
+            return jsonify({
+                'error': f'No se puede eliminar: esta estructura ya fue usada en el ticket #{ticket_id}. '
+                         f'Eliminar rompería la trazabilidad de producción.'
+            }), 400
+
+        cursor.execute("DELETE FROM stock_estructuras_sofa WHERE id = %s;", (stock_id,))
+        conexion.commit()
+        return jsonify({'exito': True, 'eliminado': stock_id}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # A10: HISTORIAL DE PAGOS A CARPINTEROS
 # ══════════════════════════════════════════════════════════════════════════════
 
