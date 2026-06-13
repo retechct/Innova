@@ -2618,16 +2618,57 @@ def resumen_logistica():
                 por_dia[dia]['cantidad'] += 1
                 por_dia[dia]['total']    += m['subtotal']
 
+        # ── Gastos sueltos del período ─────────────────────────────────────────
+        gastos_periodo = []
+        total_gastos   = 0.0
+        try:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS gastos_logistica (
+                    id               SERIAL PRIMARY KEY,
+                    concepto         VARCHAR(300) NOT NULL,
+                    monto            NUMERIC(12,2) NOT NULL DEFAULT 0,
+                    categoria        VARCHAR(50)   NOT NULL DEFAULT 'Otro',
+                    proveedor_nombre VARCHAR(200),
+                    fecha_gasto      DATE NOT NULL DEFAULT CURRENT_DATE,
+                    registrado_por   VARCHAR(150),
+                    notas            TEXT,
+                    created_at       TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            cursor.execute("""
+                SELECT id, concepto, monto, categoria, proveedor_nombre, fecha_gasto
+                FROM gastos_logistica
+                WHERE fecha_gasto BETWEEN %s AND %s
+                ORDER BY fecha_gasto DESC;
+            """, (desde, hasta))
+            for gr in cursor.fetchall():
+                m = float(gr[2] or 0)
+                total_gastos += m
+                gastos_periodo.append({
+                    'id': gr[0], 'concepto': gr[1], 'monto': m,
+                    'categoria': gr[3], 'proveedor': gr[4] or '',
+                    'fecha': gr[5].strftime('%d/%m/%Y') if gr[5] else '',
+                })
+                cat = gr[3] or 'Otro'
+                por_categoria.setdefault(cat, {'cantidad': 0, 'total': 0.0})
+                por_categoria[cat]['cantidad'] += 1
+                por_categoria[cat]['total']    += m
+        except Exception:
+            pass  # tabla aún no existe; no bloquear el resumen principal
+
         return jsonify({
-            'desde':           desde.strftime('%d/%m/%Y'),
-            'hasta':           hasta.strftime('%d/%m/%Y'),
-            'total_registros': len(movimientos),
-            'total_pagado':    total_pagado,
-            'total_recibido':  total_recibido,
-            'por_categoria':   por_categoria,
-            'por_proveedor':   por_proveedor,
-            'por_dia':         por_dia,
-            'movimientos':     movimientos,
+            'desde':            desde.strftime('%d/%m/%Y'),
+            'hasta':            hasta.strftime('%d/%m/%Y'),
+            'total_registros':  len(movimientos),
+            'total_pagado':     total_pagado,
+            'total_recibido':   total_recibido,
+            'total_gastos':     total_gastos,
+            'total_periodo':    total_recibido + total_gastos,
+            'por_categoria':    por_categoria,
+            'por_proveedor':    por_proveedor,
+            'por_dia':          por_dia,
+            'movimientos':      movimientos,
+            'gastos_logistica': gastos_periodo,
         }), 200
 
     except Exception as e:
@@ -3579,6 +3620,393 @@ def editar_estructura(stock_id):
     except Exception as e:
         if 'conexion' in locals() and conexion:
             conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# A10: HISTORIAL DE PAGOS A CARPINTEROS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@produccion_bp.route('/api/stock-estructuras/cerrar-pago-semanal', methods=['POST'])
+@requiere_login
+def cerrar_pago_semanal():
+    """
+    Cierra el pago semanal de un carpintero:
+      1. Busca todas sus estructuras con estado='entregado' y pagado=FALSE
+         dentro del rango [semana_inicio, semana_fin].
+      2. Suma el monto total.
+      3. Marca esas estructuras como pagado=TRUE.
+      4. Inserta un registro en pagos_carpinteros.
+    Body: { carpintero_nombre, semana_inicio (YYYY-MM-DD), semana_fin (YYYY-MM-DD), notas }
+    """
+    from flask import g as flask_g
+    data           = request.get_json() or {}
+    carpintero     = (data.get('carpintero_nombre') or '').strip()
+    semana_inicio  = (data.get('semana_inicio') or '').strip()
+    semana_fin     = (data.get('semana_fin') or '').strip()
+    notas          = (data.get('notas') or '').strip()
+    try:
+        registrado_por = flask_g.usuario.get('nombre', 'Sistema')
+    except Exception:
+        registrado_por = 'Sistema'
+
+    if not carpintero or not semana_inicio or not semana_fin:
+        return jsonify({'error': 'carpintero_nombre, semana_inicio y semana_fin son obligatorios.'}), 400
+
+    try:
+        from datetime import date as _date
+        _date.fromisoformat(semana_inicio)
+        _date.fromisoformat(semana_fin)
+    except ValueError:
+        return jsonify({'error': 'Fechas inválidas. Usa formato YYYY-MM-DD.'}), 400
+
+    try:
+        conexion = get_db_connection()
+        conexion.autocommit = False
+        cursor   = conexion.cursor()
+
+        # Migración segura: tabla de pagos
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pagos_carpinteros (
+                id                   SERIAL PRIMARY KEY,
+                carpintero_nombre    VARCHAR(150) NOT NULL,
+                semana_inicio        DATE NOT NULL,
+                semana_fin           DATE NOT NULL,
+                estructuras_ids      JSONB NOT NULL DEFAULT '[]',
+                cantidad_estructuras INTEGER NOT NULL DEFAULT 0,
+                monto_total          NUMERIC(12,2) NOT NULL DEFAULT 0,
+                registrado_por       VARCHAR(150),
+                fecha_pago           TIMESTAMP DEFAULT NOW(),
+                notas                TEXT,
+                created_at           TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        # Asegurar columnas necesarias
+        cursor.execute("""
+            ALTER TABLE stock_estructuras_sofa
+                ADD COLUMN IF NOT EXISTS pagado            BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS carpintero_nombre VARCHAR(150);
+        """)
+
+        # Buscar estructuras pendientes — primero por carpintero_nombre, luego fallback a chofer_nombre
+        cursor.execute("""
+            SELECT id, precio, nombre_modelo, cantidad, fecha_entrega_chofer
+            FROM stock_estructuras_sofa
+            WHERE estado = 'entregado'
+              AND COALESCE(pagado, FALSE) = FALSE
+              AND COALESCE(carpintero_nombre, chofer_nombre) = %s
+              AND fecha_entrega_chofer::date BETWEEN %s AND %s
+            ORDER BY fecha_entrega_chofer ASC;
+        """, (carpintero, semana_inicio, semana_fin))
+        filas = cursor.fetchall()
+
+        if not filas:
+            return jsonify({
+                'error': f'No hay estructuras entregadas y pendientes de pago para '
+                         f'"{carpintero}" entre {semana_inicio} y {semana_fin}.'
+            }), 404
+
+        ids_estructuras = [r[0] for r in filas]
+        monto_total     = sum(float(r[1] or 0) * int(r[3] or 1) for r in filas)
+        detalle         = [
+            {
+                'id':           r[0],
+                'nombre_modelo': r[2] or 'Sin modelo',
+                'cantidad':     r[3] or 1,
+                'precio':       float(r[1] or 0),
+                'subtotal':     float(r[1] or 0) * int(r[3] or 1),
+                'fecha_entrega': r[4].strftime('%d/%m/%Y') if r[4] else '',
+            }
+            for r in filas
+        ]
+
+        # Marcar como pagadas
+        placeholders = ','.join(['%s'] * len(ids_estructuras))
+        cursor.execute(
+            f"UPDATE stock_estructuras_sofa SET pagado = TRUE WHERE id IN ({placeholders});",
+            ids_estructuras
+        )
+
+        # Insertar registro de pago
+        cursor.execute("""
+            INSERT INTO pagos_carpinteros
+                (carpintero_nombre, semana_inicio, semana_fin, estructuras_ids,
+                 cantidad_estructuras, monto_total, registrado_por, notas)
+            VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+            RETURNING id;
+        """, (
+            carpintero, semana_inicio, semana_fin,
+            json.dumps(ids_estructuras),
+            len(ids_estructuras), monto_total,
+            registrado_por, notas or None
+        ))
+        pago_id = cursor.fetchone()[0]
+        conexion.commit()
+
+        return jsonify({
+            'exito':               True,
+            'pago_id':             pago_id,
+            'carpintero':          carpintero,
+            'estructuras_pagadas': len(ids_estructuras),
+            'monto_total':         monto_total,
+            'detalle':             detalle,
+        }), 201
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/stock-estructuras/historial-pagos', methods=['GET'])
+@requiere_login
+def historial_pagos_carpinteros():
+    """
+    GET /api/stock-estructuras/historial-pagos?carpintero=X&semana=YYYY-MM-DD
+    semana: cualquier fecha dentro de la semana (filtra semana_inicio <= fecha <= semana_fin).
+    Sin filtros devuelve los últimos 100 registros.
+    """
+    carpintero = (request.args.get('carpintero') or '').strip()
+    semana     = (request.args.get('semana') or '').strip()
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pagos_carpinteros (
+                id                   SERIAL PRIMARY KEY,
+                carpintero_nombre    VARCHAR(150) NOT NULL,
+                semana_inicio        DATE NOT NULL,
+                semana_fin           DATE NOT NULL,
+                estructuras_ids      JSONB NOT NULL DEFAULT '[]',
+                cantidad_estructuras INTEGER NOT NULL DEFAULT 0,
+                monto_total          NUMERIC(12,2) NOT NULL DEFAULT 0,
+                registrado_por       VARCHAR(150),
+                fecha_pago           TIMESTAMP DEFAULT NOW(),
+                notas                TEXT,
+                created_at           TIMESTAMP DEFAULT NOW()
+            );
+        """)
+        conexion.commit()
+
+        conditions, params = [], []
+        if carpintero:
+            conditions.append("carpintero_nombre ILIKE %s")
+            params.append(f'%{carpintero}%')
+        if semana:
+            conditions.append("semana_inicio <= %s AND semana_fin >= %s")
+            params.extend([semana, semana])
+
+        where = ('WHERE ' + ' AND '.join(conditions)) if conditions else ''
+        cursor.execute(f"""
+            SELECT id, carpintero_nombre, semana_inicio, semana_fin,
+                   estructuras_ids, cantidad_estructuras, monto_total,
+                   registrado_por, fecha_pago, notas
+            FROM pagos_carpinteros
+            {where}
+            ORDER BY fecha_pago DESC
+            LIMIT 100;
+        """, params)
+
+        rows = cursor.fetchall()
+        return jsonify([
+            {
+                'id':                    r[0],
+                'carpintero':            r[1],
+                'semana_inicio':         r[2].strftime('%d/%m/%Y') if r[2] else '',
+                'semana_fin':            r[3].strftime('%d/%m/%Y') if r[3] else '',
+                'estructuras_ids':       r[4] if r[4] else [],
+                'cantidad_estructuras':  r[5],
+                'monto_total':           float(r[6] or 0),
+                'registrado_por':        r[7] or '',
+                'fecha_pago':            r[8].strftime('%d/%m/%Y %H:%M') if r[8] else '',
+                'notas':                 r[9] or '',
+            }
+            for r in rows
+        ]), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/stock-estructuras/carpinteros', methods=['GET'])
+@requiere_login
+def listar_carpinteros():
+    """Devuelve nombres únicos de carpinteros que tienen estructuras registradas."""
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            ALTER TABLE stock_estructuras_sofa
+                ADD COLUMN IF NOT EXISTS carpintero_nombre VARCHAR(150);
+        """)
+        conexion.commit()
+        cursor.execute("""
+            SELECT DISTINCT COALESCE(carpintero_nombre, chofer_nombre) AS nombre
+            FROM stock_estructuras_sofa
+            WHERE COALESCE(carpintero_nombre, chofer_nombre) IS NOT NULL
+              AND COALESCE(carpintero_nombre, chofer_nombre) != ''
+            ORDER BY nombre;
+        """)
+        return jsonify([r[0] for r in cursor.fetchall()]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# B1: GASTOS DE LOGÍSTICA / FLETE
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _migrar_gastos_logistica(cursor):
+    """Migración idempotente: crea tabla gastos_logistica si no existe."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS gastos_logistica (
+            id               SERIAL PRIMARY KEY,
+            concepto         VARCHAR(300) NOT NULL,
+            monto            NUMERIC(12,2) NOT NULL DEFAULT 0,
+            categoria        VARCHAR(50)   NOT NULL DEFAULT 'Otro'
+                             CHECK (categoria IN ('Flete','Transporte','Compra directa','Otro')),
+            proveedor_nombre VARCHAR(200),
+            fecha_gasto      DATE NOT NULL DEFAULT CURRENT_DATE,
+            registrado_por   VARCHAR(150),
+            notas            TEXT,
+            created_at       TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+
+@produccion_bp.route('/api/logistica/gasto', methods=['POST'])
+@requiere_login
+def registrar_gasto_logistica():
+    """
+    Registra un gasto suelto de logística.
+    Body: { concepto, monto, categoria, proveedor_nombre, fecha_gasto (YYYY-MM-DD), notas }
+    """
+    from flask import g as flask_g
+    data             = request.get_json() or {}
+    concepto         = (data.get('concepto') or '').strip()
+    monto            = data.get('monto')
+    categoria        = (data.get('categoria') or 'Otro').strip()
+    proveedor_nombre = (data.get('proveedor_nombre') or '').strip() or None
+    fecha_gasto      = (data.get('fecha_gasto') or '').strip()
+    notas            = (data.get('notas') or '').strip() or None
+    try:
+        registrado_por = flask_g.usuario.get('nombre', 'Sistema')
+    except Exception:
+        registrado_por = 'Sistema'
+
+    if not concepto:
+        return jsonify({'error': 'El concepto es obligatorio.'}), 400
+    if monto is None:
+        return jsonify({'error': 'El monto es obligatorio.'}), 400
+    if categoria not in ('Flete', 'Transporte', 'Compra directa', 'Otro'):
+        return jsonify({'error': 'Categoría inválida. Usa: Flete, Transporte, Compra directa, Otro'}), 400
+    try:
+        monto = float(monto)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'El monto debe ser un número.'}), 400
+
+    if fecha_gasto:
+        try:
+            from datetime import date as _date
+            _date.fromisoformat(fecha_gasto)
+        except ValueError:
+            return jsonify({'error': 'fecha_gasto inválida. Usa YYYY-MM-DD.'}), 400
+    else:
+        from datetime import date as _date
+        fecha_gasto = _date.today().isoformat()
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _migrar_gastos_logistica(cursor)
+
+        cursor.execute("""
+            INSERT INTO gastos_logistica
+                (concepto, monto, categoria, proveedor_nombre, fecha_gasto, registrado_por, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """, (concepto, monto, categoria, proveedor_nombre, fecha_gasto, registrado_por, notas))
+        gasto_id = cursor.fetchone()[0]
+        conexion.commit()
+        return jsonify({'exito': True, 'id': gasto_id}), 201
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/logistica/gastos', methods=['GET'])
+@requiere_login
+def listar_gastos_logistica():
+    """
+    GET /api/logistica/gastos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&categoria=Flete
+    """
+    desde_str = request.args.get('desde', '')
+    hasta_str = request.args.get('hasta', '')
+    categoria = (request.args.get('categoria') or '').strip()
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _migrar_gastos_logistica(cursor)
+        conexion.commit()
+
+        conditions, params = [], []
+        if desde_str:
+            conditions.append("fecha_gasto >= %s"); params.append(desde_str)
+        if hasta_str:
+            conditions.append("fecha_gasto <= %s"); params.append(hasta_str)
+        if categoria:
+            conditions.append("categoria = %s"); params.append(categoria)
+
+        where = ('WHERE ' + ' AND '.join(conditions)) if conditions else ''
+        cursor.execute(f"""
+            SELECT id, concepto, monto, categoria, proveedor_nombre,
+                   fecha_gasto, registrado_por, notas
+            FROM gastos_logistica
+            {where}
+            ORDER BY fecha_gasto DESC, id DESC
+            LIMIT 500;
+        """, params)
+
+        gastos = [
+            {
+                'id':               r[0],
+                'concepto':         r[1],
+                'monto':            float(r[2] or 0),
+                'categoria':        r[3],
+                'proveedor_nombre': r[4] or '',
+                'fecha_gasto':      r[5].strftime('%d/%m/%Y') if r[5] else '',
+                'fecha_gasto_iso':  r[5].isoformat() if r[5] else '',
+                'registrado_por':   r[6] or '',
+                'notas':            r[7] or '',
+            }
+            for r in cursor.fetchall()
+        ]
+        return jsonify({
+            'gastos': gastos,
+            'total':  sum(g['monto'] for g in gastos),
+            'count':  len(gastos),
+        }), 200
+
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
