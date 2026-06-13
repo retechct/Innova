@@ -1099,11 +1099,68 @@ def exportar_ventas_excel():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  COMISIONES DE VENDEDORES
-#  GET /api/vendedores/comisiones
-#  Query params: desde, hasta, vendedor (nombre)
-#  Respuesta: lista de vendedores con total_ventas, total_contratos, comision
+#  COMISIONES DE VENDEDORES  (v2 — sueldos, descuentos acumulados, aumentos)
+#
+#  GET  /api/vendedores/comisiones
+#       ?desde=YYYY-MM-DD &hasta=YYYY-MM-DD &vendedor=Nombre
+#       Devuelve TODOS los vendedores (aunque no hayan vendido nada).
+#       Incluye sueldo_base, descuentos, aumentos y saldo_acumulado.
+#
+#  POST /api/vendedores/ajuste
+#       { usuario_id, tipo: 'descuento'|'aumento', monto, motivo, semana_inicio, semana_fin }
+#       Registra un descuento o aumento para el vendedor en esa semana.
+#
+#  POST /api/vendedores/cerrar-semana
+#       { usuario_id, semana_inicio, semana_fin, monto_pagado, notas, voucher_url }
+#       Cierra la semana: si comision=0 → no se paga sueldo; descuentos pendientes
+#       pasan como saldo_acumulado a la siguiente semana.
+#
+#  Tabla auto-creada: ajustes_sueldo_vendedor
+#    id, usuario_id, tipo ('descuento'|'aumento'), monto, motivo,
+#    semana_inicio, semana_fin, aplicado (bool), created_at
+#
+#  Tabla auto-creada: cierres_semanales_vendedor
+#    id, usuario_id, semana_inicio, semana_fin, sueldo_base, comision,
+#    aumentos, descuentos, saldo_anterior, monto_pagado, notas, voucher_url,
+#    created_at
 # ═══════════════════════════════════════════════════════════════════════════
+
+SUELDO_BASE_VENDEDOR = 350.0
+TASA_COMISION        = 0.03
+
+
+def _ensure_tablas_vendedor(cursor):
+    """Crea las tablas auxiliares si no existen (auto-migración segura)."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ajustes_sueldo_vendedor (
+            id             SERIAL PRIMARY KEY,
+            usuario_id     INTEGER NOT NULL,
+            tipo           VARCHAR(20) NOT NULL CHECK (tipo IN ('descuento','aumento')),
+            monto          NUMERIC(10,2) NOT NULL CHECK (monto > 0),
+            motivo         TEXT,
+            semana_inicio  DATE NOT NULL,
+            semana_fin     DATE NOT NULL,
+            aplicado       BOOLEAN DEFAULT FALSE,
+            created_at     TIMESTAMP DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS cierres_semanales_vendedor (
+            id              SERIAL PRIMARY KEY,
+            usuario_id      INTEGER NOT NULL,
+            semana_inicio   DATE NOT NULL,
+            semana_fin      DATE NOT NULL,
+            sueldo_base     NUMERIC(10,2) DEFAULT 350,
+            comision        NUMERIC(10,2) DEFAULT 0,
+            aumentos        NUMERIC(10,2) DEFAULT 0,
+            descuentos      NUMERIC(10,2) DEFAULT 0,
+            saldo_anterior  NUMERIC(10,2) DEFAULT 0,
+            monto_pagado    NUMERIC(10,2) DEFAULT 0,
+            notas           TEXT,
+            voucher_url     TEXT,
+            created_at      TIMESTAMP DEFAULT NOW(),
+            UNIQUE (usuario_id, semana_inicio)
+        );
+    """)
+
 
 @ventas_bp.route('/api/vendedores/comisiones', methods=['GET'])
 @requiere_rol('Admin')
@@ -1112,64 +1169,363 @@ def obtener_comisiones_vendedores():
     hasta    = request.args.get('hasta', '')
     vendedor = request.args.get('vendedor', '').strip()
 
-    TASA_COMISION = 0.03   # 3 %
+    conexion = None
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _ensure_tablas_vendedor(cursor)
+        conexion.commit()
+
+        # ── 1. Todos los vendedores registrados en el sistema ──────────────
+        filtro_nombre = ""
+        params_usu    = []
+        if vendedor:
+            filtro_nombre = "AND LOWER(nombre) = LOWER(%s)"
+            params_usu.append(vendedor)
+
+        cursor.execute(f"""
+            SELECT id, nombre, area_asignada
+            FROM usuarios
+            WHERE rol = 'Vendedor'
+            {filtro_nombre}
+            ORDER BY nombre;
+        """, params_usu)
+        vendedores_db = cursor.fetchall()   # [(id, nombre, area), ...]
+
+        # ── 2. Ventas del período por vendedor_nombre ──────────────────────
+        cond_v  = []
+        params_v = []
+        if desde:
+            cond_v.append("fecha_emision::date >= %s")
+            params_v.append(desde)
+        if hasta:
+            cond_v.append("fecha_emision::date <= %s")
+            params_v.append(hasta)
+        where_v = ("WHERE " + " AND ".join(cond_v)) if cond_v else ""
+
+        cursor.execute(f"""
+            SELECT
+                LOWER(TRIM(vendedor_nombre))        AS vnom,
+                COUNT(DISTINCT id)                  AS contratos,
+                COALESCE(SUM(monto_total), 0)       AS total_ventas
+            FROM ventas
+            {where_v}
+            GROUP BY LOWER(TRIM(vendedor_nombre));
+        """, params_v)
+        ventas_map = {r[0]: {'contratos': int(r[1]), 'total_ventas': float(r[2])}
+                      for r in cursor.fetchall()}
+
+        # ── 3. Ajustes pendientes (descuentos/aumentos no aplicados) ───────
+        cond_a  = ["aplicado = FALSE"]
+        params_a = []
+        if desde:
+            cond_a.append("semana_inicio >= %s")
+            params_a.append(desde)
+        if hasta:
+            cond_a.append("semana_fin <= %s")
+            params_a.append(hasta)
+        where_a = "WHERE " + " AND ".join(cond_a)
+
+        cursor.execute(f"""
+            SELECT usuario_id, tipo, COALESCE(SUM(monto), 0)
+            FROM ajustes_sueldo_vendedor
+            {where_a}
+            GROUP BY usuario_id, tipo;
+        """, params_a)
+        ajustes_map = {}   # {usuario_id: {'descuento': X, 'aumento': Y}}
+        for uid, tipo, monto in cursor.fetchall():
+            if uid not in ajustes_map:
+                ajustes_map[uid] = {'descuento': 0.0, 'aumento': 0.0}
+            ajustes_map[uid][tipo] = float(monto)
+
+        # ── 4. Saldo acumulado de descuentos de semanas anteriores ─────────
+        #       (descuentos que no se pudieron descontar porque no hubo venta)
+        cursor.execute("""
+            SELECT usuario_id,
+                   COALESCE(SUM(descuentos - monto_pagado + sueldo_base + comision), 0)
+            FROM cierres_semanales_vendedor
+            WHERE monto_pagado = 0
+            GROUP BY usuario_id;
+        """)
+        # Mejor calcular saldo acumulado como descuentos no cobrados anteriores
+        cursor.execute("""
+            SELECT usuario_id,
+                   COALESCE(SUM(
+                       CASE WHEN monto_pagado = 0
+                            THEN descuentos - aumentos
+                            ELSE 0 END
+                   ), 0) AS saldo_acum
+            FROM cierres_semanales_vendedor
+            GROUP BY usuario_id;
+        """)
+        saldo_map = {r[0]: float(r[1]) for r in cursor.fetchall()}
+
+        # ── 5. Armar resultado ─────────────────────────────────────────────
+        resultado = []
+        for uid, nombre, area in vendedores_db:
+            vk          = nombre.lower().strip()
+            vdata       = ventas_map.get(vk, {'contratos': 0, 'total_ventas': 0.0})
+            ajuste      = ajustes_map.get(uid, {'descuento': 0.0, 'aumento': 0.0})
+            saldo_acum  = max(0.0, saldo_map.get(uid, 0.0))
+
+            total_ventas   = vdata['total_ventas']
+            comision       = round(total_ventas * TASA_COMISION, 2)
+            vendio_algo    = total_ventas > 0
+
+            # Si no vendió nada → no cobra sueldo base ni comisión esta semana
+            sueldo_efectivo = SUELDO_BASE_VENDEDOR if vendio_algo else 0.0
+
+            descuentos_semana = ajuste['descuento']
+            aumentos_semana   = ajuste['aumento']
+
+            # Descuentos que no se pudieron aplicar antes se suman a los de ahora
+            descuentos_total = descuentos_semana + saldo_acum
+
+            bruto = sueldo_efectivo + comision + aumentos_semana
+            neto  = max(0.0, round(bruto - descuentos_total, 2))
+
+            # Deuda pendiente (descuentos que superan el bruto → pasan a próxima semana)
+            deuda_siguiente = max(0.0, round(descuentos_total - bruto, 2)) if not vendio_algo else 0.0
+
+            resultado.append({
+                'usuario_id':         uid,
+                'vendedor_nombre':    nombre,
+                'sede':               area or '',
+                'total_contratos':    vdata['contratos'],
+                'total_ventas':       total_ventas,
+                'comision':           comision,
+                'sueldo_base':        SUELDO_BASE_VENDEDOR,
+                'sueldo_efectivo':    sueldo_efectivo,   # 0 si no vendió nada
+                'aumentos':           aumentos_semana,
+                'descuentos':         descuentos_semana,
+                'saldo_acumulado':    saldo_acum,        # descuentos arrastrados
+                'descuentos_total':   round(descuentos_total, 2),
+                'neto':               neto,
+                'deuda_siguiente':    deuda_siguiente,   # pasa a próx. semana
+                'vendio':             vendio_algo,
+            })
+
+        # Ordenar: primero los que sí vendieron, luego los que no
+        resultado.sort(key=lambda x: (-x['total_ventas'], x['vendedor_nombre']))
+
+        return jsonify({
+            'vendedores':      resultado,
+            'total_ventas':    round(sum(r['total_ventas']  for r in resultado), 2),
+            'total_contratos': sum(r['total_contratos']     for r in resultado),
+            'total_comision':  round(sum(r['comision']      for r in resultado), 2),
+            'total_sueldos':   round(sum(r['sueldo_efectivo'] for r in resultado), 2),
+            'total_neto':      round(sum(r['neto']          for r in resultado), 2),
+            'sueldo_base':     SUELDO_BASE_VENDEDOR,
+            'tasa':            TASA_COMISION,
+        }), 200
+
+    except Exception as e:
+        if conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@ventas_bp.route('/api/vendedores/ajuste', methods=['POST'])
+@requiere_rol('Admin')
+def registrar_ajuste_vendedor():
+    """Registra un descuento o aumento para un vendedor en una semana."""
+    data = request.get_json() or {}
+    usuario_id     = data.get('usuario_id')
+    tipo           = data.get('tipo', '').strip()       # 'descuento' | 'aumento'
+    monto          = float(data.get('monto', 0) or 0)
+    motivo         = data.get('motivo', '').strip()
+    semana_inicio  = data.get('semana_inicio', '')
+    semana_fin     = data.get('semana_fin', '')
+
+    if not all([usuario_id, tipo in ('descuento', 'aumento'), monto > 0,
+                semana_inicio, semana_fin]):
+        return jsonify({'error': 'Faltan campos obligatorios o monto inválido'}), 400
 
     conexion = None
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        _ensure_tablas_vendedor(cursor)
 
-        conditions = ["vendedor_nombre IS NOT NULL", "vendedor_nombre <> ''"]
-        params     = []
+        cursor.execute("""
+            INSERT INTO ajustes_sueldo_vendedor
+                (usuario_id, tipo, monto, motivo, semana_inicio, semana_fin)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """, (usuario_id, tipo, monto, motivo, semana_inicio, semana_fin))
+        nuevo_id = cursor.fetchone()[0]
+        conexion.commit()
 
-        if desde:
-            conditions.append("fecha_emision::date >= %s")
-            params.append(desde)
-        if hasta:
-            conditions.append("fecha_emision::date <= %s")
-            params.append(hasta)
-        if vendedor:
-            conditions.append("LOWER(vendedor_nombre) = LOWER(%s)")
-            params.append(vendedor)
+        return jsonify({'exito': True, 'id': nuevo_id,
+                        'mensaje': f'{tipo.capitalize()} de S/ {monto:.2f} registrado'}), 201
+    except Exception as e:
+        if conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conexion:
+            cursor.close(); release_db_connection(conexion)
 
-        where = " AND ".join(conditions)
 
-        cursor.execute(f"""
-            SELECT
-                vendedor_nombre,
-                MAX(sede)                              AS sede,
-                COUNT(DISTINCT id)                     AS total_contratos,
-                COALESCE(SUM(monto_total), 0)          AS total_ventas,
-                COALESCE(SUM(monto_total), 0) * %s     AS comision
+@ventas_bp.route('/api/vendedores/ajustes/<int:uid>', methods=['GET'])
+@requiere_rol('Admin')
+def listar_ajustes_vendedor(uid):
+    """Lista todos los ajustes (descuentos/aumentos) de un vendedor."""
+    conexion = None
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _ensure_tablas_vendedor(cursor)
+        cursor.execute("""
+            SELECT id, tipo, monto, motivo, semana_inicio, semana_fin, aplicado,
+                   TO_CHAR(created_at, 'DD/MM/YYYY HH24:MI') AS fecha
+            FROM ajustes_sueldo_vendedor
+            WHERE usuario_id = %s
+            ORDER BY created_at DESC
+            LIMIT 50;
+        """, (uid,))
+        ajustes = [{
+            'id': r[0], 'tipo': r[1], 'monto': float(r[2]),
+            'motivo': r[3] or '', 'semana_inicio': str(r[4]),
+            'semana_fin': str(r[5]), 'aplicado': r[6], 'fecha': r[7]
+        } for r in cursor.fetchall()]
+        return jsonify(ajustes), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@ventas_bp.route('/api/vendedores/ajuste/<int:ajuste_id>', methods=['DELETE'])
+@requiere_rol('Admin')
+def eliminar_ajuste_vendedor(ajuste_id):
+    """Elimina un ajuste (solo si no fue aplicado)."""
+    conexion = None
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            DELETE FROM ajustes_sueldo_vendedor
+            WHERE id = %s AND aplicado = FALSE
+            RETURNING id;
+        """, (ajuste_id,))
+        deleted = cursor.fetchone()
+        conexion.commit()
+        if not deleted:
+            return jsonify({'error': 'Ajuste no encontrado o ya aplicado'}), 404
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@ventas_bp.route('/api/vendedores/cerrar-semana', methods=['POST'])
+@requiere_rol('Admin')
+def cerrar_semana_vendedor():
+    """
+    Cierra la semana de un vendedor:
+    - Si no vendió nada → monto_pagado = 0, descuentos se acumulan.
+    - Marca los ajustes de ese período como aplicado=TRUE.
+    """
+    data = request.get_json() or {}
+    usuario_id    = data.get('usuario_id')
+    semana_inicio = data.get('semana_inicio', '')
+    semana_fin    = data.get('semana_fin', '')
+    monto_pagado  = float(data.get('monto_pagado', 0) or 0)
+    notas         = data.get('notas', '').strip()
+    voucher_url   = data.get('voucher_url', '').strip()
+
+    if not all([usuario_id, semana_inicio, semana_fin]):
+        return jsonify({'error': 'Faltan campos obligatorios'}), 400
+
+    conexion = None
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _ensure_tablas_vendedor(cursor)
+
+        # Ventas del período para este vendedor
+        cursor.execute("""
+            SELECT nombre FROM usuarios WHERE id = %s;
+        """, (usuario_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Vendedor no encontrado'}), 404
+        nombre = row[0]
+
+        cursor.execute("""
+            SELECT COALESCE(SUM(monto_total), 0)
             FROM ventas
-            WHERE {where}
-            GROUP BY vendedor_nombre
-            ORDER BY total_ventas DESC;
-        """, [TASA_COMISION] + params)
+            WHERE LOWER(TRIM(vendedor_nombre)) = LOWER(TRIM(%s))
+              AND fecha_emision::date BETWEEN %s AND %s;
+        """, (nombre, semana_inicio, semana_fin))
+        total_ventas = float(cursor.fetchone()[0])
+        comision     = round(total_ventas * TASA_COMISION, 2)
+        vendio       = total_ventas > 0
+        sueldo_ef    = SUELDO_BASE_VENDEDOR if vendio else 0.0
 
-        filas = cursor.fetchall()
+        # Ajustes del período
+        cursor.execute("""
+            SELECT tipo, COALESCE(SUM(monto), 0)
+            FROM ajustes_sueldo_vendedor
+            WHERE usuario_id = %s AND semana_inicio >= %s AND semana_fin <= %s
+              AND aplicado = FALSE
+            GROUP BY tipo;
+        """, (usuario_id, semana_inicio, semana_fin))
+        ajustes = {r[0]: float(r[1]) for r in cursor.fetchall()}
+        aumentos   = ajustes.get('aumento', 0.0)
+        descuentos = ajustes.get('descuento', 0.0)
 
-        resultado = [{
-            'vendedor_nombre':  f[0],
-            'sede':             f[1] or '',
-            'total_contratos':  int(f[2]),
-            'total_ventas':     float(f[3]),
-            'comision':         round(float(f[4]), 2),
-        } for f in filas]
+        # Saldo arrastrado de semanas anteriores sin pagar
+        cursor.execute("""
+            SELECT COALESCE(SUM(
+                CASE WHEN monto_pagado = 0 THEN descuentos - aumentos ELSE 0 END
+            ), 0)
+            FROM cierres_semanales_vendedor
+            WHERE usuario_id = %s;
+        """, (usuario_id,))
+        saldo_anterior = max(0.0, float(cursor.fetchone()[0]))
 
-        total_ventas    = sum(r['total_ventas']    for r in resultado)
-        total_contratos = sum(r['total_contratos'] for r in resultado)
-        total_comision  = round(sum(r['comision']  for r in resultado), 2)
+        # Registrar cierre
+        cursor.execute("""
+            INSERT INTO cierres_semanales_vendedor
+                (usuario_id, semana_inicio, semana_fin, sueldo_base, comision,
+                 aumentos, descuentos, saldo_anterior, monto_pagado, notas, voucher_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (usuario_id, semana_inicio) DO UPDATE SET
+                monto_pagado = EXCLUDED.monto_pagado,
+                notas        = EXCLUDED.notas,
+                voucher_url  = EXCLUDED.voucher_url;
+        """, (usuario_id, semana_inicio, semana_fin, SUELDO_BASE_VENDEDOR,
+              comision, aumentos, descuentos, saldo_anterior, monto_pagado,
+              notas, voucher_url))
 
+        # Marcar ajustes como aplicados
+        cursor.execute("""
+            UPDATE ajustes_sueldo_vendedor
+            SET aplicado = TRUE
+            WHERE usuario_id = %s AND semana_inicio >= %s AND semana_fin <= %s;
+        """, (usuario_id, semana_inicio, semana_fin))
+
+        conexion.commit()
         return jsonify({
-            'vendedores':      resultado,
-            'total_ventas':    total_ventas,
-            'total_contratos': total_contratos,
-            'total_comision':  total_comision,
-            'tasa':            TASA_COMISION,
+            'exito':       True,
+            'vendedor':    nombre,
+            'vendio':      vendio,
+            'comision':    comision,
+            'sueldo_base': SUELDO_BASE_VENDEDOR,
+            'sueldo_ef':   sueldo_ef,
+            'neto':        max(0.0, round(sueldo_ef + comision + aumentos - descuentos - saldo_anterior, 2)),
+            'monto_pagado': monto_pagado,
         }), 200
 
     except Exception as e:
+        if conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if conexion:
