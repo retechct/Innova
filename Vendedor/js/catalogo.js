@@ -351,7 +351,7 @@ function actualizarVistaSofa() {
     } else if (tipoMedidas === 'multi3') {
         medContainer.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 3 PIEZAS (Largo, Profundidad)</label>
+                <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 3 PIEZAS (Largo, Fondo)</label>
                 <button type="button" id="btn-estandar-sofa" data-estandar="0"
                     onclick="toggleMedidasEstandar('btn-estandar-sofa','sofa-medidas-inputs','sofa-medidas-estandar')"
                     style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
@@ -362,14 +362,14 @@ function actualizarVistaSofa() {
                 <div class="medida-row" style="align-items:center;">
                     <span style="font-size:10px; width:50px; font-weight:bold;">Grande:</span>
                     <input type="number" id="m3-l1" class="form-input-sm" placeholder="Largo">
-                    <input type="number" id="m3-f1" class="form-input-sm" placeholder="Prof.">
+                    <input type="number" id="m3-f1" class="form-input-sm" placeholder="Fondo">
                     <button type="button" onclick="toggleAltura('m3-h1-wrap')" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
                     <span id="m3-h1-wrap" style="display:none;"><input type="number" id="m3-h1" class="form-input-sm" placeholder="Alto"></span>
                 </div>
                 <div class="medida-row" style="align-items:center;">
                     <span style="font-size:10px; width:50px; font-weight:bold;">Modular:</span>
                     <input type="number" id="m3-l2" class="form-input-sm" placeholder="Largo">
-                    <input type="number" id="m3-f2" class="form-input-sm" placeholder="Prof.">
+                    <input type="number" id="m3-f2" class="form-input-sm" placeholder="Fondo">
                     <button type="button" onclick="toggleAltura('m3-h2-wrap')" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
                     <span id="m3-h2-wrap" style="display:none;"><input type="number" id="m3-h2" class="form-input-sm" placeholder="Alto"></span>
                 </div>
@@ -380,7 +380,7 @@ function actualizarVistaSofa() {
     } else if (tipoMedidas === 'multi4') {
         medContainer.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 4 PIEZAS (Largo, Profundidad)</label>
+                <label style="font-size:10px; font-weight:bold; color:gray;">MULTI 4 PIEZAS (Largo, Fondo)</label>
                 <button type="button" id="btn-estandar-sofa" data-estandar="0"
                     onclick="toggleMedidasEstandar('btn-estandar-sofa','sofa-medidas-inputs','sofa-medidas-estandar')"
                     style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
@@ -391,21 +391,21 @@ function actualizarVistaSofa() {
                 <div class="medida-row" style="align-items:center;">
                     <span style="font-size:10px; width:50px; font-weight:bold;">Gnde 1:</span>
                     <input type="number" id="m4-l1" class="form-input-sm" placeholder="Largo">
-                    <input type="number" id="m4-f1" class="form-input-sm" placeholder="Prof.">
+                    <input type="number" id="m4-f1" class="form-input-sm" placeholder="Fondo">
                     <button type="button" onclick="toggleAltura('m4-h1-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
                     <span id="m4-h1-wrap" style="display:none;"><input type="number" id="m4-h1" class="form-input-sm" placeholder="Alto"></span>
                 </div>
                 <div class="medida-row" style="align-items:center;">
                     <span style="font-size:10px; width:50px; font-weight:bold;">Gnde 2:</span>
                     <input type="number" id="m4-l2" class="form-input-sm" placeholder="Largo">
-                    <input type="number" id="m4-f2" class="form-input-sm" placeholder="Prof.">
+                    <input type="number" id="m4-f2" class="form-input-sm" placeholder="Fondo">
                     <button type="button" onclick="toggleAltura('m4-h2-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
                     <span id="m4-h2-wrap" style="display:none;"><input type="number" id="m4-h2" class="form-input-sm" placeholder="Alto"></span>
                 </div>
                 <div class="medida-row" style="align-items:center;">
                     <span style="font-size:10px; width:50px; font-weight:bold;">Modular:</span>
                     <input type="number" id="m4-l3" class="form-input-sm" placeholder="Largo">
-                    <input type="number" id="m4-f3" class="form-input-sm" placeholder="Prof.">
+                    <input type="number" id="m4-f3" class="form-input-sm" placeholder="Fondo">
                     <button type="button" onclick="toggleAltura('m4-h3-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;white-space:nowrap;">+ Alt</button>
                     <span id="m4-h3-wrap" style="display:none;"><input type="number" id="m4-h3" class="form-input-sm" placeholder="Alto"></span>
                 </div>
@@ -427,7 +427,7 @@ function actualizarVistaSofa() {
                 <div class="medida-row" style="flex-wrap: wrap; align-items:center; gap:5px;">
                     <input type="number" id="u-largo-izq" class="form-input-sm" placeholder="Largo Izq." style="width: 46%;">
                     <input type="number" id="u-largo-der" class="form-input-sm" placeholder="Largo Der." style="width: 46%;">
-                    <input type="number" id="u-fondo" class="form-input-sm" placeholder="Profundidad Gen." style="width: 60%; margin-top:5px;">
+                    <input type="number" id="u-fondo" class="form-input-sm" placeholder="Fondo Gen." style="width: 60%; margin-top:5px;">
                     <button type="button" onclick="toggleAltura('u-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;margin-top:5px;white-space:nowrap;">+ Altura</button>
                     <span id="u-alto-wrap" style="display:none; margin-top:5px; width:100%;">
                         <input type="number" id="u-alto" class="form-input-sm" placeholder="Alto Gen." style="width:60%;">
@@ -450,7 +450,7 @@ function actualizarVistaSofa() {
             <div id="sofa-medidas-inputs">
                 <div class="medida-row" style="flex-wrap: wrap; align-items:center; gap:5px;">
                     <input type="number" id="med-largo" class="form-input-sm" placeholder="Largo" style="width: 46%;">
-                    <input type="number" id="med-fondo" class="form-input-sm" placeholder="Profundidad" style="width: 46%;">
+                    <input type="number" id="med-fondo" class="form-input-sm" placeholder="Fondo" style="width: 46%;">
                     <button type="button" onclick="toggleAltura('med-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 6px;margin-top:5px;white-space:nowrap;">+ Altura</button>
                     <span id="med-alto-wrap" style="display:none; margin-top:5px; width:100%;">
                         <input type="number" id="med-alto" class="form-input-sm" placeholder="Alto" style="width:46%;">
@@ -474,7 +474,7 @@ function addCuerpoSofa(cuerpos) {
     div.innerHTML = `
         <span style="font-size:11px; font-weight:bold; width:35px; text-align:center;">${cuerpos} C.</span>
         <input type="number" class="form-input-sm c-largo" title="Largo" placeholder="Largo">
-        <input type="number" class="form-input-sm c-fondo" title="Profundidad" placeholder="Prof.">
+        <input type="number" class="form-input-sm c-fondo" title="Fondo" placeholder="Fondo">
         <button type="button" onclick="event.stopPropagation(); toggleAltura(this.nextElementSibling)" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 5px;white-space:nowrap;">+ Alt</button>
         <span class="alto-wrap" style="display:none;"><input type="number" class="form-input-sm c-alto" title="Alto" placeholder="Alto"></span>
         <button onclick="event.stopPropagation(); this.parentElement.remove()" style="border:none; color:red; background:none; cursor:pointer; padding:2px;"><i class="fa-solid fa-trash"></i></button>
