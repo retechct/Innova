@@ -7,6 +7,9 @@ function filtrarMaterial(tipoInput) {
     if (searchInput.trim() === '') {
         document.getElementById(`img-preview-${tipoInput}`).style.display = 'none';
         document.getElementById(`sku-${tipoInput}`).value = '';
+        listContainer.innerHTML = '';
+        listContainer.classList.remove('show');
+        return;
     }
 
    // 1. SEPARACIÓN ABSOLUTA (Butacas tienen su propio almacén)
@@ -24,7 +27,7 @@ function filtrarMaterial(tipoInput) {
     let opciones = maestroMateriales[tipoData].filter(item => {
         let textoCompleto = Object.values(item).join(' ').toLowerCase();
         return textoCompleto.includes(searchInput);
-    });
+    }).slice(0, 10); // Mostrar máximo 10 resultados
 
     // --- MAGIA FASE 2: El botón de Pinterest estático siempre al inicio ---
     // --- MAGIA FASE 2: El botón de Pinterest estático siempre al inicio ---
