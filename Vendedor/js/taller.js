@@ -2712,9 +2712,16 @@ async function cargarGestorAprobacion() {
                 <div style="font-size: 11px; color: #64748b; margin-bottom: 15px; background: #f8fafc; padding: 8px; border-radius: 6px; line-height:1.4;">
                     ${item.detalles.replace(/\n/g, '<br>')}
                 </div>
-                <button class="btn-action btn-primary" style="font-size: 11px; padding: 10px; border-radius:8px;" onclick="procesarAprobacion(${item.id}, '${item.nombre}')">
-                    <i class="fa-solid fa-check"></i> APROBAR MUEBLE
-                </button>
+                <div style="display:flex; gap:8px; margin-top:auto;">
+                    <button class="btn-action btn-primary" style="flex:1; font-size:11px; padding:10px; border-radius:8px;"
+                            onclick="procesarAprobacion(${item.id}, '${item.nombre}')">
+                        <i class="fa-solid fa-check"></i> APROBAR
+                    </button>
+                    <button style="flex:1; font-size:11px; padding:10px; border-radius:8px; background:#dc2626; border:none; color:white; font-weight:bold; cursor:pointer;"
+                            onclick="rechazarMueble(${item.id}, '${item.nombre.replace(/'/g, "\\'")}')">
+                        <i class="fa-solid fa-xmark"></i> RECHAZAR
+                    </button>
+                </div>
             </div>`;
         });
 
@@ -2740,9 +2747,16 @@ async function cargarGestorAprobacion() {
                 <div style="font-size: 11px; color: #b45309; margin-bottom: 15px; background: #fffbeb; padding: 8px; border-radius: 6px; line-height:1.4; text-align:left;">
                     ${especificacionesInsumo || 'Instrucciones estándar básicas.'}
                 </div>
-                <button class="btn-primary" style="font-size: 11px; padding: 10px; border-radius:8px; background:#d97706; border:none; color:white; font-weight:bold; cursor:pointer;" onclick="procesarAprobacionInsumo(${insumo.id}, '${insumo.nombre.replace(/'/g, "\\'")}', '${insumo.tipo}')">
-                    <i class="fa-solid fa-stamp"></i> EVALUAR INSUMO
-                </button>
+                <div style="display:flex; gap:8px; margin-top:auto;">
+                    <button class="btn-primary" style="flex:1; font-size:11px; padding:10px; border-radius:8px; background:#d97706; border:none; color:white; font-weight:bold; cursor:pointer;"
+                            onclick="procesarAprobacionInsumo(${insumo.id}, '${insumo.nombre.replace(/'/g, "\\'")}', '${insumo.tipo}')">
+                        <i class="fa-solid fa-stamp"></i> EVALUAR
+                    </button>
+                    <button style="flex:1; font-size:11px; padding:10px; border-radius:8px; background:#dc2626; border:none; color:white; font-weight:bold; cursor:pointer;"
+                            onclick="rechazarInsumo(${insumo.id}, '${insumo.nombre.replace(/'/g, "\\'")}')">
+                        <i class="fa-solid fa-xmark"></i> RECHAZAR
+                    </button>
+                </div>
             </div>`;
         });
 
@@ -3022,6 +3036,86 @@ async function ejecutarAprobacion(id, origen, precio_base) {
     }
 }
 /* ================================================================= */
+// ─── Rechazar modelo de mueble (creación de vendedor) ────────────────────────
+async function rechazarMueble(id, nombre) {
+    const { value: motivo } = await Swal.fire({
+        title: 'Rechazar modelo de mueble',
+        html: `<p style="color:#475569;font-size:13px;margin-bottom:10px;">
+                  Indica el motivo para rechazar: <b>${nombre}</b></p>
+               <textarea id="swal-motivo-mueble" class="swal2-textarea"
+                         placeholder="Ej: No aplica para nuestro catálogo, foto de baja calidad, precio fuera de rango..."
+                         style="min-height:80px;width:90%;"></textarea>`,
+        showCancelButton: true,
+        confirmButtonText: 'Rechazar modelo',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc2626',
+        preConfirm: () => {
+            const m = document.getElementById('swal-motivo-mueble')?.value.trim();
+            if (!m) { Swal.showValidationMessage('El motivo es obligatorio.'); return false; }
+            return m;
+        }
+    });
+    if (!motivo) return;
+
+    try {
+        Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res  = await apiFetch(`${API_URL}/api/creaciones/rechazar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ creacion_id: id, motivo })
+        });
+        const data = await res.json();
+        if (data.exito) {
+            Swal.fire('Rechazado', `Modelo rechazado. Motivo registrado.`, 'info');
+            cargarGestorAprobacion();
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo rechazar.', 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', 'Error de conexión con el servidor.', 'error');
+    }
+}
+
+// ─── Rechazar sugerencia de insumo ───────────────────────────────────────────
+async function rechazarInsumo(id, nombre) {
+    const { value: motivo } = await Swal.fire({
+        title: 'Rechazar sugerencia de insumo',
+        html: `<p style="color:#475569;font-size:13px;margin-bottom:10px;">
+                  Indica el motivo para rechazar: <b>${nombre}</b></p>
+               <textarea id="swal-motivo-insumo" class="swal2-textarea"
+                         placeholder="Ej: Ya existe en el maestro, proveedor sin contrato, especificaciones incompletas..."
+                         style="min-height:80px;width:90%;"></textarea>`,
+        showCancelButton: true,
+        confirmButtonText: 'Rechazar insumo',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc2626',
+        preConfirm: () => {
+            const m = document.getElementById('swal-motivo-insumo')?.value.trim();
+            if (!m) { Swal.showValidationMessage('El motivo es obligatorio.'); return false; }
+            return m;
+        }
+    });
+    if (!motivo) return;
+
+    try {
+        Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res  = await apiFetch(`${API_URL}/api/sugerencias/rechazar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sugerencia_id: id, motivo })
+        });
+        const data = await res.json();
+        if (data.exito) {
+            Swal.fire('Rechazado', 'Sugerencia de insumo rechazada.', 'info');
+            cargarGestorAprobacion();
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo rechazar.', 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', 'Error de conexión con el servidor.', 'error');
+    }
+}
+
 /* --- MÓDULO: ENTRADA DIRECTA DE PRODUCTOS (CUADROS/ESPEJOS) --- */
 /* ================================================================= */
 /* ================================================================= */

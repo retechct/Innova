@@ -403,15 +403,26 @@ def aprobar_creacion():
 def rechazar_creacion():
     data        = request.json
     creacion_id = data.get('creacion_id')
-    motivo      = data.get('motivo', '')
+    motivo      = (data.get('motivo') or '').strip()
     if not creacion_id:
         return jsonify({'error': 'creacion_id es obligatorio'}), 400
+    if not motivo:
+        return jsonify({'error': 'El motivo de rechazo es obligatorio'}), 400
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        cursor.execute("UPDATE creaciones_vendedores SET estado = 'Rechazado' WHERE id = %s;", (creacion_id,))
+        # Añadir columna motivo_rechazo si no existe (migración segura)
+        cursor.execute("""
+            ALTER TABLE creaciones_vendedores
+            ADD COLUMN IF NOT EXISTS motivo_rechazo TEXT;
+        """)
+        cursor.execute("""
+            UPDATE creaciones_vendedores
+            SET estado = 'Rechazado', motivo_rechazo = %s
+            WHERE id = %s;
+        """, (motivo, creacion_id))
         conexion.commit()
-        return jsonify({'exito': True, 'mensaje': f'Diseño rechazado. Motivo: {motivo}'}), 200
+        return jsonify({'exito': True, 'mensaje': f'Modelo rechazado. Motivo: {motivo}'}), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500

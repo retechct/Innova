@@ -1531,10 +1531,24 @@ def aprobar_sugerencia_insumo():
 def rechazar_sugerencia_insumo():
     data          = request.json
     sugerencia_id = data.get('sugerencia_id')
+    motivo        = (data.get('motivo') or '').strip()
+    if not sugerencia_id:
+        return jsonify({'error': 'sugerencia_id es obligatorio'}), 400
+    if not motivo:
+        return jsonify({'error': 'El motivo de rechazo es obligatorio'}), 400
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        cursor.execute("UPDATE sugerencias_insumos SET estado = 'Rechazado' WHERE id = %s;", (sugerencia_id,))
+        # Añadir columna motivo_rechazo si no existe (migración segura)
+        cursor.execute("""
+            ALTER TABLE sugerencias_insumos
+            ADD COLUMN IF NOT EXISTS motivo_rechazo TEXT;
+        """)
+        cursor.execute("""
+            UPDATE sugerencias_insumos
+            SET estado = 'Rechazado', motivo_rechazo = %s
+            WHERE id = %s;
+        """, (motivo, sugerencia_id))
         conexion.commit()
         return jsonify({'exito': True, 'mensaje': 'Sugerencia de insumo rechazada.'}), 200
     except Exception as e:
