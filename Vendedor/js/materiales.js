@@ -1859,8 +1859,44 @@ function _syncPiezaFoto(inputCam, targetId) {
 // ══════════════════════════════════════════════════════════════════
 
 /**
+ * Comprime una imagen (File/Blob) en el browser usando Canvas.
+ * Reduce a máx 1200px de ancho y calidad 0.82 JPEG.
+ * Retorna una Promise<Blob>.
+ */
+function _comprimirImagen(file, maxWidth = 1200, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+        reader.onload = e => {
+            const img = new Image();
+            img.onerror = () => reject(new Error('No se pudo procesar la imagen'));
+            img.onload = () => {
+                // Calcular nuevas dimensiones respetando proporción
+                let w = img.width;
+                let h = img.height;
+                if (w > maxWidth) {
+                    h = Math.round(h * maxWidth / w);
+                    w = maxWidth;
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width  = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                canvas.toBlob(
+                    blob => blob ? resolve(blob) : reject(new Error('Error al comprimir')),
+                    'image/jpeg',
+                    quality
+                );
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+/**
  * Abre el modal SweetAlert para subir un diseño de referencia (Pinterest u otra fuente).
- * Lo llama el botón en la vista del Gestor de Aprobación o desde el menú de insumos.
+ * La imagen se comprime en el browser antes de subir → mucho más rápido en Render.
  */
 async function abrirModalDiseno() {
     const { value: formValues } = await Swal.fire({
@@ -1913,10 +1949,13 @@ async function abrirModalDiseno() {
                 <input id="dr-foto" type="file" accept="image/*"
                        onchange="drPreviewFoto(this)"
                        style="width:100%; font-size:12px; margin-bottom:8px;">
-                <div id="dr-preview-wrap" style="display:none; margin-bottom:8px;">
+                <div id="dr-preview-wrap" style="display:none; margin-bottom:4px;">
                     <img id="dr-preview-img"
-                         style="width:100%; max-height:160px; object-fit:cover;
+                         style="width:100%; max-height:150px; object-fit:cover;
                                 border-radius:8px; border:1px solid #e2e8f0;">
+                </div>
+                <div id="dr-size-info" style="font-size:11px; color:#64748b; margin-bottom:4px; display:none;">
+                    📦 Se comprimirá automáticamente antes de subir
                 </div>
             </div>
         `,
@@ -1938,9 +1977,9 @@ async function abrirModalDiseno() {
             }
             return {
                 nombre,
-                categoria:    document.getElementById('dr-categoria')?.value || 'General',
-                url:          (document.getElementById('dr-url')?.value || '').trim(),
-                descripcion:  (document.getElementById('dr-descripcion')?.value || '').trim(),
+                categoria:   document.getElementById('dr-categoria')?.value || 'General',
+                url:         (document.getElementById('dr-url')?.value || '').trim(),
+                descripcion: (document.getElementById('dr-descripcion')?.value || '').trim(),
                 file,
             };
         }
@@ -1948,8 +1987,25 @@ async function abrirModalDiseno() {
 
     if (!formValues) return;
 
-    // Construir FormData y enviar
-    Swal.fire({ title: 'Subiendo diseño...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    // Mostrar estado: comprimiendo
+    Swal.fire({
+        title: 'Optimizando imagen...',
+        text: 'Reduciendo tamaño para subida rápida',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    let blobFinal;
+    try {
+        blobFinal = await _comprimirImagen(formValues.file);
+    } catch(compErr) {
+        // Si la compresión falla (formato raro) usar el archivo original
+        console.warn('Compresión falló, usando original:', compErr);
+        blobFinal = formValues.file;
+    }
+
+    // Actualizar estado: subiendo
+    Swal.update({ title: 'Subiendo diseño...', text: 'Enviando a la nube, un momento...' });
 
     try {
         const fd = new FormData();
@@ -1957,7 +2013,8 @@ async function abrirModalDiseno() {
         fd.append('categoria',     formValues.categoria);
         fd.append('url_pinterest', formValues.url);
         fd.append('descripcion',   formValues.descripcion);
-        fd.append('foto',          formValues.file);
+        // Enviar el blob comprimido con nombre .jpg
+        fd.append('foto', blobFinal, 'referencia.jpg');
 
         const res  = await apiFetch(`${API_URL}/api/disenos-referencia`, {
             method: 'POST',
@@ -1980,10 +2037,21 @@ async function abrirModalDiseno() {
     }
 }
 
-/** Preview de foto en el modal de diseño de referencia */
+/** Preview de foto en el modal de diseño de referencia + muestra info de tamaño */
 function drPreviewFoto(input) {
     const file = input?.files[0];
     if (!file) return;
+
+    // Mostrar info de tamaño
+    const sizeInfo = document.getElementById('dr-size-info');
+    if (sizeInfo) {
+        const mb = (file.size / 1024 / 1024).toFixed(1);
+        sizeInfo.style.display = 'block';
+        sizeInfo.textContent = mb > 0.5
+            ? `📦 Imagen de ${mb} MB — se comprimirá automáticamente antes de subir`
+            : `✅ Imagen de ${mb} MB — lista para subir`;
+    }
+
     const reader = new FileReader();
     reader.onload = e => {
         const img  = document.getElementById('dr-preview-img');
