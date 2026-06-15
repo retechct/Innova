@@ -1,14 +1,91 @@
 // === MÓDULO: Materiales, buscadores e insumos ===
+
+/**
+ * mostrarUltimasMaterial — se llama en el onfocus del input de búsqueda.
+ * Si el campo está vacío, muestra las últimas 10 telas/materiales ingresados
+ * (los últimos del array, que vienen ordenados por id ASC desde el backend).
+ * Si ya tiene texto, no hace nada (filtrarMaterial se encarga).
+ */
+function mostrarUltimasMaterial(tipoInput) {
+    const searchEl = document.getElementById(`search-${tipoInput}`);
+    if (!searchEl || searchEl.value.trim() !== '') return;
+
+    let tipoData = '';
+    if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero') tipoData = 'telas';
+    else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno') tipoData = 'cojines';
+    else if (tipoInput === 'base') tipoData = 'bases';
+    else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro') tipoData = 'tableros';
+    else if (tipoInput === 'base-mesa' || tipoInput === 'base-centro') tipoData = 'bases_comedor';
+    else if (tipoInput === 'silla') tipoData = 'sillas';
+    else if (tipoInput === 'estructura-butaca') tipoData = 'butacas';
+
+    if (!maestroMateriales[tipoData]) return;
+
+    // Últimas 10: tomamos el final del array (orden id ASC → últimas agregadas al final)
+    const ultimas = maestroMateriales[tipoData].slice(-10);
+
+    const listContainer = document.getElementById(`list-${tipoInput}`);
+    if (!listContainer) return;
+
+    const htmlPinterest = `
+        <div class="custom-option-item" style="background: #fffcf0; border-left: 4px solid #f59e0b;" onclick="abrirModalPinterest('${tipoInput}')">
+            <div style="width: 45px; height: 45px; border-radius: 5px; background: #f59e0b; color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
+                <i class="fa-brands fa-pinterest-p"></i>
+            </div>
+            <div>
+                <span class="custom-option-sku" style="color: #d97706;">COMPRA A MEDIDA</span>
+                <div class="custom-option-text"><strong style="color: #b45309;">✨ DISEÑO PINTEREST / ESPECIAL</strong><br>Añadir detalles de esta pieza</div>
+            </div>
+        </div>
+    `;
+
+    const htmlItems = ultimas.map(item => {
+        let titulo = '', subtitulo = '';
+        if (tipoData === 'telas') { titulo = `${item.coleccion} - ${item.color}`; subtitulo = item.proveedor; }
+        else if (tipoData === 'cojines') { titulo = item.nombre_diseno; subtitulo = item.tipo_tela; }
+        else if (tipoData === 'bases') { titulo = `${item.modelo} - ${item.color}`; subtitulo = `${item.tipo} ${item.material} ${item.medida}`; }
+        else if (tipoData === 'tableros') { titulo = `${item.nombre} (${item.color})`; subtitulo = `${item.material_base} - ${item.acabado}`; }
+        else if (tipoData === 'bases_comedor') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
+        else if (tipoData === 'sillas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
+        else if (tipoData === 'butacas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
+
+        const safeTitulo = titulo.replace(/'/g, "\\'");
+        const isAgotado       = item.estado === 'Agotado';
+        const isDescontinuado = item.estado === 'Descontinuado';
+        const noDisponible    = isAgotado || isDescontinuado;
+        const styleAgotado    = noDisponible ? 'filter: grayscale(1); opacity: 0.5; cursor: not-allowed; background: #f1f5f9;' : '';
+        const provSeguro      = (item.proveedor || '').replace(/'/g, "\'");
+        const action          = noDisponible ? '' : `onclick="seleccionarMaterial('${tipoInput}', '${item.sku}', '${safeTitulo}', '${item.foto_url}', '${provSeguro}')"`;
+        const badge           = isAgotado       ? '<b style="color:red;">(AGOTADO)</b>'
+                              : isDescontinuado ? '<b style="color:#6b7280;">(DESCONTINUADO)</b>'
+                              : '';
+        return `
+            <div class="custom-option-item" ${action} style="${styleAgotado}">
+                <img src="${item.foto_url}" class="custom-option-img" onerror="this.src='imagenes/sin_foto.jpg'">
+                <div style="flex-grow:1;">
+                    <span class="custom-option-sku">${item.sku} ${badge}</span>
+                    <div class="custom-option-text"><strong>${titulo}</strong><br>${subtitulo}</div>
+                </div>
+            </div>`;
+    }).join('');
+
+    // Encabezado indicando que son las últimas
+    const htmlHeader = `<div style="padding:6px 12px; font-size:10px; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #f1f5f9;">
+        🕐 Últimas agregadas — escribe para buscar
+    </div>`;
+
+    listContainer.innerHTML = htmlHeader + htmlPinterest + htmlItems;
+    listContainer.classList.add('show');
+}
+
 function filtrarMaterial(tipoInput) {
     let tipoData = '';
     let listContainer = document.getElementById(`list-${tipoInput}`);
     let searchInput = document.getElementById(`search-${tipoInput}`).value.toLowerCase();
     
     if (searchInput.trim() === '') {
-        document.getElementById(`img-preview-${tipoInput}`).style.display = 'none';
-        document.getElementById(`sku-${tipoInput}`).value = '';
-        listContainer.innerHTML = '';
-        listContainer.classList.remove('show');
+        // Si borran todo el texto, volver a mostrar las últimas (igual que focus)
+        mostrarUltimasMaterial(tipoInput);
         return;
     }
 
@@ -27,7 +104,7 @@ function filtrarMaterial(tipoInput) {
     let opciones = maestroMateriales[tipoData].filter(item => {
         let textoCompleto = Object.values(item).join(' ').toLowerCase();
         return textoCompleto.includes(searchInput);
-    }).slice(0, 10); // Mostrar máximo 10 resultados
+    }).slice(0, 10); // Máximo 10 resultados al buscar
 
     // --- MAGIA FASE 2: El botón de Pinterest estático siempre al inicio ---
     // --- MAGIA FASE 2: El botón de Pinterest estático siempre al inicio ---
