@@ -559,3 +559,193 @@ def editar_butaca(sku):
         campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado', 'origen_produccion', 'proveedor_id']
     )
     return jsonify(resp), status
+
+# ══════════════════════════════════════════════════════════════════
+# DISEÑOS DE REFERENCIA (Pinterest / Inspiración)
+# ══════════════════════════════════════════════════════════════════
+
+def _ensure_disenos_referencia(cursor):
+    """Auto-crea la tabla si no existe (migración segura)."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS disenos_referencia (
+            id              SERIAL PRIMARY KEY,
+            nombre          VARCHAR(200) NOT NULL,
+            categoria       VARCHAR(100),
+            descripcion     TEXT,
+            foto_url        TEXT,
+            url_pinterest   TEXT,
+            vendedor        VARCHAR(150),
+            estado          VARCHAR(20) DEFAULT 'Pendiente',
+            motivo_rechazo  TEXT,
+            fecha_creacion  TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+
+@materiales_bp.route('/api/disenos-referencia', methods=['POST'])
+@requiere_login
+def subir_diseno_referencia():
+    """
+    Vendedor sube un diseño de referencia (foto de Pinterest u otra fuente).
+    Espera multipart/form-data con:
+      - nombre        (str, obligatorio)
+      - categoria     (str, ej: 'Sofá', 'Comedor', 'Tela')
+      - descripcion   (str, opcional)
+      - url_pinterest (str, opcional)
+      - vendedor      (str)
+      - foto          (file, obligatorio)
+    """
+    import cloudinary.uploader
+    from auth_middleware import get_usuario_actual
+    try:
+        nombre        = (request.form.get('nombre') or '').strip()
+        categoria     = (request.form.get('categoria') or 'General').strip()
+        descripcion   = (request.form.get('descripcion') or '').strip()
+        url_pinterest = (request.form.get('url_pinterest') or '').strip()
+        usuario       = get_usuario_actual()
+        vendedor      = usuario.get('nombre', request.form.get('vendedor', 'Vendedor'))
+
+        if not nombre:
+            return jsonify({'error': 'El nombre del diseño es obligatorio.'}), 400
+        if 'foto' not in request.files or request.files['foto'].filename == '':
+            return jsonify({'error': 'La foto de referencia es obligatoria.'}), 400
+
+        foto_file  = request.files['foto']
+        resultado  = cloudinary.uploader.upload(foto_file, folder='disenos_referencia')
+        foto_url   = resultado.get('secure_url')
+
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _ensure_disenos_referencia(cursor)
+        cursor.execute("""
+            INSERT INTO disenos_referencia
+                (nombre, categoria, descripcion, foto_url, url_pinterest, vendedor, estado)
+            VALUES (%s, %s, %s, %s, %s, %s, 'Pendiente')
+            RETURNING id;
+        """, (nombre, categoria, descripcion, foto_url, url_pinterest, vendedor))
+        nuevo_id = cursor.fetchone()[0]
+        conexion.commit()
+        return jsonify({'exito': True, 'id': nuevo_id,
+                        'mensaje': f'Diseño "{nombre}" enviado para aprobación.'}), 201
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@materiales_bp.route('/api/disenos-referencia', methods=['GET'])
+@requiere_login
+def listar_disenos_referencia():
+    """
+    Devuelve todos los diseños de referencia.
+    Query param opcional: ?estado=Pendiente|Aprobado|Rechazado
+    """
+    estado_filtro = request.args.get('estado', None)
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _ensure_disenos_referencia(cursor)
+        if estado_filtro:
+            cursor.execute("""
+                SELECT id, nombre, categoria, descripcion, foto_url,
+                       url_pinterest, vendedor, estado, motivo_rechazo,
+                       TO_CHAR(fecha_creacion, 'DD/MM/YYYY') AS fecha
+                FROM disenos_referencia
+                WHERE estado = %s
+                ORDER BY fecha_creacion DESC;
+            """, (estado_filtro,))
+        else:
+            cursor.execute("""
+                SELECT id, nombre, categoria, descripcion, foto_url,
+                       url_pinterest, vendedor, estado, motivo_rechazo,
+                       TO_CHAR(fecha_creacion, 'DD/MM/YYYY') AS fecha
+                FROM disenos_referencia
+                ORDER BY fecha_creacion DESC;
+            """)
+        rows = cursor.fetchall()
+        return jsonify([{
+            'id':            r[0],
+            'nombre':        r[1],
+            'categoria':     r[2] or '',
+            'descripcion':   r[3] or '',
+            'foto_url':      r[4] or '',
+            'url_pinterest': r[5] or '',
+            'vendedor':      r[6] or '',
+            'estado':        r[7] or 'Pendiente',
+            'motivo_rechazo': r[8] or '',
+            'fecha':         r[9] or '',
+        } for r in rows]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@materiales_bp.route('/api/disenos-referencia/aprobar', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def aprobar_diseno_referencia():
+    """Admin aprueba un diseño → estado = 'Aprobado'."""
+    data = request.get_json(silent=True) or {}
+    diseno_id = data.get('diseno_id')
+    if not diseno_id:
+        return jsonify({'error': 'diseno_id es requerido.'}), 400
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _ensure_disenos_referencia(cursor)
+        cursor.execute("""
+            UPDATE disenos_referencia
+            SET estado = 'Aprobado', motivo_rechazo = NULL
+            WHERE id = %s
+            RETURNING nombre;
+        """, (diseno_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Diseño no encontrado.'}), 404
+        conexion.commit()
+        return jsonify({'exito': True,
+                        'mensaje': f'Diseño "{row[0]}" aprobado y disponible como referencia.'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@materiales_bp.route('/api/disenos-referencia/rechazar', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def rechazar_diseno_referencia():
+    """Admin rechaza un diseño → estado = 'Rechazado' + motivo."""
+    data = request.get_json(silent=True) or {}
+    diseno_id = data.get('diseno_id')
+    motivo    = (data.get('motivo') or '').strip()
+    if not diseno_id:
+        return jsonify({'error': 'diseno_id es requerido.'}), 400
+    if not motivo:
+        return jsonify({'error': 'Debes indicar un motivo de rechazo.'}), 400
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _ensure_disenos_referencia(cursor)
+        cursor.execute("""
+            UPDATE disenos_referencia
+            SET estado = 'Rechazado', motivo_rechazo = %s
+            WHERE id = %s
+            RETURNING nombre;
+        """, (motivo, diseno_id))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Diseño no encontrado.'}), 404
+        conexion.commit()
+        return jsonify({'exito': True,
+                        'mensaje': f'Diseño "{row[0]}" rechazado.'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)

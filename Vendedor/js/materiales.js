@@ -1853,3 +1853,143 @@ function _syncPiezaFoto(inputCam, targetId) {
         }
     }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// DISEÑOS DE REFERENCIA — Modal para vendedor (subir inspiración)
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * Abre el modal SweetAlert para subir un diseño de referencia (Pinterest u otra fuente).
+ * Lo llama el botón en la vista del Gestor de Aprobación o desde el menú de insumos.
+ */
+async function abrirModalDiseno() {
+    const { value: formValues } = await Swal.fire({
+        title: '📌 Subir Diseño de Referencia',
+        html: `
+            <div style="text-align:left; font-size:13px; padding:4px;">
+                <p style="color:#64748b; margin-bottom:14px;">
+                    Sube una foto de inspiración (Pinterest, catálogo, foto propia).
+                    El Admin la revisará y aprobará para el equipo.
+                </p>
+
+                <label style="font-weight:800; font-size:11px; color:#0f172a; display:block; margin-bottom:4px;">
+                    NOMBRE DEL DISEÑO *
+                </label>
+                <input id="dr-nombre" class="swal2-input"
+                       placeholder="Ej: Sofá Chesterfield Capitoneado"
+                       style="height:36px; margin:0 0 12px; width:100%;">
+
+                <label style="font-weight:800; font-size:11px; color:#0f172a; display:block; margin-bottom:4px;">
+                    CATEGORÍA *
+                </label>
+                <select id="dr-categoria" class="swal2-input"
+                        style="height:36px; margin:0 0 12px; width:100%; font-size:13px;">
+                    <option value="Sofá">Sofá</option>
+                    <option value="Comedor">Comedor</option>
+                    <option value="Butaca">Butaca / Silla</option>
+                    <option value="Mesa de Centro">Mesa de Centro</option>
+                    <option value="Tela">Tela / Tapizado</option>
+                    <option value="Cojín">Cojín</option>
+                    <option value="General">General / Otro</option>
+                </select>
+
+                <label style="font-weight:800; font-size:11px; color:#0f172a; display:block; margin-bottom:4px;">
+                    URL DE PINTEREST (opcional)
+                </label>
+                <input id="dr-url" class="swal2-input" type="url"
+                       placeholder="https://pin.it/..."
+                       style="height:36px; margin:0 0 12px; width:100%;">
+
+                <label style="font-weight:800; font-size:11px; color:#0f172a; display:block; margin-bottom:4px;">
+                    DESCRIPCIÓN / NOTAS (opcional)
+                </label>
+                <textarea id="dr-descripcion" class="swal2-textarea"
+                          placeholder="Ej: El cliente quiere este estilo pero en tela beige, patas de madera..."
+                          style="min-height:70px; width:100%; margin:0 0 12px;"></textarea>
+
+                <label style="font-weight:800; font-size:11px; color:#e60023; display:block; margin-bottom:4px;">
+                    FOTO DE REFERENCIA *
+                </label>
+                <input id="dr-foto" type="file" accept="image/*"
+                       onchange="drPreviewFoto(this)"
+                       style="width:100%; font-size:12px; margin-bottom:8px;">
+                <div id="dr-preview-wrap" style="display:none; margin-bottom:8px;">
+                    <img id="dr-preview-img"
+                         style="width:100%; max-height:160px; object-fit:cover;
+                                border-radius:8px; border:1px solid #e2e8f0;">
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-paper-plane"></i> Enviar para aprobación',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#e60023',
+        width: '520px',
+        preConfirm: () => {
+            const nombre  = (document.getElementById('dr-nombre')?.value || '').trim();
+            const file    = document.getElementById('dr-foto')?.files[0];
+            if (!nombre) {
+                Swal.showValidationMessage('El nombre del diseño es obligatorio.');
+                return false;
+            }
+            if (!file) {
+                Swal.showValidationMessage('Debes adjuntar una foto de referencia.');
+                return false;
+            }
+            return {
+                nombre,
+                categoria:    document.getElementById('dr-categoria')?.value || 'General',
+                url:          (document.getElementById('dr-url')?.value || '').trim(),
+                descripcion:  (document.getElementById('dr-descripcion')?.value || '').trim(),
+                file,
+            };
+        }
+    });
+
+    if (!formValues) return;
+
+    // Construir FormData y enviar
+    Swal.fire({ title: 'Subiendo diseño...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        const fd = new FormData();
+        fd.append('nombre',        formValues.nombre);
+        fd.append('categoria',     formValues.categoria);
+        fd.append('url_pinterest', formValues.url);
+        fd.append('descripcion',   formValues.descripcion);
+        fd.append('foto',          formValues.file);
+
+        const res  = await apiFetch(`${API_URL}/api/disenos-referencia`, {
+            method: 'POST',
+            body: fd,
+        });
+        const data = await res.json();
+
+        if (data.exito) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Enviado!',
+                text: data.mensaje || 'El diseño fue enviado para revisión del Admin.',
+                confirmButtonColor: '#0f172a',
+            });
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo subir el diseño.', 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', 'Error de conexión con el servidor.', 'error');
+    }
+}
+
+/** Preview de foto en el modal de diseño de referencia */
+function drPreviewFoto(input) {
+    const file = input?.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img  = document.getElementById('dr-preview-img');
+        const wrap = document.getElementById('dr-preview-wrap');
+        if (img)  img.src = e.target.result;
+        if (wrap) wrap.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}

@@ -2674,19 +2674,22 @@ async function cargarGestorAprobacion() {
     cargarCambiosPrecioPendientes();
 
     try {
-        // Ejecutamos ambas consultas simultáneamente
-        const [resMuebles, resInsumos] = await Promise.all([
+        // Ejecutamos las tres consultas simultáneamente
+        const [resMuebles, resInsumos, resDisenos] = await Promise.all([
             apiFetch(`${API_URL}/api/creaciones`),
-            apiFetch(`${API_URL}/api/sugerencias`)
+            apiFetch(`${API_URL}/api/sugerencias`),
+            apiFetch(`${API_URL}/api/disenos-referencia?estado=Pendiente`)
         ]);
 
         const creaciones = await resMuebles.json();
         const sugerenciasInsumos = await resInsumos.json();
+        const disenosReferencia = resDisenos.ok ? await resDisenos.json() : [];
 
         const mueblesPendientes = creaciones.filter(c => c.estado === 'Pendiente');
         const insumosPendientes = sugerenciasInsumos.filter(i => i.estado === 'Pendiente');
+        const disenosPendientes = Array.isArray(disenosReferencia) ? disenosReferencia : [];
 
-        if (mueblesPendientes.length === 0 && insumosPendientes.length === 0) {
+        if (mueblesPendientes.length === 0 && insumosPendientes.length === 0 && disenosPendientes.length === 0) {
             contenedor.innerHTML = `
                 <div style="grid-column: 1/-1; text-align: center; padding: 50px; background: white; border-radius: 15px; border: 1px dashed #cbd5e1;">
                     <i class="fa-solid fa-check-double" style="font-size: 3rem; color: var(--success); margin-bottom: 15px;"></i>
@@ -2743,11 +2746,114 @@ async function cargarGestorAprobacion() {
             </div>`;
         });
 
+        // Renderizado de Diseños de Referencia (Pinterest/Inspiración)
+        disenosPendientes.forEach(diseno => {
+            const pinterestBtn = diseno.url_pinterest
+                ? `<a href="${diseno.url_pinterest}" target="_blank" rel="noopener"
+                      style="display:inline-flex;align-items:center;gap:5px;font-size:11px;
+                             color:#e60023;text-decoration:none;font-weight:700;margin-bottom:8px;">
+                      <i class="fa-brands fa-pinterest-p"></i> Ver en Pinterest
+                   </a>`
+                : '';
+            htmlFinal += `
+            <div class="card-produccion" style="position:relative; background: #fff8f8; border: 1px dashed #e60023; border-radius:14px; padding:15px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div class="badge-template" style="position:absolute; top:15px; left:15px; background: #e60023; color:white; font-size:10px; padding:3px 8px; border-radius:20px; font-weight:700;">📌 DISEÑO: ${diseno.categoria.toUpperCase()}</div>
+                <img src="${diseno.foto_url}" style="width:100%; height:160px; object-fit:cover; border-radius:10px; margin-bottom:12px; margin-top:8px;" onerror="this.src='imagenes/sin_foto.jpg'">
+                <h4 style="margin:0 0 2px 0; color:#0f172a; font-size:14px;">${diseno.nombre}</h4>
+                <small style="color:gray; display:block; margin-bottom:6px;">Subido por: <b>${diseno.vendedor || 'Vendedor'}</b> · ${diseno.fecha}</small>
+                ${pinterestBtn}
+                ${diseno.descripcion ? `<div style="font-size:11px; color:#7c3a3a; margin-bottom:12px; background:#fff0f0; padding:8px; border-radius:6px; line-height:1.5;">${diseno.descripcion}</div>` : ''}
+                <div style="display:flex; gap:8px; margin-top:auto;">
+                    <button class="btn-primary" style="flex:1; font-size:11px; padding:9px; border-radius:8px; background:#15803d; border:none; color:white; font-weight:bold; cursor:pointer;"
+                            onclick="aprobarDiseno(${diseno.id}, '${diseno.nombre.replace(/'/g, "\\'")}')">
+                        <i class="fa-solid fa-check"></i> APROBAR
+                    </button>
+                    <button class="btn-primary" style="flex:1; font-size:11px; padding:9px; border-radius:8px; background:#dc2626; border:none; color:white; font-weight:bold; cursor:pointer;"
+                            onclick="rechazarDiseno(${diseno.id}, '${diseno.nombre.replace(/'/g, "\\'")}')">
+                        <i class="fa-solid fa-xmark"></i> RECHAZAR
+                    </button>
+                </div>
+            </div>`;
+        });
+
         contenedor.innerHTML = htmlFinal;
 
     } catch (error) {
         console.error("Error unificando gestor:", error);
         contenedor.innerHTML = '<p style="color:red; text-align:center; grid-column: 1/-1;">❌ Error de sincronización con la base de datos.</p>';
+    }
+}
+
+// ─── Aprobar diseño de referencia ────────────────────────────────────────────
+async function aprobarDiseno(id, nombre) {
+    const { isConfirmed } = await Swal.fire({
+        title: '¿Aprobar diseño de referencia?',
+        html: `<p style="color:#475569; font-size:13px;">El diseño <b>${nombre}</b> quedará disponible
+               como referencia visual aprobada para el equipo.</p>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aprobar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#15803d',
+    });
+    if (!isConfirmed) return;
+
+    try {
+        Swal.fire({ title: 'Aprobando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res  = await apiFetch(`${API_URL}/api/disenos-referencia/aprobar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ diseno_id: id })
+        });
+        const data = await res.json();
+        if (data.exito) {
+            Swal.fire('¡Aprobado!', data.mensaje, 'success');
+            cargarGestorAprobacion();
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo aprobar.', 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', 'Error de conexión con el servidor.', 'error');
+    }
+}
+
+// ─── Rechazar diseño de referencia ───────────────────────────────────────────
+async function rechazarDiseno(id, nombre) {
+    const { value: motivo } = await Swal.fire({
+        title: 'Rechazar diseño',
+        html: `<p style="color:#475569;font-size:13px;margin-bottom:10px;">
+                  Indica el motivo para rechazar: <b>${nombre}</b></p>
+               <textarea id="swal-motivo-diseno" class="swal2-textarea"
+                         placeholder="Ej: No aplica para nuestro estilo, imagen de baja calidad..."
+                         style="min-height:80px;width:90%;"></textarea>`,
+        showCancelButton: true,
+        confirmButtonText: 'Rechazar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc2626',
+        preConfirm: () => {
+            const m = document.getElementById('swal-motivo-diseno')?.value.trim();
+            if (!m) { Swal.showValidationMessage('El motivo es obligatorio.'); return false; }
+            return m;
+        }
+    });
+    if (!motivo) return;
+
+    try {
+        Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res  = await apiFetch(`${API_URL}/api/disenos-referencia/rechazar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ diseno_id: id, motivo })
+        });
+        const data = await res.json();
+        if (data.exito) {
+            Swal.fire('Rechazado', data.mensaje, 'info');
+            cargarGestorAprobacion();
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo rechazar.', 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', 'Error de conexión con el servidor.', 'error');
     }
 }
 
