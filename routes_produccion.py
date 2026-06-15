@@ -1434,7 +1434,7 @@ def guardar_sugerencia():
         datos_json = request.form.get('datos_json')
         if not nombre or not tipo:
             return jsonify({'error': 'El nombre y tipo de insumo son obligatorios'}), 400
-        foto_ruta = "imagenes/sin_foto.jpg"
+        foto_ruta = request.form.get('foto_ref') or "imagenes/sin_foto.jpg"
         if 'foto' in request.files and request.files['foto'].filename != '':
             respuesta_nube = cloudinary.uploader.upload(request.files['foto'], folder="sugerencias")
             foto_ruta = respuesta_nube.get('secure_url')
@@ -1484,7 +1484,9 @@ def obtener_sugerencias():
 def aprobar_sugerencia_insumo():
     data          = request.json
     sugerencia_id = data.get('sugerencia_id')
-    origen        = data.get('origen', 'Value')
+    origen        = data.get('origen', 'Externo')
+    campo1        = data.get('campo1', '')
+    campo2        = data.get('campo2', '')
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -1495,14 +1497,18 @@ def aprobar_sugerencia_insumo():
         tipo_material, foto_ruta, datos_raw = sug
         datos = json.loads(datos_raw) if datos_raw else {}
         nuevo_sku = ""
+
+        def val(key, fallback):
+            return datos.get(key) if datos.get(key) else fallback
+
         inserts = {
-            'tela':        ("maestro_telas", "TEL", "(sku, proveedor, coleccion, color, foto_url, origen_produccion, estado, proveedor_id) VALUES (%s,%s,%s,%s,%s,%s,'Disponible',%s)", lambda d: (datos.get('proveedor'), datos.get('coleccion'), datos.get('color'), foto_ruta, origen, datos.get('proveedor_id'))),
-            'cojin':       ("maestro_disenos_cojin", "COJ", "(sku, nombre_diseno, tipo_tela, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('nombre_diseno'), datos.get('tipo_tela'), foto_ruta, origen)),
-            'base':        ("maestro_bases", "BAS", "(sku, tipo, material, modelo, color, medida_altura, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('tipo'), datos.get('material'), datos.get('modelo'), datos.get('color'), datos.get('medida_altura'), foto_ruta, origen)),
-            'tablero':     ("maestro_tableros", "TAB", "(sku, material_base, nombre_modelo, color_veta, acabado, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('material_base'), datos.get('nombre_modelo'), datos.get('color_veta'), datos.get('acabado'), foto_ruta, origen)),
-            'base-comedor':("maestro_bases_comedor", "BAC", "(sku, material, modelo, color, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('material'), datos.get('modelo'), datos.get('color'), foto_ruta, origen)),
-            'silla':       ("maestro_sillas", "SIL", "(sku, material, modelo, color_estructura, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('material'), datos.get('modelo'), datos.get('color_estructura'), foto_ruta, origen)),
-            'butaca':      ("maestro_butacas", "BUT", "(sku, material, modelo, color_estructura, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (datos.get('material'), datos.get('modelo'), datos.get('color_estructura'), foto_ruta, origen)),
+            'tela':        ("maestro_telas", "TEL", "(sku, proveedor, coleccion, color, foto_url, origen_produccion, estado, proveedor_id) VALUES (%s,%s,%s,%s,%s,%s,'Disponible',%s)", lambda d: (d.get('proveedor'), val('coleccion', campo1), val('color', campo2), foto_ruta, origen, d.get('proveedor_id'))),
+            'cojin':       ("maestro_disenos_cojin", "COJ", "(sku, nombre_diseno, tipo_tela, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,'Disponible')", lambda d: (val('nombre_diseno', campo1), val('tipo_tela', campo2), foto_ruta, origen)),
+            'base':        ("maestro_bases", "BAS", "(sku, tipo, material, modelo, color, medida_altura, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (d.get('tipo', 'Patas'), val('material', campo2), val('modelo', campo1), d.get('color'), d.get('medida_altura'), foto_ruta, origen)),
+            'tablero':     ("maestro_tableros", "TAB", "(sku, material_base, nombre_modelo, color_veta, acabado, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (val('material_base', campo2), val('nombre_modelo', campo1), d.get('color_veta'), d.get('acabado'), foto_ruta, origen)),
+            'base-comedor':("maestro_bases_comedor", "BAC", "(sku, material, modelo, color, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (val('material', campo2), val('modelo', campo1), d.get('color'), foto_ruta, origen)),
+            'silla':       ("maestro_sillas", "SIL", "(sku, material, modelo, color_estructura, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (val('material', campo2), val('modelo', campo1), d.get('color_estructura'), foto_ruta, origen)),
+            'butaca':      ("maestro_butacas", "BUT", "(sku, material, modelo, color_estructura, foto_url, origen_produccion, estado) VALUES (%s,%s,%s,%s,%s,%s,'Disponible')", lambda d: (val('material', campo2), val('modelo', campo1), d.get('color_estructura'), foto_ruta, origen)),
         }
         if tipo_material not in inserts:
             return jsonify({'error': 'Tipo de material no reconocido'}), 400

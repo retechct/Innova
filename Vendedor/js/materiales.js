@@ -700,12 +700,34 @@ async function abrirModalPinterest(tipoInput) {
             Swal.disableButtons();
 
             try {
+                // 1. Subir la imagen primero
                 const formData = new FormData();
                 formData.append('archivo', file);
                 const res = await apiFetch(`${API_URL}/api/upload-voucher`, { method: 'POST', body: formData });
                 const data = await res.json();
                 if (!data.url) throw new Error('No se pudo obtener la URL de la imagen');
-                return { desc, url: data.url };
+                
+                // 2. Mapear a tipo singular para el backend
+                let tipoSingular = 'tela';
+                if (tipoInput.includes('cojin-diseno') || tipoInput.includes('cojin-rev-diseno')) tipoSingular = 'cojin';
+                else if (tipoInput === 'base') tipoSingular = 'base';
+                else if (tipoInput.includes('tablero')) tipoSingular = 'tablero';
+                else if (tipoInput.includes('base-mesa') || tipoInput.includes('base-centro')) tipoSingular = 'base-comedor';
+                else if (tipoInput === 'silla') tipoSingular = 'silla';
+                else if (tipoInput === 'estructura-butaca') tipoSingular = 'butaca';
+
+                // 3. Guardar como sugerencia para el Gestor del Admin
+                const formSug = new FormData();
+                formSug.append('nombre', `✨ PINTEREST: ${desc}`);
+                formSug.append('tipo', tipoSingular);
+                formSug.append('foto_ref', data.url);
+                formSug.append('usuario_id', typeof usuarioActivo !== 'undefined' && usuarioActivo ? usuarioActivo.id : '');
+                formSug.append('datos_json', JSON.stringify({ origen: 'Pinterest', descripcion: desc }));
+
+                const resSug = await apiFetch(`${API_URL}/api/sugerencias`, { method: 'POST', body: formSug });
+                const dataSug = await resSug.json();
+
+                return { desc, url: data.url, idSugerencia: dataSug.id || Date.now().toString().slice(-6) };
             } catch (e) {
                 Swal.showValidationMessage('Error al subir la imagen. Intenta de nuevo.');
                 Swal.enableButtons();
@@ -717,7 +739,7 @@ async function abrirModalPinterest(tipoInput) {
 
     if (formValues) {
         let tituloEspecial = `✨ PINTEREST: ${formValues.desc}`;
-        let skuTemporal = `REQ-PIN-${Date.now().toString().slice(-6)}`;
+        let skuTemporal = `REQ-PIN-${formValues.idSugerencia}`;
         seleccionarMaterial(tipoInput, skuTemporal, tituloEspecial, formValues.url);
     }
 }

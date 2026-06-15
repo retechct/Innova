@@ -2737,7 +2737,7 @@ async function cargarGestorAprobacion() {
                 <div style="font-size: 11px; color: #b45309; margin-bottom: 15px; background: #fffbeb; padding: 8px; border-radius: 6px; line-height:1.4; text-align:left;">
                     ${especificacionesInsumo || 'Instrucciones estándar básicas.'}
                 </div>
-                <button class="btn-primary" style="font-size: 11px; padding: 10px; border-radius:8px; background:#d97706; border:none; color:white; font-weight:bold; cursor:pointer;" onclick="procesarAprobacionInsumo(${insumo.id}, '${insumo.nombre}')">
+                <button class="btn-primary" style="font-size: 11px; padding: 10px; border-radius:8px; background:#d97706; border:none; color:white; font-weight:bold; cursor:pointer;" onclick="procesarAprobacionInsumo(${insumo.id}, '${insumo.nombre.replace(/'/g, "\\'")}', '${insumo.tipo}')">
                     <i class="fa-solid fa-stamp"></i> EVALUAR INSUMO
                 </button>
             </div>`;
@@ -2752,24 +2752,63 @@ async function cargarGestorAprobacion() {
 }
 
 // Ventana de evaluación contable/operativa de insumos para el Admin
-async function procesarAprobacionInsumo(id, nombre) {
+async function procesarAprobacionInsumo(id, nombre, tipo) {
+    let camposExtra = '';
+    if (tipo === 'tela') {
+        camposExtra = `
+            <label style="font-weight:900; font-size:11px; color:#475569; display:block; margin-top:10px;">COLECCIÓN (Obligatorio):</label>
+            <input id="swal-campo1" class="swal2-input" style="height:35px; margin:5px 0 10px; width:100%;" placeholder="Ej: Velvet">
+            <label style="font-weight:900; font-size:11px; color:#475569; display:block;">COLOR (Obligatorio):</label>
+            <input id="swal-campo2" class="swal2-input" style="height:35px; margin:5px 0 10px; width:100%;" placeholder="Ej: Gris Plata">
+        `;
+    } else if (tipo === 'cojin') {
+        camposExtra = `
+            <label style="font-weight:900; font-size:11px; color:#475569; display:block; margin-top:10px;">NOMBRE DISEÑO (Obligatorio):</label>
+            <input id="swal-campo1" class="swal2-input" style="height:35px; margin:5px 0 10px; width:100%;" placeholder="Ej: Geométrico">
+            <label style="font-weight:900; font-size:11px; color:#475569; display:block;">TIPO TELA (Obligatorio):</label>
+            <input id="swal-campo2" class="swal2-input" style="height:35px; margin:5px 0 10px; width:100%;" placeholder="Ej: Jacquard">
+        `;
+    } else {
+        camposExtra = `
+            <label style="font-weight:900; font-size:11px; color:#475569; display:block; margin-top:10px;">MODELO / DISEÑO (Obligatorio):</label>
+            <input id="swal-campo1" class="swal2-input" style="height:35px; margin:5px 0 10px; width:100%;" placeholder="Ej: Zócalo Bajo">
+            <label style="font-weight:900; font-size:11px; color:#475569; display:block;">MATERIAL / COLOR (Obligatorio):</label>
+            <input id="swal-campo2" class="swal2-input" style="height:35px; margin:5px 0 10px; width:100%;" placeholder="Ej: Madera Nogal">
+        `;
+    }
+
     const { value: origenEstrategia } = await Swal.fire({
-        title: 'Evaluación Estratégica de Insumo',
+        title: 'Oficializar Insumo',
         html: `
             <div style="text-align: left; padding: 5px; font-size:13px;">
-                <p style="color:#475569; margin-bottom:15px;">Estás a punto de oficializar el insumo: <b style="color:#0f172a;">${nombre}</b> en el maestro del sistema.</p>
+                <p style="color:#475569; margin-bottom:10px;">Estás a punto de ingresar al maestro: <b style="color:#0f172a;">${nombre}</b></p>
                 <label style="font-weight:900; font-size:11px; color:var(--primary); display:block; margin-bottom:5px;">DEFINIR ORIGEN DE PRODUCCIÓN (Make vs Buy):</label>
                 <select id="swal-insumo-origen" class="swal2-input" style="width:100%; margin:0; height:40px; font-size:14px;">
                     <option value="Externo">📦 COMPRA EXTERNA (Se compra directo a proveedor)</option>
                     <option value="Interno">🛠️ FABRICACIÓN INTERNA (Se procesa en el taller)</option>
                 </select>
+                <hr style="margin: 15px 0; border: 0; border-top: 1px dashed #cbd5e1;">
+                <p style="color:#d97706; font-size:11px; font-weight:bold; margin-bottom:5px;">Completa los datos para el catálogo maestro:</p>
+                ${camposExtra}
             </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Oficializar e Inyectar SKU',
+        confirmButtonText: 'Oficializar Insumo',
         cancelButtonText: 'Rechazar',
         confirmButtonColor: '#d97706',
-        preConfirm: () => document.getElementById('swal-insumo-origen').value
+        preConfirm: () => {
+            const campo1 = document.getElementById('swal-campo1') ? document.getElementById('swal-campo1').value.trim() : '';
+            const campo2 = document.getElementById('swal-campo2') ? document.getElementById('swal-campo2').value.trim() : '';
+            if (!campo1 || !campo2) {
+                Swal.showValidationMessage('Debes completar los datos obligatorios del insumo');
+                return false;
+            }
+            return {
+                origen: document.getElementById('swal-insumo-origen').value,
+                campo1: campo1,
+                campo2: campo2
+            };
+        }
     });
 
     if (origenEstrategia) {
@@ -2778,7 +2817,12 @@ async function procesarAprobacionInsumo(id, nombre) {
             const res = await apiFetch(`${API_URL}/api/sugerencias/aprobar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sugerencia_id: id, origen: origenEstrategia })
+                body: JSON.stringify({ 
+                    sugerencia_id: id, 
+                    origen: origenEstrategia.origen,
+                    campo1: origenEstrategia.campo1,
+                    campo2: origenEstrategia.campo2
+                })
             });
             const data = await res.json();
             if (data.exito) {
