@@ -577,14 +577,21 @@ function _invMostrarDetalleUnidad(d) {
     // 1. Recuperar la foto original del maestro si el backend no la envió
     let fotoUrlFinal = d.foto_url;
     if (!fotoUrlFinal && d.tipo !== 'producto') {
-        const cat = (d.categoria || '').toLowerCase();
-        let lista = [];
-        if (cat === 'tablero') lista = _maestroInv.tableros || [];
-        else if (cat === 'silla') lista = _maestroInv.sillas || [];
-        else if (cat === 'butaca') lista = _maestroInv.butacas || [];
-        else if (cat.includes('base')) lista = _maestroInv.bases_comedor || [];
+        // Agrupamos todos los catálogos para asegurar que busque en todos lados
+        const todosLosMaestros = [
+            ...(_maestroInv.tableros || []),
+            ...(_maestroInv.bases_comedor || []),
+            ...(_maestroInv.sillas || []),
+            ...(_maestroInv.butacas || [])
+        ];
         
-        const f = lista.find(x => x.nombre_modelo === d.nombre_modelo || x.modelo === d.nombre_modelo || x.nombre === d.nombre_modelo);
+        const dNombre = (d.nombre_modelo || '').trim().toLowerCase();
+        const f = todosLosMaestros.find(x => 
+            (d.sku_maestro && x.sku === d.sku_maestro) || 
+            (x.nombre_modelo || '').trim().toLowerCase() === dNombre || 
+            (x.modelo || '').trim().toLowerCase() === dNombre || 
+            (x.nombre || '').trim().toLowerCase() === dNombre
+        );
         if (f && f.foto_url) fotoUrlFinal = f.foto_url;
     }
 
