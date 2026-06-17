@@ -56,6 +56,13 @@ function _htmlEsqueleto() {
                            display:flex;align-items:center;gap:6px;">
                 <i class="fas fa-plus"></i> Registrar
             </button>` : ''}
+            ${_puedeEditarInv() ? `
+            <button onclick="_invImprimirMasivo()" 
+                    style="background:var(--primary);color:white;border:none;padding:10px 16px;
+                           border-radius:10px;font-weight:800;cursor:pointer;font-size:12px;
+                           display:flex;align-items:center;gap:6px;">
+                <i class="fas fa-barcode"></i> Imprimir SKUs
+            </button>` : ''}
             <button onclick="_invExportarCSV()"
                     style="background:white;color:var(--text-muted);border:1px solid #e2e8f0;
                            padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;
@@ -256,8 +263,12 @@ function _renderTablaProductos() {
         <thead>
             <tr style="background:#f1f5f9;font-size:11px;font-weight:900;
                        text-transform:uppercase;color:var(--text-muted);">
-                <th style="padding:12px 16px;text-align:left;position:sticky;
-                           left:0;background:#f1f5f9;z-index:2;min-width:200px;">Modelo</th>
+                <th style="padding:12px 16px;text-align:left;position:sticky;left:0;background:#f1f5f9;z-index:2;min-width:200px;">
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="checkbox" onchange="document.querySelectorAll('.chk-prod').forEach(c=>c.checked=this.checked)">
+                        <span>Modelo</span>
+                    </div>
+                </th>
                 <th style="padding:12px 10px;text-align:center;color:var(--success);">Total Disp.</th>
                 ${sedes.map(s=>`<th style="padding:12px 8px;text-align:center;">${s}</th>`).join('')}
                 <th style="padding:12px 10px;text-align:center;">Acciones</th>
@@ -275,8 +286,13 @@ function _renderTablaProductos() {
             onmouseover="this.style.background='#eff6ff'"
             onmouseout="this.style.background='${bg}'">
             <td style="padding:12px 16px;position:sticky;left:0;background:inherit;z-index:1;">
-                <div style="font-weight:800;font-size:13px;">${m.nombre_modelo}</div>
-                <div style="margin-top:3px;">${catBadge}</div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <input type="checkbox" class="chk-prod" value="PROD-${m.catalogo_id}|${m.nombre_modelo.replace(/"/g,'&quot;')}" data-cant="${m.disponibles}" style="margin-top:2px;">
+                    <div>
+                        <div style="font-weight:800;font-size:13px;">${m.nombre_modelo}</div>
+                        <div style="margin-top:3px;">${catBadge}</div>
+                    </div>
+                </div>
             </td>
             <td style="padding:12px 10px;text-align:center;">
                 <span style="background:${m.disponibles>0?'#dcfce7':'#fee2e2'};
@@ -296,7 +312,12 @@ function _renderTablaProductos() {
                         ${st.total} total</div>` : ''}
                 </td>`;
             }).join('')}
-            <td style="padding:12px 8px;text-align:center;">
+            <td style="padding:12px 8px;text-align:center;display:flex;gap:4px;justify-content:center;">
+                <button onclick="imprimirEtiqueta('PROD-${m.catalogo_id}','${m.nombre_modelo.replace(/'/g,"\\'")}','Catálogo')"
+                        style="background:#f8fafc;border:1px solid #cbd5e1;padding:6px 10px;border-radius:6px;
+                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Imprimir SKU Maestro">
+                    <i class="fas fa-barcode"></i> SKU
+                </button>
                 <button onclick="_invVerUnidades('${m.nombre_modelo.replace(/'/g,"\\'")}','${m.categoria}',${m.catalogo_id||'null'})"
                         style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;
                                color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;">
@@ -332,11 +353,16 @@ function _renderTablaPiezas() {
         <thead>
             <tr style="background:#f1f5f9;font-size:11px;font-weight:900;
                        text-transform:uppercase;color:var(--text-muted);">
-                <th style="padding:12px 16px;text-align:left;position:sticky;
-                           left:0;background:#f1f5f9;z-index:2;min-width:200px;">Modelo</th>
+                <th style="padding:12px 16px;text-align:left;position:sticky;left:0;background:#f1f5f9;z-index:2;min-width:200px;">
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="checkbox" onchange="document.querySelectorAll('.chk-pieza').forEach(c=>c.checked=this.checked)">
+                        <span>Modelo</span>
+                    </div>
+                </th>
                 <th style="padding:12px 10px;text-align:left;">Medida</th>
                 <th style="padding:12px 10px;text-align:center;color:var(--success);">Total</th>
                 ${sedes.map(s=>`<th style="padding:12px 8px;text-align:center;">${s}</th>`).join('')}
+                <th style="padding:12px 10px;text-align:center;">Acciones</th>
             </tr>
         </thead>
         <tbody>`;
@@ -352,15 +378,20 @@ function _renderTablaPiezas() {
             onmouseover="this.style.background='#eff6ff'"
             onmouseout="this.style.background='${bg}'">
             <td style="padding:12px 16px;position:sticky;left:0;background:inherit;z-index:1;">
-                ${isNew ? `
-                <div style="font-weight:800;font-size:13px;">${p.nombre_modelo}</div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
-                    <span style="background:#fff7ed;color:#c2410c;font-size:9px;font-weight:900;
-                          padding:2px 7px;border-radius:8px;">${p.categoria.toUpperCase()}</span>
-                    <span style="margin-left:5px;">${p.material||''} ${p.color_acabado?'· '+p.color_acabado:''}</span>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    ${isNew ? `<input type="checkbox" class="chk-pieza" value="${p.sku_maestro}|${p.nombre_modelo.replace(/"/g,'&quot;')}" data-cant="${p.disponibles}" style="margin-top:2px;">` : '<div style="width:13px;"></div>'}
+                    <div>
+                        ${isNew ? `
+                        <div style="font-weight:800;font-size:13px;">${p.nombre_modelo}</div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">
+                            <span style="background:#fff7ed;color:#c2410c;font-size:9px;font-weight:900;
+                                  padding:2px 7px;border-radius:8px;">${p.categoria.toUpperCase()}</span>
+                            <span style="margin-left:5px;">${p.material||''} ${p.color_acabado?'· '+p.color_acabado:''}</span>
+                        </div>
+                        <div style="font-size:10px;color:#94a3b8;">${p.sku_maestro}</div>
+                        ` : `<span style="color:#e2e8f0;font-size:11px;">↳</span>`}
+                    </div>
                 </div>
-                <div style="font-size:10px;color:#94a3b8;">${p.sku_maestro}</div>
-                ` : `<span style="color:#e2e8f0;font-size:11px;">↳</span>`}
             </td>
             <td style="padding:12px 10px;font-weight:700;font-size:12px;">${medida}</td>
             <td style="padding:12px 10px;text-align:center;">
@@ -374,6 +405,14 @@ function _renderTablaPiezas() {
                 font-size:13px;color:${((p.sede_stock||{})[s]||0)>0?'var(--primary)':'#cbd5e1'};">
                 ${(p.sede_stock||{})[s]||0}
             </td>`).join('')}
+            <td style="padding:12px 8px;text-align:center;">
+                ${isNew ? `
+                <button onclick="imprimirEtiqueta('${p.sku_maestro}','${p.nombre_modelo.replace(/'/g,"\\'")}','Catálogo')"
+                        style="background:#f8fafc;border:1px solid #cbd5e1;padding:6px 10px;border-radius:6px;
+                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Imprimir SKU Maestro">
+                    <i class="fas fa-barcode"></i> SKU
+                </button>` : ''}
+            </td>
         </tr>`;
     });
 
@@ -1093,4 +1132,114 @@ function imprimirEtiqueta(codigo, nombre, sede) {
         win.document.close();
     }
     _renderEtiqueta();
+}
+
+/* ─── Impresión Masiva de Etiquetas ─────────────────────────────── */
+async function _invImprimirMasivo() {
+    const chks = document.querySelectorAll('.chk-prod:checked, .chk-pieza:checked');
+    if (!chks.length) {
+        return Swal.fire('Ningún ítem seleccionado', 'Selecciona al menos un modelo marcando su casilla en la tabla.', 'warning');
+    }
+
+    const res = await Swal.fire({
+        title: 'Imprimir Etiquetas',
+        text: `Has seleccionado ${chks.length} modelos. ¿Cuántas etiquetas deseas imprimir?`,
+        icon: 'question',
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: '1 por modelo',
+        denyButtonText: 'Por stock disp.',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0f172a',
+        denyButtonColor: '#16a34a'
+    });
+
+    if (res.isDismissed) return;
+
+    const porCantidad = res.isDenied; // Si presionó "Por stock disp."
+    const etiquetas = [];
+
+    chks.forEach(chk => {
+        const [codigo, nombre] = chk.value.split('|');
+        const cant = porCantidad ? parseInt(chk.dataset.cant || 1) : 1;
+        // Imprime al menos 1 aunque el stock sea 0, para que no se quede vacío
+        const n = cant > 0 ? cant : 1;
+        
+        for (let i = 0; i < n; i++) {
+            etiquetas.push({ codigo, nombre, sede: 'Catálogo' });
+        }
+    });
+
+    imprimirEtiquetasMasivas(etiquetas);
+}
+
+function imprimirEtiquetasMasivas(lista) {
+    const win = window.open('', '_blank', 'width=800,height=600');
+    if (!win) return Swal.fire('Aviso', 'Por favor permite las ventanas emergentes (pop-ups) en tu navegador para imprimir.', 'warning');
+    
+    const divs = lista.map((it, i) => `
+        <div class="etiqueta">
+            <div class="marca">INNOVA MÖBILI</div>
+            <div class="nombre">${it.nombre}</div>
+            <div class="sede">${it.sede}</div>
+            <svg id="barcode-${i}"></svg>
+            <div class="codigo-texto">${it.codigo}</div>
+        </div>
+    `).join('');
+
+    win.document.write(`<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Impresión Masiva de Etiquetas</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+                font-family: 'Arial', sans-serif; background: #f1f5f9;
+                display: flex; flex-wrap: wrap; gap: 15px; padding: 20px; justify-content: center;
+            }
+            .toolbar {
+                width: 100%; text-align: center; padding: 15px; background: #fff;
+                border-bottom: 1px solid #e2e8f0; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            }
+            .etiqueta {
+                background: #fff; border: 2px dashed #cbd5e1; border-radius: 6px;
+                padding: 16px 20px; width: 320px; text-align: center; page-break-inside: avoid;
+            }
+            .marca { font-size: 9px; letter-spacing: 0.35em; text-transform: uppercase; color: #c9a84c; margin-bottom: 4px; }
+            .nombre { font-size: 13px; font-weight: 700; color: #1e140a; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .sede { font-size: 10px; color: #8a7560; margin-bottom: 10px; }
+            svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+            .codigo-texto { font-size: 12px; font-weight: 900; color: #1e140a; letter-spacing: 0.15em; margin-top: 6px; }
+            @media print {
+                body { background: white; padding: 0; gap: 0; display: block; }
+                .toolbar { display: none !important; }
+                .etiqueta {
+                    border: none; margin: 0; page-break-after: always; /* 1 por página en ticketeras */
+                    width: 100vw; height: 100vh; display: flex; flex-direction: column; justify-content: center;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="toolbar no-print">
+            <button onclick="window.print()"
+                style="background:#0f172a;color:white;border:none;padding:10px 24px;
+                       border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;">
+                🖨️ Imprimir Todas (${lista.length})
+            </button>
+        </div>
+        ${divs}
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+        <script>
+            window.onload = function() {
+                ${lista.map((it, i) => `
+                JsBarcode("#barcode-${i}", "${it.codigo}", {
+                    format: "CODE128", width: 2, height: 60, displayValue: false, margin: 4
+                });`).join('\n')}
+            };
+        <\/script>
+    </body>
+    </html>`);
+    win.document.close();
 }
