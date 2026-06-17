@@ -118,7 +118,7 @@ function filtrarMaterial(tipoInput) {
     let opciones = maestroMateriales[tipoData].filter(item => {
         let textoCompleto = Object.values(item).join(' ').toLowerCase();
         return textoCompleto.includes(searchInput);
-    }).slice(0, 10); // Máximo 10 resultados al buscar
+    }).slice(0, 50); // Máximo 50 resultados al buscar (ampliado para ver más opciones)
 
     // --- MAGIA FASE 2: El botón de Pinterest estático siempre al inicio ---
     // --- MAGIA FASE 2: El botón de Pinterest estático siempre al inicio ---
