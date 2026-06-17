@@ -574,10 +574,24 @@ function _invMostrarDetalleUnidad(d) {
         'Dañado': '#fee2e2', 'Baja': '#f1f5f9'
     };
 
-    // 1. Confirmación Visual Híbrida (Foto del catálogo)
-    const fotoHTML = d.foto_url 
+    // 1. Recuperar la foto original del maestro si el backend no la envió
+    let fotoUrlFinal = d.foto_url;
+    if (!fotoUrlFinal && d.tipo !== 'producto') {
+        const cat = (d.categoria || '').toLowerCase();
+        let lista = [];
+        if (cat === 'tablero') lista = _maestroInv.tableros || [];
+        else if (cat === 'silla') lista = _maestroInv.sillas || [];
+        else if (cat === 'butaca') lista = _maestroInv.butacas || [];
+        else if (cat.includes('base')) lista = _maestroInv.bases_comedor || [];
+        
+        const f = lista.find(x => x.nombre_modelo === d.nombre_modelo || x.modelo === d.nombre_modelo || x.nombre === d.nombre_modelo);
+        if (f && f.foto_url) fotoUrlFinal = f.foto_url;
+    }
+
+    // 2. Confirmación Visual Híbrida (Foto del catálogo)
+    const fotoHTML = fotoUrlFinal 
         ? `<div style="text-align:center; margin-bottom:15px;">
-               <img src="${d.foto_url.split('|')[0]}" style="width:120px; height:120px; object-fit:cover; border-radius:12px; border:2px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.08);" onerror="this.style.display='none'">
+               <img src="${fotoUrlFinal.split('|')[0]}" style="width:120px; height:120px; object-fit:cover; border-radius:12px; border:2px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.08);" onerror="this.style.display='none'">
                <p style="font-size:10px; color:var(--text-muted); margin-top:6px; font-weight:bold; letter-spacing:0.5px;">FOTO DEL CATÁLOGO</p>
            </div>`
         : '';
@@ -1071,19 +1085,25 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
 
         let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:15px;">`;
         (data.sedes||[]).forEach(s => {
-            const st = (m.sede_stock||{})[s] || {disponibles:0,total:0};
+            // FIX: Manejar si el backend devuelve un número o un objeto incompleto
+            const stockSede = (m.sede_stock || {})[s];
+            const st = {
+                disponibles: (typeof stockSede === 'number') ? stockSede : (stockSede?.disponibles || 0),
+                total: (typeof stockSede === 'number') ? stockSede : (stockSede?.total || 0)
+            };
+
             html += `<div style="background:#f8fafc;border-radius:12px;padding:12px;text-align:center;border:1px solid #e2e8f0;">
                 <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:6px;">${s}</div>
                 <div style="font-size:2rem;font-weight:900;color:${st.disponibles>0?'#16a34a':'#cbd5e1'};">${st.disponibles}</div>
                 <div style="font-size:10px;color:var(--text-muted);">disponibles</div>
-                ${st.total>st.disponibles?`<div style="font-size:10px;color:var(--text-muted);">${st.total} total</div>`:''}
+                ${st.total > st.disponibles ? `<div style="font-size:10px;color:var(--text-muted);">${st.total} total</div>` : ''}
             </div>`;
         });
         html += `</div>`;
 
         Swal.fire({
             title: nombre,
-            html, width: 680,
+            html, width: '90vw', maxWidth: '680px',
             confirmButtonColor: '#0f172a',
             confirmButtonText: 'Cerrar'
         });
