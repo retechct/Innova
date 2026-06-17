@@ -603,7 +603,7 @@ def listar_ventas():
         cursor   = conexion.cursor()
         cursor.execute("""
             SELECT
-                v.codigo_venta, v.nombre_cliente, v.monto_total,
+                v.id, v.codigo_venta, v.nombre_cliente, v.monto_total,
                 COALESCE(pg.total_pagado, 0) AS monto_adelanto,
                 COALESCE(v.monto_total, 0) - COALESCE(pg.total_pagado, 0) AS saldo,
                 COALESCE(v.estado_general, 'Pendiente') AS estado,
@@ -623,13 +623,14 @@ def listar_ventas():
         """)
         filas = cursor.fetchall()
         resultado = [{
-            'codigo':        f[0], 'cliente':       f[1],
-            'total':         float(f[2]) if f[2] else 0,
-            'adelanto':      float(f[3]) if f[3] else 0,
-            'saldo':         float(f[4]) if f[4] else 0,
-            'estado':        f[5],
-            'fecha_entrega': f[6].strftime('%Y-%m-%d') if f[6] else None,
-            'vendedor':      f[7], 'productos':     f[8], 'sede': f[9]
+            'id':            f[0],
+            'codigo':        f[1], 'cliente':       f[2],
+            'total':         float(f[3]) if f[3] else 0,
+            'adelanto':      float(f[4]) if f[4] else 0,
+            'saldo':         float(f[5]) if f[5] else 0,
+            'estado':        f[6],
+            'fecha_entrega': f[7].strftime('%Y-%m-%d') if f[7] else None,
+            'vendedor':      f[8], 'productos':     f[9], 'sede': f[10]
         } for f in filas]
         return jsonify(resultado), 200
     except Exception as e:
