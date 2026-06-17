@@ -3229,7 +3229,9 @@ def listar_stock_estructuras():
             ALTER TABLE stock_estructuras_sofa
                 ADD COLUMN IF NOT EXISTS pagado            BOOLEAN DEFAULT FALSE,
                 ADD COLUMN IF NOT EXISTS fecha_entrega_chofer TIMESTAMP,
-                ADD COLUMN IF NOT EXISTS carpintero_nombre VARCHAR(150);
+                ADD COLUMN IF NOT EXISTS carpintero_nombre VARCHAR(150),
+                ADD COLUMN IF NOT EXISTS es_antiguo        BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS medida_brazo      NUMERIC(8,2);
         """)
         conexion.commit()
 
@@ -3258,7 +3260,9 @@ def listar_stock_estructuras():
                    COALESCE(medida_base_estandar, FALSE),
                    COALESCE(pagado, FALSE),
                    TO_CHAR(fecha_entrega_chofer, 'DD/MM/YYYY HH24:MI'),
-                   COALESCE(carpintero_nombre, '')
+                   COALESCE(carpintero_nombre, ''),
+                   COALESCE(es_antiguo, FALSE),
+                   medida_brazo
             FROM stock_estructuras_sofa
             {where_sql}
             ORDER BY fecha_registro DESC
@@ -3277,6 +3281,8 @@ def listar_stock_estructuras():
             'pagado': bool(r[18]),
             'fecha_entrega_chofer': r[19] or '',
             'carpintero_nombre': r[20] or '',
+            'es_antiguo': bool(r[21]),
+            'medida_brazo': float(r[22]) if r[22] is not None else None,
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -3304,6 +3310,8 @@ def registrar_stock_estructura():
         tipo_base           = request.form.get('tipo_base', '')  # 'patas', 'zocalo', o vacío
         medida_base         = request.form.get('medida_base') or None
         medida_base_estandar = request.form.get('medida_base_estandar') == 'true'
+        es_antiguo          = request.form.get('es_antiguo') == 'true'
+        medida_brazo        = request.form.get('medida_brazo') or None
 
         # Guardar quién registró la estructura (el carpintero que la creó)
         try:
@@ -3331,11 +3339,13 @@ def registrar_stock_estructura():
                     INSERT INTO stock_estructuras_sofa
                         (nombre_modelo, modelo_base, ancho, profundidad, alto,
                          medida_estandar, foto_url, tipo, cantidad, precio,
-                         tipo_base, medida_base, medida_base_estandar, carpintero_nombre)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1,%s,%s,%s,%s,%s) RETURNING id
+                         tipo_base, medida_base, medida_base_estandar, carpintero_nombre,
+                         es_antiguo, medida_brazo)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1,%s,%s,%s,%s,%s,%s,%s) RETURNING id
                 """, (nombre, modelo_base, ancho, profundidad, alto,
                       medida_estandar, foto_url, tipo, precio,
-                      tipo_base, medida_base, medida_base_estandar, carpintero_nombre or None))
+                      tipo_base, medida_base, medida_base_estandar, carpintero_nombre or None,
+                      es_antiguo, medida_brazo))
                 new_ids.append(cursor.fetchone()[0])
             new_id = new_ids[0]
         else:
@@ -3343,11 +3353,13 @@ def registrar_stock_estructura():
                 INSERT INTO stock_estructuras_sofa
                     (nombre_modelo, modelo_base, ancho, profundidad, alto,
                      medida_estandar, foto_url, tipo, cantidad, precio,
-                     tipo_base, medida_base, medida_base_estandar, carpintero_nombre)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                     tipo_base, medida_base, medida_base_estandar, carpintero_nombre,
+                     es_antiguo, medida_brazo)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
             """, (nombre, modelo_base, ancho, profundidad, alto,
                   medida_estandar, foto_url, tipo, cantidad, precio,
-                  tipo_base, medida_base, medida_base_estandar, carpintero_nombre or None))
+                  tipo_base, medida_base, medida_base_estandar, carpintero_nombre or None,
+                  es_antiguo, medida_brazo))
             new_id = cursor.fetchone()[0]
 
         conexion.commit()
@@ -3431,6 +3443,7 @@ def sugerir_estructura():
                 WHERE estado = 'disponible'
                   AND medida_estandar = TRUE
                   AND tipo = 'estructura'
+                  AND COALESCE(es_antiguo, FALSE) = FALSE
                 ORDER BY nombre_modelo ASC
                 LIMIT 8
             """)
@@ -3458,6 +3471,7 @@ def sugerir_estructura():
                        COALESCE(modelo_base, '')
                 FROM stock_estructuras_sofa
                 WHERE estado = 'disponible'
+                  AND COALESCE(es_antiguo, FALSE) = FALSE
                   AND (
                     medida_estandar = TRUE
                     OR (%(modelo_base)s != '' AND LOWER(modelo_base) = LOWER(%(modelo_base)s))
@@ -3636,6 +3650,8 @@ def editar_estructura(stock_id):
         medida_base_est = get('medida_base_estandar')
         precio          = get('precio')
         cantidad        = get('cantidad')
+        es_antiguo      = get('es_antiguo')
+        medida_brazo    = get('medida_brazo')
 
         # Foto opcional
         foto_url = None
@@ -3656,6 +3672,8 @@ def editar_estructura(stock_id):
         if medida_base_est is not None: sets.append('medida_base_estandar = %s');vals.append(str(medida_base_est).lower() == 'true')
         if precio          is not None: sets.append('precio = %s');              vals.append(float(precio) if precio else 0)
         if cantidad        is not None: sets.append('cantidad = %s');            vals.append(int(cantidad) if cantidad else 1)
+        if es_antiguo      is not None: sets.append('es_antiguo = %s');          vals.append(str(es_antiguo).lower() == 'true')
+        if medida_brazo    is not None: sets.append('medida_brazo = %s');        vals.append(float(medida_brazo) if medida_brazo else None)
         if foto_url        is not None: sets.append('foto_url = %s');            vals.append(foto_url)
 
         if not sets:

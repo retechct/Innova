@@ -568,3 +568,5 @@ class StockEstructuraSofa(db.Model):
     tipo_base            = db.Column(db.String(50), nullable=True)   # 'patas', 'zocalo', o vacío
     medida_base          = db.Column(db.Numeric(8, 2), nullable=True)
     medida_base_estandar = db.Column(db.Boolean, default=False)
+    es_antiguo           = db.Column(db.Boolean, default=False)
+    medida_brazo         = db.Column(db.Numeric(8, 2), nullable=True)

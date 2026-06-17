@@ -883,7 +883,7 @@
                         <h4><i class="fa-solid fa-layer-group"></i> A. Tapicería Principal</h4>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-tela" class="form-input-sm" placeholder="🔍 Buscar Tela Principal..." onkeyup="filtrarMaterial('tela')" onclick="filtrarMaterial('tela')">
+                                <input type="text" id="search-tela" class="form-input-sm" placeholder="🔍 Buscar Tela Principal..." onkeyup="filtrarMaterial('tela')" onfocus="mostrarUltimasMaterial('tela')">
                                 <div id="list-tela" class="custom-options"></div>
                             </div>
                             <img id="img-preview-tela" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
@@ -973,7 +973,7 @@
                                 <input type="number" id="c-enteros" placeholder="Cant. Enteros" class="form-input-sm" style="margin-bottom:4px;">
                                 <div style="display: flex; gap: 8px; align-items: center; margin-top:2px;">
                                     <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                        <input type="text" id="search-cojin-entero" class="form-input-sm" placeholder="🔍 Tela Cojines Enteros..." onkeyup="filtrarMaterial('cojin-entero')" onclick="filtrarMaterial('cojin-entero')">
+                                        <input type="text" id="search-cojin-entero" class="form-input-sm" placeholder="🔍 Tela Cojines Enteros..." onkeyup="filtrarMaterial('cojin-entero')" onfocus="mostrarUltimasMaterial('cojin-entero')">
                                         <div id="list-cojin-entero" class="custom-options"></div>
                                     </div>
                                     <img id="img-preview-cojin-entero" src="" style="width:35px;height:35px;border-radius:5px;object-fit:cover;border:1px solid #cbd5e1;display:none;cursor:zoom-in;" onclick="ampliarImagen(this.src)">
@@ -986,7 +986,7 @@
                                 <input type="number" id="c-diseno" placeholder="Cant. c/Diseño" class="form-input-sm" style="margin-bottom:4px;">
                                 <div style="display: flex; gap: 8px; align-items: center; margin-top:2px;">
                                     <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                        <input type="text" id="search-cojin-diseno" class="form-input-sm" placeholder="🔍 Diseño Cojines c/Patrón..." onkeyup="filtrarMaterial('cojin-diseno')" onclick="filtrarMaterial('cojin-diseno')">
+                                        <input type="text" id="search-cojin-diseno" class="form-input-sm" placeholder="🔍 Diseño Cojines c/Patrón..." onkeyup="filtrarMaterial('cojin-diseno')" onfocus="mostrarUltimasMaterial('cojin-diseno')">
                                         <div id="list-cojin-diseno" class="custom-options"></div>
                                     </div>
                                     <img id="img-preview-cojin-diseno" src="" style="width:35px;height:35px;border-radius:5px;object-fit:cover;border:1px solid #cbd5e1;display:none;cursor:zoom-in;" onclick="ampliarImagen(this.src)">
@@ -1016,7 +1016,7 @@
                                 <div style="font-size:10px; color:#7c3aed; font-weight:700; margin-bottom:3px;">Cara A — Tela con diseño</div>
                                 <div style="display: flex; gap: 8px; align-items: center;">
                                     <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                        <input type="text" id="search-cojin-rev-diseno" class="form-input-sm" placeholder="🔍 Tela con diseño (reversible)..." onkeyup="filtrarMaterial('cojin-rev-diseno')" onclick="filtrarMaterial('cojin-rev-diseno')">
+                                        <input type="text" id="search-cojin-rev-diseno" class="form-input-sm" placeholder="🔍 Tela con diseño (reversible)..." onkeyup="filtrarMaterial('cojin-rev-diseno')" onfocus="mostrarUltimasMaterial('cojin-rev-diseno')">
                                         <div id="list-cojin-rev-diseno" class="custom-options"></div>
                                     </div>
                                     <img id="img-preview-cojin-rev-diseno" src="" style="width:35px;height:35px;border-radius:5px;object-fit:cover;border:1px solid #a78bfa;display:none;cursor:zoom-in;" onclick="ampliarImagen(this.src)">
@@ -1028,7 +1028,7 @@
                                 <div style="font-size:10px; color:#7c3aed; font-weight:700; margin-top:6px; margin-bottom:3px;">Cara B — Tela entera</div>
                                 <div style="display: flex; gap: 8px; align-items: center;">
                                     <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                        <input type="text" id="search-cojin-rev-entero" class="form-input-sm" placeholder="🔍 Tela entera (reversible)..." onkeyup="filtrarMaterial('cojin-rev-entero')" onclick="filtrarMaterial('cojin-rev-entero')">
+                                        <input type="text" id="search-cojin-rev-entero" class="form-input-sm" placeholder="🔍 Tela entera (reversible)..." onkeyup="filtrarMaterial('cojin-rev-entero')" onfocus="mostrarUltimasMaterial('cojin-rev-entero')">
                                         <div id="list-cojin-rev-entero" class="custom-options"></div>
                                     </div>
                                     <img id="img-preview-cojin-rev-entero" src="" style="width:35px;height:35px;border-radius:5px;object-fit:cover;border:1px solid #a78bfa;display:none;cursor:zoom-in;" onclick="ampliarImagen(this.src)">
@@ -1050,7 +1050,7 @@
                         <h4><i class="fa-solid fa-shoe-prints"></i> C. Bases (Patas/Zócalos)</h4>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-base" class="form-input-sm" placeholder="🔍 Buscar Pata o Zócalo..." onkeyup="filtrarMaterial('base')" onclick="filtrarMaterial('base')">
+                                <input type="text" id="search-base" class="form-input-sm" placeholder="🔍 Buscar Pata o Zócalo..." onkeyup="filtrarMaterial('base')" onfocus="mostrarUltimasMaterial('base')">
                                 <div id="list-base" class="custom-options"></div>
                             </div>
                             <img id="img-preview-base" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" onclick="ampliarImagen(this.src)">
@@ -1163,7 +1163,7 @@
                         
                         <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-tablero" class="form-input-sm" placeholder="🔍 Buscar nombre/modelo del tablero..." onkeyup="filtrarMaterial('tablero')" onclick="filtrarMaterial('tablero')">
+                                <input type="text" id="search-tablero" class="form-input-sm" placeholder="🔍 Buscar nombre/modelo del tablero..." onkeyup="filtrarMaterial('tablero')" onfocus="mostrarUltimasMaterial('tablero')">
                                 <div id="list-tablero" class="custom-options"></div>
                             </div>
                             <img id="img-preview-tablero" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
@@ -1193,7 +1193,7 @@
                         <h4><i class="fa-solid fa-table"></i> B. Base de Mesa</h4>
                         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-base-mesa" class="form-input-sm" placeholder="🔍 Buscar modelo de base..." onkeyup="filtrarMaterial('base-mesa')" onclick="filtrarMaterial('base-mesa')">
+                                <input type="text" id="search-base-mesa" class="form-input-sm" placeholder="🔍 Buscar modelo de base..." onkeyup="filtrarMaterial('base-mesa')" onfocus="mostrarUltimasMaterial('base-mesa')">
                                 <div id="list-base-mesa" class="custom-options"></div>
                             </div>
                             <img id="img-preview-base-mesa" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
@@ -1212,7 +1212,7 @@
                         <label style="font-size:10px; font-weight:bold; color:gray;">ESTRUCTURA DE LA SILLA:</label>
                         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-silla" class="form-input-sm" placeholder="🔍 Buscar modelo de silla..." onkeyup="filtrarMaterial('silla')" onclick="filtrarMaterial('silla')">
+                                <input type="text" id="search-silla" class="form-input-sm" placeholder="🔍 Buscar modelo de silla..." onkeyup="filtrarMaterial('silla')" onfocus="mostrarUltimasMaterial('silla')">
                                 <div id="list-silla" class="custom-options"></div>
                             </div>
                             <img id="img-preview-silla" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
@@ -1223,7 +1223,7 @@
                         <label style="font-size:10px; font-weight:bold; color:gray;">TELA DE LA SILLA:</label>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-tela-silla" class="form-input-sm" placeholder="🔍 Buscar tela para tapizado..." onkeyup="filtrarMaterial('tela-silla')" onclick="filtrarMaterial('tela-silla')">
+                                <input type="text" id="search-tela-silla" class="form-input-sm" placeholder="🔍 Buscar tela para tapizado..." onkeyup="filtrarMaterial('tela-silla')" onfocus="mostrarUltimasMaterial('tela-silla')">
                                 <div id="list-tela-silla" class="custom-options"></div>
                             </div>
                             <img id="img-preview-tela-silla" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
@@ -1324,7 +1324,7 @@
                         <h4><i class="fa-solid fa-table-cells-large"></i> A. Tablero / Superficie</h4>
                         <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-tablero-centro" class="form-input-sm" placeholder="🔍 Buscar tablero..." onkeyup="filtrarMaterial('tablero-centro')" onclick="filtrarMaterial('tablero-centro')">
+                                <input type="text" id="search-tablero-centro" class="form-input-sm" placeholder="🔍 Buscar tablero..." onkeyup="filtrarMaterial('tablero-centro')" onfocus="mostrarUltimasMaterial('tablero-centro')">
                                 <div id="list-tablero-centro" class="custom-options"></div>
                             </div>
                             <img id="img-preview-tablero-centro" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
@@ -1337,7 +1337,7 @@
                         <h4><i class="fa-solid fa-table"></i> B. Base / Estructura</h4>
                         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-base-centro" class="form-input-sm" placeholder="🔍 Buscar modelo de base..." onkeyup="filtrarMaterial('base-centro')" onclick="filtrarMaterial('base-centro')">
+                                <input type="text" id="search-base-centro" class="form-input-sm" placeholder="🔍 Buscar modelo de base..." onkeyup="filtrarMaterial('base-centro')" onfocus="mostrarUltimasMaterial('base-centro')">
                                 <div id="list-base-centro" class="custom-options"></div>
                             </div>
                             <img id="img-preview-base-centro" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
@@ -1428,7 +1428,7 @@
                         <h4><i class="fa-solid fa-chair"></i> A. Estructura / Modelo Base</h4>
                         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-estructura-butaca" class="form-input-sm" placeholder="🔍 Buscar modelo (Madera/Metal)..." onkeyup="filtrarMaterial('estructura-butaca')" onclick="filtrarMaterial('estructura-butaca')">
+                                <input type="text" id="search-estructura-butaca" class="form-input-sm" placeholder="🔍 Buscar modelo (Madera/Metal)..." onkeyup="filtrarMaterial('estructura-butaca')" onfocus="mostrarUltimasMaterial('estructura-butaca')">
                                 <div id="list-estructura-butaca" class="custom-options"></div>
                             </div>
                             <img id="img-preview-estructura-butaca" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">
@@ -1441,7 +1441,7 @@
                         <h4><i class="fa-solid fa-layer-group"></i> B. Tapiz Principal</h4>
                         <div style="display: flex; gap: 8px; align-items: center; margin-top:5px;">
                             <div class="custom-select-wrapper" style="flex-grow: 1;">
-                                <input type="text" id="search-tela-butaca" class="form-input-sm" placeholder="🔍 Buscar tela para tapizado..." onkeyup="filtrarMaterial('tela-butaca')" onclick="filtrarMaterial('tela-butaca')">
+                                <input type="text" id="search-tela-butaca" class="form-input-sm" placeholder="🔍 Buscar tela para tapizado..." onkeyup="filtrarMaterial('tela-butaca')" onfocus="mostrarUltimasMaterial('tela-butaca')">
                                 <div id="list-tela-butaca" class="custom-options"></div>
                             </div>
                             <img id="img-preview-tela-butaca" src="" style="width: 35px; height: 35px; border-radius: 5px; object-fit: cover; border: 1px solid #cbd5e1; display: none;">

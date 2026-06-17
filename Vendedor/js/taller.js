@@ -3714,6 +3714,26 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
                         </label>`;
             }).join('')}
           </div>
+          
+          <!-- Radio buttons: Antigüedad -->
+          <div id="radio-antiguedad-${contenedorId}"
+               style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
+            ${['actual','antiguo'].map((v,i) => {
+                const labels = ['Actual','🗄️ Antiguo'];
+                const checked = i === 0 ? 'checked' : '';
+                return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;
+                                      padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;
+                                      border:1.5px solid ${i===0?'#0369a1':'#e2e8f0'};
+                                      background:${i===0?'#e0f2fe':'white'};
+                                      color:${i===0?'#0369a1':'#64748b'};"
+                               id="radio-label-antiguedad-${v}-${contenedorId}">
+                          <input type="radio" name="antiguedad-${contenedorId}" value="${v}" ${checked}
+                                 style="accent-color:#0369a1;"
+                                 onchange="_filtrarSubtipoSofa('${contenedorId}')">
+                          ${labels[i]}
+                        </label>`;
+            }).join('')}
+          </div>
 
           <div id="lista-est-${contenedorId}">
             ${_renderListaEstructuras(_groupEstructuras(disponibles))}
@@ -3770,17 +3790,24 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             </div>
             <div id="bloque-medidas" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
             <input id="se-ancho" type="number" placeholder="Ancho"
-                style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                style="flex:1;min-width:70px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
             <input id="se-prof" type="number" placeholder="Prof."
-                style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                style="flex:1;min-width:70px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
             <input id="se-alto" type="number" placeholder="Alto"
-                style="flex:1;min-width:80px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                style="flex:1;min-width:70px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+            <input id="se-medida-brazo" type="number" placeholder="Brazo"
+                style="flex:1;min-width:70px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;" title="Medida del brazo (cm)">
             </div>
             <!-- A8: Checkbox para marcar como medida estándar en BD -->
-            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;cursor:pointer;
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer;
                         background:#f9f5ff;padding:8px 10px;border-radius:6px;border:1px solid #ede9fe;">
             <input type="checkbox" id="se-estandar" onchange="document.getElementById('bloque-medidas').style.display = this.checked ? 'none' : 'flex'; if(this.checked){document.getElementById('se-ancho').value='';document.getElementById('se-prof').value='';document.getElementById('se-alto').value='';}"> 
             <span style="font-weight:500;">Es una medida estándar de catálogo</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;cursor:pointer;
+                        background:#fef2f2;padding:8px 10px;border-radius:6px;border:1px solid #fee2e2;">
+            <input type="checkbox" id="se-es-antiguo"> 
+            <span style="font-weight:500;color:#991b1b;">🗄️ Es stock antiguo (hallado en almacén)</span>
             </label>
             </div><!-- A8: Bloque PATA/ZÓCALO para estructura sofa -->
 <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">
@@ -3954,13 +3981,22 @@ function _filtrarStockSofa(estado, contenedorId) {
 
     // Mostrar radio buttons solo en "En stock", ocultar en "Entregados"
     const radioWrap = document.getElementById(`radio-subtipo-${contenedorId}`);
+    const radioAntiWrap = document.getElementById(`radio-antiguedad-${contenedorId}`);
     if (radioWrap) {
         radioWrap.style.display = estado === 'disponible' ? 'flex' : 'none';
         // Resetear a "Todos" al cambiar de tab
         const radioTodos = radioWrap.querySelector(`input[value="todos"]`);
         if (radioTodos) {
             radioTodos.checked = true;
-            _actualizarEstiloRadios(contenedorId, 'todos');
+            _actualizarEstiloRadios(contenedorId, 'todos', 'subtipo');
+        }
+    }
+    if (radioAntiWrap) {
+        radioAntiWrap.style.display = estado === 'disponible' ? 'flex' : 'none';
+        const radioActual = radioAntiWrap.querySelector(`input[value="actual"]`);
+        if (radioActual) {
+            radioActual.checked = true;
+            _actualizarEstiloRadios(contenedorId, 'actual', 'antiguedad');
         }
     }
 
@@ -3971,29 +4007,47 @@ function _filtrarStockSofa(estado, contenedorId) {
 
 function _filtrarSubtipoSofa(contenedorId) {
     const data   = window._stockEstructurasData || [];
-    const radios = document.querySelectorAll(`input[name="subtipo-${contenedorId}"]`);
+    
     let subtipo  = 'todos';
-    radios.forEach(r => { if (r.checked) subtipo = r.value; });
+    document.querySelectorAll(`input[name="subtipo-${contenedorId}"]`).forEach(r => { if (r.checked) subtipo = r.value; });
 
-    _actualizarEstiloRadios(contenedorId, subtipo);
+    let antiguedad = 'actual';
+    document.querySelectorAll(`input[name="antiguedad-${contenedorId}"]`).forEach(r => { if (r.checked) antiguedad = r.value; });
+
+    _actualizarEstiloRadios(contenedorId, subtipo, 'subtipo');
+    _actualizarEstiloRadios(contenedorId, antiguedad, 'antiguedad');
 
     let lista = data.filter(e => e.estado === 'disponible');
     if (subtipo === 'estandar')     lista = lista.filter(e => e.medida_estandar);
     if (subtipo === 'personalizada') lista = lista.filter(e => !e.medida_estandar);
 
+    if (antiguedad === 'actual')    lista = lista.filter(e => !e.es_antiguo);
+    if (antiguedad === 'antiguo')   lista = lista.filter(e => e.es_antiguo);
+
     document.getElementById(`lista-est-${contenedorId}`).innerHTML =
         _renderListaEstructuras(_groupEstructuras(lista));
 }
 
-function _actualizarEstiloRadios(contenedorId, activo) {
-    ['todos','estandar','personalizada'].forEach(v => {
-        const lbl = document.getElementById(`radio-label-${v}-${contenedorId}`);
-        if (!lbl) return;
-        const esActivo = v === activo;
-        lbl.style.border     = `1.5px solid ${esActivo ? '#7c3aed' : '#e2e8f0'}`;
-        lbl.style.background = esActivo ? '#f5f3ff' : 'white';
-        lbl.style.color      = esActivo ? '#7c3aed' : '#64748b';
-    });
+function _actualizarEstiloRadios(contenedorId, activo, grupo) {
+    if (grupo === 'subtipo') {
+        ['todos','estandar','personalizada'].forEach(v => {
+            const lbl = document.getElementById(`radio-label-${v}-${contenedorId}`);
+            if (!lbl) return;
+            const esActivo = v === activo;
+            lbl.style.border     = `1.5px solid ${esActivo ? '#7c3aed' : '#e2e8f0'}`;
+            lbl.style.background = esActivo ? '#f5f3ff' : 'white';
+            lbl.style.color      = esActivo ? '#7c3aed' : '#64748b';
+        });
+    } else if (grupo === 'antiguedad') {
+        ['actual','antiguo'].forEach(v => {
+            const lbl = document.getElementById(`radio-label-antiguedad-${v}-${contenedorId}`);
+            if (!lbl) return;
+            const esActivo = v === activo;
+            lbl.style.border     = `1.5px solid ${esActivo ? '#0369a1' : '#e2e8f0'}`;
+            lbl.style.background = esActivo ? '#e0f2fe' : 'white';
+            lbl.style.color      = esActivo ? '#0369a1' : '#64748b';
+        });
+    }
 }
 
 // A8: Mostrar/ocultar inputs de medida de base cuando cambia el tipo
@@ -4021,7 +4075,7 @@ function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
     modal.style.display = 'flex';
 
     // Reset todos los campos
-    ['se-nombre','se-precio','se-ancho','se-prof','se-alto','se-cantidad','se-medida-base'].forEach(id => {
+    ['se-nombre','se-precio','se-ancho','se-prof','se-alto','se-cantidad','se-medida-base','se-medida-brazo'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
@@ -4031,6 +4085,8 @@ function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
         const b = document.getElementById('bloque-medidas');
         if (b) b.style.display = 'flex';
     }
+    const cbAnti = document.getElementById('se-es-antiguo');
+    if (cbAnti) cbAnti.checked = false;
     const cbBase = document.getElementById('se-medida-base-estandar');
     if (cbBase) {
         cbBase.checked = false;
@@ -4166,9 +4222,10 @@ function _renderListaEstructuras(lista) {
               📦 Cant: <b>${e.cantidad || 1}</b>
             </span>
             ${e.medida_estandar ? `<span style="font-size:11px;color:#7c3aed;background:#f5f3ff;padding:3px 8px;border-radius:6px;font-weight:700;">⭐ Estándar</span>` : ''}
+            ${e.es_antiguo ? `<span style="font-size:11px;color:#991b1b;background:#fef2f2;padding:3px 8px;border-radius:6px;font-weight:700;">🗄️ Antiguo</span>` : ''}
             ${e.tipo_base ? `<span style="font-size:11px;color:#0f172a;background:#e2e8f0;padding:3px 8px;border-radius:6px;">${e.tipo_base === 'zocalo' ? '🪵 Zócalo' : '🦵 Patas'}: <b>${e.medida_base_estandar ? 'Estándar' : e.medida_base + ' cm'}</b></span>` : ''}
           </div>
-          ${e.ancho ? `<div style="font-size:12px;color:#475569;margin-top:6px;"><i class="fa-solid fa-ruler-combined" style="color:#94a3b8;"></i> ${e.ancho}×${e.profundidad}×${e.alto} cm</div>` : ''}
+          ${(e.ancho || e.medida_brazo) ? `<div style="font-size:12px;color:#475569;margin-top:6px;"><i class="fa-solid fa-ruler-combined" style="color:#94a3b8;"></i> ${e.ancho ? e.ancho+'×'+e.profundidad+'×'+e.alto+' cm' : ''}${e.medida_brazo ? (e.ancho?' | ':'') + 'Brazo: '+e.medida_brazo+'cm' : ''}</div>` : ''}
           ${e.precio ? `<div style="font-size:14px;color:#15803d;font-weight:800;margin-top:6px;">S/ ${parseFloat(e.precio).toFixed(2)}</div>` : ''}
 
           <!-- A9b: fechas -->
@@ -4311,6 +4368,8 @@ async function guardarEstructura() {
         // Si es estándar enviamos "0" para que el backend no rechace campo vacío
         fd.append('medida_base',          medidaBaseEst ? '0' : medidaBaseValor);
         fd.append('medida_base_estandar', medidaBaseEst ? 'true' : 'false');
+        fd.append('medida_brazo',         document.getElementById('se-medida-brazo')?.value || '');
+        fd.append('es_antiguo',           document.getElementById('se-es-antiguo')?.checked ? 'true' : 'false');
     }
 
     try {
@@ -4350,7 +4409,9 @@ function _groupEstructuras(lista) {
             g.medida_base_estandar === e.medida_base_estandar &&
             g.medida_estandar === e.medida_estandar &&
             g.estado === e.estado &&
-            g.chofer_nombre === e.chofer_nombre
+            g.chofer_nombre === e.chofer_nombre &&
+            g.es_antiguo === e.es_antiguo &&
+            g.medida_brazo === e.medida_brazo
         );
         if (existing) {
             existing.cantidad = (existing.cantidad || 1) + (e.cantidad || 1);
@@ -4594,12 +4655,19 @@ async function abrirModalEditarEstructura(id) {
         style="flex:1;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:13px;">
     <input id="ed-alto" type="number" placeholder="Alto" value="${e.alto||''}"
         style="flex:1;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:13px;">
+    <input id="ed-medida-brazo" type="number" placeholder="Brazo" value="${e.medida_brazo||''}"
+        style="flex:1;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:13px;">
   </div>
   <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;
-                margin-bottom:12px;background:#f9f5ff;padding:7px 10px;border-radius:6px;border:1px solid #ede9fe;">
+                margin-bottom:6px;background:#f9f5ff;padding:7px 10px;border-radius:6px;border:1px solid #ede9fe;">
     <input type="checkbox" id="ed-estandar" ${e.medida_estandar ? 'checked' : ''}
            onchange="['ed-ancho','ed-prof','ed-alto'].forEach(id=>document.getElementById(id).disabled=this.checked);">
     <span style="font-weight:500;">Es medida estándar de catálogo</span>
+  </label>
+  <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;
+                margin-bottom:12px;background:#fef2f2;padding:7px 10px;border-radius:6px;border:1px solid #fee2e2;">
+    <input type="checkbox" id="ed-es-antiguo" ${e.es_antiguo ? 'checked' : ''}>
+    <span style="font-weight:500;color:#991b1b;">🗄️ Es stock antiguo (hallado en almacén)</span>
   </label>
 
   <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:3px;">TIPO DE BASE</label>
@@ -4649,6 +4717,8 @@ async function abrirModalEditarEstructura(id) {
                 profundidad:          document.getElementById('ed-prof')?.value || 0,
                 alto:                 document.getElementById('ed-alto')?.value || 0,
                 medida_estandar:      document.getElementById('ed-estandar')?.checked || false,
+                medida_brazo:         document.getElementById('ed-medida-brazo')?.value || '',
+                es_antiguo:           document.getElementById('ed-es-antiguo')?.checked || false,
                 tipo_base:            document.getElementById('ed-tipo-base')?.value || '',
                 medida_base:          document.getElementById('ed-medida-base')?.value || '',
                 medida_base_estandar: document.getElementById('ed-medida-base-est')?.checked || false,
