@@ -1419,6 +1419,74 @@ def agregar_ingrediente_receta():
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
 
+@produccion_bp.route('/api/inventario/etiquetas-disponibles', methods=['POST'])
+@requiere_login
+def obtener_etiquetas_disponibles():
+    datos = request.json
+    items = datos.get('items', [])
+    por_cantidad = datos.get('por_cantidad', False)
+    
+    etiquetas = []
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        
+        for item in items:
+            es_pieza = 'sku_maestro' in item
+            
+            if es_pieza:
+                # Filtrar stock_piezas por sus medidas exactas
+                query = """
+                    SELECT codigo_barra, (SELECT nombre FROM sedes WHERE id = sede_id)
+                    FROM stock_piezas
+                    WHERE sku_maestro = %(sku)s AND forma = %(forma)s
+                      AND COALESCE(largo_cm, 0) = %(largo)s AND COALESCE(ancho_cm, 0) = %(ancho)s AND COALESCE(alto_cm, 0) = %(alto)s
+                      AND estado = 'Disponible'
+                """
+                cursor.execute(query, {
+                    'sku': item.get('sku_maestro'),
+                    'forma': item.get('forma'),
+                    'largo': float(item.get('largo_cm') or 0),
+                    'ancho': float(item.get('ancho_cm') or 0),
+                    'alto': float(item.get('alto_cm') or 0)
+                })
+            else:
+                # Filtrar stock_productos enteros
+                query = """
+                    SELECT codigo_barra, (SELECT nombre FROM sedes WHERE id = sede_id)
+                    FROM stock_productos
+                    WHERE catalogo_id = %(cat_id)s AND estado = 'Disponible'
+                """
+                cursor.execute(query, {'cat_id': item.get('catalogo_id')})
+            
+            filas = cursor.fetchall()
+            nombre_etiqueta = item.get('nombreConMedida') or item.get('nombre_modelo')
+            
+            if por_cantidad:
+                # Imprimir todas las unidades físicas disponibles
+                for r in filas:
+                    etiquetas.append({'codigo': r[0], 'nombre': nombre_etiqueta, 'sede': r[1] or 'Tienda'})
+                # Fallback: si pidieron todas pero no hay stock, imprimir 1 genérica de aviso
+                if not filas:
+                    fallback_code = item.get('sku_maestro') if es_pieza else f"PROD-{item.get('catalogo_id')}"
+                    etiquetas.append({'codigo': fallback_code, 'nombre': nombre_etiqueta, 'sede': 'Sin Stock Disp.'})
+            else:
+                # Imprimir solo 1 por modelo (la primera unidad física que encuentre)
+                if filas:
+                    etiquetas.append({'codigo': filas[0][0], 'nombre': nombre_etiqueta, 'sede': filas[0][1] or 'Tienda'})
+                else:
+                    fallback_code = item.get('sku_maestro') if es_pieza else f"PROD-{item.get('catalogo_id')}"
+                    etiquetas.append({'codigo': fallback_code, 'nombre': nombre_etiqueta, 'sede': 'Sin Stock Disp.'})
+                    
+        return jsonify({'exito': True, 'etiquetas': etiquetas}), 200
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close()
+            release_db_connection(conexion)
+
 
 # ==========================================
 # 12. SUGERENCIAS DE INSUMOS

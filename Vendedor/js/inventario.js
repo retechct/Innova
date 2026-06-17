@@ -304,7 +304,7 @@ function _renderTablaProductos() {
             onmouseout="this.style.background='${bg}'">
             <td style="padding:12px 16px;position:sticky;left:0;background:inherit;z-index:1;">
                 <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <input type="checkbox" class="chk-prod" value="PROD-${m.catalogo_id}|${m.nombre_modelo.replace(/"/g,'&quot;')}" data-cant="${m.disponibles}" style="margin-top:2px;">
+                    <input type="checkbox" class="chk-prod" value="${encodeURIComponent(JSON.stringify(m))}" data-cant="${m.disponibles}" style="margin-top:2px;">
                     <div>
                         <div style="font-weight:800;font-size:13px;">${m.nombre_modelo}</div>
                         <div style="margin-top:3px;">${catBadge}</div>
@@ -330,9 +330,9 @@ function _renderTablaProductos() {
                 </td>`;
             }).join('')}
             <td style="padding:12px 8px;text-align:center;display:flex;gap:4px;justify-content:center;">
-                <button onclick="imprimirEtiqueta('PROD-${m.catalogo_id}','${m.nombre_modelo.replace(/'/g,"\\'")}','Catálogo')"
+                <button onclick="_invImprimirFisico('${encodeURIComponent(JSON.stringify(m))}')"
                         style="background:#f8fafc;border:1px solid #cbd5e1;padding:6px 10px;border-radius:6px;
-                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Imprimir SKU Maestro">
+                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Imprimir Código Físico">
                     <i class="fas fa-barcode"></i> SKU
                 </button>
                 <button onclick="_invVerUnidades('${m.nombre_modelo.replace(/'/g,"\\'")}','${m.categoria}',${m.catalogo_id||'null'})"
@@ -389,6 +389,8 @@ function _renderTablaPiezas() {
         prevSKU = p.sku_maestro;
         const bg = idx % 2 === 0 ? 'white' : '#fafbfc';
         const medida = _fmtMedida(p);
+        const nombreConMedida = `${p.nombre_modelo} - ${medida.toUpperCase()}`;
+        const pObj = { ...p, nombreConMedida };
 
         html += `
         <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
@@ -396,7 +398,7 @@ function _renderTablaPiezas() {
             onmouseout="this.style.background='${bg}'">
             <td style="padding:12px 16px;position:sticky;left:0;background:inherit;z-index:1;">
                 <div style="display:flex; gap:10px; align-items:flex-start;">
-                    ${isNew ? `<input type="checkbox" class="chk-pieza" value="${p.sku_maestro}|${p.nombre_modelo.replace(/"/g,'&quot;')}" data-cant="${p.disponibles}" style="margin-top:2px;">` : '<div style="width:13px;"></div>'}
+                    <input type="checkbox" class="chk-pieza" value="${encodeURIComponent(JSON.stringify(pObj))}" data-cant="${p.disponibles}" style="margin-top:2px;">
                     <div>
                         ${isNew ? `
                         <div style="font-weight:800;font-size:13px;">${p.nombre_modelo}</div>
@@ -423,17 +425,17 @@ function _renderTablaPiezas() {
                 ${(p.sede_stock||{})[s]||0}
             </td>`).join('')}
             <td style="padding:12px 8px;text-align:center;display:flex;gap:4px;justify-content:center;">
-                ${isNew ? `
-                <button onclick="imprimirEtiqueta('${p.sku_maestro}','${p.nombre_modelo.replace(/'/g,"\\'")}','Catálogo')"
+                <button onclick="_invImprimirFisico('${encodeURIComponent(JSON.stringify(pObj))}')"
                         style="background:#f8fafc;border:1px solid #cbd5e1;padding:6px 10px;border-radius:6px;
-                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Imprimir SKU Maestro">
+                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Imprimir Código Físico">
                     <i class="fas fa-barcode"></i> SKU
                 </button>
+                ${isNew ? `
                 <button onclick="_invVerUnidades('${p.nombre_modelo.replace(/'/g,"\\'")}','${p.categoria}','es_pieza')"
                         style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;
-                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;">
+                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Ver Stock Físico">
                     <i class="fas fa-eye"></i> Ver
-                </button>` : ''}
+                </button>` : '<div style="width:55px;"></div>'}
             </td>
         </tr>`;
     });
@@ -1012,7 +1014,23 @@ async function _invGuardarPieza() {
 
         const sedeSel    = document.getElementById('npf-sede');
         const sedeNombre = sedeSel?.options[sedeSel.selectedIndex]?.text || '';
-        const nombrePieza = document.getElementById('npf-nombre-val')?.value || '';
+        
+        const nombreBase = document.getElementById('search-inv-pieza')?.value || '';
+        const formaActual  = document.getElementById('npf-forma')?.value || '';
+        let medida = '';
+        if (formaActual === 'Circular') {
+            const l = document.getElementById('npf-largo')?.value;
+            medida = l ? `⌀ ${l} cm` : 'Circular';
+        } else if (formaActual === 'Rectangular') {
+            const l = document.getElementById('npf-largo')?.value || '?';
+            const a = document.getElementById('npf-ancho')?.value || '';
+            const h = document.getElementById('npf-alto')?.value || '';
+            medida = `${l}${a ? ' × '+a : ''} cm${h ? ' / H:'+h : ''}`;
+        } else {
+            const l = document.getElementById('npf-largo')?.value;
+            medida = l ? `${l} cm` : 'Irregular';
+        }
+        const nombrePieza = `${nombreBase} - ${medida.toUpperCase()}`;
 
         const codigosHTML = (d.unidades || []).map(u => `
             <div style="margin:6px 0;">
@@ -1229,7 +1247,7 @@ function imprimirEtiqueta(codigo, nombre, sede) {
     _renderEtiqueta();
 }
 
-/* ─── Impresión Masiva de Etiquetas ─────────────────────────────── */
+/* ─── Impresión Masiva de Etiquetas Físicas ─────────────────────────────── */
 async function _invImprimirMasivo() {
     const chks = document.querySelectorAll('.chk-prod:checked, .chk-pieza:checked');
     if (!chks.length) {
@@ -1237,13 +1255,13 @@ async function _invImprimirMasivo() {
     }
 
     const res = await Swal.fire({
-        title: 'Imprimir Etiquetas',
-        text: `Has seleccionado ${chks.length} modelos. ¿Cuántas etiquetas deseas imprimir?`,
+        title: 'Imprimir Etiquetas Físicas',
+        text: `Has seleccionado ${chks.length} modelos. ¿Deseas imprimir el código físico de 1 unidad por modelo, o de TODAS las unidades disponibles?`,
         icon: 'question',
         showCancelButton: true,
         showDenyButton: true,
         confirmButtonText: '1 por modelo',
-        denyButtonText: 'Por stock disp.',
+        denyButtonText: 'Todas las disp.',
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#0f172a',
         denyButtonColor: '#16a34a'
@@ -1251,21 +1269,36 @@ async function _invImprimirMasivo() {
 
     if (res.isDismissed) return;
 
-    const porCantidad = res.isDenied; // Si presionó "Por stock disp."
-    const etiquetas = [];
+    const porCantidad = res.isDenied; 
+    const items = Array.from(chks).map(chk => JSON.parse(decodeURIComponent(chk.value)));
 
-    chks.forEach(chk => {
-        const [codigo, nombre] = chk.value.split('|');
-        const cant = porCantidad ? parseInt(chk.dataset.cant || 1) : 1;
-        // Imprime al menos 1 aunque el stock sea 0, para que no se quede vacío
-        const n = cant > 0 ? cant : 1;
-        
-        for (let i = 0; i < n; i++) {
-            etiquetas.push({ codigo, nombre, sede: 'Catálogo' });
+    await _ejecutarImpresionFisica(items, porCantidad);
+}
+
+async function _invImprimirFisico(encodedObj) {
+    const obj = JSON.parse(decodeURIComponent(encodedObj));
+    await _ejecutarImpresionFisica([obj], false);
+}
+
+async function _ejecutarImpresionFisica(items, porCantidad) {
+    Swal.fire({ title: 'Obteniendo códigos...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        const res = await apiFetch(`${API_URL}/api/inventario/etiquetas-disponibles`, {
+            method: 'POST',
+            body: JSON.stringify({ items, por_cantidad: porCantidad })
+        });
+        const data = await res.json();
+        Swal.close();
+        if (data.error) throw new Error(data.error);
+
+        if (data.etiquetas && data.etiquetas.length > 0) {
+            imprimirEtiquetasMasivas(data.etiquetas);
+        } else {
+            Swal.fire('Aviso', 'No se encontraron unidades físicas disponibles para los modelos seleccionados.', 'info');
         }
-    });
-
-    imprimirEtiquetasMasivas(etiquetas);
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
 }
 
 function imprimirEtiquetasMasivas(lista) {
