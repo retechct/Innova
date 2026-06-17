@@ -11,7 +11,14 @@ function mostrarUltimasMaterial(tipoInput) {
     if (!searchEl || searchEl.value.trim() !== '') return;
 
     let tipoData = '';
-    if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero' || tipoInput === 'tela-inv') tipoData = 'telas';
+    if (tipoInput === 'inv-pieza') {
+        const cat = document.getElementById('npf-cat')?.value;
+        if (cat === 'tablero') tipoData = 'tableros';
+        else if (cat === 'silla') tipoData = 'sillas';
+        else if (cat === 'butaca') tipoData = 'butacas';
+        else tipoData = 'bases_comedor';
+    }
+    else if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero' || tipoInput === 'tela-inv') tipoData = 'telas';
     else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno' || tipoInput === 'cojin-inv') tipoData = 'cojines';
     else if (tipoInput === 'base' || tipoInput === 'base-inv') tipoData = 'bases';
     else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro' || tipoInput === 'tablero-inv') tipoData = 'tableros';
@@ -90,7 +97,14 @@ function filtrarMaterial(tipoInput) {
     }
 
    // 1. SEPARACIÓN ABSOLUTA (Butacas tienen su propio almacén)
-    if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero' || tipoInput === 'tela-inv') tipoData = 'telas';
+    if (tipoInput === 'inv-pieza') {
+        const cat = document.getElementById('npf-cat')?.value;
+        if (cat === 'tablero') tipoData = 'tableros';
+        else if (cat === 'silla') tipoData = 'sillas';
+        else if (cat === 'butaca') tipoData = 'butacas';
+        else tipoData = 'bases_comedor';
+    }
+    else if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero' || tipoInput === 'tela-inv') tipoData = 'telas';
     else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno' || tipoInput === 'cojin-inv') tipoData = 'cojines';
     else if (tipoInput === 'base' || tipoInput === 'base-inv') tipoData = 'bases';
     else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro' || tipoInput === 'tablero-inv') tipoData = 'tableros'; 
@@ -1891,6 +1905,14 @@ async function _refreshMaestro() {
         maestroMateriales.bases_comedor = mat.bases_comedor || [];
         maestroMateriales.sillas       = mat.sillas       || [];
         maestroMateriales.butacas      = mat.butacas      || [];
+
+        // TAMBIÉN ACTUALIZAR EL MAESTRO DEL MÓDULO INVENTARIO EN SEGUNDO PLANO
+        if (typeof _maestroInv !== 'undefined') {
+            _maestroInv.tableros      = mat.tableros      || [];
+            _maestroInv.bases_comedor = mat.bases_comedor || [];
+            _maestroInv.sillas        = mat.sillas        || [];
+            _maestroInv.butacas       = mat.butacas       || [];
+        }
     } catch { /* ignorar error de red — no re-lanzar */ }
 
     // Re-renderizar si la función está disponible (taller.js)

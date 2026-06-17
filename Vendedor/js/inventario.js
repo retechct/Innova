@@ -692,23 +692,30 @@ function _formPieza() {
         .filter(o=>o.value)
         .map(o=>`<option value="${o.value}">${o.textContent}</option>`).join('');
     const cats  = CATEGORIAS_PIEZA.map(c=>`<option value="${c.val}">${c.label}</option>`).join('');
-    const tabs  = _maestroInv.tableros.map(t=>
-        `<option value="${t.sku}|${(t.nombre||'').replace(/"/g,'')}|${t.material_base||''}|${t.color||''}">${t.sku} — ${t.nombre}</option>`
-    ).join('');
-    const bases = _maestroInv.bases_comedor.map(b=>
-        `<option value="${b.sku}|${(b.modelo||'').replace(/"/g,'')}|${b.material||''}|${b.color||''}">${b.sku} — ${b.modelo}</option>`
-    ).join('');
 
     return `
     <div class="form-group"><label>Categoría *</label>
-        <select id="npf-cat" class="form-input" onchange="_invActualizarModelosPieza()">${cats}</select></div>
-    <div class="form-group"><label>Modelo Maestro *</label>
-        <select id="npf-sku" class="form-input" onchange="_invSelModeloPieza()">
-            <option value="">— Seleccionar —</option>${tabs}</select></div>
-    <input type="hidden" id="npf-sku-val"/>
-    <input type="hidden" id="npf-nombre-val"/>
-    <input type="hidden" id="npf-mat-val"/>
-    <input type="hidden" id="npf-color-val"/>
+        <select id="npf-cat" class="form-input" onchange="_invLimpiarSmartSearch()">${cats}</select></div>
+        
+    <div class="form-group" style="margin-bottom: 15px;">
+        <label style="font-size: 11px; font-weight: bold; color: var(--primary);">MODELO MAESTRO *</label>
+        <div style="display: flex; gap: 8px; align-items: center; margin-top: 5px;">
+            <div class="custom-select-wrapper" style="flex-grow: 1; position: relative;">
+                <input type="text" id="search-inv-pieza" class="form-input" placeholder="🔍 Buscar modelo en el catálogo..."
+                       onkeyup="filtrarMaterial('inv-pieza')" onfocus="mostrarUltimasMaterial('inv-pieza')" autocomplete="off">
+                <div id="list-inv-pieza" class="custom-options" style="position: absolute; width: 100%; z-index: 9999;"></div>
+            </div>
+            <img id="img-preview-inv-pieza" src="" 
+                 style="width: 42px; height: 42px; border-radius: 6px; object-fit: cover; border: 1px solid #cbd5e1; display: none; cursor: zoom-in;" 
+                 onclick="ampliarImagen(this.src)" title="Haz clic para agrandar">
+        </div>
+        <input type="hidden" id="sku-inv-pieza">
+        <button type="button" onclick="_invCrearAlVuelo()"
+                style="margin-top: 8px; width: 100%; background: #f8fafc; color: var(--accent); border: 1px dashed var(--accent); padding: 8px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;">
+            <i class="fa-solid fa-plus"></i> CREAR NUEVO MODELO AL VUELO
+        </button>
+    </div>
+
     <div class="form-group"><label>Forma *</label>
         <select id="npf-forma" class="form-input" onchange="_invToggleMedidasPieza()">
             <option value="Rectangular">Rectangular</option>
@@ -739,40 +746,28 @@ function _formPieza() {
     <button onclick="_cerrarModalInvNuevo()" class="btn-action btn-ghost">Cancelar</button>`;
 }
 
-function _invActualizarModelosPieza() {
-    const cat = document.getElementById('npf-cat')?.value;
-    const sel = document.getElementById('npf-sku');
-    if (!sel) return;
-    let lista = '';
-    if (cat === 'tablero') {
-        lista = _maestroInv.tableros.map(t =>
-            `<option value="${t.sku}|${(t.nombre_modelo||t.nombre||'').replace(/"/g,'')}|${t.material_base||''}|${t.color||''}">${t.sku} — ${t.nombre_modelo||t.nombre}</option>`
-        ).join('');
-    } else if (cat === 'silla') {
-        lista = (_maestroInv.sillas||[]).map(s =>
-            `<option value="${s.sku}|${(s.modelo||'').replace(/"/g,'')}|${s.material||''}|${s.color||''}">${s.sku} — ${s.modelo}</option>`
-        ).join('');
-    } else if (cat === 'butaca') {
-        lista = (_maestroInv.butacas||[]).map(b =>
-            `<option value="${b.sku}|${(b.modelo||'').replace(/"/g,'')}|${b.material||''}|${b.color||''}">${b.sku} — ${b.modelo}</option>`
-        ).join('');
-    } else {
-        lista = _maestroInv.bases_comedor.map(b =>
-            `<option value="${b.sku}|${(b.modelo||'').replace(/"/g,'')}|${b.material||''}|${b.color||''}">${b.sku} — ${b.modelo}</option>`
-        ).join('');
-    }
-
-    sel.innerHTML = `<option value="">— Seleccionar —</option>${lista}`;
+function _invLimpiarSmartSearch() {
+    const search = document.getElementById('search-inv-pieza');
+    const sku = document.getElementById('sku-inv-pieza');
+    const img = document.getElementById('img-preview-inv-pieza');
+    const list = document.getElementById('list-inv-pieza');
+    if (search) search.value = '';
+    if (sku) sku.value = '';
+    if (img) img.style.display = 'none';
+    if (list) list.classList.remove('show');
 }
 
-function _invSelModeloPieza() {
-    const val = document.getElementById('npf-sku')?.value;
-    if (!val) return;
-    const [sku, nombre, mat, color] = val.split('|');
-    document.getElementById('npf-sku-val').value    = sku;
-    document.getElementById('npf-nombre-val').value = nombre;
-    document.getElementById('npf-mat-val').value    = mat;
-    document.getElementById('npf-color-val').value  = color;
+function _invCrearAlVuelo() {
+    const cat = document.getElementById('npf-cat')?.value || 'tablero';
+    const mapeo = {
+        'tablero': 'tablero',
+        'base-comedor': 'base-comedor',
+        'base-consola': 'base-comedor',
+        'base-mesa-centro': 'base-comedor',
+        'silla': 'silla',
+        'butaca': 'butaca'
+    };
+    abrirModalNuevo(mapeo[cat] || 'tablero', 'inventario');
 }
 
 function _invToggleMedidasPieza() {
@@ -837,14 +832,32 @@ async function _invGuardarProducto() {
 }
 
 async function _invGuardarPieza() {
-    const sku    = document.getElementById('npf-sku-val')?.value;
-    const nombre = document.getElementById('npf-nombre-val')?.value;
+    const sku    = document.getElementById('sku-inv-pieza')?.value;
+    const nombre = document.getElementById('search-inv-pieza')?.value;
     const cat    = document.getElementById('npf-cat')?.value;
     const forma  = document.getElementById('npf-forma')?.value;
     const sedeId = document.getElementById('npf-sede')?.value;
+
     if (!sku || !nombre || !sedeId) {
         Swal.fire('Incompleto', 'Selecciona el modelo y la sede.', 'warning'); return;
     }
+
+    let mat = '';
+    let color = '';
+    if (cat === 'tablero') {
+        const f = _maestroInv.tableros.find(x => x.sku === sku);
+        if (f) { mat = f.material_base; color = f.color; }
+    } else if (cat === 'silla') {
+        const f = _maestroInv.sillas.find(x => x.sku === sku);
+        if (f) { mat = f.material; color = f.color_estructura; }
+    } else if (cat === 'butaca') {
+        const f = _maestroInv.butacas.find(x => x.sku === sku);
+        if (f) { mat = f.material; color = f.color_estructura; }
+    } else {
+        const f = _maestroInv.bases_comedor.find(x => x.sku === sku);
+        if (f) { mat = f.material; color = f.color; }
+    }
+
     try {
         const res = await apiFetch(`${API_URL}/api/inventario/pieza/nueva`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -852,8 +865,8 @@ async function _invGuardarPieza() {
                 sku_maestro:    sku,
                 nombre_modelo:  nombre,
                 categoria:      cat,
-                material:       document.getElementById('npf-mat-val')?.value,
-                color_acabado:  document.getElementById('npf-color-val')?.value,
+                material:       mat,
+                color_acabado:  color,
                 forma,
                 largo_cm:  parseFloat(document.getElementById('npf-largo')?.value)    || null,
                 ancho_cm:  parseFloat(document.getElementById('npf-ancho')?.value)    || null,
