@@ -1047,7 +1047,7 @@ function imprimirEtiqueta(codigo, nombre, sede) {
             color: #8a7560;
             margin-bottom: 10px;
         }
-        svg { display: block; margin: 0 auto; }
+        svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
         .codigo-texto {
             font-size: 12px;
             font-weight: 900;
