@@ -11,13 +11,13 @@ function mostrarUltimasMaterial(tipoInput) {
     if (!searchEl || searchEl.value.trim() !== '') return;
 
     let tipoData = '';
-    if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero') tipoData = 'telas';
-    else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno') tipoData = 'cojines';
-    else if (tipoInput === 'base') tipoData = 'bases';
-    else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro') tipoData = 'tableros';
-    else if (tipoInput === 'base-mesa' || tipoInput === 'base-centro') tipoData = 'bases_comedor';
-    else if (tipoInput === 'silla') tipoData = 'sillas';
-    else if (tipoInput === 'estructura-butaca') tipoData = 'butacas';
+    if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero' || tipoInput === 'tela-inv') tipoData = 'telas';
+    else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno' || tipoInput === 'cojin-inv') tipoData = 'cojines';
+    else if (tipoInput === 'base' || tipoInput === 'base-inv') tipoData = 'bases';
+    else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro' || tipoInput === 'tablero-inv') tipoData = 'tableros';
+    else if (tipoInput === 'base-mesa' || tipoInput === 'base-centro' || tipoInput === 'base-comedor-inv') tipoData = 'bases_comedor';
+    else if (tipoInput === 'silla' || tipoInput === 'silla-inv') tipoData = 'sillas';
+    else if (tipoInput === 'estructura-butaca' || tipoInput === 'butaca-inv') tipoData = 'butacas';
 
     if (!maestroMateriales[tipoData]) return;
 
@@ -90,13 +90,13 @@ function filtrarMaterial(tipoInput) {
     }
 
    // 1. SEPARACIÓN ABSOLUTA (Butacas tienen su propio almacén)
-    if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero') tipoData = 'telas';
-    else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno') tipoData = 'cojines';
-    else if (tipoInput === 'base') tipoData = 'bases';
-    else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro') tipoData = 'tableros'; 
-    else if (tipoInput === 'base-mesa' || tipoInput === 'base-centro') tipoData = 'bases_comedor'; 
-    else if (tipoInput === 'silla') tipoData = 'sillas';
-    else if (tipoInput === 'estructura-butaca') tipoData = 'butacas';
+    if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero' || tipoInput === 'tela-inv') tipoData = 'telas';
+    else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno' || tipoInput === 'cojin-inv') tipoData = 'cojines';
+    else if (tipoInput === 'base' || tipoInput === 'base-inv') tipoData = 'bases';
+    else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro' || tipoInput === 'tablero-inv') tipoData = 'tableros'; 
+    else if (tipoInput === 'base-mesa' || tipoInput === 'base-centro' || tipoInput === 'base-comedor-inv') tipoData = 'bases_comedor'; 
+    else if (tipoInput === 'silla' || tipoInput === 'silla-inv') tipoData = 'sillas';
+    else if (tipoInput === 'estructura-butaca' || tipoInput === 'butaca-inv') tipoData = 'butacas';
 
     // Protección por si el catálogo aún no carga
     if (!maestroMateriales[tipoData]) return;
@@ -1383,7 +1383,11 @@ async function guardarNuevoMaterial() {
                 confirmButtonColor: '#0f172a'
             });
             document.getElementById('modal-nuevo-material').style.display = 'none';
-            init();
+            if (destinoActual === 'inventario') {
+                await _refreshMaestro(); // Recarga los datos de fondo sin sacarte de tu vista actual
+            } else {
+                init();
+            }
         } else {
             const err = await res.json();
             Swal.fire('Error', err.error || 'No se pudo procesar', 'error');
