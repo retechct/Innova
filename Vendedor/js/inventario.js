@@ -97,6 +97,11 @@ function _htmlEsqueleto() {
                            border-radius:10px;cursor:pointer;font-size:13px;">
                 <i class="fas fa-search"></i>
             </button>
+            <button onclick="_iniciarEscaneoCamara()" title="Escanear con cámara"
+                    style="background:#1e293b;color:white;border:none;padding:8px 14px;
+                           border-radius:10px;cursor:pointer;font-size:13px;">
+                <i class="fas fa-camera"></i>
+            </button>
         </div>
     </div>
 
@@ -143,6 +148,18 @@ function _htmlEsqueleto() {
                     <i class="fas fa-times"></i></button>
             </div>
             <div id="modal-inv-det-cuerpo" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    <!-- MODAL ESCANER CAMARA -->
+    <div id="modal-scanner-inv" class="modal-overlay" style="display:none;align-items:center;justify-content:center;z-index:99999;">
+        <div class="modal-content" style="width:92%;max-width:500px;border-radius:16px;padding:20px;text-align:center;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+                <h3 style="margin:0;"><i class="fas fa-camera"></i> Escanear Código</h3>
+                <button onclick="_cerrarEscaneoCamara()" style="background:none;border:none;font-size:20px;cursor:pointer;">&times;</button>
+            </div>
+            <div id="reader-inv" style="width:100%; min-height:250px; background:#f1f5f9; border-radius:8px; overflow:hidden;"></div>
+            <p style="font-size:12px;color:gray;margin-top:10px;">Apunta la cámara del celular al código de barras impreso.</p>
         </div>
     </div>
     `;
@@ -1242,4 +1259,45 @@ function imprimirEtiquetasMasivas(lista) {
     </body>
     </html>`);
     win.document.close();
+}
+
+/* ─── Lector de Código de Barras con Cámara del Celular ────────────────── */
+let _html5QrcodeScannerInv = null;
+
+function _iniciarEscaneoCamara() {
+    document.getElementById('modal-scanner-inv').style.display = 'flex';
+    
+    // Cargar la librería dinámicamente solo cuando se necesita para no poner lenta tu página
+    if (typeof Html5QrcodeScanner === 'undefined') {
+        const script = document.createElement('script');
+        script.src = "https://unpkg.com/html5-qrcode";
+        script.onload = () => _iniciarLectorLibreria();
+        document.head.appendChild(script);
+    } else {
+        _iniciarLectorLibreria();
+    }
+}
+
+function _iniciarLectorLibreria() {
+    if (_html5QrcodeScannerInv) _html5QrcodeScannerInv.clear();
+    
+    _html5QrcodeScannerInv = new Html5QrcodeScanner(
+        "reader-inv", 
+        { fps: 10, qrbox: {width: 250, height: 100} },
+        false
+    );
+    
+    _html5QrcodeScannerInv.render((textoDecodificado) => {
+        // Cuando lee un código exitosamente
+        _cerrarEscaneoCamara();
+        document.getElementById('inv-barcode-input').value = textoDecodificado;
+        _invBuscarBarcode(textoDecodificado); // Ejecuta la búsqueda automáticamente
+    }, undefined);
+}
+
+function _cerrarEscaneoCamara() {
+    if (_html5QrcodeScannerInv) {
+        _html5QrcodeScannerInv.clear().catch(e => console.error("Error al limpiar escáner.", e));
+    }
+    document.getElementById('modal-scanner-inv').style.display = 'none';
 }
