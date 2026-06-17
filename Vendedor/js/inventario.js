@@ -530,9 +530,31 @@ async function _invBuscarBarcode(barcode) {
     barcode = (barcode || '').trim();
     if (!barcode) return;
     try {
+        // 1. Interceptar escaneo de código genérico de estante (PROD-XX)
+        if (barcode.startsWith('PROD-')) {
+            const catId = barcode.split('-')[1];
+            const catItem = _maestroInv.catalogo.find(c => c.id == catId);
+            if (catItem) {
+                Swal.fire({ title: 'Etiqueta de Estante', text: 'Escaneaste la etiqueta general del modelo. Mostrando el stock disponible en tienda...', icon: 'info', timer: 2500, showConfirmButton: false });
+                _invVerUnidades(catItem.nombre || catItem.nombre_modelo, catItem.categoria, catId);
+                return;
+            }
+        }
+
+        // 2. Búsqueda normal de unidad física
         const res = await apiFetch(`${API_URL}/api/inventario/buscar/${encodeURIComponent(barcode)}`);
         const d   = await res.json();
-        if (d.error) { Swal.fire('No encontrado', d.error, 'warning'); return; }
+        if (d.error) { 
+            // 3. Interceptar escaneo de SKU Maestro (Piezas)
+            const esPiezaMaestro = _invDataPiezas.piezas.find(p => p.sku_maestro === barcode);
+            if (esPiezaMaestro) {
+                Swal.fire({ title: 'Etiqueta de Estante', text: 'Escaneaste el SKU general de la pieza. Mostrando el stock disponible en tienda...', icon: 'info', timer: 2500, showConfirmButton: false });
+                _invVerUnidades(esPiezaMaestro.nombre_modelo, esPiezaMaestro.categoria, null);
+                return;
+            }
+            Swal.fire('No encontrado', 'El código no pertenece a ninguna unidad física ni modelo registrado.', 'warning'); 
+            return; 
+        }
         _invMostrarDetalleUnidad(d);
     } catch(e) { Swal.fire('Error', e.message, 'error'); }
 }
@@ -545,7 +567,15 @@ function _invMostrarDetalleUnidad(d) {
         'Dañado': '#fee2e2', 'Baja': '#f1f5f9'
     };
 
-    let html = `
+    // 1. Confirmación Visual Híbrida (Foto del catálogo)
+    const fotoHTML = d.foto_url 
+        ? `<div style="text-align:center; margin-bottom:15px;">
+               <img src="${d.foto_url.split('|')[0]}" style="width:120px; height:120px; object-fit:cover; border-radius:12px; border:2px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.08);" onerror="this.style.display='none'">
+               <p style="font-size:10px; color:var(--text-muted); margin-top:6px; font-weight:bold; letter-spacing:0.5px;">FOTO DEL CATÁLOGO</p>
+           </div>`
+        : '';
+
+    let html = fotoHTML + `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px;">
         <div class="specs-section">
             <h4>Identificación</h4>
@@ -609,6 +639,8 @@ function _invMostrarDetalleUnidad(d) {
 }
 
 async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
+    const pideFoto = (estadoNuevo === 'Dañado' || estadoNuevo === 'En Traslado');
+
     const { value: datos } = await Swal.fire({
         title:  `Cambiar a: ${estadoNuevo}`,
         html: `
@@ -621,14 +653,31 @@ async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
                     .join('')}
             </select>` : ''}
             <input id="swal-notas" class="swal2-input" placeholder="Motivo / notas" style="margin:8px 0;">
+
+            <!-- 2. Evidencia Fotográfica Híbrida -->
+            <div style="margin-top:15px; text-align:left; background:#f8fafc; padding:10px; border-radius:8px; border:1px dashed #cbd5e1;">
+                <label style="font-size:11px; font-weight:bold; color:var(--text-muted);">📷 FOTO DE EVIDENCIA ${pideFoto ? '<span style="color:#dc2626;">(OBLIGATORIA)</span>' : '(OPCIONAL)'}</label>
+                <input type="file" id="swal-evidencia" accept="image/*" style="width:100%; padding:8px 0; margin-top:5px; font-size:12px;">
+            </div>
         `,
         showCancelButton: true,
         confirmButtonText: 'Confirmar',
         confirmButtonColor: '#0f172a',
-        preConfirm: () => ({
-            notas:          document.getElementById('swal-notas')?.value || '',
-            sede_destino_id: document.getElementById('swal-sede-dest')?.value || null,
-        })
+        preConfirm: () => {
+            const notas = document.getElementById('swal-notas')?.value || '';
+            const sede_destino_id = document.getElementById('swal-sede-dest')?.value || null;
+            const archivo = document.getElementById('swal-evidencia')?.files[0];
+            
+            if (estadoNuevo === 'En Traslado' && !sede_destino_id) {
+                Swal.showValidationMessage('Debes seleccionar la sede de destino.');
+                return false;
+            }
+            if (pideFoto && !archivo) {
+                Swal.showValidationMessage('Para este estado es OBLIGATORIO subir una foto de evidencia.');
+                return false;
+            }
+            return { notas, sede_destino_id, archivo };
+        }
     });
     if (!datos) return;
 
@@ -637,7 +686,24 @@ async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
         'Baja': 'Baja', 'Disponible': 'Ajuste', 'Reservado': 'Reserva'
     }[estadoNuevo] || 'Ajuste';
 
+    // Subir evidencia fotográfica si el usuario adjuntó una
+    let urlEvidencia = '';
+    if (datos.archivo) {
+        Swal.fire({ title: 'Subiendo evidencia...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const fd = new FormData();
+        fd.append('foto', datos.archivo);
+        try {
+            const resUpload = await apiFetch(`${API_URL}/api/upload-foto`, { method: 'POST', body: fd });
+            const dUpload = await resUpload.json();
+            if (dUpload.url) urlEvidencia = dUpload.url;
+        } catch(e) { console.error("Error al subir foto:", e); }
+    }
+
+    let notasFinales = datos.notas;
+    if (urlEvidencia) notasFinales += ` [Evidencia adjunta: ${urlEvidencia}]`;
+
     try {
+        Swal.fire({ title: 'Actualizando estado...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         const res = await apiFetch(`${API_URL}/api/inventario/${tipo}/${id}/estado`, {
             method:  'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -648,7 +714,7 @@ async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
                 usuario_id:      window.usuarioActivo?.id,
                 usuario_rol:     window.usuarioActivo?.rol,
                 usuario_nombre:  window.usuarioActivo?.nombre,
-                notas:           datos.notas,
+                notas:           notasFinales,
             })
         });
         const d = await res.json();
@@ -1262,13 +1328,13 @@ function imprimirEtiquetasMasivas(lista) {
 }
 
 /* ─── Lector de Código de Barras con Cámara del Celular ────────────────── */
-let _html5QrcodeScannerInv = null;
+let _html5QrcodeInv = null;
 
 function _iniciarEscaneoCamara() {
     document.getElementById('modal-scanner-inv').style.display = 'flex';
     
     // Cargar la librería dinámicamente solo cuando se necesita para no poner lenta tu página
-    if (typeof Html5QrcodeScanner === 'undefined') {
+    if (typeof Html5Qrcode === 'undefined') {
         const script = document.createElement('script');
         script.src = "https://unpkg.com/html5-qrcode";
         script.onload = () => _iniciarLectorLibreria();
@@ -1279,25 +1345,28 @@ function _iniciarEscaneoCamara() {
 }
 
 function _iniciarLectorLibreria() {
-    if (_html5QrcodeScannerInv) _html5QrcodeScannerInv.clear();
+    if (!_html5QrcodeInv) {
+        _html5QrcodeInv = new Html5Qrcode("reader-inv");
+    }
     
-    _html5QrcodeScannerInv = new Html5QrcodeScanner(
-        "reader-inv", 
-        { fps: 10, qrbox: {width: 250, height: 100} },
-        false
-    );
-    
-    _html5QrcodeScannerInv.render((textoDecodificado) => {
-        // Cuando lee un código exitosamente
-        _cerrarEscaneoCamara();
-        document.getElementById('inv-barcode-input').value = textoDecodificado;
-        _invBuscarBarcode(textoDecodificado); // Ejecuta la búsqueda automáticamente
-    }, undefined);
+    _html5QrcodeInv.start(
+        { facingMode: "environment" }, // ⬅️ Fuerza la cámara trasera del celular
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        (textoDecodificado) => {
+            _cerrarEscaneoCamara();
+            document.getElementById('inv-barcode-input').value = textoDecodificado;
+            _invBuscarBarcode(textoDecodificado);
+        },
+        (errorMessage) => { /* Ignorar errores de lectura en progreso */ }
+    ).catch(err => {
+        console.error("Error cámara:", err);
+        Swal.fire('Aviso', 'No se pudo acceder a la cámara trasera. Asegúrate de dar permisos en tu navegador.', 'warning');
+    });
 }
 
 function _cerrarEscaneoCamara() {
-    if (_html5QrcodeScannerInv) {
-        _html5QrcodeScannerInv.clear().catch(e => console.error("Error al limpiar escáner.", e));
+    if (_html5QrcodeInv && _html5QrcodeInv.isScanning) {
+        _html5QrcodeInv.stop().catch(e => console.error("Error al detener escáner.", e));
     }
     document.getElementById('modal-scanner-inv').style.display = 'none';
 }
