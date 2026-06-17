@@ -577,31 +577,46 @@ function _invMostrarDetalleUnidad(d) {
     // 1. Recuperar la foto original del maestro si el backend no la envió
     let fotoUrlFinal = d.foto_url;
     if (!fotoUrlFinal && d.tipo !== 'producto') {
-        // Agrupamos todos los catálogos para asegurar que busque en todos lados
-        const todosLosMaestros = [
-            ...(_maestroInv.tableros || []),
-            ...(_maestroInv.bases_comedor || []),
-            ...(_maestroInv.sillas || []),
-            ...(_maestroInv.butacas || [])
-        ];
+        const cat = (d.categoria || '').toLowerCase();
+        let lista = [];
         
-        const dNombre = (d.nombre_modelo || '').trim().toLowerCase();
-        const f = todosLosMaestros.find(x => 
-            (d.sku_maestro && x.sku === d.sku_maestro) || 
-            (x.nombre_modelo || '').trim().toLowerCase() === dNombre || 
-            (x.modelo || '').trim().toLowerCase() === dNombre || 
-            (x.nombre || '').trim().toLowerCase() === dNombre
+        // ✅ MAPEO MEJORADO: Cubrir todas las categorías
+        if (cat === 'tablero') lista = _maestroInv.tableros || [];
+        else if (cat === 'silla') lista = _maestroInv.sillas || [];
+        else if (cat === 'butaca') lista = _maestroInv.butacas || [];
+        else if (cat.includes('base') || cat === 'base-comedor' || cat === 'base-consola' || cat === 'base-mesa-centro') 
+            lista = _maestroInv.bases_comedor || [];
+        
+        const f = lista.find(x => 
+            (x.nombre_modelo && x.nombre_modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
+            (x.modelo && x.modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
+            (x.nombre && x.nombre.toLowerCase() === (d.nombre_modelo || '').toLowerCase())
         );
         if (f && f.foto_url) fotoUrlFinal = f.foto_url;
     }
 
-    // 2. Confirmación Visual Híbrida (Foto del catálogo)
-    const fotoHTML = fotoUrlFinal 
-        ? `<div style="text-align:center; margin-bottom:15px;">
-               <img src="${fotoUrlFinal.split('|')[0]}" style="width:120px; height:120px; object-fit:cover; border-radius:12px; border:2px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.08);" onerror="this.style.display='none'">
+    // ✅ FUNCIÓN HELPER: Extraer URL limpia y validar
+    function obtenerFotoLimpia(url) {
+        if (!url) return null;
+        // Si contiene |, tomar la primera parte (puede ser múltiples fotos separadas por |)
+        return url.split('|')[0].trim();
+    }
+
+    const fotoLimpia = obtenerFotoLimpia(fotoUrlFinal);
+    
+    // 2. HTML de imagen mejorado (con fallback y mejor diseño responsive)
+    const fotoHTML = fotoLimpia 
+        ? `<div style="text-align:center; margin-bottom:15px; display:flex; justify-content:center;">
+               <img src="${fotoLimpia}" 
+                    alt="${d.nombre_modelo}"
+                    style="max-width:180px; width:100%; height:auto; max-height:180px; object-fit:cover; border-radius:12px; border:2px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.08);"
+                    onerror="this.src='imagenes/sin_foto.jpg'; this.style.opacity='0.6';">
                <p style="font-size:10px; color:var(--text-muted); margin-top:6px; font-weight:bold; letter-spacing:0.5px;">FOTO DEL CATÁLOGO</p>
            </div>`
-        : '';
+        : `<div style="text-align:center; margin-bottom:15px; padding:20px; background:#f1f5f9; border-radius:12px; color:var(--text-muted);">
+               <i class="fas fa-image" style="font-size:32px; opacity:0.3; margin-bottom:8px; display:block;"></i>
+               <p style="font-size:12px; margin:0;">Sin foto disponible</p>
+           </div>`;
 
     let html = fotoHTML + `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px;">

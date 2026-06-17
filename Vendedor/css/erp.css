@@ -765,4 +765,279 @@ header {
     .tickets-area-grid {
         grid-template-columns: 1fr;
     }
+}/* ============================================================
+   INNOVA MOBILI — FIX RESPONSIVE MODAL INVENTARIO
+   Copia esto al FINAL de tu archivo erp.css
+   ============================================================ */
+
+/* ─── RESPONSIVE FIX para Modal Inventario (línea 569) ─────────────── */
+@media (max-width: 768px) {
+    /* Modal container responsivo */
+    #modal-inv-detalle {
+        padding: 0;
+    }
+
+    #modal-inv-detalle .modal-content {
+        width: 95% !important;
+        max-width: 95%;
+        padding: 16px !important;
+        border-radius: 16px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    #modal-inv-det-titulo {
+        font-size: 14px !important;
+    }
+
+    #modal-inv-det-cuerpo {
+        margin-top: 12px !important;
+    }
+
+    /* Collapse grid a single column */
+    #modal-inv-det-cuerpo > div[style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    /* Imagen más grande y flexible */
+    #modal-inv-det-cuerpo img[alt] {
+        max-width: 220px !important;
+        width: 100% !important;
+        height: auto !important;
+    }
+
+    /* Imagen fallback sin foto */
+    #modal-inv-det-cuerpo img[src*="sin_foto"] {
+        width: 100%;
+        max-width: 220px;
+    }
+
+    /* Placeholder de sin foto */
+    #modal-inv-det-cuerpo > div[style*="background:#f1f5f9"] {
+        padding: 24px 16px !important;
+        margin-bottom: 15px !important;
+    }
+
+    #modal-inv-det-cuerpo > div[style*="background:#f1f5f9"] i {
+        font-size: 40px !important;
+    }
+
+    /* Specs section en mobile */
+    .specs-section {
+        display: block !important;
+    }
+
+    .specs-section h4 {
+        margin: 0 0 8px 0 !important;
+        font-size: 12px !important;
+    }
+
+    .specs-section p {
+        font-size: 13px !important;
+    }
+
+    /* Botones de estado apilados verticalmente */
+    #modal-inv-det-cuerpo > div[style*="border-top"] {
+        margin-top: 12px !important;
+        padding-top: 12px !important;
+    }
+
+    #modal-inv-det-cuerpo > div[style*="border-top"] > div[style*="display:flex"] {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+
+    #modal-inv-det-cuerpo > div[style*="border-top"] button[onclick*="Cambiar"] {
+        font-size: 10px !important;
+        padding: 4px 8px !important;
+        flex: 0 1 calc(50% - 3px) !important;
+    }
+
+    #modal-inv-det-cuerpo > div[style*="border-top"] button[onclick*="historial"] {
+        width: 100% !important;
+        font-size: 11px !important;
+    }
+
+    /* Etiqueta de etado */
+    #modal-inv-det-cuerpo span[style*="background:"] {
+        font-size: 11px !important;
+        padding: 3px 8px !important;
+    }
+
+    /* Modal header responsivo */
+    .modal-header {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .modal-header h3 {
+        word-break: break-word;
+        font-size: 14px !important;
+    }
+
+    .close-btn {
+        position: absolute;
+        right: 8px;
+        top: 8px;
+    }
 }
+
+/* ─── Extra small devices (< 480px) ──────────────────────────────── */
+@media (max-width: 480px) {
+    #modal-inv-detalle .modal-content {
+        width: 98% !important;
+        padding: 12px !important;
+        border-radius: 12px;
+    }
+
+    #modal-inv-det-titulo {
+        font-size: 12px !important;
+    }
+
+    #modal-inv-det-cuerpo {
+        font-size: 12px !important;
+    }
+
+    #modal-inv-det-cuerpo img[alt] {
+        max-width: 200px !important;
+    }
+
+    #modal-inv-det-cuerpo > div[style*="grid-template-columns"] {
+        gap: 8px !important;
+    }
+
+    .specs-section h4 {
+        font-size: 11px !important;
+        margin-bottom: 6px !important;
+    }
+
+    .specs-section p {
+        font-size: 12px !important;
+        margin: 3px 0 !important;
+    }
+
+    #modal-inv-det-cuerpo > div[style*="border-top"] button[onclick*="Cambiar"] {
+        flex: 0 1 calc(50% - 3px) !important;
+        font-size: 9px !important;
+        padding: 3px 6px !important;
+    }
+}
+
+/* ─── ESCANEO CON CÁMARA - Responsivo ─────────────────────────────── */
+@media (max-width: 768px) {
+    #modal-scanner-inv .modal-content {
+        width: 95% !important;
+        max-width: 95%;
+        padding: 16px !important;
+    }
+
+    #reader-inv {
+        width: 100% !important;
+        min-height: 300px !important;
+        max-height: 400px !important;
+    }
+
+    #modal-scanner-inv h3 {
+        font-size: 14px !important;
+    }
+
+    #modal-scanner-inv p {
+        font-size: 11px !important;
+    }
+}
+
+/* ─── TABLA DE INVENTARIO - Responsivo ────────────────────────────── */
+@media (max-width: 768px) {
+    #inv-contenido .table-wrapper {
+        border-radius: 8px;
+    }
+
+    #inv-contenido .table {
+        font-size: 12px;
+    }
+
+    #inv-contenido .table th,
+    #inv-contenido .table td {
+        padding: 8px 6px;
+    }
+
+    #inv-contenido .table th {
+        font-size: 10px;
+    }
+
+    /* Columnas menos espaciadas */
+    #inv-contenido .table td:first-child {
+        width: 60px;
+    }
+
+    #inv-contenido .table td:nth-child(2) {
+        width: auto;
+    }
+}
+
+/* ─── BUSCADOR DE CÓDIGO RESPONSIVO ───────────────────────────────── */
+@media (max-width: 768px) {
+    #inv-barcode-input {
+        max-width: 100% !important;
+        width: 100% !important;
+        font-size: 14px !important;
+    }
+
+    /* Los botones de buscar y cámara se apilan */
+    div[style*="display:flex"][style*="gap:6px"] {
+        display: flex !important;
+        flex-wrap: wrap !important;
+    }
+
+    div[style*="display:flex"][style*="gap:6px"] button {
+        flex: 1;
+        min-width: 100px;
+    }
+}
+
+/* ─── FILTROS RESPONSIVOS ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+    #inv-filtros {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    #inv-filtro-cat,
+    #inv-filtro-sede,
+    #inv-filtro-q {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+}
+
+/* ─── HEADER DEL INVENTARIO RESPONSIVO ─────────────────────────────── */
+@media (max-width: 768px) {
+    .view-title-container {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .view-title-container > div[style*="margin-left:auto"] {
+        margin-left: 0 !important;
+        width: 100%;
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 6px;
+    }
+
+    .view-title-container button {
+        font-size: 11px !important;
+        padding: 8px 10px !important;
+    }
+
+    .view-title-container i {
+        font-size: 12px !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════ */
+/* FIN FIX RESPONSIVO INVENTARIO */
+/* ═══════════════════════════════════════════════════════════════════ */
