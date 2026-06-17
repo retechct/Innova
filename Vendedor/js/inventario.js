@@ -422,12 +422,17 @@ function _renderTablaPiezas() {
                 font-size:13px;color:${((p.sede_stock||{})[s]||0)>0?'var(--primary)':'#cbd5e1'};">
                 ${(p.sede_stock||{})[s]||0}
             </td>`).join('')}
-            <td style="padding:12px 8px;text-align:center;">
+            <td style="padding:12px 8px;text-align:center;display:flex;gap:4px;justify-content:center;">
                 ${isNew ? `
                 <button onclick="imprimirEtiqueta('${p.sku_maestro}','${p.nombre_modelo.replace(/'/g,"\\'")}','Catálogo')"
                         style="background:#f8fafc;border:1px solid #cbd5e1;padding:6px 10px;border-radius:6px;
                                color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Imprimir SKU Maestro">
                     <i class="fas fa-barcode"></i> SKU
+                </button>
+                <button onclick="_invVerUnidades('${p.nombre_modelo.replace(/'/g,"\\'")}','${p.categoria}','es_pieza')"
+                        style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;
+                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;">
+                    <i class="fas fa-eye"></i> Ver
                 </button>` : ''}
             </td>
         </tr>`;
@@ -549,7 +554,7 @@ async function _invBuscarBarcode(barcode) {
             const esPiezaMaestro = _invDataPiezas.piezas.find(p => p.sku_maestro === barcode);
             if (esPiezaMaestro) {
                 Swal.fire({ title: 'Etiqueta de Estante', text: 'Escaneaste el SKU general de la pieza. Mostrando el stock disponible en tienda...', icon: 'info', timer: 2500, showConfirmButton: false });
-                _invVerUnidades(esPiezaMaestro.nombre_modelo, esPiezaMaestro.categoria, null);
+                _invVerUnidades(esPiezaMaestro.nombre_modelo, esPiezaMaestro.categoria, 'es_pieza');
                 return;
             }
             Swal.fire('No encontrado', 'El código no pertenece a ninguna unidad física ni modelo registrado.', 'warning'); 
@@ -1033,11 +1038,18 @@ async function _invGuardarPieza() {
 /* ─── Ver unidades de un modelo ─────────────────────────────── */
 async function _invVerUnidades(nombre, categoria, catalogoId) {
     try {
+        const esPieza = (catalogoId === 'es_pieza');
         const p = new URLSearchParams({ categoria, q: nombre });
-        const res  = await apiFetch(`${API_URL}/api/inventario/resumen?${p}`);
+        const endpoint = esPieza 
+            ? `${API_URL}/api/inventario/piezas/resumen?${p}`
+            : `${API_URL}/api/inventario/resumen?${p}`;
+
+        const res  = await apiFetch(endpoint);
         const data = await res.json();
-        const m    = (data.modelos||[]).find(x=>x.nombre_modelo===nombre);
-        if (!m) { Swal.fire('Sin datos', '', 'info'); return; }
+        
+        const lista = esPieza ? (data.piezas || []) : (data.modelos || []);
+        const m    = lista.find(x => x.nombre_modelo === nombre);
+        if (!m) { Swal.fire('Sin datos', 'No hay stock registrado de este modelo.', 'info'); return; }
 
         let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:15px;">`;
         (data.sedes||[]).forEach(s => {
