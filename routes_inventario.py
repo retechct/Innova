@@ -274,7 +274,7 @@ def buscar_por_barcode(barcode):
                 SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
                        sp.material, sp.color_acabado, sp.estado, se.nombre AS sede,
                        sp.forma, sp.largo_cm, sp.ancho_cm, sp.alto_cm,
-                       sp.costo_ingreso, sp.fecha_ingreso, 'pieza' AS tipo
+                       sp.costo_ingreso, sp.fecha_ingreso, 'pieza' AS tipo, sp.foto_url
                 FROM stock_piezas sp
                 JOIN sedes se ON sp.sede_id = se.id
                 WHERE sp.codigo_barra = %s;
@@ -299,6 +299,7 @@ def buscar_por_barcode(barcode):
                 "alto_cm":       float(row[11]) if row[11] else None,
                 "costo_ingreso": float(row[12]) if row[12] else None,
                 "fecha_ingreso": row[13].strftime('%d/%m/%Y') if row[13] else None,
+                "foto_url":      row[15] or "",
             }), 200
 
         return jsonify({
