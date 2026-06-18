@@ -11,7 +11,7 @@ let _invDataPiezas = { sedes: [], piezas:  [] };
 let _invFiltroCat  = '';
 let _invFiltroQ    = '';
 let _invFiltroSede = '';
-let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], catalogo: [] };
+let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], catalogo: [], cargado: false };
 
 const CATEGORIAS_PRODUCTO = [
     'Sofa','Butaca','Silla','Espejo','Cuadro','Cojin','Mesa Centro','Consola'
@@ -173,6 +173,10 @@ function _puedeEditarInv() {
 
 /* ─── Cargar maestros ───────────────────────────────────────── */
 async function _cargarMaestrosInv() {
+    // Guard: no recargar si ya están en memoria (evita 3 requests redundantes
+    // cuando el usuario navega entre tabs o vuelve a la vista)
+    if (_maestroInv.cargado) return;
+
     try {
         const [resMat, resCat, resSedes] = await Promise.all([
             apiFetch(`${API_URL}/api/materiales/listas`),
@@ -183,12 +187,12 @@ async function _cargarMaestrosInv() {
         const cat   = await resCat.json();
         const sedes = await resSedes.json();
 
-        // DESPUÉS:
         _maestroInv.tableros      = mat.tableros      || [];
         _maestroInv.bases_comedor = mat.bases_comedor || [];
         _maestroInv.sillas        = mat.sillas        || [];
         _maestroInv.butacas       = mat.butacas       || [];
         _maestroInv.catalogo      = cat || [];
+        _maestroInv.cargado       = true;
 
         // Poblar selector de sedes en filtros
         const selSede = document.getElementById('inv-filtro-sede');
@@ -562,11 +566,11 @@ async function _invBuscarBarcode(barcode) {
             Swal.fire('No encontrado', 'El código no pertenece a ninguna unidad física ni modelo registrado.', 'warning'); 
             return; 
         }
-        _invMostrarDetalleUnidad(d);
+        await _invMostrarDetalleUnidad(d);
     } catch(e) { Swal.fire('Error', e.message, 'error'); }
 }
 
-function _invMostrarDetalleUnidad(d) {
+async function _invMostrarDetalleUnidad(d) {
     const esProducto = d.tipo === 'producto';
     const estadoColor = {
         'Disponible': '#dcfce7', 'Reservado': '#fef3c7',
@@ -574,25 +578,35 @@ function _invMostrarDetalleUnidad(d) {
         'Dañado': '#fee2e2', 'Baja': '#f1f5f9'
     };
 
-    // 1. Recuperar la foto original del maestro si el backend no la envió
+    // 1. Intentar recuperar foto: primero en memoria, luego request al backend
     let fotoUrlFinal = d.foto_url;
     if (!fotoUrlFinal && d.tipo !== 'producto') {
         const cat = (d.categoria || '').toLowerCase();
         let lista = [];
-        
-        // ✅ MAPEO MEJORADO: Cubrir todas las categorías
         if (cat === 'tablero') lista = _maestroInv.tableros || [];
         else if (cat === 'silla') lista = _maestroInv.sillas || [];
         else if (cat === 'butaca') lista = _maestroInv.butacas || [];
-        else if (cat.includes('base') || cat === 'base-comedor' || cat === 'base-consola' || cat === 'base-mesa-centro') 
-            lista = _maestroInv.bases_comedor || [];
-        
-        const f = lista.find(x => 
+        else if (cat.includes('base')) lista = _maestroInv.bases_comedor || [];
+
+        const f = lista.find(x =>
             (x.nombre_modelo && x.nombre_modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
             (x.modelo && x.modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
             (x.nombre && x.nombre.toLowerCase() === (d.nombre_modelo || '').toLowerCase())
         );
-        if (f && f.foto_url) fotoUrlFinal = f.foto_url;
+        if (f && f.foto_url) {
+            fotoUrlFinal = f.foto_url;
+        } else {
+            // Fallback: pedir al backend directamente (cubre el caso donde
+            // _maestroInv no estaba cargado porque el usuario llegó desde otra vista)
+            try {
+                const params = new URLSearchParams({ tipo: cat, modelo: d.nombre_modelo || '' });
+                const resFoto = await apiFetch(`${API_URL}/api/materiales/maestro/buscar?${params}`);
+                const dataFoto = await resFoto.json();
+                if (dataFoto.foto_url) fotoUrlFinal = dataFoto.foto_url;
+            } catch(e) {
+                console.warn('[inventario] No se pudo obtener foto del maestro:', e);
+            }
+        }
     }
 
     // ✅ FUNCIÓN HELPER: Extraer URL limpia y validar

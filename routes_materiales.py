@@ -287,6 +287,61 @@ def obtener_listas_materiales():
             release_db_connection(conexion)
 
 
+@materiales_bp.route('/api/materiales/maestro/buscar', methods=['GET'])
+@requiere_login
+def buscar_maestro_por_modelo():
+    """
+    Devuelve la foto_url del maestro que coincide con tipo + nombre de modelo.
+    Query params:
+      ?tipo=tablero|silla|butaca|base-comedor|base-consola|base-mesa-centro
+      &modelo=Nombre%20del%20modelo
+    Respuesta: { "foto_url": "https://..." }  o  { "error": "..." }
+
+    Usado por el frontend como fallback cuando una unidad física no tiene foto_url.
+    """
+    tipo   = (request.args.get('tipo')   or '').lower().strip()
+    modelo = (request.args.get('modelo') or '').strip()
+
+    if not tipo or not modelo:
+        return jsonify({'error': 'Los parámetros tipo y modelo son obligatorios'}), 400
+
+    # Mapa: tipo → (tabla, columna_nombre_modelo)
+    # base-consola y base-mesa-centro comparten la tabla maestro_bases_comedor
+    TABLA_MAP = {
+        'tablero':          ('maestro_tableros',     'nombre_modelo'),
+        'silla':            ('maestro_sillas',        'modelo'),
+        'butaca':           ('maestro_butacas',       'modelo'),
+        'base-comedor':     ('maestro_bases_comedor', 'modelo'),
+        'base-consola':     ('maestro_bases_comedor', 'modelo'),
+        'base-mesa-centro': ('maestro_bases_comedor', 'modelo'),
+    }
+
+    info = TABLA_MAP.get(tipo)
+    if not info:
+        return jsonify({'error': f'Tipo de maestro no reconocido: {tipo}'}), 400
+
+    tabla, col_nombre = info
+    conexion = None
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute(
+            f"SELECT foto_url FROM {tabla} WHERE LOWER({col_nombre}) = LOWER(%s) LIMIT 1",
+            (modelo,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Maestro no encontrado'}), 404
+        return jsonify({'foto_url': limpiar_foto(row[0]) or ''}), 200
+    except Exception as ex:
+        print(f"[buscar_maestro_por_modelo] Error: {ex}")
+        return jsonify({'error': str(ex)}), 500
+    finally:
+        if conexion:
+            cursor.close()
+            release_db_connection(conexion)
+
+
 # ==========================================
 # CREACIONES DE VENDEDORES (Módulo 5)
 # ==========================================

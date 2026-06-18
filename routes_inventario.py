@@ -89,6 +89,42 @@ def _registrar_historial(cur, tipo, reg_id, barcode, evento,
           usuario_id, usuario_nombre, venta_id, codigo_venta, notas))
 
 
+# Mapa: categoría de pieza → (tabla_maestro, columna_nombre_modelo)
+_MAESTRO_FOTO_MAP = {
+    'tablero':          ('maestro_tableros',     'nombre_modelo'),
+    'silla':            ('maestro_sillas',        'modelo'),
+    'butaca':           ('maestro_butacas',       'modelo'),
+    'base-comedor':     ('maestro_bases_comedor', 'modelo'),
+    'base-consola':     ('maestro_bases_comedor', 'modelo'),
+    'base-mesa-centro': ('maestro_bases_comedor', 'modelo'),
+}
+
+
+def _obtener_foto_maestro(cur, categoria, nombre_modelo):
+    """
+    Busca la foto_url del maestro correspondiente a una categoría y nombre de modelo.
+    Devuelve la URL limpia (str) o '' si no encuentra nada.
+    """
+    if not categoria or not nombre_modelo:
+        return ''
+    entry = _MAESTRO_FOTO_MAP.get(categoria.lower())
+    if not entry:
+        return ''
+    tabla, col = entry
+    try:
+        cur.execute(
+            f"SELECT foto_url FROM {tabla} WHERE LOWER({col}) = LOWER(%s) LIMIT 1",
+            (nombre_modelo,)
+        )
+        row = cur.fetchone()
+        if row and row[0]:
+            # Normalizar: tomar primera URL si hay varias separadas por |
+            return row[0].split('|')[0].strip()
+    except Exception:
+        pass
+    return ''
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. RESUMEN DE PRODUCTOS ENTEROS (pivot por sede)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -283,6 +319,11 @@ def buscar_por_barcode(barcode):
             if not row:
                 return jsonify({'error': 'Código no encontrado'}), 404
 
+            # Fallback: si la unidad no tiene foto propia, buscar en el maestro
+            foto_url = row[15] or ""
+            if not foto_url:
+                foto_url = _obtener_foto_maestro(cur, row[3], row[2])
+
             return jsonify({
                 "tipo":          "pieza",
                 "id":            row[0],
@@ -299,7 +340,7 @@ def buscar_por_barcode(barcode):
                 "alto_cm":       float(row[11]) if row[11] else None,
                 "costo_ingreso": float(row[12]) if row[12] else None,
                 "fecha_ingreso": row[13].strftime('%d/%m/%Y') if row[13] else None,
-                "foto_url":      row[15] or "",
+                "foto_url":      foto_url,
             }), 200
 
         return jsonify({
