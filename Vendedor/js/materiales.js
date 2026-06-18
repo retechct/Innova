@@ -28,8 +28,8 @@ function mostrarUltimasMaterial(tipoInput) {
 
     if (!maestroMateriales[tipoData]) return;
 
-    // Últimas 10: tomamos el final del array (orden id ASC → últimas agregadas al final)
-    const ultimas = maestroMateriales[tipoData].slice(-10);
+    // Últimas 10: tomamos el inicio del array (backend devuelve ORDER BY id DESC)
+    const ultimas = maestroMateriales[tipoData].slice(0, 10);
 
     const listContainer = document.getElementById(`list-${tipoInput}`);
     if (!listContainer) return;
@@ -186,8 +186,14 @@ function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl, proveedor) {
     // MOSTRAMOS LA IMAGEN EN MINIATURA
     let imgPreview = document.getElementById(`img-preview-${tipoInput}`);
     if (imgPreview) {
-        imgPreview.src = fotoUrl;
-        imgPreview.style.display = 'block'; 
+        const urlSegura = (fotoUrl && fotoUrl.startsWith('http')) ? fotoUrl : '';
+        if (urlSegura) {
+            imgPreview.src = urlSegura;
+            imgPreview.style.display = 'block';
+            imgPreview.onclick = () => ampliarImagen(urlSegura);
+        } else {
+            imgPreview.style.display = 'none';
+        }
     }
 
     // INYECTAMOS CAMPO DE NOTA DINÁMICO
