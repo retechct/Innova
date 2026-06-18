@@ -3779,7 +3779,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             <input id="se-nombre" placeholder="Ej: Seccional 3+2 · Gris Perla"
                 style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
 
-            <div data-bloque-normal="true">
+            <div>
                 <label style="font-size:12px;font-weight:700;color:#475569;">CANTIDAD *</label>
                 <input id="se-cantidad" type="number" placeholder="Ej: 1" min="1" step="1" value="1"
                     style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
@@ -3855,13 +3855,13 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             </div>
             <!-- ── fin bloque destrokes ── -->
 
-            <div data-bloque-normal="true">
+            <div>
                 <label style="font-size:12px;font-weight:700;color:#475569;">PRECIO (S/)</label>
                 <input id="se-precio" type="number" placeholder="Ej: 350.00" step="0.01"
                     style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
             </div>
 
-            <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:8px;">FOTO *</label>
+            <label id="se-foto-label" style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:8px;">FOTO *</label>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
               <label style="flex:1;cursor:pointer;background:#7c3aed;color:#fff;padding:10px;border-radius:8px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;">
                 <i class="fa-solid fa-camera"></i> Tomar foto
@@ -3906,15 +3906,18 @@ function _onChangeEsAntiguo() {
     const bloquesNormales = document.querySelectorAll('#modal-registro-estructura [data-bloque-normal="true"]');
     const titulo = document.getElementById('se-modal-titulo');
     const seTipo = document.getElementById('se-tipo');
+    const fotoLabel = document.getElementById('se-foto-label');
 
     bloquesNormales.forEach(b => { b.style.display = isAntiguo ? 'none' : 'block'; });
 
     if (isAntiguo) {
         if (titulo) titulo.textContent = 'Registrar Estructura Antigua';
         if (seTipo) { seTipo.value = 'estructura'; _onChangeTipoEstructura(); }
+        if (fotoLabel) fotoLabel.textContent = 'FOTO (Opcional)';
     } else {
         if (titulo) titulo.textContent = 'Registrar estructura / destrokes';
         if (seTipo) _onChangeTipoEstructura(); 
+        if (fotoLabel) fotoLabel.textContent = 'FOTO *';
     }
 }
 
@@ -4235,9 +4238,9 @@ function _renderListaEstructuras(lista) {
       <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;
                   overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
         <div style="position:relative;">
-          <img src="${e.foto_url || 'imagenes/sin_foto.jpg'}"
+          <img src="${e.foto_url || (e.es_antiguo ? 'imagenes/Logo3.png' : 'imagenes/sin_foto.jpg')}"
                style="width:100%;height:clamp(120px,18vw,160px);object-fit:cover;display:block;"
-               onerror="this.src='imagenes/sin_foto.jpg'">
+               onerror="this.src='${e.es_antiguo ? 'imagenes/Logo3.png' : 'imagenes/sin_foto.jpg'}'">
           <span style="position:absolute;top:8px;right:8px;
                        background:${e.estado==='disponible'?'#dcfce7':'#f1f5f9'};
                        color:${e.estado==='disponible'?'#15803d':'#64748b'};
@@ -4392,7 +4395,7 @@ async function guardarEstructura() {
     fd.append('es_antiguo', esAntiguo ? 'true' : 'false');
 
     if (esAntiguo) {
-        fd.append('cantidad', 1);
+        fd.append('cantidad', document.getElementById('se-cantidad').value || 1);
         fd.append('ancho', 0);
         fd.append('profundidad', 0);
         fd.append('alto', 0);
