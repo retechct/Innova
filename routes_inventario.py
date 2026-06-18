@@ -292,7 +292,7 @@ def buscar_por_barcode(barcode):
     try:
         conn = _conn(); cur = conn.cursor()
 
-        # Buscar en productos
+        # 1. Buscar en stock_productos
         cur.execute("""
             SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
                    sp.color_tela, sp.acabado, sp.estado, se.nombre AS sede,
@@ -303,68 +303,74 @@ def buscar_por_barcode(barcode):
             WHERE sp.codigo_barra = %s;
         """, (barcode,))
         row = cur.fetchone()
+        if row:
+            return jsonify({
+                "tipo": "producto", "id": row[0], "codigo_barra": row[1],
+                "nombre_modelo": row[2], "categoria": row[3],
+                "color_tela": row[4], "acabado": row[5], "estado": row[6],
+                "sede": row[7], "foto_url": row[8] or "",
+                "costo_ingreso": float(row[9]) if row[9] else None,
+                "precio_venta":  float(row[10]) if row[10] else None,
+                "fecha_ingreso": row[11].strftime('%d/%m/%Y') if row[11] else None,
+            }), 200
 
-        if not row:
-            # Buscar en piezas
-            cur.execute("""
-                SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
-                       sp.material, sp.color_acabado, sp.estado, se.nombre AS sede,
-                       sp.forma, sp.largo_cm, sp.ancho_cm, sp.alto_cm,
-                       sp.costo_ingreso, sp.fecha_ingreso, 'pieza' AS tipo, sp.foto_url
-                FROM stock_piezas sp
-                JOIN sedes se ON sp.sede_id = se.id
-                WHERE sp.codigo_barra = %s;
-            """, (barcode,))
-            row = cur.fetchone()
-            if not row:
-                return jsonify({'error': 'Código no encontrado'}), 404
-
-            # Fallback: si la unidad no tiene foto propia, buscar en el maestro
+        # 2. Buscar en stock_piezas
+        cur.execute("""
+            SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
+                   sp.material, sp.color_acabado, sp.estado, se.nombre AS sede,
+                   sp.forma, sp.largo_cm, sp.ancho_cm, sp.alto_cm,
+                   sp.costo_ingreso, sp.fecha_ingreso, 'pieza' AS tipo, sp.foto_url
+            FROM stock_piezas sp
+            JOIN sedes se ON sp.sede_id = se.id
+            WHERE sp.codigo_barra = %s;
+        """, (barcode,))
+        row = cur.fetchone()
+        if row:
             foto_url = row[15] or ""
             if not foto_url:
                 foto_url = _obtener_foto_maestro(cur, row[3], row[2])
-
             return jsonify({
-                "tipo":          "pieza",
-                "id":            row[0],
-                "codigo_barra":  row[1],
-                "nombre_modelo": row[2],
-                "categoria":     row[3],
-                "material":      row[4],
-                "color_acabado": row[5],
-                "estado":        row[6],
-                "sede":          row[7],
-                "forma":         row[8],
-                "largo_cm":      float(row[9])  if row[9]  else None,
-                "ancho_cm":      float(row[10]) if row[10] else None,
-                "alto_cm":       float(row[11]) if row[11] else None,
+                "tipo": "pieza", "id": row[0], "codigo_barra": row[1],
+                "nombre_modelo": row[2], "categoria": row[3],
+                "material": row[4], "color_acabado": row[5], "estado": row[6],
+                "sede": row[7], "forma": row[8],
+                "largo_cm":  float(row[9])  if row[9]  else None,
+                "ancho_cm":  float(row[10]) if row[10] else None,
+                "alto_cm":   float(row[11]) if row[11] else None,
                 "costo_ingreso": float(row[12]) if row[12] else None,
                 "fecha_ingreso": row[13].strftime('%d/%m/%Y') if row[13] else None,
-                "foto_url":      foto_url,
+                "foto_url": foto_url,
             }), 200
 
-        return jsonify({
-            "tipo":          "producto",
-            "id":            row[0],
-            "codigo_barra":  row[1],
-            "nombre_modelo": row[2],
-            "categoria":     row[3],
-            "color_tela":    row[4],
-            "acabado":       row[5],
-            "estado":        row[6],
-            "sede":          row[7],
-            "foto_url":      row[8] or "",
-            "costo_ingreso": float(row[9])  if row[9]  else None,
-            "precio_venta":  float(row[10]) if row[10] else None,
-            "fecha_ingreso": row[11].strftime('%d/%m/%Y') if row[11] else None,
-        }), 200
+        # 3. ← NUEVO: Buscar en stock_unidades
+        cur.execute("""
+            SELECT su.id, su.codigo_barra, su.nombre_modelo, su.categoria,
+                   su.color_tela, su.acabado, su.estado, se.nombre AS sede,
+                   su.foto_url, su.costo_ingreso, su.fecha_ingreso,
+                   'unidad' AS tipo
+            FROM stock_unidades su
+            JOIN sedes se ON su.sede_id = se.id
+            WHERE su.codigo_barra = %s;
+        """, (barcode,))
+        row = cur.fetchone()
+        if row:
+            return jsonify({
+                "tipo": "producto",   # tratarlo como producto para que el frontend lo muestre igual
+                "id": row[0], "codigo_barra": row[1],
+                "nombre_modelo": row[2], "categoria": row[3],
+                "color_tela": row[4], "acabado": row[5], "estado": row[6],
+                "sede": row[7], "foto_url": row[8] or "",
+                "costo_ingreso": float(row[9]) if row[9] else None,
+                "precio_venta": None,
+                "fecha_ingreso": row[10].strftime('%d/%m/%Y') if row[10] else None,
+            }), 200
+
+        return jsonify({'error': 'Código no encontrado'}), 404
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        _rel(conn)
-
-
+        if conn: cur.close(); _rel(conn)
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. REGISTRAR PRODUCTO ENTERO
 # ─────────────────────────────────────────────────────────────────────────────
