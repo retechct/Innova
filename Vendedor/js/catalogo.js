@@ -1,237 +1,255 @@
 // === MÓDULO: Catálogo y configuradores de muebles ===
 
 // ─────────────────────────────────────────────────────────────────────────────
-// renderGrid — VERSIÓN CON STOCK REAL
-//   · Muestra la cantidad disponible en el badge de la tarjeta de stock
-//   · Deshabilita "AÑADIR" cuando stock_cantidad llega a 0
-//   · Marca la tarjeta como AGOTADO con estilo visual diferente
-//   · En catálogo normal (a medida) el comportamiento es idéntico al anterior
+// renderGrid — VERSIÓN DE DOBLE VISTA
+//   · Si es Catálogo: Muestra plantillas A MEDIDA
+//   · Si es Stock: Cambia radicalmente la vista, organiza por Sedes
+//     y divide entre "Productos Enteros" y "Piezas Físicas"
 // ─────────────────────────────────────────────────────────────────────────────
 function renderGrid() {
     const grid = document.getElementById('product-grid');
-    let filtered = [];
 
     if (currentMode === 'stock') {
-        filtered = allProducts.filter(p => p.en_stock === true && p.es_plantilla === false);
-    } else if (currentMode === 'catalogo') {
-        filtered = allProducts.filter(p => p.en_stock === false && p.es_plantilla === false);
+        renderStockTiendas(grid);
+        return;
     }
 
+    // --- MODO CATÁLOGO ---
+    grid.style.display = 'grid'; // restaurar display a grid
+    let filtered = allProducts.filter(p => p.en_stock === false && p.es_plantilla === false);
+
     if (filtered.length === 0) {
-        grid.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: gray; padding: 40px;">No hay productos disponibles en esta categoría.</p>`;
+        grid.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: gray; padding: 40px;">No hay productos a medida disponibles en esta categoría.</p>`;
         return;
     }
 
     grid.innerHTML = filtered.map(p => {
-        const qty          = typeof p.stock_cantidad === 'number' ? p.stock_cantidad : 1;
-        const agotado      = p.en_stock && qty <= 0;
-        const pocasUnidades = p.en_stock && qty > 0 && qty <= 3;
-
-        // ── Badge superior ─────────────────────────────────────────────────
-        let badge = '';
-        if (p.en_stock) {
-            if (agotado) {
-                badge = `<span class="status-badge" style="background:#fee2e2; color:#b91c1c;">
-                            <i class="fa-solid fa-ban" style="font-size:9px;"></i> AGOTADO
-                         </span>`;
-            } else {
-                const colorQty = pocasUnidades ? '#f59e0b' : 'var(--success)';
-                const bgQty    = pocasUnidades ? '#fffbeb' : '#f0fdf4';
-                badge = `<span class="status-badge" style="background:${bgQty}; color:${colorQty};">
-                            <i class="fa-solid fa-box" style="font-size:9px;"></i>
-                            ${pocasUnidades ? 'ÚLTIMAS' : 'DISPONIBLE'} · ${qty} ${qty === 1 ? 'und.' : 'unds.'}
-                         </span>`;
-            }
-        } else {
-            badge = `<span class="status-badge" style="background:#f1f5f9; color:var(--text-muted);">
-                        <i class="fa-solid fa-ruler-combined" style="font-size:9px;"></i> A MEDIDA
-                     </span>`;
-        }
-
-        // ── Botón de acción ────────────────────────────────────────────────
-        let btnHtml = '';
-        if (p.en_stock) {
-            if (agotado) {
-                btnHtml = `<button class="btn-action" disabled
-                               style="background:#f1f5f9; color:#94a3b8; cursor:not-allowed; width:100%; padding:12px; border:none; border-radius:12px; font-weight:800;">
-                               <i class="fa-solid fa-ban"></i> AGOTADO
-                           </button>`;
-            } else {
-                // Pasamos el id del producto de catálogo para que el backend
-                // pueda hacer el descuento correcto en stock_cantidad
-                btnHtml = `<button class="btn-action btn-primary"
-                               onclick="addStockItemToCart(${p.id}, '${p.nombre.replace(/'/g,"\\'")}', ${p.precio}, '${p.foto}')">
-                               <i class="fa-solid fa-bolt"></i> COMPRAR AHORA
-                           </button>`;
-            }
-        } else {
-            btnHtml = `<button class="btn-action btn-primary"
-                           onclick="addToCart('${p.nombre.replace(/'/g,"\\'")}', ${p.precio}, '${p.foto}', 'Venta Estándar')">
-                           <i class="fa-solid fa-plus"></i> AÑADIR AL CARRO
-                       </button>`;
-        }
-
-        // ── Overlay agotado ────────────────────────────────────────────────
-        const agotadoOverlay = agotado
-            ? `<div style="position:absolute; top:0; left:0; width:100%; height:100%;
-                           background:rgba(255,255,255,0.5); border-radius:18px; z-index:1;"></div>`
-            : '';
-
         return `
-        <div class="card" style="position:relative; ${agotado ? 'opacity:0.75;' : ''}">
-            ${agotadoOverlay}
-            <img src="${p.foto}" onerror="this.src='imagenes/sin_foto.jpg'"
-                 style="${agotado ? 'filter:grayscale(60%);' : ''}">
+        <div class="card" style="position:relative;">
+            <img src="${p.foto}" onerror="this.src='imagenes/sin_foto.jpg'">
             <div class="card-info">
-                ${badge}
+                <span class="status-badge" style="background:#f1f5f9; color:var(--text-muted);">
+                    <i class="fa-solid fa-ruler-combined" style="font-size:9px;"></i> A MEDIDA
+                </span>
                 <h4>${p.nombre}</h4>
                 <span class="price-tag">${p.precio > 0 ? 'S/ ' + p.precio.toFixed(2) : 'A Cotizar'}</span>
-                ${btnHtml}
+                <button class="btn-action btn-primary"
+                        onclick="addToCart('${p.nombre.replace(/'/g,"\\'")}', ${p.precio}, '${p.foto}', 'Venta Estándar')">
+                    <i class="fa-solid fa-plus"></i> AÑADIR AL CARRO
+                </button>
             </div>
         </div>`;
     }).join('');
 }
 
 /**
- * addStockItemToCart — wrapper para ítems de Stock en Tienda.
-// =============================================================================
-// PATCH para catalogo.js
-// =============================================================================
-// INSTRUCCIÓN: Reemplaza toda la función addStockItemToCart (líneas ~97-115
-// en catalogo.js original) con el bloque de abajo.
-//
-// Qué cambia:
-//   - Antes: pushaba el ítem al carrito directamente.
-//   - Ahora: primero consulta /api/inventario/disponibles/<id> para obtener
-//     las unidades físicas disponibles. Si hay más de una, muestra un picker.
-//     El ítem que se agrega al carrito lleva stock_producto_id con el id real
-//     de la fila en stock_productos — el "puente" con el inventario.
-// =============================================================================
+ * Genera la vista de stock dividida por sedes e independiza las piezas y productos enteros.
+ */
+async function renderStockTiendas(grid) {
+    grid.style.display = 'block'; // Bloque porque adentro irá agrupado por sedes
+    grid.innerHTML = '<div style="padding: 40px; text-align: center; color: #64748b;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p>Cargando stock de tiendas...</p></div>';
+
+    try {
+        const [resProd, resPiez] = await Promise.all([
+            apiFetch(`${API_URL}/api/inventario/resumen`),
+            apiFetch(`${API_URL}/api/inventario/piezas/resumen`)
+        ]);
+        const dataProd = await resProd.json();
+        const dataPiez = await resPiez.json();
+
+        if (dataProd.error || dataPiez.error) throw new Error("Error obteniendo datos del servidor.");
+
+        const sedesSet = new Set([
+            ...(dataProd.sedes || []),
+            ...(dataPiez.sedes || [])
+        ]);
+        const sedes = Array.from(sedesSet).sort();
+
+        if (sedes.length === 0) {
+            grid.innerHTML = '<p style="text-align:center; color: #64748b; padding: 40px;">No hay stock físico registrado en ninguna tienda.</p>';
+            return;
+        }
+
+        let html = '';
+
+        sedes.forEach(sede => {
+            const prodsEnSede = (dataProd.modelos || []).filter(m => m.sede_stock && m.sede_stock[sede] && m.sede_stock[sede].disponibles > 0);
+            const piezEnSede = (dataPiez.piezas || []).filter(p => p.sede_stock && p.sede_stock[sede] > 0);
+
+            if (prodsEnSede.length === 0 && piezEnSede.length === 0) return;
+
+            html += `
+            <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                <h2 style="margin-top: 0; color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px; margin-bottom: 20px; font-size: 18px;">
+                    <i class="fa-solid fa-store" style="color: #64748b; margin-right: 8px;"></i> ${sede}
+                </h2>`;
+
+            if (prodsEnSede.length > 0) {
+                html += `<h3 style="font-size: 14px; color: #475569; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;"><i class="fa-solid fa-couch" style="margin-right: 5px;"></i> Productos Enteros</h3>
+                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px;">`;
+                
+                prodsEnSede.forEach(p => {
+                    const cant = p.sede_stock[sede].disponibles;
+                    html += `
+                    <div class="card" style="position:relative; margin:0; border:1px solid #e2e8f0; box-shadow:none;">
+                        <img src="${p.foto_url}" onerror="this.src='imagenes/sin_foto.jpg'">
+                        <div class="card-info" style="padding:15px;">
+                            <span class="status-badge" style="background:#f0fdf4; color:#166534; margin-bottom:8px;">
+                                <i class="fa-solid fa-box"></i> Disp: ${cant}
+                            </span>
+                            <h4 style="font-size:14px; margin-bottom:4px;">${p.nombre_modelo}</h4>
+                            <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${p.categoria}</span>
+                            <button class="btn-action btn-primary" style="width:100%; border-radius:8px;"
+                                onclick="addStockItemToCart(${p.catalogo_id || 'null'}, '${p.nombre_modelo.replace(/'/g,"\\'")}', 0, '${p.foto_url || ''}', false)">
+                                <i class="fa-solid fa-cart-plus"></i> AGREGAR
+                            </button>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
+            if (piezEnSede.length > 0) {
+                html += `<h3 style="font-size: 14px; color: #475569; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;"><i class="fa-solid fa-puzzle-piece" style="margin-right: 5px;"></i> Piezas Físicas</h3>
+                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-bottom: 10px;">`;
+                
+                piezEnSede.forEach(p => {
+                    const cant = p.sede_stock[sede];
+                    
+                    // Recuperar foto del maestro cargado en init()
+                    let fotoPieza = '';
+                    const catLower = (p.categoria || '').toLowerCase();
+                    let lista = [];
+                    if (catLower === 'tablero') lista = maestroMateriales.tableros || [];
+                    else if (catLower === 'silla') lista = maestroMateriales.sillas || [];
+                    else if (catLower === 'butaca') lista = maestroMateriales.butacas || [];
+                    else if (catLower.includes('base')) lista = maestroMateriales.bases_comedor || [];
+
+                    // Buscar coincidencia por SKU, o nombre como fallback
+                    const found = lista.find(x => x.sku === p.sku_maestro || x.nombre_modelo === p.nombre_modelo || x.modelo === p.nombre_modelo);
+                    if (found && found.foto_url) {
+                        fotoPieza = found.foto_url.split('|')[0];
+                    }
+
+                    // Formatear medida visible
+                    let medidaStr = '';
+                    if (p.forma === 'Circular') medidaStr = p.largo_cm ? `⌀ ${p.largo_cm} cm` : 'Circular';
+                    else if (p.forma === 'Rectangular') {
+                        const l = p.largo_cm ? `${p.largo_cm}` : '?';
+                        const a = p.ancho_cm ? ` × ${p.ancho_cm}` : '';
+                        const h = p.alto_cm  ? ` / H:${p.alto_cm}` : '';
+                        medidaStr = `${l}${a} cm${h}`;
+                    } else medidaStr = p.largo_cm ? `${p.largo_cm} cm` : 'Irregular';
+
+                    html += `
+                    <div class="card" style="position:relative; margin:0; border:1px solid #e2e8f0; box-shadow:none;">
+                        <img src="${fotoPieza}" onerror="this.src='imagenes/sin_foto.jpg'">
+                        <div class="card-info" style="padding:15px;">
+                            <span class="status-badge" style="background:#f0fdf4; color:#166534; margin-bottom:8px;">
+                                <i class="fa-solid fa-puzzle-piece"></i> Disp: ${cant}
+                            </span>
+                            <h4 style="font-size: 13px; margin-bottom:4px;">${p.nombre_modelo}</h4>
+                            <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${medidaStr}</span>
+                            <button class="btn-action btn-primary" style="width:100%; border-radius:8px; background:#0f172a;"
+                                onclick="addStockItemToCart('${p.sku_maestro}', '${p.nombre_modelo.replace(/'/g,"\\'")}', 0, '${fotoPieza}', true)">
+                                <i class="fa-solid fa-cart-plus"></i> AGREGAR
+                            </button>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+        });
+
+        grid.innerHTML = html;
+
+    } catch (e) {
+        grid.innerHTML = `<p style="text-align:center; color:red; padding: 40px;">Error al cargar stock de tiendas: ${e.message}</p>`;
+    }
+}
 
 /**
- * addStockItemToCart — wrapper para ítems de Stock en Tienda.
- *
- * 1. Consulta las unidades físicas disponibles para este producto de catálogo.
- * 2. Si hay una sola, la selecciona automáticamente.
- * 3. Si hay varias, muestra un picker para que el vendedor elija cuál pieza
- *    física está vendiendo (por código de barras / sede).
- * 4. Agrega el ítem al carrito con stock_producto_id para que el backend
- *    marque esa unidad específica como "Reservado" al guardar la venta.
+ * addStockItemToCart — maneja ítems de Stock (productos enteros y piezas).
  */
-async function addStockItemToCart(catalogoId, nombre, precio, foto) {
-    // Indicar que estamos consultando
+async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false) {
     const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
 
     let unidades = [];
     try {
-        const res = await apiFetch(`${API_URL}/api/inventario/disponibles/${catalogoId}`);
+        const endpoint = isPieza 
+            ? `${API_URL}/api/inventario/piezas/disponibles/${itemId}` 
+            : `${API_URL}/api/inventario/disponibles/${itemId}`;
+        const res = await apiFetch(endpoint);
         unidades  = await res.json();
     } catch (e) {
-        // Si el endpoint aún no está disponible (p.ej. deploy en curso),
-        // caemos al comportamiento anterior para no bloquear las ventas.
-        console.warn('addStockItemToCart: no se pudo consultar disponibles, modo legacy.', e);
-        _addStockLegacy(catalogoId, nombre, precio, foto);
+        console.warn('addStockItemToCart: no se pudo consultar disponibles', e);
         return;
     }
 
-    if (unidades.error) {
-        console.warn('addStockItemToCart: error del servidor:', unidades.error);
-        _addStockLegacy(catalogoId, nombre, precio, foto);
-        return;
-    }
-
-    if (!unidades.length) {
+    if (unidades.error || !unidades.length) {
         return Swal.fire({
             icon: 'warning',
             title: 'Sin unidades disponibles',
-            text:  `No hay unidades físicas registradas de "${nombre}" en el inventario. ` +
-                   'Si el producto existe en tienda, regístralo primero en el módulo de Inventario.',
+            text:  `No hay unidades físicas disponibles de "${nombre}".`,
             confirmButtonColor: 'var(--accent)'
         });
     }
 
-    // ── Selección de la unidad física ────────────────────────────────────────
     let unidad;
-
     if (unidades.length === 1) {
-        // Una sola unidad disponible: selección automática
         unidad = unidades[0];
     } else {
-        // Varias unidades: el vendedor elige cuál está vendiendo
-        const opciones = unidades
-            .map(u => `<option value="${u.id}">${u.label}</option>`)
-            .join('');
-
+        const opciones = unidades.map(u => `<option value="${u.id}">${u.label}</option>`).join('');
         const { value: idSeleccionado, isConfirmed } = await Swal.fire({
             title: `Seleccionar unidad — ${nombre}`,
             html: `
                 <p style="font-size:13px;color:#6b7280;margin-bottom:12px;">
                     Hay <strong>${unidades.length}</strong> unidades disponibles.<br>
-                    Elige la que estás vendiendo físicamente:
+                    Elige la que estás vendiendo:
                 </p>
-                <select id="swal-picker-unidad"
-                    style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;
-                           border-radius:8px;font-size:13px;font-family:inherit;">
+                <select id="swal-picker-unidad" style="width:100%;padding:10px;border-radius:8px;font-size:13px;">
                     ${opciones}
                 </select>`,
+            showCancelButton: true,
             confirmButtonText: 'Seleccionar esta unidad',
             confirmButtonColor: '#0f172a',
-            showCancelButton: true,
-            cancelButtonText: 'Cancelar',
             preConfirm: () => document.getElementById('swal-picker-unidad').value
         });
 
-        if (!isConfirmed || !idSeleccionado) return; // El vendedor canceló
-
+        if (!isConfirmed || !idSeleccionado) return;
         unidad = unidades.find(u => u.id == idSeleccionado);
     }
 
     if (!unidad) return;
 
-    // ── Agregar al carrito con la referencia física ───────────────────────────
     const detalleLabel = [
         `Cód: ${unidad.codigo_barra}`,
-        unidad.sede       && unidad.sede,
-        unidad.color_tela && unidad.color_tela,
-        unidad.acabado    && unidad.acabado,
+        unidad.sede,
+        unidad.color_tela || unidad.material,
+        unidad.acabado || unidad.color_acabado
     ].filter(Boolean).join(' · ');
 
-    cart.push({
+    const cartItem = {
         name:              nombre,
-        price:             precio,
+        price:             precio || 0,
         img:               foto,
         details:           detalleLabel,
         componentes:       {},
         es_stock:          true,
-        catalogo_id:       catalogoId,
-        stock_producto_id: unidad.id,    // ← EL PUENTE con stock_productos
-    });
+    };
 
+    if (isPieza) {
+        cartItem.stock_pieza_id = unidad.id;
+    } else {
+        cartItem.stock_producto_id = unidad.id;
+        cartItem.catalogo_id = itemId;
+    }
+
+    cart.push(cartItem);
     document.getElementById('cart-count').innerText = cart.length;
-    updateCartUI();
-
-    Toast.fire({ icon: 'success', title: `"${nombre}" añadido al carrito` });
-}
-
-/**
- * Comportamiento de respaldo (modo legacy) cuando el endpoint de inventario
- * no responde. Permite seguir vendiendo sin el puente de inventario.
- * @private
- */
-function _addStockLegacy(catalogoId, nombre, precio, foto) {
-    cart.push({
-        name:        nombre,
-        price:       precio,
-        img:         foto,
-        details:     'Venta Estándar',
-        componentes: {},
-        es_stock:    true,
-        catalogo_id: catalogoId
-        // stock_producto_id ausente → solo descuenta el contador genérico
-    });
-    document.getElementById('cart-count').innerText = cart.length;
-    updateCartUI();
-    const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+    if(typeof updateCartUI === 'function') updateCartUI();
     Toast.fire({ icon: 'success', title: `"${nombre}" añadido al carrito` });
 }
 /* --- LÓGICA DEL NUEVO MODAL DE SOFÁS --- */

@@ -283,6 +283,65 @@ def resumen_piezas():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 11. UNIDADES DE PIEZAS DISPONIBLES POR SKU (para el picker del carrito)
+# ─────────────────────────────────────────────────────────────────────────────
+@inventario_bp.route('/api/inventario/piezas/disponibles/<sku_maestro>', methods=['GET'])
+@requiere_login
+def unidades_piezas_disponibles_por_sku(sku_maestro):
+    sede_id = request.args.get('sede_id', '')
+    conn = None
+    try:
+        conn = _conn(); cur = conn.cursor()
+
+        where_extra = ""
+        params = [sku_maestro]
+        if sede_id:
+            where_extra = " AND sp.sede_id = %s"
+            params.append(sede_id)
+
+        cur.execute(f"""
+            SELECT sp.id, sp.codigo_barra, se.nombre AS sede,
+                   sp.material, sp.color_acabado, sp.forma, sp.largo_cm, sp.ancho_cm, sp.alto_cm,
+                   sp.costo_ingreso,
+                   TO_CHAR(sp.fecha_ingreso, 'DD/MM/YYYY') AS fecha_ingreso
+            FROM stock_piezas sp
+            JOIN sedes se ON sp.sede_id = se.id
+            WHERE sp.sku_maestro = %s
+              AND sp.estado = 'Disponible'
+              {where_extra}
+            ORDER BY se.nombre, sp.fecha_ingreso;
+        """, params)
+
+        unidades = []
+        for r in cur.fetchall():
+            medida = ""
+            if r[5] == 'Circular': medida = f"⌀ {r[6]} cm" if r[6] else 'Circular'
+            elif r[5] == 'Rectangular':
+                l = r[6] if r[6] else '?'
+                a = f" x {r[7]}" if r[7] else ''
+                h = f" / H:{r[8]}" if r[8] else ''
+                medida = f"{l}{a} cm{h}"
+            else: medida = f"{r[6]} cm" if r[6] else 'Irregular'
+
+            label_parts = [r[1], r[2], medida]
+            if r[3]: label_parts.append(r[3])
+            if r[4]: label_parts.append(r[4])
+
+            unidades.append({
+                'id':            r[0],
+                'codigo_barra':  r[1],
+                'sede':          r[2],
+                'label':         ' — '.join(label_parts),
+            })
+        return jsonify(unidades), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        _rel(conn)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 3. BUSCAR POR CÓDIGO DE BARRAS
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/buscar/<barcode>', methods=['GET'])
