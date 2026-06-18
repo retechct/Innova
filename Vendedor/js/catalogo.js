@@ -42,8 +42,15 @@ function renderGrid() {
     }).join('');
 }
 
+let _stkItemsAplanados = [];
+let _stockTiendasSedes = [];
+let _stkFiltroSede = 'Todas';
+let _stkFiltroTipo = 'Todos';
+let _stkPagina = 1;
+const _stkItemsPorPagina = 16;
+
 /**
- * Genera la vista de stock dividida por sedes e independiza las piezas y productos enteros.
+ * Genera la vista de stock con filtros tipo catálogo (sedes/piezas) y paginación
  */
 async function renderStockTiendas(grid) {
     grid.style.display = 'block'; // Bloque porque adentro irá agrupado por sedes
@@ -63,112 +70,185 @@ async function renderStockTiendas(grid) {
             ...(dataProd.sedes || []),
             ...(dataPiez.sedes || [])
         ]);
-        const sedes = Array.from(sedesSet).sort();
+        _stockTiendasSedes = Array.from(sedesSet).sort();
 
-        if (sedes.length === 0) {
-            grid.innerHTML = '<p style="text-align:center; color: #64748b; padding: 40px;">No hay stock físico registrado en ninguna tienda.</p>';
-            return;
-        }
+        _stkItemsAplanados = [];
 
-        let html = '';
-
-        sedes.forEach(sede => {
-            const prodsEnSede = (dataProd.modelos || []).filter(m => m.sede_stock && m.sede_stock[sede] && m.sede_stock[sede].disponibles > 0);
-            const piezEnSede = (dataPiez.piezas || []).filter(p => p.sede_stock && p.sede_stock[sede] > 0);
-
-            if (prodsEnSede.length === 0 && piezEnSede.length === 0) return;
-
-            html += `
-            <div style="margin-bottom: 30px; background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                <h2 style="margin-top: 0; color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px; margin-bottom: 20px; font-size: 18px;">
-                    <i class="fa-solid fa-store" style="color: #64748b; margin-right: 8px;"></i> ${sede}
-                </h2>`;
-
-            if (prodsEnSede.length > 0) {
-                html += `<h3 style="font-size: 14px; color: #475569; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;"><i class="fa-solid fa-couch" style="margin-right: 5px;"></i> Productos Enteros</h3>
-                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px;">`;
-                
-                prodsEnSede.forEach(p => {
-                    const cant = p.sede_stock[sede].disponibles;
-                    html += `
-                    <div class="card" style="position:relative; margin:0; border:1px solid #e2e8f0; box-shadow:none;">
-                        <img src="${p.foto_url}" onerror="this.src='imagenes/sin_foto.jpg'">
-                        <div class="card-info" style="padding:15px;">
-                            <span class="status-badge" style="background:#f0fdf4; color:#166534; margin-bottom:8px;">
-                                <i class="fa-solid fa-box"></i> Disp: ${cant}
-                            </span>
-                            <h4 style="font-size:14px; margin-bottom:4px;">${p.nombre_modelo}</h4>
-                            <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${p.categoria}</span>
-                            <button class="btn-action btn-primary" style="width:100%; border-radius:8px;"
-                                onclick="addStockItemToCart(${p.catalogo_id || 'null'}, '${p.nombre_modelo.replace(/'/g,"\\'")}', 0, '${p.foto_url || ''}', false)">
-                                <i class="fa-solid fa-cart-plus"></i> AGREGAR
-                            </button>
-                        </div>
-                    </div>`;
-                });
-                html += `</div>`;
-            }
-
-            if (piezEnSede.length > 0) {
-                html += `<h3 style="font-size: 14px; color: #475569; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px;"><i class="fa-solid fa-puzzle-piece" style="margin-right: 5px;"></i> Piezas Físicas</h3>
-                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-bottom: 10px;">`;
-                
-                piezEnSede.forEach(p => {
-                    const cant = p.sede_stock[sede];
-                    
-                    // Recuperar foto del maestro cargado en init()
-                    let fotoPieza = '';
-                    const catLower = (p.categoria || '').toLowerCase();
-                    let lista = [];
-                    if (catLower === 'tablero') lista = maestroMateriales.tableros || [];
-                    else if (catLower === 'silla') lista = maestroMateriales.sillas || [];
-                    else if (catLower === 'butaca') lista = maestroMateriales.butacas || [];
-                    else if (catLower.includes('base')) lista = maestroMateriales.bases_comedor || [];
-
-                    // Buscar coincidencia por SKU, o nombre como fallback
-                    const found = lista.find(x => x.sku === p.sku_maestro || x.nombre_modelo === p.nombre_modelo || x.modelo === p.nombre_modelo);
-                    if (found && found.foto_url) {
-                        fotoPieza = found.foto_url.split('|')[0];
-                    }
-
-                    // Formatear medida visible
-                    let medidaStr = '';
-                    if (p.forma === 'Circular') medidaStr = p.largo_cm ? `⌀ ${p.largo_cm} cm` : 'Circular';
-                    else if (p.forma === 'Rectangular') {
-                        const l = p.largo_cm ? `${p.largo_cm}` : '?';
-                        const a = p.ancho_cm ? ` × ${p.ancho_cm}` : '';
-                        const h = p.alto_cm  ? ` / H:${p.alto_cm}` : '';
-                        medidaStr = `${l}${a} cm${h}`;
-                    } else medidaStr = p.largo_cm ? `${p.largo_cm} cm` : 'Irregular';
-
-                    html += `
-                    <div class="card" style="position:relative; margin:0; border:1px solid #e2e8f0; box-shadow:none;">
-                        <img src="${fotoPieza}" onerror="this.src='imagenes/sin_foto.jpg'">
-                        <div class="card-info" style="padding:15px;">
-                            <span class="status-badge" style="background:#f0fdf4; color:#166534; margin-bottom:8px;">
-                                <i class="fa-solid fa-puzzle-piece"></i> Disp: ${cant}
-                            </span>
-                            <h4 style="font-size: 13px; margin-bottom:4px;">${p.nombre_modelo}</h4>
-                            <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${medidaStr}</span>
-                            <button class="btn-action btn-primary" style="width:100%; border-radius:8px; background:#0f172a;"
-                                onclick="addStockItemToCart('${p.sku_maestro}', '${p.nombre_modelo.replace(/'/g,"\\'")}', 0, '${fotoPieza}', true)">
-                                <i class="fa-solid fa-cart-plus"></i> AGREGAR
-                            </button>
-                        </div>
-                    </div>`;
-                });
-                html += `</div>`;
-            }
-
-            html += `</div>`;
+        // Aplanar Productos
+        (dataProd.modelos || []).forEach(p => {
+            _stockTiendasSedes.forEach(sede => {
+                if (p.sede_stock && p.sede_stock[sede] && p.sede_stock[sede].disponibles > 0) {
+                    _stkItemsAplanados.push({
+                        tipoElemento: 'Producto',
+                        sede: sede,
+                        cantidad: p.sede_stock[sede].disponibles,
+                        foto: p.foto_url,
+                        nombre: p.nombre_modelo,
+                        categoria: p.categoria,
+                        catalogo_id: p.catalogo_id,
+                        sku: null
+                    });
+                }
+            });
         });
 
-        grid.innerHTML = html;
+        // Aplanar Piezas
+        (dataPiez.piezas || []).forEach(p => {
+            let fotoPieza = '';
+            const catLower = (p.categoria || '').toLowerCase();
+            let lista = [];
+            if (catLower === 'tablero') lista = maestroMateriales.tableros || [];
+            else if (catLower === 'silla') lista = maestroMateriales.sillas || [];
+            else if (catLower === 'butaca') lista = maestroMateriales.butacas || [];
+            else if (catLower.includes('base')) lista = maestroMateriales.bases_comedor || [];
+
+            const found = lista.find(x => x.sku === p.sku_maestro || x.nombre_modelo === p.nombre_modelo || x.modelo === p.nombre_modelo);
+            if (found && found.foto_url) {
+                fotoPieza = found.foto_url.split('|')[0];
+            }
+
+            let medidaStr = '';
+            if (p.forma === 'Circular') medidaStr = p.largo_cm ? `⌀ ${p.largo_cm} cm` : 'Circular';
+            else if (p.forma === 'Rectangular') {
+                const l = p.largo_cm ? `${p.largo_cm}` : '?';
+                const a = p.ancho_cm ? ` × ${p.ancho_cm}` : '';
+                const h = p.alto_cm  ? ` / H:${p.alto_cm}` : '';
+                medidaStr = `${l}${a} cm${h}`;
+            } else medidaStr = p.largo_cm ? `${p.largo_cm} cm` : 'Irregular';
+
+            _stockTiendasSedes.forEach(sede => {
+                if (p.sede_stock && p.sede_stock[sede] > 0) {
+                    _stkItemsAplanados.push({
+                        tipoElemento: 'Pieza',
+                        sede: sede,
+                        cantidad: p.sede_stock[sede],
+                        foto: fotoPieza,
+                        nombre: p.nombre_modelo,
+                        categoria: medidaStr,
+                        catalogo_id: null,
+                        sku: p.sku_maestro
+                    });
+                }
+            });
+        });
+
+        _stkFiltroSede = 'Todas';
+        _stkFiltroTipo = 'Todos';
+        _stkPagina = 1;
+
+        _renderStockUI(grid);
 
     } catch (e) {
         grid.innerHTML = `<p style="text-align:center; color:red; padding: 40px;">Error al cargar stock de tiendas: ${e.message}</p>`;
     }
 }
+
+function _renderStockUI(grid) {
+    if (!grid) grid = document.getElementById('product-grid');
+    grid.style.display = 'block';
+
+    let filtrados = _stkItemsAplanados.filter(item => {
+        if (_stkFiltroSede !== 'Todas' && item.sede !== _stkFiltroSede) return false;
+        if (_stkFiltroTipo !== 'Todos' && item.tipoElemento !== _stkFiltroTipo) return false;
+        return true;
+    });
+
+    const totalPaginas = Math.ceil(filtrados.length / _stkItemsPorPagina) || 1;
+    if (_stkPagina > totalPaginas) _stkPagina = totalPaginas;
+    
+    const inicio = (_stkPagina - 1) * _stkItemsPorPagina;
+    const fin = inicio + _stkItemsPorPagina;
+    const paginaActualItems = filtrados.slice(inicio, fin);
+
+    let html = `
+    <div style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+        <div style="margin-bottom: 12px;">
+            <span style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-right: 10px; display: inline-block; margin-bottom: 5px;">TIENDA:</span>
+            <button onclick="_cambiarFiltroStock('sede', 'Todas')" style="margin-right: 5px; margin-bottom: 5px; padding: 6px 12px; border-radius: 20px; border: 1px solid ${_stkFiltroSede === 'Todas' ? '#0f172a' : '#e2e8f0'}; background: ${_stkFiltroSede === 'Todas' ? '#0f172a' : 'white'}; color: ${_stkFiltroSede === 'Todas' ? 'white' : '#475569'}; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">Todas</button>
+            ${_stockTiendasSedes.map(sede => `
+                <button onclick="_cambiarFiltroStock('sede', '${sede}')" style="margin-right: 5px; margin-bottom: 5px; padding: 6px 12px; border-radius: 20px; border: 1px solid ${_stkFiltroSede === sede ? '#0f172a' : '#e2e8f0'}; background: ${_stkFiltroSede === sede ? '#0f172a' : 'white'}; color: ${_stkFiltroSede === sede ? 'white' : '#475569'}; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">${sede}</button>
+            `).join('')}
+        </div>
+        <div>
+            <span style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-right: 10px; display: inline-block; margin-bottom: 5px;">TIPO:</span>
+            <button onclick="_cambiarFiltroStock('tipo', 'Todos')" style="margin-right: 5px; margin-bottom: 5px; padding: 6px 12px; border-radius: 20px; border: 1px solid ${_stkFiltroTipo === 'Todos' ? '#3b82f6' : '#e2e8f0'}; background: ${_stkFiltroTipo === 'Todos' ? '#eff6ff' : 'white'}; color: ${_stkFiltroTipo === 'Todos' ? '#1d4ed8' : '#475569'}; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">Todos</button>
+            <button onclick="_cambiarFiltroStock('tipo', 'Producto')" style="margin-right: 5px; margin-bottom: 5px; padding: 6px 12px; border-radius: 20px; border: 1px solid ${_stkFiltroTipo === 'Producto' ? '#3b82f6' : '#e2e8f0'}; background: ${_stkFiltroTipo === 'Producto' ? '#eff6ff' : 'white'}; color: ${_stkFiltroTipo === 'Producto' ? '#1d4ed8' : '#475569'}; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;"><i class="fa-solid fa-couch"></i> Productos Enteros</button>
+            <button onclick="_cambiarFiltroStock('tipo', 'Pieza')" style="margin-right: 5px; margin-bottom: 5px; padding: 6px 12px; border-radius: 20px; border: 1px solid ${_stkFiltroTipo === 'Pieza' ? '#3b82f6' : '#e2e8f0'}; background: ${_stkFiltroTipo === 'Pieza' ? '#eff6ff' : 'white'}; color: ${_stkFiltroTipo === 'Pieza' ? '#1d4ed8' : '#475569'}; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;"><i class="fa-solid fa-puzzle-piece"></i> Piezas Físicas</button>
+        </div>
+    </div>`;
+
+    if (paginaActualItems.length === 0) {
+        html += `<p style="text-align:center; color: #64748b; padding: 40px; background: white; border-radius: 12px; border: 1px solid #e2e8f0;">No se encontraron artículos disponibles para los filtros seleccionados.</p>`;
+    } else {
+        html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px;">`;
+        paginaActualItems.forEach(item => {
+            const isProd = item.tipoElemento === 'Producto';
+            const actionArgs = isProd 
+                ? `${item.catalogo_id || 'null'}, '${item.nombre.replace(/'/g,"\\'")}', 0, '${item.foto || ''}', false`
+                : `'${item.sku}', '${item.nombre.replace(/'/g,"\\'")}', 0, '${item.foto || ''}', true`;
+
+            html += `
+            <div class="card" style="position:relative; margin:0; border:1px solid #e2e8f0; box-shadow:none; transition: transform 0.2s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                <img src="${item.foto}" onerror="this.src='imagenes/sin_foto.jpg'">
+                <div class="card-info" style="padding:15px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span class="status-badge" style="background:#f0fdf4; color:#166534; font-size:10px;">
+                            <i class="fa-solid ${isProd ? 'fa-box' : 'fa-puzzle-piece'}"></i> Disp: ${item.cantidad}
+                        </span>
+                        <span class="status-badge" style="background:#f1f5f9; color:#475569; font-size:10px;">
+                            <i class="fa-solid fa-store"></i> ${item.sede}
+                        </span>
+                    </div>
+                    <h4 style="font-size:14px; margin-bottom:4px; min-height: 38px;">${item.nombre}</h4>
+                    <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${item.categoria}</span>
+                    <button class="btn-action btn-primary" style="width:100%; border-radius:8px; ${!isProd ? 'background:#0f172a;' : ''}"
+                        onclick="addStockItemToCart(${actionArgs})">
+                        <i class="fa-solid fa-cart-plus"></i> AGREGAR
+                    </button>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    if (totalPaginas > 1) {
+        let pagButtons = '';
+        for (let i = 1; i <= totalPaginas; i++) {
+            if (i === 1 || i === totalPaginas || (i >= _stkPagina - 1 && i <= _stkPagina + 1)) {
+                pagButtons += `<button onclick="_cambiarPaginaStock(${i})" style="padding: 6px 12px; margin: 0 3px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; background: ${_stkPagina === i ? '#0f172a' : 'white'}; color: ${_stkPagina === i ? 'white' : '#475569'}; font-weight: bold; transition: all 0.2s;">${i}</button>`;
+            } else if (i === _stkPagina - 2 || i === _stkPagina + 2) {
+                pagButtons += `<span style="color: #cbd5e1; padding: 0 5px;">...</span>`;
+            }
+        }
+        
+        html += `
+        <div style="display: flex; justify-content: center; align-items: center; margin-top: 20px; padding-bottom: 30px;">
+            <button onclick="_cambiarPaginaStock(${_stkPagina - 1})" ${_stkPagina === 1 ? 'disabled' : ''} style="padding: 6px 12px; margin: 0 3px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: ${_stkPagina === 1 ? 'not-allowed' : 'pointer'}; background: white; color: ${_stkPagina === 1 ? '#cbd5e1' : '#475569'}; font-weight: bold; transition: all 0.2s;">&laquo; Ant</button>
+            ${pagButtons}
+            <button onclick="_cambiarPaginaStock(${_stkPagina + 1})" ${_stkPagina === totalPaginas ? 'disabled' : ''} style="padding: 6px 12px; margin: 0 3px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: ${_stkPagina === totalPaginas ? 'not-allowed' : 'pointer'}; background: white; color: ${_stkPagina === totalPaginas ? '#cbd5e1' : '#475569'}; font-weight: bold; transition: all 0.2s;">Sig &raquo;</button>
+        </div>
+        `;
+    }
+
+    grid.innerHTML = html;
+}
+
+window._cambiarFiltroStock = function(tipo, valor) {
+    if (tipo === 'sede') _stkFiltroSede = valor;
+    if (tipo === 'tipo') _stkFiltroTipo = valor;
+    _stkPagina = 1;
+    _renderStockUI();
+};
+
+window._cambiarPaginaStock = function(pag) {
+    _stkPagina = pag;
+    _renderStockUI();
+    const grid = document.getElementById('product-grid');
+    if (grid) {
+        const y = grid.getBoundingClientRect().top + window.scrollY - 80;
+        window.scrollTo({top: y, behavior: 'smooth'});
+    }
+};
 
 /**
  * addStockItemToCart — maneja ítems de Stock (productos enteros y piezas).
