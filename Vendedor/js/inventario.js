@@ -554,9 +554,18 @@ async function _invBuscarBarcode(barcode) {
         if (d.error) { 
             // 3. Interceptar escaneo de SKU Maestro (Piezas)
             const esPiezaMaestro = _invDataPiezas.piezas.find(p => p.sku_maestro === barcode);
+            let esPiezaMaestro = null;
+            let catPieza = '';
+            if (!esPiezaMaestro) { esPiezaMaestro = (_maestroInv.tableros || []).find(p => p.sku === barcode); if (esPiezaMaestro) catPieza = 'tablero'; }
+            if (!esPiezaMaestro) { esPiezaMaestro = (_maestroInv.bases_comedor || []).find(p => p.sku === barcode); if (esPiezaMaestro) catPieza = 'base-comedor'; }
+            if (!esPiezaMaestro) { esPiezaMaestro = (_maestroInv.sillas || []).find(p => p.sku === barcode); if (esPiezaMaestro) catPieza = 'silla'; }
+            if (!esPiezaMaestro) { esPiezaMaestro = (_maestroInv.butacas || []).find(p => p.sku === barcode); if (esPiezaMaestro) catPieza = 'butaca'; }
+
             if (esPiezaMaestro) {
+                const nombreCat = esPiezaMaestro.nombre_modelo || esPiezaMaestro.modelo || esPiezaMaestro.nombre;
                 Swal.fire({ title: 'Etiqueta de Estante', text: 'Escaneaste el SKU general de la pieza. Mostrando el stock disponible en tienda...', icon: 'info', timer: 2500, showConfirmButton: false });
                 _invVerUnidades(esPiezaMaestro.nombre_modelo, esPiezaMaestro.categoria, 'es_pieza');
+                _invVerUnidades(nombreCat, catPieza, 'es_pieza');
                 return;
             }
             Swal.fire('No encontrado', 'El código no pertenece a ninguna unidad física ni modelo registrado.', 'warning'); 
@@ -1102,6 +1111,38 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
         const data = await res.json();
         
         const lista = esPieza ? (data.piezas || []) : (data.modelos || []);
+        
+        if (esPieza) {
+            // Agrupar todo lo que coincida para sumar sus stocks (cubre todas las medidas/formas)
+            const piezasDelModelo = lista.filter(x => x.nombre_modelo === nombre);
+            if (!piezasDelModelo.length) { Swal.fire('Sin datos', 'No hay stock registrado de este modelo.', 'info'); return; }
+            
+            let sedesConsolidadas = {};
+            piezasDelModelo.forEach(pz => {
+                Object.keys(pz.sede_stock || {}).forEach(s => {
+                    if (!sedesConsolidadas[s]) sedesConsolidadas[s] = { disponibles: 0, total: 0 };
+                    const st = pz.sede_stock[s];
+                    sedesConsolidadas[s].disponibles += (typeof st === 'number' ? st : (st?.disponibles || 0));
+                    sedesConsolidadas[s].total += (typeof st === 'number' ? st : (st?.total || 0));
+                });
+            });
+            
+            let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:15px;">`;
+            (data.sedes||[]).forEach(s => {
+                const st = sedesConsolidadas[s] || { disponibles: 0, total: 0 };
+                html += `<div style="background:#f8fafc;border-radius:12px;padding:12px;text-align:center;border:1px solid #e2e8f0;">
+                    <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:6px;">${s}</div>
+                    <div style="font-size:2rem;font-weight:900;color:${st.disponibles>0?'#16a34a':'#cbd5e1'};">${st.disponibles}</div>
+                    <div style="font-size:10px;color:var(--text-muted);">disponibles</div>
+                    ${st.total > st.disponibles ? `<div style="font-size:10px;color:var(--text-muted);">${st.total} total</div>` : ''}
+                </div>`;
+            });
+            html += `</div>`;
+            
+            Swal.fire({ title: nombre, html, width: '90vw', maxWidth: '680px', confirmButtonColor: '#0f172a', confirmButtonText: 'Cerrar' });
+            return;
+        }
+
         const m    = lista.find(x => x.nombre_modelo === nombre);
         if (!m) { Swal.fire('Sin datos', 'No hay stock registrado de este modelo.', 'info'); return; }
 
