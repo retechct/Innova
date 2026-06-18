@@ -3330,7 +3330,14 @@ def listar_stock_estructuras():
                    TO_CHAR(fecha_entrega_chofer, 'DD/MM/YYYY HH24:MI'),
                    COALESCE(carpintero_nombre, ''),
                    COALESCE(es_antiguo, FALSE),
-                   medida_brazo
+                   medida_brazo,
+                   COALESCE(es_juego_completo, TRUE),
+                   COALESCE(completado_por, ''),
+                   TO_CHAR(fecha_completado, 'DD/MM/YYYY'),
+                   COALESCE(comentario_parte, ''),
+                   COALESCE(foto_completado_url, ''),
+                   COALESCE(foto_entrega_url, ''),
+                   COALESCE(comentario_entrega, '')
             FROM stock_estructuras_sofa
             {where_sql}
             ORDER BY fecha_registro DESC
@@ -3351,6 +3358,13 @@ def listar_stock_estructuras():
             'carpintero_nombre': r[20] or '',
             'es_antiguo': bool(r[21]),
             'medida_brazo': float(r[22]) if r[22] is not None else None,
+            'es_juego_completo': bool(r[23]),
+            'completado_por': r[24] or '',
+            'fecha_completado': r[25] or '',
+            'comentario_parte': r[26] or '',
+            'foto_completado_url': r[27] or '',
+            'foto_entrega_url': r[28] or '',
+            'comentario_entrega': r[29] or '',
         } for r in rows]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -3380,6 +3394,7 @@ def registrar_stock_estructura():
         medida_base_estandar = request.form.get('medida_base_estandar') == 'true'
         es_antiguo          = request.form.get('es_antiguo') == 'true'
         medida_brazo        = request.form.get('medida_brazo') or None
+        es_juego_completo   = request.form.get('es_juego_completo') != 'false'
 
         # Guardar quién registró la estructura (el carpintero que la creó)
         try:
@@ -3408,12 +3423,12 @@ def registrar_stock_estructura():
                         (nombre_modelo, modelo_base, ancho, profundidad, alto,
                          medida_estandar, foto_url, tipo, cantidad, precio,
                          tipo_base, medida_base, medida_base_estandar, carpintero_nombre,
-                         es_antiguo, medida_brazo)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                         es_antiguo, medida_brazo, es_juego_completo)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
                 """, (nombre, modelo_base, ancho, profundidad, alto,
                       medida_estandar, foto_url, tipo, precio,
                       tipo_base, medida_base, medida_base_estandar, carpintero_nombre or None,
-                      es_antiguo, medida_brazo))
+                      es_antiguo, medida_brazo, es_juego_completo))
                 new_ids.append(cursor.fetchone()[0])
             new_id = new_ids[0]
         else:
@@ -3422,12 +3437,12 @@ def registrar_stock_estructura():
                     (nombre_modelo, modelo_base, ancho, profundidad, alto,
                      medida_estandar, foto_url, tipo, cantidad, precio,
                      tipo_base, medida_base, medida_base_estandar, carpintero_nombre,
-                     es_antiguo, medida_brazo)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                     es_antiguo, medida_brazo, es_juego_completo)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
             """, (nombre, modelo_base, ancho, profundidad, alto,
                   medida_estandar, foto_url, tipo, cantidad, precio,
                   tipo_base, medida_base, medida_base_estandar, carpintero_nombre or None,
-                  es_antiguo, medida_brazo))
+                  es_antiguo, medida_brazo, es_juego_completo))
             new_id = cursor.fetchone()[0]
 
         conexion.commit()
@@ -3592,6 +3607,8 @@ def entregar_estructura(stock_id):
     """
     data          = request.get_json() or {}
     chofer_nombre = (data.get('chofer_nombre') or '').strip()
+    foto_entrega_url   = (data.get('foto_entrega_url') or '').strip()
+    comentario_entrega = (data.get('comentario_entrega') or '').strip()
 
     if not chofer_nombre:
         return jsonify({'error': 'Debes indicar el nombre del chofer.'}), 400
@@ -3622,15 +3639,52 @@ def entregar_estructura(stock_id):
         cursor.execute("""
             UPDATE stock_estructuras_sofa
             SET estado = 'entregado', chofer_nombre = %s,
-                fecha_entrega_chofer = NOW()
+                fecha_entrega_chofer = NOW(),
+                foto_entrega_url = %s,
+                comentario_entrega = %s
             WHERE id = %s
-        """, (chofer_nombre, stock_id))
+        """, (chofer_nombre, foto_entrega_url or None, comentario_entrega or None, stock_id))
         conexion.commit()
         return jsonify({'exito': True, 'chofer_nombre': chofer_nombre}), 200
 
     except Exception as e:
         if 'conexion' in locals() and conexion:
             conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+# A10: Completar parte de estructura
+@produccion_bp.route('/api/stock-estructuras/<int:stock_id>/completar-parte', methods=['PATCH'])
+@requiere_login
+def completar_parte_estructura(stock_id):
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+
+        completado_por = request.form.get('completado_por', '').strip()
+        fecha_completado = request.form.get('fecha_completado', '').strip()
+        comentario_parte = request.form.get('comentario_parte', '').strip()
+        
+        foto_url = None
+        if 'foto' in request.files and request.files['foto'].filename:
+            import cloudinary.uploader
+            res = cloudinary.uploader.upload(request.files['foto'], folder='stock_estructuras')
+            foto_url = res.get('secure_url')
+
+        cursor.execute("""
+            UPDATE stock_estructuras_sofa
+            SET completado_por = %s,
+                fecha_completado = %s::date,
+                comentario_parte = %s,
+                foto_completado_url = COALESCE(%s, foto_completado_url)
+            WHERE id = %s
+        """, (completado_por, fecha_completado if fecha_completado else None, comentario_parte, foto_url, stock_id))
+        conexion.commit()
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:

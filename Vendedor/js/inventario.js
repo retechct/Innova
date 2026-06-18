@@ -141,13 +141,13 @@ function _htmlEsqueleto() {
 
     <!-- MODAL DETALLE / ACCIONES -->
     <div id="modal-inv-detalle" class="modal-overlay" style="display:none;align-items:center;justify-content:center;">
-        <div class="modal-content" style="width:92%;max-width:620px;border-radius:20px;">
-            <div class="modal-header">
+        <div class="modal-content" style="width:92%;max-width:620px;border-radius:20px;max-height:90vh;display:flex;flex-direction:column;">
+            <div class="modal-header" style="flex-shrink:0;">
                 <h3 id="modal-inv-det-titulo">Detalle</h3>
                 <button class="close-btn" onclick="document.getElementById('modal-inv-detalle').style.display='none'">
                     <i class="fas fa-times"></i></button>
             </div>
-            <div id="modal-inv-det-cuerpo" style="margin-top:12px;"></div>
+            <div id="modal-inv-det-cuerpo" style="margin-top:12px;overflow-y:auto;overflow-x:hidden;padding-right:4px;"></div>
         </div>
     </div>
 
@@ -620,7 +620,7 @@ async function _invMostrarDetalleUnidad(d) {
     
     // 2. HTML de imagen mejorado (con fallback y mejor diseño responsive)
     const fotoHTML = fotoLimpia 
-        ? `<div style="text-align:center; margin-bottom:15px; display:flex; justify-content:center;">
+        ? `<div style="text-align:center; margin-bottom:15px; display:flex; flex-direction:column; align-items:center;">
                <img src="${fotoLimpia}" 
                     alt="${d.nombre_modelo}"
                     style="max-width:180px; width:100%; height:auto; max-height:180px; object-fit:cover; border-radius:12px; border:2px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.08);"
@@ -633,37 +633,38 @@ async function _invMostrarDetalleUnidad(d) {
            </div>`;
 
     let html = fotoHTML + `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:15px;">
-        <div class="specs-section">
-            <h4>Identificación</h4>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:15px;">
+        <div class="specs-section" style="background:#f8fafc; padding:12px; border-radius:8px;">
+            <h4 style="margin:0 0 8px 0; font-size:12px; color:var(--primary); text-transform:uppercase;">Identificación</h4>
             <p style="margin:4px 0;font-size:13px;"><b>Código:</b> <span style="color:var(--accent);font-weight:900;">${d.codigo_barra}</span></p>
             <p style="margin:4px 0;font-size:13px;"><b>Modelo:</b> ${d.nombre_modelo}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Categoría:</b> ${d.categoria}</p>
         </div>
-        <div class="specs-section">
-            <h4>Ubicación y Estado</h4>
+        <div class="specs-section" style="background:#f8fafc; padding:12px; border-radius:8px;">
+            <h4 style="margin:0 0 8px 0; font-size:12px; color:var(--primary); text-transform:uppercase;">Ubicación y Estado</h4>
             <p style="margin:4px 0;font-size:13px;"><b>Sede:</b> ${d.sede}</p>
             <p style="margin:4px 0;"><span style="background:${estadoColor[d.estado]||'#f1f5f9'};
-               padding:4px 10px;border-radius:8px;font-weight:800;font-size:12px;">${d.estado}</span></p>
+               padding:4px 10px;border-radius:8px;font-weight:800;font-size:12px;display:inline-block;">${d.estado}</span></p>
             <p style="margin:4px 0;font-size:12px;color:var(--text-muted);">Ingreso: ${d.fecha_ingreso||'—'}</p>
-        </div>
-    </div>`;
+        </div>`;
 
     if (esProducto) {
-        html += `<div class="specs-section">
-            <h4>Detalles</h4>
+        html += `<div class="specs-section" style="background:#f8fafc; padding:12px; border-radius:8px;">
+            <h4 style="margin:0 0 8px 0; font-size:12px; color:var(--primary); text-transform:uppercase;">Detalles</h4>
             <p style="margin:4px 0;font-size:13px;"><b>Color/Tela:</b> ${d.color_tela||'—'}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Acabado:</b> ${d.acabado||'—'}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Costo:</b> S/ ${d.costo_ingreso||'—'}</p>
         </div>`;
     } else {
-        html += `<div class="specs-section">
-            <h4>Medidas</h4>
+        html += `<div class="specs-section" style="background:#f8fafc; padding:12px; border-radius:8px;">
+            <h4 style="margin:0 0 8px 0; font-size:12px; color:var(--primary); text-transform:uppercase;">Medidas</h4>
             <p style="margin:4px 0;font-size:13px;"><b>Material:</b> ${d.material||'—'} ${d.color_acabado?'· '+d.color_acabado:''}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Forma:</b> ${d.forma}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Medida:</b> ${_fmtMedidaObj(d)}</p>
         </div>`;
     }
+
+    html += `</div>`;
 
     // Acciones (solo si puede editar)
     if (_puedeEditarInv()) {
@@ -677,11 +678,11 @@ async function _invMostrarDetalleUnidad(d) {
                         style="background:${e===d.estado?'var(--primary)':'#f1f5f9'};
                                color:${e===d.estado?'white':'var(--text-muted)'};
                                border:none;padding:6px 12px;border-radius:8px;
-                               font-weight:700;cursor:pointer;font-size:11px;">
+                               font-weight:700;cursor:pointer;font-size:11px;flex:1;min-width:90px;">
                     ${e}</button>`).join('')}
             </div>
             <button onclick="_invVerHistorialUnidad('${d.tipo}',${d.id})"
-                    style="background:none;border:1px solid #e2e8f0;padding:8px 14px;
+                    style="width:100%;background:none;border:1px solid #e2e8f0;padding:10px 14px;
                            border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;
                            color:var(--text-muted);">
                 <i class="fas fa-history"></i> Ver historial completo

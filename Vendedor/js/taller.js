@@ -3751,23 +3751,42 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
                   style="background:#f1f5f9;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:16px;color:#64748b;">✕</button>
             </div>
 
-            <label style="font-size:12px;font-weight:700;color:#475569;">TIPO</label>
-            <select id="se-tipo" onchange="_onChangeTipoEstructura()"
-                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
-              <option value="estructura">🪵 Estructura de sofá</option>
-              <option value="destrokes">🔧 Destrokes</option>
-            </select>
+            <!-- ── Mover "es_antiguo" al tope ── -->
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;cursor:pointer;
+                          background:#fff7ed;padding:10px;border-radius:8px;border:1.5px solid #fed7aa;">
+              <input type="checkbox" id="se-es-antiguo" onchange="_onChangeEsAntiguo()"> 
+              <span style="font-weight:800;color:#c2410c;">🗄️ Es stock antiguo (hallado en almacén)</span>
+            </label>
+
+            <div data-bloque-normal="true">
+                <label style="font-size:12px;font-weight:700;color:#475569;">TIPO</label>
+                <select id="se-tipo" onchange="_onChangeTipoEstructura()"
+                    style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
+                  <option value="estructura">🪵 Estructura de sofá</option>
+                  <option value="destrokes">🔧 Destrokes</option>
+                </select>
+            </div>
+
+            <div data-bloque-normal="true" style="margin-bottom:14px;">
+                <label style="font-size:12px;font-weight:700;color:#475569;">¿ES JUEGO COMPLETO?</label>
+                <select id="se-juego-completo" style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                    <option value="true">Sí, juego completo</option>
+                    <option value="false">No, es una parte (se completará después)</option>
+                </select>
+            </div>
 
             <label style="font-size:12px;font-weight:700;color:#475569;">NOMBRE / DESCRIPCIÓN *</label>
             <input id="se-nombre" placeholder="Ej: Seccional 3+2 · Gris Perla"
                 style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
 
-            <label style="font-size:12px;font-weight:700;color:#475569;">CANTIDAD *</label>
-            <input id="se-cantidad" type="number" placeholder="Ej: 1" min="1" step="1" value="1"
-                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
+            <div data-bloque-normal="true">
+                <label style="font-size:12px;font-weight:700;color:#475569;">CANTIDAD *</label>
+                <input id="se-cantidad" type="number" placeholder="Ej: 1" min="1" step="1" value="1"
+                    style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
+            </div>
 
             <!-- ── Bloque SOLO para Estructura ── -->
-            <div id="bloque-solo-estructura">
+            <div id="bloque-solo-estructura" data-bloque-normal="true">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                 <label style="font-size:12px;font-weight:700;color:#475569;">MODELO BASE *</label>
                 <button type="button" onclick="_abrirGestorDesdeStock()"
@@ -3804,11 +3823,6 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             <input type="checkbox" id="se-estandar" onchange="document.getElementById('bloque-medidas').style.display = this.checked ? 'none' : 'flex'; if(this.checked){document.getElementById('se-ancho').value='';document.getElementById('se-prof').value='';document.getElementById('se-alto').value='';}"> 
             <span style="font-weight:500;">Es una medida estándar de catálogo</span>
             </label>
-            <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;cursor:pointer;
-                        background:#fef2f2;padding:8px 10px;border-radius:6px;border:1px solid #fee2e2;">
-            <input type="checkbox" id="se-es-antiguo"> 
-            <span style="font-weight:500;color:#991b1b;">🗄️ Es stock antiguo (hallado en almacén)</span>
-            </label>
             </div><!-- A8: Bloque PATA/ZÓCALO para estructura sofa -->
 <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">
   <label style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;display:block;">TIPO DE BASE</label>
@@ -3841,9 +3855,11 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             </div>
             <!-- ── fin bloque destrokes ── -->
 
-            <label style="font-size:12px;font-weight:700;color:#475569;">PRECIO (S/)</label>
-            <input id="se-precio" type="number" placeholder="Ej: 350.00" step="0.01"
-                style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
+            <div data-bloque-normal="true">
+                <label style="font-size:12px;font-weight:700;color:#475569;">PRECIO (S/)</label>
+                <input id="se-precio" type="number" placeholder="Ej: 350.00" step="0.01"
+                    style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;font-size:13px;">
+            </div>
 
             <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:8px;">FOTO *</label>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
@@ -3882,6 +3898,23 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
     } catch(e) {
         const el = document.getElementById(contenedorId);
         if (el) el.innerHTML = `<p style="color:red;text-align:center;">Error al cargar stock.</p>`;
+    }
+}
+
+function _onChangeEsAntiguo() {
+    const isAntiguo = document.getElementById('se-es-antiguo')?.checked;
+    const bloquesNormales = document.querySelectorAll('#modal-registro-estructura [data-bloque-normal="true"]');
+    const titulo = document.getElementById('se-modal-titulo');
+    const seTipo = document.getElementById('se-tipo');
+
+    bloquesNormales.forEach(b => { b.style.display = isAntiguo ? 'none' : 'block'; });
+
+    if (isAntiguo) {
+        if (titulo) titulo.textContent = 'Registrar Estructura Antigua';
+        if (seTipo) { seTipo.value = 'estructura'; _onChangeTipoEstructura(); }
+    } else {
+        if (titulo) titulo.textContent = 'Registrar estructura / destrokes';
+        if (seTipo) _onChangeTipoEstructura(); 
     }
 }
 
@@ -4079,6 +4112,7 @@ function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
+    if (document.getElementById('se-juego-completo')) document.getElementById('se-juego-completo').value = 'true';
     const cb = document.getElementById('se-estandar');
     if (cb) {
         cb.checked = false;
@@ -4086,7 +4120,7 @@ function abrirModalRegistrarEstructura(contenedorId, esAdminCtx) {
         if (b) b.style.display = 'flex';
     }
     const cbAnti = document.getElementById('se-es-antiguo');
-    if (cbAnti) cbAnti.checked = false;
+    if (cbAnti) { cbAnti.checked = false; _onChangeEsAntiguo(); }
     const cbBase = document.getElementById('se-medida-base-estandar');
     if (cbBase) {
         cbBase.checked = false;
@@ -4224,6 +4258,7 @@ function _renderListaEstructuras(lista) {
             ${e.medida_estandar ? `<span style="font-size:11px;color:#7c3aed;background:#f5f3ff;padding:3px 8px;border-radius:6px;font-weight:700;">⭐ Estándar</span>` : ''}
             ${e.es_antiguo ? `<span style="font-size:11px;color:#991b1b;background:#fef2f2;padding:3px 8px;border-radius:6px;font-weight:700;">🗄️ Antiguo</span>` : ''}
             ${e.tipo_base ? `<span style="font-size:11px;color:#0f172a;background:#e2e8f0;padding:3px 8px;border-radius:6px;">${e.tipo_base === 'zocalo' ? '🪵 Zócalo' : '🦵 Patas'}: <b>${e.medida_base_estandar ? 'Estándar' : e.medida_base + ' cm'}</b></span>` : ''}
+            ${e.es_juego_completo ? `<span style="font-size:11px;color:#15803d;background:#dcfce7;padding:3px 8px;border-radius:6px;font-weight:700;">🧩 Juego Completo</span>` : `<span style="font-size:11px;color:#c2410c;background:#fff7ed;padding:3px 8px;border-radius:6px;font-weight:700;">🔧 Es Parte</span>`}
           </div>
           ${(e.ancho || e.medida_brazo) ? `<div style="font-size:12px;color:#475569;margin-top:6px;"><i class="fa-solid fa-ruler-combined" style="color:#94a3b8;"></i> ${e.ancho ? e.ancho+'×'+e.profundidad+'×'+e.alto+' cm' : ''}${e.medida_brazo ? (e.ancho?' | ':'') + 'Brazo: '+e.medida_brazo+'cm' : ''}</div>` : ''}
           ${e.precio ? `<div style="font-size:14px;color:#15803d;font-weight:800;margin-top:6px;">S/ ${parseFloat(e.precio).toFixed(2)}</div>` : ''}
@@ -4233,6 +4268,22 @@ function _renderListaEstructuras(lista) {
             ${e.fecha ? `<div style="font-size:11px;color:#94a3b8;"><i class="fa-regular fa-calendar" style="margin-right:4px;"></i>Registrado: <b style="color:#64748b;">${e.fecha}</b></div>` : ''}
             ${e.fecha_entrega_chofer ? `<div style="font-size:11px;color:#94a3b8;"><i class="fa-solid fa-truck" style="margin-right:4px;color:#15803d;"></i>Entregado: <b style="color:#15803d;">${e.fecha_entrega_chofer}</b></div>` : ''}
           </div>
+
+          <!-- Info si es parte -->
+          ${!e.es_juego_completo ? (e.completado_por ? `
+            <div style="margin-top:10px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:10px;font-size:11px;">
+                <div style="color:#0f172a;font-weight:700;margin-bottom:4px;">✅ Parte Completada / Cambiada</div>
+                <div style="color:#475569;margin-bottom:2px;">Por: <b>${e.completado_por}</b> el ${e.fecha_completado || ''}</div>
+                ${e.comentario_parte ? `<div style="color:#64748b;margin-bottom:4px;font-style:italic;">"${e.comentario_parte}"</div>` : ''}
+                ${e.foto_completado_url ? `<img src="${e.foto_completado_url}" style="width:60px;height:60px;border-radius:4px;object-fit:cover;cursor:pointer;border:1px solid #e2e8f0;" onclick="window.open(this.src)">` : ''}
+            </div>` : `
+            <div style="margin-top:10px;">
+                <button onclick="marcarParteCompletada(${e.ids && e.ids.length===1 ? e.ids[0] : e.id})"
+                        style="background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;width:100%;justify-content:center;">
+                    📷 Marcar como completado/cambiado
+                </button>
+            </div>
+          `) : ''}
 
           <!-- A9: badge de pago + botón toggle -->
           <div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:6px;">
@@ -4303,24 +4354,25 @@ async function guardarEstructura() {
     const foto   = document.getElementById('se-foto-cam')?.files[0]
                || document.getElementById('se-foto').files[0];
     const tipo   = document.getElementById('se-tipo').value;
+    const esAntiguo = document.getElementById('se-es-antiguo')?.checked;
 
     if (!nombre) {
         return Swal.fire({ icon:'warning', title:'Falta el nombre', text:'Escribe un nombre o descripción.' });
     }
-    if (!foto) {
+    if (!esAntiguo && !foto) {
         return Swal.fire({ icon:'warning', title:'Falta la foto', text:'Agrega una foto del lote.' });
     }
 
     const esDestrokes = tipo === 'destrokes';
 
     // Validaciones específicas por tipo
-    if (!esDestrokes) {
+    if (!esAntiguo && !esDestrokes) {
         const modeloBase = (document.getElementById('se-modelo-base')?.value || '').trim();
         if (!modeloBase) {
             return Swal.fire({ icon:'warning', title:'Falta el modelo base',
                 text:'Selecciona el modelo base. Si no está en la lista, usa ⚙️ Gestionar para agregarlo.' });
         }
-    } else {
+    } else if (!esAntiguo && esDestrokes) {
         const cant = document.getElementById('se-cantidad').value;
         if (!cant || parseInt(cant) < 1) {
             return Swal.fire({ icon:'warning', title:'Falta la cantidad',
@@ -4334,9 +4386,23 @@ async function guardarEstructura() {
     fd.append('nombre_modelo', nombre);
     fd.append('tipo',          tipo);
     fd.append('precio',        document.getElementById('se-precio').value || 0);
-    fd.append('foto',          foto);
+    if (foto) fd.append('foto', foto);
+    
+    fd.append('es_juego_completo', document.getElementById('se-juego-completo')?.value || 'true');
+    fd.append('es_antiguo', esAntiguo ? 'true' : 'false');
 
-    if (esDestrokes) {
+    if (esAntiguo) {
+        fd.append('cantidad', 1);
+        fd.append('ancho', 0);
+        fd.append('profundidad', 0);
+        fd.append('alto', 0);
+        fd.append('modelo_base', '');
+        fd.append('medida_estandar', 'false');
+        fd.append('tipo_base', '');
+        fd.append('medida_base', '0');
+        fd.append('medida_base_estandar', 'false');
+        fd.append('medida_brazo', '');
+    } else if (esDestrokes) {
         // Destrokes: solo cantidad, sin medidas ni modelo base
         fd.append('cantidad',    document.getElementById('se-cantidad').value || 1);
         fd.append('ancho',       0);
@@ -4369,7 +4435,6 @@ async function guardarEstructura() {
         fd.append('medida_base',          medidaBaseEst ? '0' : medidaBaseValor);
         fd.append('medida_base_estandar', medidaBaseEst ? 'true' : 'false');
         fd.append('medida_brazo',         document.getElementById('se-medida-brazo')?.value || '');
-        fd.append('es_antiguo',           document.getElementById('se-es-antiguo')?.checked ? 'true' : 'false');
     }
 
     try {
@@ -4411,7 +4476,10 @@ function _groupEstructuras(lista) {
             g.estado === e.estado &&
             g.chofer_nombre === e.chofer_nombre &&
             g.es_antiguo === e.es_antiguo &&
-            g.medida_brazo === e.medida_brazo
+            g.medida_brazo === e.medida_brazo &&
+            g.es_juego_completo === e.es_juego_completo &&
+            g.completado_por === e.completado_por &&
+            g.fecha_completado === e.fecha_completado
         );
         if (existing) {
             existing.cantidad = (existing.cantidad || 1) + (e.cantidad || 1);
@@ -4459,6 +4527,12 @@ async function marcarEstructuraEntregada(idsStr, nombreEstructura, btnEl) {
                 placeholder="O escribe el nombre si no aparece en la lista"
                 style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;
                        font-size:13px;box-sizing:border-box;">
+            <div style="margin-top:14px;text-align:left;">
+                <label style="font-size:12px;font-weight:700;color:#475569;">Foto de entrega (opcional)</label>
+                <input id="swal-foto-entrega" type="file" accept="image/*" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;box-sizing:border-box;margin-top:4px;">
+                <label style="font-size:12px;font-weight:700;color:#475569;margin-top:10px;display:block;">Comentario</label>
+                <textarea id="swal-comentario-entrega" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;box-sizing:border-box;margin-top:4px;resize:vertical;min-height:50px;"></textarea>
+            </div>
             ${maxCant > 1 ? `
             <div style="margin-top:14px;text-align:left;">
                 <label style="font-size:12px;font-weight:700;color:#475569;">¿Cuántas unidades se lleva?</label>
@@ -4499,6 +4573,15 @@ async function marcarEstructuraEntregada(idsStr, nombreEstructura, btnEl) {
     if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...'; }
 
     try {
+        let foto_entrega_url = '';
+        if (datos.foto) {
+            const fdFoto = new FormData();
+            fdFoto.append('foto', datos.foto);
+            const resFoto = await apiFetch(`${API_URL}/api/upload-foto`, { method: 'POST', body: fdFoto });
+            const dFoto = await resFoto.json();
+            if (dFoto.url) foto_entrega_url = dFoto.url;
+        }
+
         let exitoCount = 0;
         let lastError = null;
         const idsToDeliver = ids.slice(0, datos.cantidad);
@@ -4507,7 +4590,11 @@ async function marcarEstructuraEntregada(idsStr, nombreEstructura, btnEl) {
             const res = await apiFetch(`${API_URL}/api/stock-estructuras/${id}/entregar`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chofer_nombre: datos.choferNombre })
+                body: JSON.stringify({ 
+                    chofer_nombre: datos.choferNombre,
+                    foto_entrega_url: foto_entrega_url,
+                    comentario_entrega: datos.comentario
+                })
             });
             const d = await res.json();
             if (d.exito) exitoCount++;
@@ -4605,6 +4692,64 @@ async function eliminarCardEstructura(id) {
     } catch(e) {
         Swal.fire('Error', 'Error de conexión', 'error');
     }
+}
+
+// ── Completar / Cambiar parte de la estructura ──
+async function marcarParteCompletada(id) {
+    const { value: datos } = await Swal.fire({
+        title: 'Marcar como completado/cambiado',
+        html: `
+            <div style="text-align:left; font-size:13px;">
+                <label style="font-weight:bold;display:block;margin-bottom:4px;">Completado por *</label>
+                <input id="swal-cp-nombre" type="text" class="swal2-input" style="width:100%;margin:0 0 12px;font-size:13px;" placeholder="¿Quién lo completó?">
+                
+                <label style="font-weight:bold;display:block;margin-bottom:4px;">Fecha *</label>
+                <input id="swal-cp-fecha" type="date" class="swal2-input" style="width:100%;margin:0 0 12px;font-size:13px;" value="${new Date().toISOString().split('T')[0]}">
+                
+                <label style="font-weight:bold;display:block;margin-bottom:4px;">Comentario</label>
+                <textarea id="swal-cp-comentario" class="swal2-textarea" style="width:100%;margin:0 0 12px;font-size:13px;min-height:60px;" placeholder="Detalles de la pieza..."></textarea>
+                
+                <label style="font-weight:bold;display:block;margin-bottom:4px;">Foto de evidencia (opcional)</label>
+                <input id="swal-cp-foto" type="file" accept="image/*" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;">
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Guardar',
+        confirmButtonColor: '#16a34a',
+        preConfirm: () => {
+            const completadoPor = document.getElementById('swal-cp-nombre').value.trim();
+            const fecha = document.getElementById('swal-cp-fecha').value;
+            const comentario = document.getElementById('swal-cp-comentario').value.trim();
+            const foto = document.getElementById('swal-cp-foto').files[0];
+            
+            if (!completadoPor || !fecha) {
+                Swal.showValidationMessage('El nombre y la fecha son obligatorios.');
+                return false;
+            }
+            return { completadoPor, fecha, comentario, foto };
+        }
+    });
+
+    if (!datos) return;
+    Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    const fd = new FormData();
+    fd.append('completado_por', datos.completadoPor);
+    fd.append('fecha_completado', datos.fecha);
+    fd.append('comentario_parte', datos.comentario);
+    if (datos.foto) fd.append('foto', datos.foto);
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/stock-estructuras/${id}/completar-parte`, { method: 'PATCH', body: fd });
+        const d = await res.json();
+        if (d.exito) {
+            Swal.fire({ icon: 'success', title: 'Completado', timer: 1500, showConfirmButton: false });
+            const ctx = window._modalEstructuraCtx || {};
+            const contenedorId = window._stockSofaContenedorActivo || ctx.contenedorId;
+            if (contenedorId) {
+                await _cargarContenidoStockSofa(contenedorId, contenedorId === 'sp-sofa-contenido');
+            } else { cargarTicketsTaller(); }
+        } else { Swal.fire('Error', d.error, 'error'); }
+    } catch (e) { Swal.fire('Error', 'No se pudo conectar', 'error'); }
 }
 
 // ── A9: Modal de edición de estructura ───────────────────────────────────────
