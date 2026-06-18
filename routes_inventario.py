@@ -299,7 +299,7 @@ def buscar_por_barcode(barcode):
                    sp.foto_url, sp.costo_ingreso, sp.precio_venta, sp.fecha_ingreso,
                    'producto' AS tipo
             FROM stock_productos sp
-            JOIN sedes se ON sp.sede_id = se.id
+            LEFT JOIN sedes se ON sp.sede_id = se.id
             WHERE sp.codigo_barra = %s;
         """, (barcode,))
         row = cur.fetchone()
@@ -319,9 +319,9 @@ def buscar_por_barcode(barcode):
             SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
                    sp.material, sp.color_acabado, sp.estado, se.nombre AS sede,
                    sp.forma, sp.largo_cm, sp.ancho_cm, sp.alto_cm,
-                   sp.costo_ingreso, sp.fecha_ingreso, 'pieza' AS tipo, sp.foto_url
+                   sp.costo_ingreso, sp.fecha_ingreso, 'pieza' AS tipo, NULL AS foto_url
             FROM stock_piezas sp
-            JOIN sedes se ON sp.sede_id = se.id
+            LEFT JOIN sedes se ON sp.sede_id = se.id
             WHERE sp.codigo_barra = %s;
         """, (barcode,))
         row = cur.fetchone()
@@ -346,10 +346,10 @@ def buscar_por_barcode(barcode):
         cur.execute("""
             SELECT su.id, su.codigo_barra, su.nombre_modelo, su.categoria,
                    su.color_tela, su.acabado, su.estado, se.nombre AS sede,
-                   su.foto_url, su.costo_ingreso, su.fecha_ingreso,
+                   NULL AS foto_url, su.costo_ingreso, su.fecha_ingreso,
                    'unidad' AS tipo
             FROM stock_unidades su
-            JOIN sedes se ON su.sede_id = se.id
+            LEFT JOIN sedes se ON su.sede_id = se.id
             WHERE su.codigo_barra = %s;
         """, (barcode,))
         row = cur.fetchone()
