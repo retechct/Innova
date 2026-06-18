@@ -682,10 +682,16 @@ async function _invMostrarDetalleUnidad(d) {
                     ${e}</button>`).join('')}
             </div>
             <button onclick="_invVerHistorialUnidad('${d.tipo}',${d.id})"
-                    style="width:100%;background:none;border:1px solid #e2e8f0;padding:10px 14px;
+                    style="width:100%;background:none;border:1px solid #e2e8f0;padding:10px 14px;margin-bottom:8px;
                            border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;
                            color:var(--text-muted);">
                 <i class="fas fa-history"></i> Ver historial completo
+            </button>
+            <button onclick="_invEliminarUnidad('${d.tipo}',${d.id})"
+                    style="width:100%;background:#fee2e2;border:1px solid #fca5a5;padding:10px 14px;
+                           border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;
+                           color:#991b1b;">
+                <i class="fas fa-trash"></i> Eliminar Registro Físico
             </button>
         </div>`;
     }
@@ -806,6 +812,31 @@ async function _invVerHistorialUnidad(tipo, id) {
         tabla += `</table>`;
         Swal.fire({ title:'Historial', html:tabla, width:650, confirmButtonColor:'#0f172a' });
     } catch(e) { Swal.fire('Error', e.message, 'error'); }
+}
+
+async function _invEliminarUnidad(tipo, id) {
+    const conf = await Swal.fire({
+        title: '¿Eliminar este registro?',
+        text: 'Se borrará permanentemente del inventario físico. Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    });
+    
+    if (!conf.isConfirmed) return;
+    Swal.fire({ title: 'Eliminando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        const res = await apiFetch(`${API_URL}/api/inventario/${tipo}/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.exito) {
+            Swal.fire({ icon: 'success', title: 'Eliminado', timer: 1500, showConfirmButton: false });
+            document.getElementById('modal-inv-detalle').style.display = 'none';
+            await _cargarDatosTab();
+        } else { Swal.fire('Error', data.error || 'No se pudo eliminar el registro.', 'error'); }
+    } catch(e) { Swal.fire('Error', 'Fallo de conexión al servidor.', 'error'); }
 }
 
 /* ─── Modal: Registrar nuevo item ───────────────────────────── */
@@ -1137,6 +1168,45 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
             </div>`;
         });
         html += `</div>`;
+
+        // Añadir tabla detallada de códigos
+        try {
+            const tipoQuery = esPieza ? 'pieza' : 'producto';
+            const resUnidades = await apiFetch(`${API_URL}/api/inventario/unidades-modelo?tipo=${tipoQuery}&modelo=${encodeURIComponent(nombre)}`);
+            if (resUnidades.ok) {
+                const unidades = await resUnidades.json();
+                if (unidades.length > 0) {
+                    html += `<div style="margin-top: 20px; text-align: left;">
+                        <h4 style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">Unidades Físicas (Códigos):</h4>
+                        <div style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                <thead style="background: #f1f5f9; position: sticky; top: 0; z-index:1;">
+                                    <tr>
+                                        <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Código</th>
+                                        <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e2e8f0;">Sede</th>
+                                        <th style="padding: 8px; text-align: center; border-bottom: 1px solid #e2e8f0;">Estado</th>
+                                        <th style="padding: 8px; text-align: center; border-bottom: 1px solid #e2e8f0;">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${unidades.map(u => `
+                                        <tr style="border-bottom: 1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                                            <td style="padding: 8px; font-weight: bold; color: var(--accent);">${u.codigo_barra}</td>
+                                            <td style="padding: 8px;">${u.sede}</td>
+                                            <td style="padding: 8px; text-align: center;">
+                                                <span style="background: ${u.estado === 'Disponible' ? '#dcfce7' : '#f1f5f9'}; color: ${u.estado === 'Disponible' ? '#16a34a' : '#64748b'}; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: bold;">${u.estado}</span>
+                                            </td>
+                                            <td style="padding: 8px; text-align: center;">
+                                                <button onclick="Swal.close(); setTimeout(() => _invBuscarBarcode('${u.codigo_barra}'), 300)" style="background: var(--primary); color: white; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold;"><i class="fa-solid fa-eye"></i> Detalles</button>
+                                            </td>
+                                        </tr>`).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>`;
+                }
+            }
+        } catch(err) {}
 
         Swal.fire({
             title: nombre,

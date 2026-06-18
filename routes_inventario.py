@@ -824,3 +824,73 @@ def unidades_disponibles_por_catalogo(catalogo_id):
         return jsonify({'error': str(e)}), 500
     finally:
         _rel(conn)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ELIMINAR ITEM (Pruebas)
+# ─────────────────────────────────────────────────────────────────────────────
+@inventario_bp.route('/api/inventario/<tipo>/<int:reg_id>', methods=['DELETE'])
+@requiere_rol('Admin')
+def eliminar_item_inventario(tipo, reg_id):
+    if tipo not in ('producto', 'pieza'):
+        return jsonify({'error': 'tipo debe ser producto o pieza'}), 400
+
+    tabla = 'stock_productos' if tipo == 'producto' else 'stock_piezas'
+    conn = None
+    try:
+        conn = _conn()
+        cur = conn.cursor()
+
+        # Borrar del historial primero para evitar problemas de relación
+        cur.execute("DELETE FROM historial_inventario WHERE tipo_registro = %s AND registro_id = %s", (tipo, reg_id))
+        
+        # Eliminar el registro de stock físico
+        cur.execute(f"DELETE FROM {tabla} WHERE id = %s RETURNING id", (reg_id,))
+        if not cur.fetchone():
+            return jsonify({'error': 'Registro no encontrado'}), 404
+
+        conn.commit()
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if conn: conn.rollback()
+        err_msg = str(e)
+        if "foreign key" in err_msg.lower() or "llave foránea" in err_msg.lower():
+            err_msg = "No se puede eliminar porque este registro ya está vinculado a una venta o proceso activo."
+        return jsonify({'error': err_msg}), 500
+    finally:
+        if conn: _rel(conn)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LISTAR UNIDADES DE UN MODELO (Para eliminar pruebas/gestión)
+# ─────────────────────────────────────────────────────────────────────────────
+@inventario_bp.route('/api/inventario/unidades-modelo', methods=['GET'])
+@requiere_login
+def unidades_modelo():
+    tipo = request.args.get('tipo')
+    nombre_modelo = request.args.get('modelo', '')
+    
+    conn = None
+    try:
+        conn = _conn()
+        cur = conn.cursor()
+        
+        tabla = 'stock_productos' if tipo == 'producto' else 'stock_piezas'
+        
+        cur.execute(f"""
+            SELECT sp.id, sp.codigo_barra, se.nombre AS sede, sp.estado, sp.fecha_ingreso
+            FROM {tabla} sp
+            LEFT JOIN sedes se ON sp.sede_id = se.id
+            WHERE sp.nombre_modelo = %s
+            ORDER BY sp.fecha_ingreso DESC
+        """, (nombre_modelo,))
+            
+        unidades = [{
+            'id': r[0], 'codigo_barra': r[1],
+            'sede': r[2] or 'Sin sede', 'estado': r[3],
+            'fecha_ingreso': r[4].strftime('%d/%m/%Y') if r[4] else ''
+        } for r in cur.fetchall()]
+            
+        return jsonify(unidades), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn: _rel(conn)
