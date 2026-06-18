@@ -3824,7 +3824,7 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             <span style="font-weight:500;">Es una medida estándar de catálogo</span>
             </label>
             </div><!-- A8: Bloque PATA/ZÓCALO para estructura sofa -->
-<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">
+<div data-bloque-normal="true" style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;">
   <label style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;display:block;">TIPO DE BASE</label>
   <select id="se-tipo-base" onchange="_actualizarVisibilidadBase()"
       style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;font-size:13px;background:white;">
@@ -3854,6 +3854,26 @@ async function _cargarContenidoStockSofa(contenedorId, esAdmin) {
             <div id="bloque-solo-destrokes" style="display:none;">
             </div>
             <!-- ── fin bloque destrokes ── -->
+            <!-- ── Bloque SOLO visible en modo antiguo ── -->
+            <div id="bloque-antiguo-extra" style="display:none;">
+              <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">DESCRIPCIÓN</label>
+              <textarea id="se-descripcion-antiguo" rows="3"
+                  placeholder="Ej: Seccional hallado en almacén, color gris, sin patas..."
+                  style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;resize:vertical;margin-bottom:14px;"></textarea>
+              <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">¿ES JUEGO COMPLETO O PARTES?</label>
+              <select id="se-juego-completo-antiguo"
+                  style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;margin-bottom:14px;">
+                <option value="true">Sí, juego completo</option>
+                <option value="false">No, es una parte (se completará después)</option>
+              </select>
+              <label style="font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:4px;">ESTRUCTURA SOFÁ</label>
+              <select id="se-tipo-antiguo"
+                  style="width:100%;padding:9px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:13px;margin-bottom:14px;">
+                <option value="estructura">🪵 Estructura de sofá</option>
+                <option value="destrokes">🔧 Destrokes</option>
+              </select>
+            </div>
+            <!-- ── fin bloque antiguo extra ── -->
 
             <div>
                 <label style="font-size:12px;font-weight:700;color:#475569;">PRECIO (S/)</label>
@@ -3907,19 +3927,21 @@ function _onChangeEsAntiguo() {
     const titulo = document.getElementById('se-modal-titulo');
     const seTipo = document.getElementById('se-tipo');
     const fotoLabel = document.getElementById('se-foto-label');
+    const bloqueAntiguoExtra = document.getElementById('bloque-antiguo-extra');
 
     bloquesNormales.forEach(b => { b.style.display = isAntiguo ? 'none' : 'block'; });
+    if (bloqueAntiguoExtra) bloqueAntiguoExtra.style.display = isAntiguo ? 'block' : 'none';
 
     if (isAntiguo) {
         if (titulo) titulo.textContent = 'Registrar Estructura Antigua';
-        if (seTipo) { seTipo.value = 'estructura'; _onChangeTipoEstructura(); }
         if (fotoLabel) fotoLabel.textContent = 'FOTO (Opcional)';
     } else {
         if (titulo) titulo.textContent = 'Registrar estructura / destrokes';
-        if (seTipo) _onChangeTipoEstructura(); 
+        if (seTipo) _onChangeTipoEstructura();
         if (fotoLabel) fotoLabel.textContent = 'FOTO *';
     }
 }
+
 
 
 // ── Buscador inteligente de contratos pendientes (carpintero de sofás) ──
@@ -4391,10 +4413,13 @@ async function guardarEstructura() {
     fd.append('precio',        document.getElementById('se-precio').value || 0);
     if (foto) fd.append('foto', foto);
     
-    fd.append('es_juego_completo', document.getElementById('se-juego-completo')?.value || 'true');
     fd.append('es_antiguo', esAntiguo ? 'true' : 'false');
 
     if (esAntiguo) {
+        // En modo antiguo usar los campos del bloque antiguo extra
+        fd.append('es_juego_completo', document.getElementById('se-juego-completo-antiguo')?.value || 'true');
+        fd.append('tipo', document.getElementById('se-tipo-antiguo')?.value || 'estructura');
+        fd.append('descripcion', document.getElementById('se-descripcion-antiguo')?.value || '');
         fd.append('cantidad', document.getElementById('se-cantidad').value || 1);
         fd.append('ancho', 0);
         fd.append('profundidad', 0);
