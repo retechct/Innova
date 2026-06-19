@@ -162,6 +162,7 @@ def finalizar_ticket(id):
 
 
 @produccion_bp.route('/api/taller/cola-recojo', methods=['GET'])
+@requiere_login
 def obtener_cola_recojo():
     try:
         conexion = get_db_connection()
@@ -247,6 +248,7 @@ def obtener_cola_recojo():
 
 
 @produccion_bp.route('/api/taller/ticket/<int:id>/confirmar-recojo', methods=['POST'])
+@requiere_login
 def confirmar_recojo_estructura(id):
     """Chofer confirma recojo de estructura: Listo para Recojo → Recogido.
     También intenta desbloquear tapicería si ya están listas las telas."""
@@ -344,6 +346,7 @@ def confirmar_recojo_estructura(id):
 
 
 @produccion_bp.route('/api/logistica/<int:logistica_id>/confirmar-recojo-externo', methods=['POST'])
+@requiere_login
 def confirmar_recojo_externo(logistica_id):
     """Chofer o Tapicero confirma recojo externo: marca logística como Recibido
     y desbloquea las áreas de producción que correspondan."""
@@ -1854,6 +1857,7 @@ def cotizar_lote(token):
 
 
 @produccion_bp.route('/api/despacho/progreso/<int:item_id>', methods=['GET'])
+@requiere_login
 def progreso_despacho(item_id):
     try:
         conexion = get_db_connection()
@@ -1878,6 +1882,7 @@ def progreso_despacho(item_id):
 
 
 @produccion_bp.route('/api/despacho/ficha-chofer/<int:item_id>', methods=['GET'])
+@requiere_login
 def ficha_chofer(item_id):
     """
     Devuelve todo lo que el chofer necesita ver antes de hacer la entrega:

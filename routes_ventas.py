@@ -800,6 +800,7 @@ def ver_tickets_area(area):
 
 
 @ventas_bp.route('/api/pedido/detalle/<codigo>', methods=['GET'])
+@requiere_login
 def obtener_detalle_pedido(codigo):
     try:
         conexion = get_db_connection()

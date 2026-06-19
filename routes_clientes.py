@@ -32,6 +32,7 @@ Tabla esperada en PostgreSQL:
 
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection
+from auth_middleware import requiere_login
 
 clientes_bp = Blueprint('clientes', __name__)
 
@@ -59,6 +60,7 @@ def _ensure_tabla_clientes(cursor):
 # ==========================================
 
 @clientes_bp.route('/api/clientes/buscar', methods=['GET'])
+@requiere_login
 def buscar_clientes():
     """
     Devuelve hasta 8 clientes cuyo nombre o DNI contenga el texto buscado.
@@ -106,6 +108,7 @@ def buscar_clientes():
 # ==========================================
 
 @clientes_bp.route('/api/clientes', methods=['GET'])
+@requiere_login
 def listar_clientes():
     """Lista paginada de todos los clientes registrados."""
     try:

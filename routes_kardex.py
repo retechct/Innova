@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from models import db, Sede, CatalogoProducto, PiezaFisica
+from auth_middleware import requiere_login, requiere_rol
 
 # Creamos el Blueprint para el módulo Kardex
 kardex_bp = Blueprint('kardex', __name__)
@@ -8,6 +9,7 @@ kardex_bp = Blueprint('kardex', __name__)
 # RUTA ESPECIAL: Inicializar Sedes Base
 # ==========================================
 @kardex_bp.route('/inicializar-sedes', methods=['POST'])
+@requiere_rol('Admin')
 def inicializar_sedes():
     # Verificar si ya existen sedes para no duplicar
     if Sede.query.first():
@@ -32,6 +34,7 @@ def inicializar_sedes():
 # RUTAS PARA LAS SEDES
 # ==========================================
 @kardex_bp.route('/sedes', methods=['GET'])
+@requiere_login
 def obtener_sedes():
     sedes = Sede.query.all()
     resultado = [{'id': s.id, 'nombre': s.nombre, 'tipo': s.tipo} for s in sedes]
@@ -41,6 +44,7 @@ def obtener_sedes():
 # RUTAS PARA EL CATÁLOGO
 # ==========================================
 @kardex_bp.route('/catalogo', methods=['GET'])
+@requiere_login
 def obtener_catalogo():
     productos = CatalogoProducto.query.all()
     resultado = [{
@@ -52,6 +56,7 @@ def obtener_catalogo():
     return jsonify(resultado), 200
 
 @kardex_bp.route('/catalogo', methods=['POST'])
+@requiere_login
 def crear_producto_catalogo():
     data = request.json
     if not data or not data.get('nombre') or not data.get('tipo_producto') or not data.get('categoria'):

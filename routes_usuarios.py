@@ -15,6 +15,7 @@ usuarios_bp = Blueprint('usuarios', __name__)
 # ==========================================
 
 @usuarios_bp.route('/api/usuarios', methods=['GET'])
+@requiere_login
 def obtener_usuarios():
     try:
         conexion = get_db_connection()
@@ -78,6 +79,7 @@ def crear_usuario():
 
 
 @usuarios_bp.route('/api/usuarios/por-area/<string:area>', methods=['GET'])
+@requiere_login
 def obtener_usuarios_por_area(area):
     AREA_ALIASES = {
         'CORTE_Y_CONTROL_TELAS':    ['CORTE_Y_CONTROL_TELAS', 'TELAS'],
@@ -119,6 +121,7 @@ def obtener_usuarios_por_area(area):
 
 
 @usuarios_bp.route('/api/usuarios/choferes', methods=['GET'])
+@requiere_login
 def obtener_choferes():
     try:
         conexion = get_db_connection()
