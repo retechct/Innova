@@ -826,13 +826,27 @@ def obtener_ordenes_produccion():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         
-        query = """
-            SELECT v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega, v.vendedor_nombre, v.sede, v.estado_general
-            FROM ventas v
-            WHERE v.estado_general NOT IN ('Entregado', 'Cancelado')
-            ORDER BY v.fecha_entrega ASC
-        """
-        cursor.execute(query)
+        # Activas: todo excepto Cancelado, ordenadas por urgencia (fecha_entrega ASC, nulls al final)
+        # Entregadas: solo las últimas 30, más recientes primero
+        # El frontend separa visualmente activas vs entregadas usando el campo estado_general
+        cursor.execute("""
+            (
+                SELECT v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega,
+                       v.vendedor_nombre, v.sede, v.estado_general
+                FROM ventas v
+                WHERE v.estado_general NOT IN ('Entregado', 'Cancelado')
+                ORDER BY v.fecha_entrega ASC NULLS LAST
+            )
+            UNION ALL
+            (
+                SELECT v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega,
+                       v.vendedor_nombre, v.sede, v.estado_general
+                FROM ventas v
+                WHERE v.estado_general = 'Entregado'
+                ORDER BY v.fecha_entrega DESC NULLS LAST
+                LIMIT 30
+            )
+        """)
         ventas = cursor.fetchall()
         
         resultado = []

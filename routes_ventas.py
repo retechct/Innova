@@ -676,16 +676,19 @@ def _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado_venta):
           AND estado_ticket NOT IN ('Terminado', 'Cancelado', 'Recogido', 'Listo para Recojo')
     """, (ticket_destino, venta_id))
 
-    # Despacho central: al marcar Entregado, el ticket de despacho pasa
-    # directo a "Recogido" (ya salió/llegó al cliente).
+    # Despacho central: al marcar Entregado (incluso si venía de Pendiente
+    # después de haber estado Entregado antes), el ticket pasa a 'Terminado'
+    # para que aparezca en despacho/entregados.
+    # No se excluye 'Recogido': en el flujo Entregado→Pendiente→Entregado
+    # el ticket queda en 'Recogido' y jamás avanzaba a 'Terminado'.
     if nuevo_estado_venta == 'Entregado':
         cursor.execute("""
             UPDATE tickets_produccion
-            SET estado_ticket = 'Recogido',
+            SET estado_ticket = 'Terminado',
                 fecha_fin = COALESCE(fecha_fin, CURRENT_TIMESTAMP)
             WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
               AND area_trabajo = 'DESPACHO_CENTRAL'
-              AND estado_ticket NOT IN ('Recogido', 'Cancelado')
+              AND estado_ticket != 'Cancelado'
         """, (venta_id,))
 
     # ── PUENTE LOGÍSTICA EXTERNA ──────────────────────────────────────────

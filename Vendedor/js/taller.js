@@ -3166,10 +3166,14 @@ async function cargarStatsTaller() {
 /* --- 2. VISTA DE ÓRDENES POR PEDIDO (Admin) --- */
 async function cargarOrdenesProduccion(contenedor) {
     try {
-        const res    = await apiFetch(`${API_URL}/api/taller/ordenes?estado=activas`);
+        const res    = await apiFetch(`${API_URL}/api/taller/ordenes`);
         const ordenes = await res.json();
 
-        if (!Array.isArray(ordenes) || ordenes.length === 0) {
+        // Separar activas (todo excepto Entregado/Cancelado) de entregadas
+        const activas     = (ordenes || []).filter(o => o.estado !== 'Entregado' && o.estado !== 'Cancelado');
+        const entregadas  = (ordenes || []).filter(o => o.estado === 'Entregado');
+
+        if (!Array.isArray(ordenes) || activas.length === 0) {
             contenedor.innerHTML = `
                 <div style="text-align:center; padding:60px 20px; color:#94a3b8;">
                     <i class="fa-solid fa-circle-check" style="font-size:3rem; color:#22c55e; display:block; margin-bottom:15px;"></i>
@@ -3203,23 +3207,14 @@ async function cargarOrdenesProduccion(contenedor) {
             'Distribuido':  { bg:'#dcfce7', color:'#166534', icon:'✅' },
         };
 
-        let html = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
-                <div>
-                    <h3 style="margin:0; font-size:15px; font-weight:900; color:#0f172a;">
-                        <i class="fa-solid fa-list-check" style="color:#558fc5;"></i> ${ordenes.length} orden${ordenes.length>1?'es':''} activa${ordenes.length>1?'s':''}
-                    </h3>
-                    <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">Vista agrupada por pedido — progreso de cada área de producción</p>
-                </div>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:16px;">`;
-
-        ordenes.forEach(orden => {
+        // ── Función helper para renderizar una tarjeta de orden ─────────────
+        const renderOrdenCard = (orden) => {
             const progresoColor = orden.progreso >= 100 ? '#22c55e' : (orden.progreso >= 50 ? '#3b82f6' : '#f59e0b');
             const estadoBadge   = {
                 'Listo':         { bg:'#dcfce7', color:'#166534' },
                 'En Producción': { bg:'#dbeafe', color:'#1e40af' },
                 'Pendiente':     { bg:'#fef3c7', color:'#b45309' },
+                'Entregado':     { bg:'#d1fae5', color:'#065f46' },
             }[orden.estado] || { bg:'#f1f5f9', color:'#475569' };
 
             // Construir filas de items con sus tickets
@@ -3266,7 +3261,7 @@ async function cargarOrdenesProduccion(contenedor) {
                     </div>`;
             });
 
-            html += `
+            return `
             <div style="background:white; border-radius:14px; border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,0.05); overflow:hidden;">
                 <!-- Cabecera de la orden -->
                 <div style="background:#f8fafc; padding:14px 18px; border-bottom:1px solid #e2e8f0; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
@@ -3298,9 +3293,46 @@ async function cargarOrdenesProduccion(contenedor) {
                     ${itemsHTML || '<p style="color:#94a3b8; font-size:12px; text-align:center; padding:10px;">Sin ítems de producción</p>'}
                 </div>
             </div>`;
-        });
+        };
 
+        // ── Sección ACTIVAS ─────────────────────────────────────────────────
+        let html = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <h3 style="margin:0; font-size:15px; font-weight:900; color:#0f172a;">
+                        <i class="fa-solid fa-list-check" style="color:#558fc5;"></i>
+                        ${activas.length} orden${activas.length!==1?'es':''} activa${activas.length!==1?'s':''}
+                    </h3>
+                    <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">Ordenadas por fecha de entrega más próxima · progreso por área</p>
+                </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px;">`;
+
+        activas.forEach(orden => { html += renderOrdenCard(orden); });
         html += '</div>';
+
+        // ── Sección ENTREGADAS (colapsable) ─────────────────────────────────
+        if (entregadas.length > 0) {
+            html += `
+            <div style="margin-top:32px;">
+                <button onclick="
+                    const sec=document.getElementById('sec-entregadas-ordenes');
+                    const ico=document.getElementById('ico-entregadas-ordenes');
+                    const visible=sec.style.display!=='none';
+                    sec.style.display=visible?'none':'flex';
+                    ico.className=visible?'fa-solid fa-chevron-right':'fa-solid fa-chevron-down';
+                " style="width:100%;display:flex;align-items:center;gap:10px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:12px 16px;cursor:pointer;font-size:13px;font-weight:800;color:#166534;">
+                    <i id="ico-entregadas-ordenes" class="fa-solid fa-chevron-right"></i>
+                    <i class="fa-solid fa-circle-check" style="color:#22c55e;"></i>
+                    ${entregadas.length} pedido${entregadas.length!==1?'s':''} entregado${entregadas.length!==1?'s':''} reciente${entregadas.length!==1?'s':''}
+                    <span style="margin-left:auto;font-size:10px;font-weight:500;color:#4ade80;">clic para ver</span>
+                </button>
+                <div id="sec-entregadas-ordenes" style="display:none;flex-direction:column;gap:12px;margin-top:12px;">
+                    ${entregadas.map(o => renderOrdenCard(o)).join('')}
+                </div>
+            </div>`;
+        }
+
         contenedor.innerHTML = html;
         contenedor.style.display = 'block';
 
