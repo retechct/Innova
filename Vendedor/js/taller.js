@@ -2256,21 +2256,32 @@ async function asignarTrabajador(ticketId, areaTicket) {
         const operariosArea  = usuarios.filter(u => u.area === areaTicket);
         const otrosUsuarios  = usuarios.filter(u => u.area !== areaTicket);
 
+        // Etiqueta de carga: 🟢 libre, 🟡 algo cargado, 🔴 muy cargado
+        const etiquetaCarga = (pendientes) => {
+            const n = Number(pendientes) || 0;
+            if (n === 0) return `🟢 libre`;
+            if (n <= 3)  return `🟡 ${n} pendiente${n !== 1 ? 's' : ''}`;
+            return `🔴 ${n} pendientes`;
+        };
+
         // Construimos HTML de select manualmente para mejor UX
         let selectHtml = `<select id="swal-select-trabajador" class="swal2-input" style="width:100%; margin:0; padding:10px; font-size:14px; border-radius:8px;">
             <option value="">-- Selecciona un trabajador --</option>`;
 
         if (operariosArea.length > 0) {
             selectHtml += `<optgroup label="✅ Operarios del área ${areaTicket.replace(/_/g,' ')}">`;
-            operariosArea.forEach(u => {
-                selectHtml += `<option value="${u.id}">${u.nombre}</option>`;
-            });
+            operariosArea
+                .slice()
+                .sort((a, b) => (a.pendientes || 0) - (b.pendientes || 0)) // menos cargados primero
+                .forEach(u => {
+                    selectHtml += `<option value="${u.id}">${u.nombre} — ${etiquetaCarga(u.pendientes)}</option>`;
+                });
             selectHtml += `</optgroup>`;
         }
         if (otrosUsuarios.length > 0) {
             selectHtml += `<optgroup label="👔 Jefes / Admins (respaldo)">`;
             otrosUsuarios.forEach(u => {
-                selectHtml += `<option value="${u.id}">${u.nombre} (${u.rol})</option>`;
+                selectHtml += `<option value="${u.id}">${u.nombre} (${u.rol}) — ${etiquetaCarga(u.pendientes)}</option>`;
             });
             selectHtml += `</optgroup>`;
         }

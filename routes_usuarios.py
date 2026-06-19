@@ -101,16 +101,28 @@ def obtener_usuarios_por_area(area):
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         placeholders = ",".join(["%s"] * len(areas_buscar_set))
+        # ── Carga de trabajo: tickets activos (sin contar Terminado/Cancelado/
+        #    Recogido) que ya tiene asignados cada usuario, sin importar el
+        #    área del ticket — así el admin ve la carga REAL de la persona,
+        #    no solo lo de un área específica. Se usa LEFT JOIN para que los
+        #    operarios sin tickets salgan con pendientes = 0.
         cursor.execute(f"""
-            SELECT id, nombre, rol, area_asignada,
-                CASE WHEN UPPER(COALESCE(area_asignada,'')) IN ({placeholders}) THEN 0 ELSE 1 END AS orden
-            FROM usuarios
-            WHERE UPPER(COALESCE(area_asignada,'')) IN ({placeholders})
-               OR rol IN ('Admin', 'Jefe_Taller')
-            ORDER BY orden ASC, nombre ASC;
+            SELECT u.id, u.nombre, u.rol, u.area_asignada,
+                CASE WHEN UPPER(COALESCE(u.area_asignada,'')) IN ({placeholders}) THEN 0 ELSE 1 END AS orden,
+                COALESCE(carga.pendientes, 0) AS pendientes
+            FROM usuarios u
+            LEFT JOIN (
+                SELECT trabajador_asignado_id, COUNT(*) AS pendientes
+                FROM tickets_produccion
+                WHERE estado_ticket NOT IN ('Terminado', 'Cancelado', 'Recogido')
+                GROUP BY trabajador_asignado_id
+            ) carga ON carga.trabajador_asignado_id = u.id
+            WHERE UPPER(COALESCE(u.area_asignada,'')) IN ({placeholders})
+               OR u.rol IN ('Admin', 'Jefe_Taller')
+            ORDER BY orden ASC, u.nombre ASC;
         """, (*areas_buscar_set, *areas_buscar_set))
         usuarios = [
-            {"id": r[0], "nombre": r[1], "rol": r[2], "area": r[3] or ''}
+            {"id": r[0], "nombre": r[1], "rol": r[2], "area": r[3] or '', "pendientes": int(r[5] or 0)}
             for r in cursor.fetchall()
         ]
         return jsonify(usuarios), 200

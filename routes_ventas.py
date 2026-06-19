@@ -643,6 +643,52 @@ def listar_ventas():
 # GESTIÓN MANUAL DE ESTADOS Y ANULACIÓN
 # ==========================================
 
+def _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado_venta):
+    """
+    Cuando el Admin cambia manualmente el estado general de la venta
+    (botón "Gestionar Venta" en Reportes/Ventas), los tickets de producción
+    de cada pieza (taller, cojines, estructuras, despacho, etc.) NO se
+    actualizan solos — quedan "abiertos" en sus áreas de trabajo aunque
+    la venta ya esté Lista/Despachada/Entregada.
+
+    Esta función cierra esos tickets para que dejen de aparecer como
+    pendientes en las pantallas de cada área, manteniendo coherencia
+    entre el estado general de la venta y el detalle por pieza.
+    """
+    mapa_estados = {
+        'Listo':      'Terminado',
+        'Despachado': 'Terminado',
+        'Entregado':  'Terminado',
+    }
+    ticket_destino = mapa_estados.get(nuevo_estado_venta)
+    if not ticket_destino:
+        # 'Pendiente' / 'En producción' no fuerzan retroceso de tickets
+        # ya avanzados — solo afecta el estado general visible al cliente.
+        return
+
+    # Áreas normales de producción (corte, tapicería, estructuras, cojines...)
+    cursor.execute("""
+        UPDATE tickets_produccion
+        SET estado_ticket = %s,
+            fecha_fin = COALESCE(fecha_fin, CURRENT_TIMESTAMP)
+        WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
+          AND area_trabajo != 'DESPACHO_CENTRAL'
+          AND estado_ticket NOT IN ('Terminado', 'Cancelado', 'Recogido', 'Listo para Recojo')
+    """, (ticket_destino, venta_id))
+
+    # Despacho central: al marcar Entregado, el ticket de despacho pasa
+    # directo a "Recogido" (ya salió/llegó al cliente).
+    if nuevo_estado_venta == 'Entregado':
+        cursor.execute("""
+            UPDATE tickets_produccion
+            SET estado_ticket = 'Recogido',
+                fecha_fin = COALESCE(fecha_fin, CURRENT_TIMESTAMP)
+            WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
+              AND area_trabajo = 'DESPACHO_CENTRAL'
+              AND estado_ticket NOT IN ('Recogido', 'Cancelado')
+        """, (venta_id,))
+
+
 @ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])
 @requiere_login
 def cambiar_estado_venta(venta_id):
@@ -656,6 +702,10 @@ def cambiar_estado_venta(venta_id):
         cursor   = conexion.cursor()
 
         cursor.execute("UPDATE ventas SET estado_general = %s WHERE id = %s", (nuevo_estado, venta_id))
+
+        # ── PUENTE TALLER: sincroniza los tickets de cada pieza con el
+        #    nuevo estado general (para que ya no aparezcan en sus áreas) ──
+        _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado)
 
         # ── PUENTE INVENTARIO: Entregado → marcar unidades como Vendido ──────
         if nuevo_estado == 'Entregado':
