@@ -10,6 +10,17 @@ from auth_middleware import generar_token, requiere_login, requiere_rol
 usuarios_bp = Blueprint('usuarios', __name__)
 
 
+def _asegurar_columna_telefono(cursor):
+    """
+    Auto-migración segura: agrega la columna `telefono` a `usuarios` si
+    no existe todavía. Se necesita para poder notificar por WhatsApp/SMS
+    a futuro (la capa de notificación ya recibe este campo, ver
+    database.notificar_usuario). Formato libre por ahora — se recomienda
+    incluir código de país, ej: +51987654321.
+    """
+    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);")
+
+
 # ==========================================
 # USUARIOS
 # ==========================================
@@ -40,13 +51,14 @@ def obtener_usuarios_detalle():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        _asegurar_columna_telefono(cursor)
         cursor.execute("""
-            SELECT id, nombre, rol, email, area_asignada, empresa_nombre, empresa_ruc
+            SELECT id, nombre, rol, email, area_asignada, empresa_nombre, empresa_ruc, telefono
             FROM usuarios ORDER BY nombre;
         """)
         usuarios = [
             {"id": r[0], "nombre": r[1], "rol": r[2], "email": r[3],
-             "area": r[4], "empresa": r[5], "ruc": r[6]}
+             "area": r[4], "empresa": r[5], "ruc": r[6], "telefono": r[7] or ''}
             for r in cursor.fetchall()
         ]
         return jsonify(usuarios), 200
@@ -64,15 +76,67 @@ def crear_usuario():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        _asegurar_columna_telefono(cursor)
         cursor.execute("""
-            INSERT INTO usuarios (nombre, email, pin_acceso, contrasena, rol, area_asignada, empresa_nombre, empresa_ruc)
-            VALUES (%s, %s, %s, '123456', %s, %s, %s, %s);
+            INSERT INTO usuarios (nombre, email, pin_acceso, contrasena, rol, area_asignada, empresa_nombre, empresa_ruc, telefono)
+            VALUES (%s, %s, %s, '123456', %s, %s, %s, %s, %s);
         """, (data['nombre'], data['correo'], data['pin'], data['rol'],
-              data['area'], data['empresa_nombre'], data['empresa_ruc']))
+              data['area'], data['empresa_nombre'], data['empresa_ruc'], data.get('telefono')))
         conexion.commit()
         return jsonify({'exito': True}), 201
     except Exception as e:
         print(f"❌ Error en crear_usuario: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@usuarios_bp.route('/api/usuarios/<int:usuario_id>', methods=['PUT'])
+@requiere_rol('Admin')
+def editar_usuario(usuario_id):
+    """
+    Edita datos de un usuario ya existente — pensado en primer lugar
+    para poder registrar/actualizar el `telefono` de operarios y choferes
+    que se crearon antes de que existiera este campo, sin tener que
+    recrear el usuario desde cero.
+
+    Solo actualiza los campos que vengan en el body (parcial), para no
+    pisar datos que no se quisieron tocar.
+    """
+    data = request.json or {}
+    campos_permitidos = {
+        'nombre':         'nombre',
+        'correo':         'email',
+        'telefono':       'telefono',
+        'rol':            'rol',
+        'area':           'area_asignada',
+        'empresa_nombre': 'empresa_nombre',
+        'empresa_ruc':    'empresa_ruc',
+    }
+    actualizaciones = {
+        col: data[clave] for clave, col in campos_permitidos.items() if clave in data
+    }
+    if not actualizaciones:
+        return jsonify({'error': 'No se envió ningún campo para actualizar'}), 400
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        _asegurar_columna_telefono(cursor)
+
+        set_clause = ", ".join(f"{col} = %s" for col in actualizaciones.keys())
+        valores    = list(actualizaciones.values()) + [usuario_id]
+        cursor.execute(f"UPDATE usuarios SET {set_clause} WHERE id = %s;", valores)
+
+        if cursor.rowcount == 0:
+            conexion.rollback()
+            return jsonify({'error': 'Usuario no encontrado'}), 404
+
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': 'Usuario actualizado correctamente'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
@@ -101,28 +165,16 @@ def obtener_usuarios_por_area(area):
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         placeholders = ",".join(["%s"] * len(areas_buscar_set))
-        # ── Carga de trabajo: tickets activos (sin contar Terminado/Cancelado/
-        #    Recogido) que ya tiene asignados cada usuario, sin importar el
-        #    área del ticket — así el admin ve la carga REAL de la persona,
-        #    no solo lo de un área específica. Se usa LEFT JOIN para que los
-        #    operarios sin tickets salgan con pendientes = 0.
         cursor.execute(f"""
-            SELECT u.id, u.nombre, u.rol, u.area_asignada,
-                CASE WHEN UPPER(COALESCE(u.area_asignada,'')) IN ({placeholders}) THEN 0 ELSE 1 END AS orden,
-                COALESCE(carga.pendientes, 0) AS pendientes
-            FROM usuarios u
-            LEFT JOIN (
-                SELECT trabajador_asignado_id, COUNT(*) AS pendientes
-                FROM tickets_produccion
-                WHERE estado_ticket NOT IN ('Terminado', 'Cancelado', 'Recogido')
-                GROUP BY trabajador_asignado_id
-            ) carga ON carga.trabajador_asignado_id = u.id
-            WHERE UPPER(COALESCE(u.area_asignada,'')) IN ({placeholders})
-               OR u.rol IN ('Admin', 'Jefe_Taller')
-            ORDER BY orden ASC, u.nombre ASC;
+            SELECT id, nombre, rol, area_asignada,
+                CASE WHEN UPPER(COALESCE(area_asignada,'')) IN ({placeholders}) THEN 0 ELSE 1 END AS orden
+            FROM usuarios
+            WHERE UPPER(COALESCE(area_asignada,'')) IN ({placeholders})
+               OR rol IN ('Admin', 'Jefe_Taller')
+            ORDER BY orden ASC, nombre ASC;
         """, (*areas_buscar_set, *areas_buscar_set))
         usuarios = [
-            {"id": r[0], "nombre": r[1], "rol": r[2], "area": r[3] or '', "pendientes": int(r[5] or 0)}
+            {"id": r[0], "nombre": r[1], "rol": r[2], "area": r[3] or ''}
             for r in cursor.fetchall()
         ]
         return jsonify(usuarios), 200

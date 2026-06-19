@@ -117,3 +117,58 @@ Innova Möbili — Área de Compras
         print(f'✅ Cotización enviada a {correo_proveedor}')
     except Exception as e:
         print(f'Error al enviar cotización: {e}')
+
+
+# ─── Notificaciones internas a usuarios del ERP (operarios, choferes, etc.) ──
+def notificar_usuario(destinatario_email, nombre_destinatario, asunto, mensaje, telefono=None):
+    """
+    Capa de abstracción para notificar a un usuario del ERP (operario,
+    chofer, jefe de taller, etc.) — por ejemplo cuando se le asigna un
+    ticket nuevo.
+
+    Por qué existe esta función en vez de llamar smtplib directamente
+    desde cada ruta: el día que conectes WhatsApp Business (Meta Cloud API)
+    o un proveedor como Twilio, solo cambias el CUERPO de esta función.
+    Todos los lugares del sistema que ya llaman a notificar_usuario()
+    empezarán a notificar por WhatsApp sin que toques nada más.
+
+    HOY  → envía por correo (usa las mismas credenciales EMAIL_USER /
+           EMAIL_PASS que ya usa enviar_notificacion_venta()).
+    LUEGO → cuando tengas WhatsApp Business listo, reemplaza el cuerpo
+           por una llamada a la Cloud API usando `telefono`.
+
+    El parámetro `telefono` se recibe ya desde ahora (aunque hoy no se
+    use) para que los lugares que llaman a esta función no tengan que
+    cambiar cuando se conecte el canal nuevo.
+
+    Retorna True/False según si se pudo enviar.
+    """
+    if not destinatario_email:
+        print(f"⚠️  notificar_usuario: '{nombre_destinatario}' no tiene correo registrado — no se envió notificación.")
+        return False
+
+    try:
+        remitente   = os.getenv("EMAIL_USER")
+        password    = os.getenv("EMAIL_PASS")
+        smtp_server = os.getenv("EMAIL_SMTP", "smtp.gmail.com")
+        smtp_port   = int(os.getenv("EMAIL_PORT", 587))
+
+        if not remitente or not password:
+            print("⚠️ Advertencia: Credenciales de correo no configuradas — no se envió notificación.")
+            return False
+
+        msg = MIMEText(mensaje)
+        msg['Subject'] = asunto
+        msg['From']    = remitente
+        msg['To']      = destinatario_email
+
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(remitente, password)
+            server.send_message(msg)
+
+        print(f"✅ Notificación enviada a {nombre_destinatario} ({destinatario_email})")
+        return True
+    except Exception as e:
+        print(f"⚠️ Error al notificar a {nombre_destinatario}: {e}")
+        return False

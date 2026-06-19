@@ -394,6 +394,10 @@ async function cargarLogisticaExterna() {
         const items       = await resLog.json();
         const proveedores = await resProv.json();
 
+        const ESTADOS_COMPLETADOS = ['Recibido', 'Cancelado'];
+        const itemsActivos     = items.filter(i => !ESTADOS_COMPLETADOS.includes(i.estado));
+        const itemsCompletados = items.filter(i =>  ESTADOS_COMPLETADOS.includes(i.estado));
+
         if (!items.length) {
             tabla.innerHTML = `<div style="text-align:center;padding:40px;color:#94a3b8;">
                 <i class="fa-solid fa-box-open" style="font-size:2.5rem;opacity:0.4;"></i>
@@ -421,76 +425,130 @@ async function cargarLogisticaExterna() {
         // FIX RESPONSIVE: detectar móvil
         const esMobil = window.innerWidth < 700;
 
-        let html = `
-        <div style="display:flex;justify-content:space-between;margin-bottom:15px;align-items:center;flex-wrap:wrap;gap:8px;">
-            <h3 style="margin:0;font-size:16px;">Requerimientos</h3>
-            <button onclick="abrirModalLote()" style="background:#25D366;color:white;border:none;padding:8px 12px;border-radius:6px;font-weight:bold;cursor:pointer;">
-                <i class="fa-solid fa-list-check"></i> Cotizar por lote
-            </button>
-        </div>`;
-
-        if (esMobil) {
-            // ── VISTA MÓVIL: Cards apiladas ──────────────────────────
-            html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;">`;
-            items.forEach(item => {
-                const c = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
-                const fotoHTML = item.foto_url
-                    ? `<img src="${item.foto_url}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-                           style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;flex-shrink:0;">`
-                    : `<div style="width:56px;height:56px;border-radius:8px;background:#f1f5f9;display:flex;
-                              align-items:center;justify-content:center;flex-shrink:0;font-size:22px;border:1px solid #e2e8f0;">🪵</div>`;
-                html += `
-                <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
-                    <div style="display:flex;gap:12px;margin-bottom:10px;">
+        const _renderFilaDesktop = (item, idx, proveedores, esAdmin, coloresEstado, bgAlt) => {
+            const c  = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
+            const bg = idx % 2 === 0 ? bgAlt : '#fafbfc';
+            const fotoHTML = item.foto_url
+                ? `<img src="${item.foto_url}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
+                       style="width:42px;height:42px;object-fit:cover;border-radius:6px;
+                              border:1px solid #e2e8f0;flex-shrink:0;">`
+                : `<div style="width:42px;height:42px;border-radius:6px;background:#f1f5f9;
+                          display:flex;align-items:center;justify-content:center;
+                          flex-shrink:0;font-size:18px;border:1px solid #e2e8f0;">🪵</div>`;
+            return `
+            <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
+                onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
+                <td style="padding:12px 14px;">
+                    <span style="font-weight:900;color:#d97706;">#${item.codigo_venta}</span>
+                </td>
+                <td style="padding:10px 14px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
                         ${fotoHTML}
-                        <div style="flex:1;min-width:0;">
-                            <div style="font-weight:900;font-size:14px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.insumo}</div>
-                            ${item.sku ? `<div style="font-size:11px;color:#94a3b8;margin-top:1px;">${item.sku}</div>` : ''}
-                            ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.detalle_insumo}</div>` : ''}
-                            <div style="margin-top:4px;">
-                                <span style="background:${c.bg};color:${c.color};padding:3px 9px;border-radius:20px;font-weight:800;font-size:10px;">${item.estado}</span>
-                            </div>
+                        <div style="min-width:0;">
+                            <div style="font-weight:700;line-height:1.3;">${item.insumo}</div>
+                            <div style="font-size:11px;color:#94a3b8;">${item.sku || '—'}</div>
+                            ${item.detalle_insumo ? `<div style="font-size:10px;color:#64748b;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">${item.detalle_insumo}</div>` : ''}
+                            ${item.cantidad ? `<div style="font-size:11px;color:#64748b;margin-top:1px;">${item.cantidad} ${item.unidad || ''}</div>` : ''}
                         </div>
                     </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:10px;">
-                        <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
-                            <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Pedido</div>
-                            <div style="font-weight:800;color:#d97706;">#${item.codigo_venta}</div>
-                        </div>
-                        <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
-                            <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Proveedor</div>
-                            <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.proveedor}</div>
-                        </div>
-                        ${item.precio_cotizado ? `
-                        <div style="background:#fef9c3;border-radius:6px;padding:6px 8px;">
-                            <div style="font-size:10px;color:#92400e;font-weight:700;text-transform:uppercase;">Precio</div>
-                            <div style="font-weight:900;color:#92400e;">S/ ${item.precio_cotizado.toFixed(2)}</div>
-                        </div>` : ''}
-                        ${item.fecha_entrega_proveedor ? `
-                        <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
-                            <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">F. Entrega</div>
-                            <div style="font-weight:600;">${item.fecha_entrega_proveedor}</div>
-                        </div>` : ''}
-                        ${item.cantidad ? `
-                        <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
-                            <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Cantidad</div>
-                            <div style="font-weight:600;">${item.cantidad} ${item.unidad || ''}</div>
-                        </div>` : ''}
-                    </div>
-                    ${esAdmin ? `
+                </td>
+                <td style="padding:12px 14px;">
+                    <div style="color:#475569;">${item.proveedor}</div>
+                    ${item.proveedor_informal ? `
+                    <div style="font-size:11px;color:#64748b;margin-top:2px;">
+                        <i class="fa-solid fa-phone" style="font-size:10px;"></i> ${item.proveedor_informal}
+                    </div>` : ''}
+                    ${item.tipo_gestion && item.tipo_gestion !== 'Externo' ? `
+                    <span style="background:${item.tipo_gestion === 'Informal' ? '#fef9c3' : '#dcfce7'};
+                        color:${item.tipo_gestion === 'Informal' ? '#854d0e' : '#166534'};
+                        padding:2px 7px;border-radius:10px;font-size:10px;font-weight:800;">
+                        ${item.tipo_gestion === 'Informal' ? '📞 Informal' : '🔨 Interno'}
+                    </span>` : ''}
+                </td>
+                <td style="padding:12px 10px;text-align:center;font-weight:800;color:#0f172a;">
+                    ${item.precio_cotizado ? `S/ ${item.precio_cotizado.toFixed(2)}` : '<span style="color:#cbd5e1;">—</span>'}
+                    ${item.url_comprobante_pago
+                        ? `<br><a href="${item.url_comprobante_pago}" target="_blank"
+                              title="Ver comprobante de pago"
+                              style="font-size:10px;font-weight:700;color:#1d4ed8;text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:3px;">
+                              <i class="fa-solid fa-receipt"></i> Comprobante
+                           </a>`
+                        : ''
+                    }
+                </td>
+                <td style="padding:12px 10px;text-align:center;font-size:12px;color:#64748b;">
+                    ${item.fecha_entrega_proveedor || '<span style="color:#cbd5e1;">Sin fecha</span>'}
+                </td>
+                <td style="padding:12px 10px;text-align:center;">
+                    <span style="background:${c.bg};color:${c.color};padding:4px 10px;border-radius:20px;font-weight:800;font-size:11px;">
+                        ${item.estado}
+                    </span>
+                </td>
+                ${esAdmin ? `
+                <td style="padding:12px 10px;text-align:center;">
                     <button onclick="_abrirEditarLogistica(${JSON.stringify(item).replace(/"/g,'&quot;')}, ${JSON.stringify(proveedores).replace(/"/g,'&quot;')})"
-                            style="width:100%;background:#0f172a;color:white;border:none;
-                                   padding:9px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
-                        <i class="fa-solid fa-pen"></i> Gestionar requerimiento
-                    </button>` : ''}
-                </div>`;
-            });
-            html += `</div>`;
+                            style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;color:#475569;">
+                        <i class="fa-solid fa-pen"></i> Editar
+                    </button>
+                </td>` : ''}
+            </tr>`;
+        };
 
-        } else {
-            // ── VISTA ESCRITORIO: Tabla ───────────────────────────────
-            html += `
-            <div style="overflow-x:auto;">
+        const _renderCardMobile = (item, proveedores, esAdmin, coloresEstado) => {
+            const c = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
+            const fotoHTML = item.foto_url
+                ? `<img src="${item.foto_url}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
+                       style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;flex-shrink:0;">`
+                : `<div style="width:56px;height:56px;border-radius:8px;background:#f1f5f9;display:flex;
+                          align-items:center;justify-content:center;flex-shrink:0;font-size:22px;border:1px solid #e2e8f0;">🪵</div>`;
+            return `
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+                <div style="display:flex;gap:12px;margin-bottom:10px;">
+                    ${fotoHTML}
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:900;font-size:14px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.insumo}</div>
+                        ${item.sku ? `<div style="font-size:11px;color:#94a3b8;margin-top:1px;">${item.sku}</div>` : ''}
+                        ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.detalle_insumo}</div>` : ''}
+                        <div style="margin-top:4px;">
+                            <span style="background:${c.bg};color:${c.color};padding:3px 9px;border-radius:20px;font-weight:800;font-size:10px;">${item.estado}</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:10px;">
+                    <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
+                        <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Pedido</div>
+                        <div style="font-weight:800;color:#d97706;">#${item.codigo_venta}</div>
+                    </div>
+                    <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
+                        <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Proveedor</div>
+                        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.proveedor}</div>
+                    </div>
+                    ${item.precio_cotizado ? `
+                    <div style="background:#fef9c3;border-radius:6px;padding:6px 8px;">
+                        <div style="font-size:10px;color:#92400e;font-weight:700;text-transform:uppercase;">Precio</div>
+                        <div style="font-weight:900;color:#92400e;">S/ ${item.precio_cotizado.toFixed(2)}</div>
+                    </div>` : ''}
+                    ${item.fecha_entrega_proveedor ? `
+                    <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
+                        <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">F. Entrega</div>
+                        <div style="font-weight:600;">${item.fecha_entrega_proveedor}</div>
+                    </div>` : ''}
+                    ${item.cantidad ? `
+                    <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
+                        <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Cantidad</div>
+                        <div style="font-weight:600;">${item.cantidad} ${item.unidad || ''}</div>
+                    </div>` : ''}
+                </div>
+                ${esAdmin ? `
+                <button onclick="_abrirEditarLogistica(${JSON.stringify(item).replace(/"/g,'&quot;')}, ${JSON.stringify(proveedores).replace(/"/g,'&quot;')})"
+                        style="width:100%;background:#0f172a;color:white;border:none;
+                               padding:9px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
+                    <i class="fa-solid fa-pen"></i> Gestionar requerimiento
+                </button>` : ''}
+            </div>`;
+        };
+
+        const _tablaHeader = (esAdmin) => `
             <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px;">
                 <thead>
                     <tr style="background:#0f172a;color:white;font-size:11px;font-weight:900;text-transform:uppercase;">
@@ -505,82 +563,66 @@ async function cargarLogisticaExterna() {
                 </thead>
                 <tbody>`;
 
-            items.forEach((item, idx) => {
-                const c  = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
-                const bg = idx % 2 === 0 ? 'white' : '#fafbfc';
-                // FIX foto: ícono 🪵 en lugar de 📦 cuando no hay foto
-                const fotoHTML = item.foto_url
-                    ? `<img src="${item.foto_url}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-                           style="width:42px;height:42px;object-fit:cover;border-radius:6px;
-                                  border:1px solid #e2e8f0;flex-shrink:0;">`
-                    : `<div style="width:42px;height:42px;border-radius:6px;background:#f1f5f9;
-                              display:flex;align-items:center;justify-content:center;
-                              flex-shrink:0;font-size:18px;border:1px solid #e2e8f0;">🪵</div>`;
-                html += `
-                <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
-                    onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
-                    <td style="padding:12px 14px;">
-                        <span style="font-weight:900;color:#d97706;">#${item.codigo_venta}</span>
-                    </td>
-                    <td style="padding:10px 14px;">
-                        <div style="display:flex;align-items:center;gap:10px;">
-                            ${fotoHTML}
-                            <div style="min-width:0;">
-                                <div style="font-weight:700;line-height:1.3;">${item.insumo}</div>
-                                <div style="font-size:11px;color:#94a3b8;">${item.sku || '—'}</div>
-                                ${item.detalle_insumo ? `<div style="font-size:10px;color:#64748b;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">${item.detalle_insumo}</div>` : ''}
-                                ${item.cantidad ? `<div style="font-size:11px;color:#64748b;margin-top:1px;">${item.cantidad} ${item.unidad || ''}</div>` : ''}
-                            </div>
-                        </div>
-                    </td>
-                    <td style="padding:12px 14px;">
-                        <div style="color:#475569;">${item.proveedor}</div>
-                        ${item.proveedor_informal ? `
-                        <div style="font-size:11px;color:#64748b;margin-top:2px;">
-                            <i class="fa-solid fa-phone" style="font-size:10px;"></i> ${item.proveedor_informal}
-                        </div>` : ''}
-                        ${item.tipo_gestion && item.tipo_gestion !== 'Externo' ? `
-                        <span style="background:${item.tipo_gestion === 'Informal' ? '#fef9c3' : '#dcfce7'};
-                            color:${item.tipo_gestion === 'Informal' ? '#854d0e' : '#166534'};
-                            padding:2px 7px;border-radius:10px;font-size:10px;font-weight:800;">
-                            ${item.tipo_gestion === 'Informal' ? '📞 Informal' : '🔨 Interno'}
-                        </span>` : ''}
-                    </td>
-                    <td style="padding:12px 10px;text-align:center;font-weight:800;color:#0f172a;">
-                        ${item.precio_cotizado ? `S/ ${item.precio_cotizado.toFixed(2)}` : '<span style="color:#cbd5e1;">—</span>'}
-                        ${item.url_comprobante_pago
-                            ? `<br><a href="${item.url_comprobante_pago}" target="_blank"
-                                  title="Ver comprobante de pago"
-                                  style="font-size:10px;font-weight:700;color:#1d4ed8;text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:3px;">
-                                  <i class="fa-solid fa-receipt"></i> Comprobante
-                               </a>`
-                            : ''
-                        }
-                    </td>
-                    <td style="padding:12px 10px;text-align:center;font-size:12px;color:#64748b;">
-                        ${item.fecha_entrega_proveedor || '<span style="color:#cbd5e1;">Sin fecha</span>'}
-                    </td>
-                    <td style="padding:12px 10px;text-align:center;">
-                        <span style="background:${c.bg};color:${c.color};padding:4px 10px;border-radius:20px;font-weight:800;font-size:11px;">
-                            ${item.estado}
-                        </span>
-                    </td>
-                    ${esAdmin ? `
-                    <td style="padding:12px 10px;text-align:center;">
-                        <button onclick="_abrirEditarLogistica(${JSON.stringify(item).replace(/"/g,'&quot;')}, ${JSON.stringify(proveedores).replace(/"/g,'&quot;')})"
-                                style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;color:#475569;">
-                            <i class="fa-solid fa-pen"></i> Editar
-                        </button>
-                    </td>` : ''}
-                </tr>`;
-            });
+        let html = `
+        <div style="display:flex;justify-content:space-between;margin-bottom:15px;align-items:center;flex-wrap:wrap;gap:8px;">
+            <h3 style="margin:0;font-size:16px;">Requerimientos</h3>
+            <button onclick="abrirModalLote()" style="background:#25D366;color:white;border:none;padding:8px 12px;border-radius:6px;font-weight:bold;cursor:pointer;">
+                <i class="fa-solid fa-list-check"></i> Cotizar por lote
+            </button>
+        </div>`;
 
+        // ── Sección 1: Activos (requieren atención) ───────────────
+        if (itemsActivos.length === 0) {
+            html += `<div style="text-align:center;padding:24px;color:#94a3b8;background:#f8fafc;border-radius:10px;margin-bottom:20px;">
+                <i class="fa-solid fa-circle-check" style="font-size:1.8rem;color:#86efac;display:block;margin-bottom:8px;"></i>
+                <span style="font-weight:700;">Sin requerimientos pendientes</span>
+            </div>`;
+        } else if (esMobil) {
+            html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;margin-bottom:24px;">`;
+            itemsActivos.forEach(item => { html += _renderCardMobile(item, proveedores, esAdmin, coloresEstado); });
+            html += `</div>`;
+        } else {
+            html += `<div style="overflow-x:auto;margin-bottom:24px;">`;
+            html += _tablaHeader(esAdmin);
+            itemsActivos.forEach((item, idx) => { html += _renderFilaDesktop(item, idx, proveedores, esAdmin, coloresEstado, 'white'); });
             html += `</tbody></table></div>`;
+        }
+
+        // ── Sección 2: Completados (colapsable) ───────────────────
+        if (itemsCompletados.length > 0) {
+            const idCollapse = 'log-completados-body';
+            html += `
+            <div style="margin-top:8px;">
+                <button onclick="const b=document.getElementById('${idCollapse}');const ic=this.querySelector('i');
+                    b.style.display=b.style.display==='none'?'block':'none';
+                    ic.className=b.style.display==='none'?'fa-solid fa-chevron-right':'fa-solid fa-chevron-down';"
+                    style="width:100%;display:flex;align-items:center;gap:8px;background:#f1f5f9;border:none;
+                           border-radius:10px;padding:10px 16px;cursor:pointer;font-size:13px;font-weight:700;color:#475569;text-align:left;">
+                    <i class="fa-solid fa-chevron-right"></i>
+                    <i class="fa-solid fa-circle-check" style="color:#86efac;"></i>
+                    Completados / Recibidos
+                    <span style="margin-left:auto;background:#d1fae5;color:#065f46;border-radius:20px;
+                                 padding:2px 10px;font-size:11px;font-weight:800;">${itemsCompletados.length}</span>
+                </button>
+                <div id="${idCollapse}" style="display:none;margin-top:8px;">`;
+
+            if (esMobil) {
+                html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;opacity:.8;">`;
+                itemsCompletados.forEach(item => { html += _renderCardMobile(item, proveedores, esAdmin, coloresEstado); });
+                html += `</div>`;
+            } else {
+                html += `<div style="overflow-x:auto;opacity:.85;">`;
+                html += _tablaHeader(esAdmin);
+                itemsCompletados.forEach((item, idx) => { html += _renderFilaDesktop(item, idx, proveedores, esAdmin, coloresEstado, '#f9fafb'); });
+                html += `</tbody></table></div>`;
+            }
+            html += `</div></div>`;
         }
 
         html += `
         <div style="margin-top:10px;font-size:11px;color:#94a3b8;text-align:right;">
-            ${items.length} requerimiento${items.length !== 1 ? 's' : ''} activos
+            ${itemsActivos.length} activo${itemsActivos.length !== 1 ? 's' : ''}
+            ${itemsCompletados.length > 0 ? ` · ${itemsCompletados.length} completado${itemsCompletados.length !== 1 ? 's' : ''}` : ''}
         </div>`;
         tabla.innerHTML = html;
 

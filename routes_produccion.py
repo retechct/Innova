@@ -10,7 +10,7 @@ from datetime import datetime
 from io import BytesIO
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
-from database import get_db_connection, release_db_connection, limpiar_foto
+from database import get_db_connection, release_db_connection, limpiar_foto, notificar_usuario
 from auth_middleware import requiere_login, requiere_rol
 
 # pip install reportlab==4.2.2
@@ -631,6 +631,43 @@ def asignar_maestro_ticket():
             WHERE id = %s;
         """, (trabajador_id, nuevo_estado, nuevo_estado, ticket_id))
         conexion.commit()
+
+        # ── NOTIFICACIÓN: avisar al trabajador que tiene un ticket nuevo ──
+        # No debe tumbar la respuesta si falla (red caída, correo mal
+        # configurado, etc.) — la asignación ya quedó guardada arriba.
+        try:
+            cursor.execute("""
+                SELECT u.nombre, u.email, u.telefono,
+                       i.producto, t.area_trabajo, v.codigo_venta
+                FROM tickets_produccion t
+                JOIN items_venta i  ON t.item_id  = i.id
+                JOIN ventas v       ON i.venta_id = v.id
+                JOIN usuarios u     ON u.id        = t.trabajador_asignado_id
+                WHERE t.id = %s
+            """, (ticket_id,))
+            info = cursor.fetchone()
+            if info:
+                nombre, email, telefono, producto, area, codigo_venta = info
+                area_legible = (area or '').replace('_', ' ').title()
+                notificar_usuario(
+                    destinatario_email=email,
+                    nombre_destinatario=nombre,
+                    asunto=f"Nuevo ticket asignado — {codigo_venta}",
+                    mensaje=(
+                        f"Hola {nombre},\n\n"
+                        f"Se te asignó un nuevo ticket de producción:\n\n"
+                        f"  Producto: {producto}\n"
+                        f"  Área: {area_legible}\n"
+                        f"  Pedido: {codigo_venta}\n\n"
+                        f"Ingresa al ERP para ver los detalles.\n\n"
+                        f"Innova Möbili — Taller"
+                    ),
+                    telefono=telefono,
+                )
+        except Exception as e_notif:
+            print(f"⚠️ No se pudo notificar la asignación del ticket {ticket_id}: {e_notif}")
+        # ───────────────────────────────────────────────────────────────────
+
         return jsonify({'exito': True, 'mensaje': 'Maestro asignado correctamente', 'estado': nuevo_estado}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
