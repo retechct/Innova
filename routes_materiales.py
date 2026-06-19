@@ -346,6 +346,69 @@ def buscar_maestro_por_modelo():
 # CREACIONES DE VENDEDORES (Módulo 5)
 # ==========================================
 
+@materiales_bp.route('/api/aprobacion/actualizar-foto', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def actualizar_foto_aprobacion():
+    """
+    Reemplaza la foto de un ítem PENDIENTE en el Gestor de Aprobación
+    (mueble / insumo / diseño de referencia) antes de aprobarlo o rechazarlo.
+
+    multipart/form-data:
+        tipo : 'mueble' | 'insumo' | 'diseno'
+        id   : id del registro (creaciones_vendedores / sugerencias_insumos / disenos_referencia)
+        foto : archivo de imagen (obligatorio)
+    """
+    import cloudinary.uploader
+    tipo    = (request.form.get('tipo') or '').strip()
+    item_id = request.form.get('id')
+
+    if tipo not in ('mueble', 'insumo', 'diseno'):
+        return jsonify({'error': "Tipo inválido. Usa 'mueble', 'insumo' o 'diseno'."}), 400
+    if not item_id:
+        return jsonify({'error': 'id es obligatorio.'}), 400
+    if 'foto' not in request.files or request.files['foto'].filename == '':
+        return jsonify({'error': 'No se recibió ninguna foto.'}), 400
+
+    try:
+        resultado = cloudinary.uploader.upload(request.files['foto'], folder='aprobaciones')
+        foto_url  = resultado.get('secure_url')
+
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        if tipo == 'mueble':
+            # creaciones_vendedores guarda sus fotos en fotos_creaciones (1 a N)
+            cursor.execute(
+                "SELECT id FROM fotos_creaciones WHERE creacion_id = %s ORDER BY id LIMIT 1;",
+                (item_id,)
+            )
+            existente = cursor.fetchone()
+            if existente:
+                cursor.execute("UPDATE fotos_creaciones SET foto_url = %s WHERE id = %s;", (foto_url, existente[0]))
+            else:
+                cursor.execute(
+                    "INSERT INTO fotos_creaciones (creacion_id, foto_url) VALUES (%s, %s);",
+                    (item_id, foto_url)
+                )
+
+        elif tipo == 'insumo':
+            cursor.execute("UPDATE sugerencias_insumos SET foto_ref = %s WHERE id = %s;", (foto_url, item_id))
+
+        elif tipo == 'diseno':
+            _ensure_disenos_referencia(cursor)
+            cursor.execute("UPDATE disenos_referencia SET foto_url = %s WHERE id = %s;", (foto_url, item_id))
+
+        conexion.commit()
+        return jsonify({'exito': True, 'foto_url': foto_url}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
 @materiales_bp.route('/api/creaciones', methods=['POST'])
 @requiere_login
 def guardar_creacion():

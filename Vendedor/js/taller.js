@@ -2671,6 +2671,42 @@ function filtrarPorProveedorTela(proveedor) {
 }
 
 /* ================================================================= */
+/* --- EDITAR FOTO DE UN ÍTEM PENDIENTE EN EL GESTOR DE APROBACIÓN --- */
+/* ================================================================= */
+function editarFotoAprobacion(tipo, id) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('tipo', tipo);
+        formData.append('id', id);
+        formData.append('foto', file);
+
+        try {
+            Swal.fire({ title: 'Subiendo foto...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const res  = await apiFetch(`${API_URL}/api/aprobacion/actualizar-foto`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.exito) {
+                Swal.fire({ title: '¡Foto actualizada!', icon: 'success', timer: 1200, showConfirmButton: false });
+                cargarGestorAprobacion();
+            } else {
+                Swal.fire('Error', data.error || 'No se pudo actualizar la foto.', 'error');
+            }
+        } catch(e) {
+            Swal.fire('Error', 'Error de conexión con el servidor.', 'error');
+        }
+    };
+    input.click();
+}
+
+/* ================================================================= */
 /* --- LÓGICA DE MESA DE CENTRO Y CONSOLA --- */
 /* ================================================================= */
 async function cargarGestorAprobacion() {
@@ -2717,7 +2753,15 @@ async function cargarGestorAprobacion() {
             htmlFinal += `
             <div class="card-produccion" style="position:relative; background: #ffffff; border: 1px solid #e2e8f0; border-radius:14px; padding:15px; display:flex; flex-direction:column; justify-content:space-between;">
                 <div class="badge-area" style="position:absolute; top:15px; left:15px; background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">MUEBLE: ${item.categoria}</div>
-                <img src="${item.foto_url.startsWith('http') ? item.foto_url : `${API_URL}/uploads/` + item.foto_url}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 12px;" onerror="this.src='imagenes/sin_foto.jpg'">
+                <div style="position:relative;">
+                    <img src="${item.foto_url.startsWith('http') ? item.foto_url : `${API_URL}/uploads/` + item.foto_url}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 12px;" onerror="this.src='imagenes/sin_foto.jpg'">
+                    <button onclick="editarFotoAprobacion('mueble', ${item.id})"
+                            title="Editar foto"
+                            style="position:absolute; bottom:20px; right:8px; background:rgba(15,23,42,0.85); color:white;
+                                   border:none; border-radius:7px; width:30px; height:30px; cursor:pointer; font-size:13px;">
+                        ✏️
+                    </button>
+                </div>
                 <h4 style="margin: 0 0 4px 0; color:#0f172a; font-size:14px;">${item.nombre}</h4>
                 <small style="color:gray; display:block; margin-bottom:8px;">Subido por: <b>${item.vendedor || 'Vendedor'}</b></small>
                 <div style="font-size: 11px; color: #64748b; margin-bottom: 15px; background: #f8fafc; padding: 8px; border-radius: 6px; line-height:1.4;">
@@ -2752,7 +2796,15 @@ async function cargarGestorAprobacion() {
             htmlFinal += `
             <div class="card-produccion" style="position:relative; background: #fffdf5; border: 1px dashed #d4af37; border-radius:14px; padding:15px; display:flex; flex-direction:column; justify-content:space-between;">
                 <div class="badge-template" style="position:absolute; top:15px; left:15px; background: #f59e0b; color:white;">📌 INSUMO: ${insumo.tipo.toUpperCase()}</div>
-                <img src="${insumo.foto_url}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 12px;" onerror="this.src='imagenes/sin_foto.jpg'">
+                <div style="position:relative;">
+                    <img src="${insumo.foto_url}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 12px;" onerror="this.src='imagenes/sin_foto.jpg'">
+                    <button onclick="editarFotoAprobacion('insumo', ${insumo.id})"
+                            title="Editar foto"
+                            style="position:absolute; bottom:20px; right:8px; background:rgba(15,23,42,0.85); color:white;
+                                   border:none; border-radius:7px; width:30px; height:30px; cursor:pointer; font-size:13px;">
+                        ✏️
+                    </button>
+                </div>
                 <h4 style="margin: 0 0 4px 0; color:#0f172a; font-size:14px;">${insumo.nombre}</h4>
                 <small style="color:gray; display:block; margin-bottom:8px;">Sugerido por: <b>${insumo.vendedor}</b></small>
                 <div style="font-size: 11px; color: #b45309; margin-bottom: 15px; background: #fffbeb; padding: 8px; border-radius: 6px; line-height:1.4; text-align:left;">
@@ -2783,7 +2835,15 @@ async function cargarGestorAprobacion() {
             htmlFinal += `
             <div class="card-produccion" style="position:relative; background: #fff8f8; border: 1px dashed #e60023; border-radius:14px; padding:15px; display:flex; flex-direction:column; justify-content:space-between;">
                 <div class="badge-template" style="position:absolute; top:15px; left:15px; background: #e60023; color:white; font-size:10px; padding:3px 8px; border-radius:20px; font-weight:700;">📌 DISEÑO: ${diseno.categoria.toUpperCase()}</div>
-                <img src="${diseno.foto_url}" style="width:100%; height:160px; object-fit:cover; border-radius:10px; margin-bottom:12px; margin-top:8px;" onerror="this.src='imagenes/sin_foto.jpg'">
+                <div style="position:relative;">
+                    <img src="${diseno.foto_url}" style="width:100%; height:160px; object-fit:cover; border-radius:10px; margin-bottom:12px; margin-top:8px;" onerror="this.src='imagenes/sin_foto.jpg'">
+                    <button onclick="editarFotoAprobacion('diseno', ${diseno.id})"
+                            title="Editar foto"
+                            style="position:absolute; bottom:20px; right:8px; background:rgba(15,23,42,0.85); color:white;
+                                   border:none; border-radius:7px; width:30px; height:30px; cursor:pointer; font-size:13px;">
+                        ✏️
+                    </button>
+                </div>
                 <h4 style="margin:0 0 2px 0; color:#0f172a; font-size:14px;">${diseno.nombre}</h4>
                 <small style="color:gray; display:block; margin-bottom:6px;">Subido por: <b>${diseno.vendedor || 'Vendedor'}</b> · ${diseno.fecha}</small>
                 ${pinterestBtn}
