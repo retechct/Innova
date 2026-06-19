@@ -15,7 +15,8 @@ usuarios_bp = Blueprint('usuarios', __name__)
 # ==========================================
 
 @usuarios_bp.route('/api/usuarios', methods=['GET'])
-@requiere_login
+# Sin @requiere_login: este endpoint alimenta el dropdown del formulario
+# de login (se llama antes de tener token). Solo devuelve id/nombre/rol.
 def obtener_usuarios():
     try:
         conexion = get_db_connection()

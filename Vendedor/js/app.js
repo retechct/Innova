@@ -1554,8 +1554,8 @@ function changeView(view) {
  */
 async function cargarDatosInicialesLogin() {
     try {
-        // 1. Cargar Sedes
-        const resSedes = await apiFetch(`${API_URL}/api/sedes`);
+        // 1. Cargar Sedes (fetch directo: se llama antes del login, sin token)
+        const resSedes = await fetch(`${API_URL}/api/sedes`);
         const sedes = await resSedes.json();
         const selectSede = document.getElementById('login-tienda');
         
@@ -1566,8 +1566,8 @@ async function cargarDatosInicialesLogin() {
             });
         }
 
-        // 2. Cargar Usuarios
-        const resUser = await apiFetch(`${API_URL}/api/usuarios`);
+        // 2. Cargar Usuarios (fetch directo: se llama antes del login, sin token)
+        const resUser = await fetch(`${API_URL}/api/usuarios`);
         const usuarios = await resUser.json();
         const selectUser = document.getElementById('login-usuario');
         if (selectUser) {
