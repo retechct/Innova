@@ -39,6 +39,20 @@ from models import db
 # ─── Carga de variables de entorno ───────────────────────────────────────────
 load_dotenv()
 
+# ─── Validación de secretos críticos ─────────────────────────────────────────
+# Si JWT_SECRET_KEY no está seteada en el entorno, la app NO debe arrancar.
+# Antes existía un valor por defecto hardcodeado y conocido (visible en el
+# repo) — eso permitía a cualquiera fabricar tokens válidos con rol Admin
+# si la variable de entorno faltaba en el servidor. Mejor fallar el deploy
+# de forma explícita que correr en producción con esa clave pública.
+_JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
+if not _JWT_SECRET_KEY:
+    raise RuntimeError(
+        "❌ Falta la variable de entorno JWT_SECRET_KEY. "
+        "Configúrala en Render (Settings → Environment) antes de arrancar la app. "
+        "Nunca uses un valor por defecto hardcodeado para esta clave."
+    )
+
 # ─── Cloudinary ──────────────────────────────────────────────────────────────
 cloudinary.config(
     cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
@@ -57,7 +71,7 @@ CORS(app, origins=[
 
 app.config['SQLALCHEMY_DATABASE_URI']        = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY']                 = os.getenv('JWT_SECRET_KEY', 'clave-secreta-de-innova-mobili')
+app.config['JWT_SECRET_KEY']                 = _JWT_SECRET_KEY
 app.config['JWT_ACCESS_TOKEN_EXPIRES']       = timedelta(hours=8)   # jornada laboral completa
 app.config['JWT_REFRESH_TOKEN_EXPIRES']      = timedelta(days=30)   # renovar sin re-login
 
