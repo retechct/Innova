@@ -563,30 +563,106 @@ async function cargarLogisticaExterna() {
                 </thead>
                 <tbody>`;
 
+        // ── Filtrado reactivo en memoria ────────────────────────────
+        const ESTADOS_PILLS = ['Todos','POR_PEDIR','Cotizado','Cotizacion Enviada','Confirmado','En Tránsito'];
+        let _filtroEstado = 'Todos';
+        let _filtroBusqueda = '';
+
+        const _aplicarFiltros = () => {
+            const filtrados = itemsActivos.filter(i => {
+                const matchEstado  = _filtroEstado === 'Todos' || i.estado === _filtroEstado;
+                const q = _filtroBusqueda.toLowerCase();
+                const matchTexto   = !q ||
+                    (i.codigo_venta || '').toLowerCase().includes(q) ||
+                    (i.insumo       || '').toLowerCase().includes(q) ||
+                    (i.proveedor    || '').toLowerCase().includes(q) ||
+                    (i.sku          || '').toLowerCase().includes(q);
+                return matchEstado && matchTexto;
+            });
+
+            // Re-renderiza solo la sección activos
+            const cont = document.getElementById('log-activos-body');
+            if (!cont) return;
+            if (filtrados.length === 0) {
+                cont.innerHTML = `<div style="text-align:center;padding:24px;color:#94a3b8;background:#f8fafc;border-radius:10px;">
+                    <i class="fa-solid fa-magnifying-glass" style="font-size:1.5rem;display:block;margin-bottom:8px;"></i>
+                    <span style="font-weight:700;">Sin resultados para ese filtro</span>
+                </div>`;
+                return;
+            }
+            if (esMobil) {
+                cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;">
+                    ${filtrados.map(i => _renderCardMobile(i, proveedores, esAdmin, coloresEstado)).join('')}
+                </div>`;
+            } else {
+                cont.innerHTML = `<div style="overflow-x:auto;">
+                    ${_tablaHeader(esAdmin)}
+                    ${filtrados.map((i,idx) => _renderFilaDesktop(i, idx, proveedores, esAdmin, coloresEstado, 'white')).join('')}
+                    </tbody></table></div>`;
+            }
+            // Actualizar contador pills
+            document.querySelectorAll('.log-pill').forEach(btn => {
+                const est = btn.dataset.estado;
+                const activo = est === _filtroEstado;
+                btn.style.background  = activo ? '#0f172a' : '#f1f5f9';
+                btn.style.color       = activo ? 'white'   : '#475569';
+                btn.style.fontWeight  = activo ? '800'     : '600';
+            });
+        };
+
+        window._logFiltrarEstado = (estado) => { _filtroEstado = estado; _aplicarFiltros(); };
+        window._logFiltrarTexto  = (q)      => { _filtroBusqueda = q;    _aplicarFiltros(); };
+
+        // Contar activos por estado para los pills
+        const cuentaEstado = {};
+        ESTADOS_PILLS.forEach(e => { cuentaEstado[e] = e === 'Todos' ? itemsActivos.length : itemsActivos.filter(i => i.estado === e).length; });
+
+        const pillsHTML = ESTADOS_PILLS
+            .filter(e => e === 'Todos' || cuentaEstado[e] > 0)
+            .map(e => `<button class="log-pill" data-estado="${e}"
+                onclick="_logFiltrarEstado('${e}')"
+                style="background:${e === 'Todos' ? '#0f172a' : '#f1f5f9'};
+                       color:${e === 'Todos' ? 'white' : '#475569'};
+                       border:none;border-radius:20px;padding:5px 13px;
+                       font-size:11px;font-weight:${e === 'Todos' ? '800' : '600'};
+                       cursor:pointer;white-space:nowrap;">
+                ${e === 'Todos' ? 'Todos' : e.replace(/_/g,' ')}
+                ${cuentaEstado[e] > 0 ? `<span style="background:rgba(255,255,255,.25);border-radius:10px;padding:1px 6px;margin-left:4px;">${cuentaEstado[e]}</span>` : ''}
+            </button>`).join('');
+
         let html = `
-        <div style="display:flex;justify-content:space-between;margin-bottom:15px;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px;">
             <h3 style="margin:0;font-size:16px;">Requerimientos</h3>
             <button onclick="abrirModalLote()" style="background:#25D366;color:white;border:none;padding:8px 12px;border-radius:6px;font-weight:bold;cursor:pointer;">
                 <i class="fa-solid fa-list-check"></i> Cotizar por lote
             </button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            ${pillsHTML}
+            <input oninput="_logFiltrarTexto(this.value)" placeholder="🔍 Pedido, insumo o proveedor…"
+                style="margin-left:auto;border:1.5px solid #e2e8f0;border-radius:20px;
+                       padding:5px 14px;font-size:12px;outline:none;min-width:200px;max-width:260px;"
+                onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
         </div>`;
 
         // ── Sección 1: Activos (requieren atención) ───────────────
+        html += `<div id="log-activos-body" style="margin-bottom:24px;">`;
         if (itemsActivos.length === 0) {
-            html += `<div style="text-align:center;padding:24px;color:#94a3b8;background:#f8fafc;border-radius:10px;margin-bottom:20px;">
+            html += `<div style="text-align:center;padding:24px;color:#94a3b8;background:#f8fafc;border-radius:10px;">
                 <i class="fa-solid fa-circle-check" style="font-size:1.8rem;color:#86efac;display:block;margin-bottom:8px;"></i>
                 <span style="font-weight:700;">Sin requerimientos pendientes</span>
             </div>`;
         } else if (esMobil) {
-            html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;margin-bottom:24px;">`;
+            html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;">`;
             itemsActivos.forEach(item => { html += _renderCardMobile(item, proveedores, esAdmin, coloresEstado); });
             html += `</div>`;
         } else {
-            html += `<div style="overflow-x:auto;margin-bottom:24px;">`;
+            html += `<div style="overflow-x:auto;">`;
             html += _tablaHeader(esAdmin);
             itemsActivos.forEach((item, idx) => { html += _renderFilaDesktop(item, idx, proveedores, esAdmin, coloresEstado, 'white'); });
             html += `</tbody></table></div>`;
         }
+        html += `</div>`;
 
         // ── Sección 2: Completados (colapsable) ───────────────────
         if (itemsCompletados.length > 0) {

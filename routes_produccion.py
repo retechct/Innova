@@ -1397,6 +1397,43 @@ def asignar_operario_logistica(id):
             WHERE id = %s
         """, (operario_id, id))
         conexion.commit()
+
+        # ── NOTIFICACIÓN: avisar al operario que tiene un recojo asignado ──
+        # No tumba la respuesta si falla — la asignación ya quedó guardada.
+        try:
+            cursor.execute("""
+                SELECT u.nombre, u.email, u.telefono,
+                       le.insumo, le.sku, v.codigo_venta, c.nombre AS proveedor
+                FROM logistica_externa le
+                JOIN usuarios u         ON u.id            = le.operario_id
+                LEFT JOIN items_venta i ON le.item_id      = i.id
+                LEFT JOIN ventas v      ON i.venta_id      = v.id
+                LEFT JOIN proveedores c ON le.proveedor_id = c.id
+                WHERE le.id = %s
+            """, (id,))
+            info = cursor.fetchone()
+            if info:
+                nombre, email, telefono, insumo, sku, codigo_venta, proveedor = info
+                notificar_usuario(
+                    destinatario_email=email,
+                    nombre_destinatario=nombre,
+                    asunto=f"Nuevo recojo asignado — {codigo_venta or 'Logística'}",
+                    mensaje=(
+                        f"Hola {nombre},\n\n"
+                        f"Se te asignó un recojo de material externo:\n\n"
+                        f"  Insumo:    {insumo or '—'}\n"
+                        f"  SKU:       {sku or '—'}\n"
+                        f"  Proveedor: {proveedor or '—'}\n"
+                        f"  Pedido:    {codigo_venta or '—'}\n\n"
+                        f"Ingresa al ERP para ver los detalles y confirmar el recojo.\n\n"
+                        f"Innova Möbili — Taller"
+                    ),
+                    telefono=telefono,
+                )
+        except Exception as e_notif:
+            print(f"⚠️ No se pudo notificar la asignación logística {id}: {e_notif}")
+        # ────────────────────────────────────────────────────────────────────
+
         return jsonify({'exito': True}), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
