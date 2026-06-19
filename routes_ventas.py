@@ -688,6 +688,24 @@ def _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado_venta):
               AND estado_ticket NOT IN ('Recogido', 'Cancelado')
         """, (venta_id,))
 
+    # ── PUENTE LOGÍSTICA EXTERNA ──────────────────────────────────────────
+    # Si el pedido ya se Despachó/Entregó, el material que se pidió a
+    # proveedores externos (tela, madera, etc.) para ESE pedido ya tuvo
+    # que haber sido recibido y usado — de lo contrario el mueble no se
+    # podría haber fabricado. Sin este cierre, la fila se queda "colgada"
+    # en estados intermedios (Pendiente, Cotizado, Pagado, Orden Enviada...)
+    # aunque el producto físico ya salió del taller.
+    # No se tocan filas ya 'Cancelado' o 'Rechazado'.
+    cursor.execute("""
+        UPDATE logistica_externa
+        SET estado = 'Recibido',
+            estado_distribucion = COALESCE(estado_distribucion, 'Distribuido'),
+            fecha_recojo_fisico = COALESCE(fecha_recojo_fisico, CURRENT_TIMESTAMP)
+        WHERE venta_id = %s
+          AND estado NOT IN ('Recibido', 'Cancelado', 'Rechazado')
+    """, (venta_id,))
+    # ───────────────────────────────────────────────────────────────────────
+
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])
 @requiere_login
