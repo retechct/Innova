@@ -63,8 +63,8 @@ function apiFetch(url, options = {}) {
 async function init() {
     try {
         const [catRes, matRes] = await Promise.all([
-            apiFetch(`${API_URL}/api/catalogo`),
-            apiFetch(`${API_URL}/api/materiales/listas`)
+            fetch(`${API_URL}/api/catalogo`),
+            fetch(`${API_URL}/api/materiales/listas`)
         ]);
         
         allProducts = await catRes.json();

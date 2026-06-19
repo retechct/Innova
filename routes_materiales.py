@@ -153,7 +153,6 @@ def agregar_nuevo_material():
 
 
 @materiales_bp.route('/api/materiales/listas', methods=['GET'])
-@requiere_login
 def obtener_listas_materiales():
     """
     B3: Devuelve 'id' en todos los registros (necesario para actualizarEstadoInsumo).
