@@ -1605,6 +1605,7 @@ function changeView(view) {
     // ── Mostrar la vista seleccionada ──
     if (view === 'stock' || view === 'catalogo') {
         mostrar('view-productos');
+        if (typeof _catPagina !== 'undefined') _catPagina = 1;
         renderGrid();
     }
     else if (view === 'contrato') {

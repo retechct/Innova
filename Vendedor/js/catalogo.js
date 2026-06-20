@@ -6,6 +6,9 @@
 //   · Si es Stock: Cambia radicalmente la vista, organiza por Sedes
 //     y divide entre "Productos Enteros" y "Piezas Físicas"
 // ─────────────────────────────────────────────────────────────────────────────
+let _catPagina = 1;
+const _catItemsPorPagina = 16;
+
 function renderGrid() {
     const grid = document.getElementById('product-grid');
 
@@ -15,7 +18,7 @@ function renderGrid() {
     }
 
     // --- MODO CATÁLOGO ---
-    grid.style.display = 'grid'; // restaurar display a grid
+    grid.style.display = 'block'; // ahora controla su propio layout (grid interno + paginación)
     let filtered = allProducts.filter(p => p.en_stock === false && p.es_plantilla === false);
 
     if (filtered.length === 0) {
@@ -23,7 +26,14 @@ function renderGrid() {
         return;
     }
 
-    grid.innerHTML = filtered.map(p => {
+    const totalPaginas = Math.ceil(filtered.length / _catItemsPorPagina) || 1;
+    if (_catPagina > totalPaginas) _catPagina = totalPaginas;
+
+    const inicio = (_catPagina - 1) * _catItemsPorPagina;
+    const paginaActual = filtered.slice(inicio, inicio + _catItemsPorPagina);
+
+    let html = `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px;">`;
+    html += paginaActual.map(p => {
         return `
         <div class="card" style="position:relative;">
             <img src="${p.foto}" onerror="this.src='imagenes/sin_foto.jpg'">
@@ -40,7 +50,37 @@ function renderGrid() {
             </div>
         </div>`;
     }).join('');
+    html += `</div>`;
+
+    if (totalPaginas > 1) {
+        let pagButtons = '';
+        for (let i = 1; i <= totalPaginas; i++) {
+            if (i === 1 || i === totalPaginas || (i >= _catPagina - 1 && i <= _catPagina + 1)) {
+                pagButtons += `<button onclick="_cambiarPaginaCatalogo(${i})" style="padding: 6px 12px; margin: 0 3px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; background: ${_catPagina === i ? '#0f172a' : 'white'}; color: ${_catPagina === i ? 'white' : '#475569'}; font-weight: bold; transition: all 0.2s;">${i}</button>`;
+            } else if (i === _catPagina - 2 || i === _catPagina + 2) {
+                pagButtons += `<span style="color: #cbd5e1; padding: 0 5px;">...</span>`;
+            }
+        }
+        html += `
+        <div style="display: flex; justify-content: center; align-items: center; margin-top: 20px; padding-bottom: 30px;">
+            <button onclick="_cambiarPaginaCatalogo(${_catPagina - 1})" ${_catPagina === 1 ? 'disabled' : ''} style="padding: 6px 12px; margin: 0 3px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: ${_catPagina === 1 ? 'not-allowed' : 'pointer'}; background: white; color: ${_catPagina === 1 ? '#cbd5e1' : '#475569'}; font-weight: bold; transition: all 0.2s;">&laquo; Ant</button>
+            ${pagButtons}
+            <button onclick="_cambiarPaginaCatalogo(${_catPagina + 1})" ${_catPagina === totalPaginas ? 'disabled' : ''} style="padding: 6px 12px; margin: 0 3px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: ${_catPagina === totalPaginas ? 'not-allowed' : 'pointer'}; background: white; color: ${_catPagina === totalPaginas ? '#cbd5e1' : '#475569'}; font-weight: bold; transition: all 0.2s;">Sig &raquo;</button>
+        </div>`;
+    }
+
+    grid.innerHTML = html;
 }
+
+window._cambiarPaginaCatalogo = function(pag) {
+    _catPagina = pag;
+    renderGrid();
+    const grid = document.getElementById('product-grid');
+    if (grid) {
+        const y = grid.getBoundingClientRect().top + window.scrollY - 80;
+        window.scrollTo({top: y, behavior: 'smooth'});
+    }
+};
 
 let _stkItemsAplanados = [];
 let _stockTiendasSedes = [];

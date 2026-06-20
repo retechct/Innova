@@ -3416,13 +3416,13 @@ def listar_stock_estructuras():
         cursor.execute(f"""
             SELECT id, nombre_modelo, ancho, profundidad, alto,
                    medida_estandar, foto_url, tipo, cantidad, estado,
-                   ticket_id, TO_CHAR(fecha_registro,'DD/MM/YYYY'), COALESCE(precio, 0),
+                   ticket_id, TO_CHAR(fecha_registro AT TIME ZONE 'America/Lima','DD/MM/YYYY'), COALESCE(precio, 0),
                    COALESCE(modelo_base, ''), COALESCE(chofer_nombre, ''),
                    COALESCE(tipo_base, ''),
                    COALESCE(medida_base::numeric, 0),
                    COALESCE(medida_base_estandar, FALSE),
                    COALESCE(pagado, FALSE),
-                   TO_CHAR(fecha_entrega_chofer, 'DD/MM/YYYY HH24:MI'),
+                   TO_CHAR(fecha_entrega_chofer AT TIME ZONE 'America/Lima', 'DD/MM/YYYY HH24:MI'),
                    COALESCE(carpintero_nombre, ''),
                    COALESCE(es_antiguo, FALSE),
                    medida_brazo,
@@ -3516,8 +3516,8 @@ def exportar_stock_estructuras_excel():
                    ancho, profundidad, alto, medida_brazo,
                    COALESCE(precio, 0), COALESCE(carpintero_nombre, ''),
                    COALESCE(chofer_nombre, ''), COALESCE(pagado, FALSE),
-                   TO_CHAR(fecha_registro, 'DD/MM/YYYY'),
-                   TO_CHAR(fecha_entrega_chofer, 'DD/MM/YYYY HH24:MI'),
+                   TO_CHAR(fecha_registro AT TIME ZONE 'America/Lima', 'DD/MM/YYYY'),
+                   TO_CHAR(fecha_entrega_chofer AT TIME ZONE 'America/Lima', 'DD/MM/YYYY HH24:MI'),
                    COALESCE(es_antiguo, FALSE)
             FROM stock_estructuras_sofa
             {where_sql}
@@ -3536,15 +3536,18 @@ def exportar_stock_estructuras_excel():
         border      = Border(left=thin, right=thin, top=thin, bottom=thin)
         fill_par    = PatternFill("solid", fgColor="F8FAFC")
         fill_impar  = PatternFill("solid", fgColor="FFFFFF")
+        fill_entregado_si = PatternFill("solid", fgColor="DCFCE7")  # verde clarito
+        fill_entregado_no  = PatternFill("solid", fgColor="FEF3C7")  # ambar clarito
 
         headers = [
             "Modelo", "Tipo", "Cantidad", "Estado",
+            "Antiguo", "Entregado",
             "Modelo Base", "Tipo Base",
             "Ancho", "Profundidad", "Alto", "Medida Brazo",
             "Precio (S/)", "Carpintero", "Chofer", "Pagado",
             "Fecha Registro", "Fecha Entrega Chofer"
         ]
-        anchos = [22, 14, 10, 16, 18, 14, 10, 12, 10, 13, 12, 22, 20, 10, 14, 20]
+        anchos = [22, 14, 10, 16, 10, 12, 18, 14, 10, 12, 10, 13, 12, 22, 20, 10, 14, 20]
 
         def _llenar_hoja(ws, datos):
             for col, h in enumerate(headers, 1):
@@ -3555,8 +3558,11 @@ def exportar_stock_estructuras_excel():
                 ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = ancho
             for row_num, f in enumerate(datos, 2):
                 fill = fill_par if row_num % 2 == 0 else fill_impar
+                entregado = (f[3] or '').strip().lower() == 'entregado'
                 valores = [
                     f[0], f[1], f[2], f[3],
+                    'Sí' if f[16] else 'No',
+                    'Sí' if entregado else 'No',
                     f[4], f[5],
                     float(f[6] or 0), float(f[7] or 0), float(f[8] or 0),
                     float(f[9]) if f[9] is not None else '',
@@ -3566,8 +3572,12 @@ def exportar_stock_estructuras_excel():
                 ]
                 for col, val in enumerate(valores, 1):
                     cell = ws.cell(row=row_num, column=col, value=val)
-                    cell.fill = fill; cell.border = border
+                    cell.border = border
                     cell.alignment = Alignment(vertical="center", wrap_text=True)
+                    if col == 6:  # columna "Entregado" resaltada
+                        cell.fill = fill_entregado_si if entregado else fill_entregado_no
+                    else:
+                        cell.fill = fill
             ws.freeze_panes = "A2"
 
         ws_nuevas = wb.active
