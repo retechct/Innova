@@ -9,7 +9,9 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 import cloudinary.uploader
-from flask import Blueprint, jsonify, request
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from flask import Blueprint, jsonify, request, send_file
 from database import get_db_connection, release_db_connection, limpiar_foto, notificar_usuario
 from auth_middleware import requiere_login, requiere_rol
 
@@ -3459,6 +3461,131 @@ def listar_stock_estructuras():
             'foto_entrega_url': r[28] or '',
             'comentario_entrega': r[29] or '',
         } for r in rows]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/stock-estructuras/exportar', methods=['GET'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def exportar_stock_estructuras_excel():
+    """
+    Descarga un Excel con dos hojas separadas: 'Estructuras Nuevas' y
+    'Estructuras Antiguas' (campo es_antiguo), usando los mismos filtros
+    opcionales que el listado normal (desde, hasta, carpintero, pago).
+    """
+    desde       = (request.args.get('desde') or '').strip()
+    hasta       = (request.args.get('hasta') or '').strip()
+    carpintero  = (request.args.get('carpintero') or '').strip()
+    estado_pago = (request.args.get('pago') or '').strip()
+
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+
+        cursor.execute("""
+            ALTER TABLE stock_estructuras_sofa
+                ADD COLUMN IF NOT EXISTS pagado            BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS fecha_entrega_chofer TIMESTAMP,
+                ADD COLUMN IF NOT EXISTS carpintero_nombre VARCHAR(150),
+                ADD COLUMN IF NOT EXISTS es_antiguo        BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS medida_brazo      NUMERIC(8,2);
+        """)
+        conexion.commit()
+
+        conditions, params = [], []
+        if desde:
+            conditions.append("fecha_registro::date >= %s"); params.append(desde)
+        if hasta:
+            conditions.append("fecha_registro::date <= %s"); params.append(hasta)
+        if carpintero:
+            conditions.append("COALESCE(carpintero_nombre,'') ILIKE %s")
+            params.append(f'%{carpintero}%')
+        if estado_pago == 'pagado':
+            conditions.append("COALESCE(pagado, FALSE) = TRUE")
+        elif estado_pago == 'pendiente':
+            conditions.append("COALESCE(pagado, FALSE) = FALSE")
+
+        where_sql = ('WHERE ' + ' AND '.join(conditions)) if conditions else ''
+
+        cursor.execute(f"""
+            SELECT nombre_modelo, tipo, cantidad, estado,
+                   COALESCE(modelo_base, ''), COALESCE(tipo_base, ''),
+                   ancho, profundidad, alto, medida_brazo,
+                   COALESCE(precio, 0), COALESCE(carpintero_nombre, ''),
+                   COALESCE(chofer_nombre, ''), COALESCE(pagado, FALSE),
+                   TO_CHAR(fecha_registro, 'DD/MM/YYYY'),
+                   TO_CHAR(fecha_entrega_chofer, 'DD/MM/YYYY HH24:MI'),
+                   COALESCE(es_antiguo, FALSE)
+            FROM stock_estructuras_sofa
+            {where_sql}
+            ORDER BY COALESCE(es_antiguo, FALSE) ASC, fecha_registro DESC
+        """, params)
+        filas = cursor.fetchall()
+
+        nuevas   = [f for f in filas if not f[16]]
+        antiguas = [f for f in filas if f[16]]
+
+        wb = openpyxl.Workbook()
+        header_font = Font(bold=True, color="FFFFFF", size=10)
+        header_fill = PatternFill("solid", fgColor="0F172A")
+        center      = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin        = Side(style="thin", color="CBD5E0")
+        border      = Border(left=thin, right=thin, top=thin, bottom=thin)
+        fill_par    = PatternFill("solid", fgColor="F8FAFC")
+        fill_impar  = PatternFill("solid", fgColor="FFFFFF")
+
+        headers = [
+            "Modelo", "Tipo", "Cantidad", "Estado",
+            "Modelo Base", "Tipo Base",
+            "Ancho", "Profundidad", "Alto", "Medida Brazo",
+            "Precio (S/)", "Carpintero", "Chofer", "Pagado",
+            "Fecha Registro", "Fecha Entrega Chofer"
+        ]
+        anchos = [22, 14, 10, 16, 18, 14, 10, 12, 10, 13, 12, 22, 20, 10, 14, 20]
+
+        def _llenar_hoja(ws, datos):
+            for col, h in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=h)
+                cell.font = header_font; cell.fill = header_fill
+                cell.alignment = center; cell.border = border
+            for col, ancho in enumerate(anchos, 1):
+                ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = ancho
+            for row_num, f in enumerate(datos, 2):
+                fill = fill_par if row_num % 2 == 0 else fill_impar
+                valores = [
+                    f[0], f[1], f[2], f[3],
+                    f[4], f[5],
+                    float(f[6] or 0), float(f[7] or 0), float(f[8] or 0),
+                    float(f[9]) if f[9] is not None else '',
+                    float(f[10] or 0), f[11], f[12],
+                    'Sí' if f[13] else 'No',
+                    f[14] or '', f[15] or ''
+                ]
+                for col, val in enumerate(valores, 1):
+                    cell = ws.cell(row=row_num, column=col, value=val)
+                    cell.fill = fill; cell.border = border
+                    cell.alignment = Alignment(vertical="center", wrap_text=True)
+            ws.freeze_panes = "A2"
+
+        ws_nuevas = wb.active
+        ws_nuevas.title = "Estructuras Nuevas"
+        _llenar_hoja(ws_nuevas, nuevas)
+
+        ws_antiguas = wb.create_sheet("Estructuras Antiguas")
+        _llenar_hoja(ws_antiguas, antiguas)
+
+        buffer = BytesIO()
+        wb.save(buffer); buffer.seek(0)
+        fecha_hoy = datetime.now().strftime('%Y%m%d_%H%M')
+        return send_file(
+            buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'estructuras_innova_{fecha_hoy}.xlsx'
+        )
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:

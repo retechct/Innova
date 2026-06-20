@@ -41,6 +41,47 @@ function egresosTab(tab) {
     if (tab === 'logistica')         cargarLogistica();
 }
 
+async function descargarExcelEstructuras() {
+    const filtroEstado     = document.getElementById('eg-pc-estado')?.value    || '';
+    const filtroCarpintero = document.getElementById('eg-pc-carpintero')?.value || '';
+    const filtroDesde      = document.getElementById('eg-pc-desde')?.value      || '';
+    const filtroHasta      = document.getElementById('eg-pc-hasta')?.value      || '';
+
+    const btn = document.getElementById('eg-btn-exportar-excel');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...'; }
+
+    try {
+        let url = `${API_URL}/api/stock-estructuras/exportar`;
+        const params = [];
+        if (filtroDesde)      params.push(`desde=${filtroDesde}`);
+        if (filtroHasta)      params.push(`hasta=${filtroHasta}`);
+        if (filtroCarpintero) params.push(`carpintero=${encodeURIComponent(filtroCarpintero)}`);
+        if (filtroEstado === 'pagado')    params.push('pago=pagado');
+        if (filtroEstado === 'pendiente') params.push('pago=pendiente');
+        if (params.length) url += '?' + params.join('&');
+
+        const res = await apiFetch(url);
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || 'No se pudo generar el Excel');
+        }
+
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        const objectUrl = URL.createObjectURL(blob);
+        a.href = objectUrl;
+        a.download = `estructuras_innova_${new Date().toISOString().slice(0,10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+        Swal.fire('Error', e.message || 'Fallo al generar el Excel', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-file-excel"></i> Descargar Excel'; }
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  PESTAÑA 1 — PAGOS DE ESTRUCTURAS
 //  Correcciones vs versión anterior:
