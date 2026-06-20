@@ -918,6 +918,37 @@ async function enviarSugerencia() {
     }
 }
 
+async function cerrarSesionesTodas() {
+    const confirmacion = await Swal.fire({
+        title: '¿Cerrar sesión a todos?',
+        html: 'Esto desconectará a <b>todos los usuarios</b> en todos los dispositivos ' +
+              '(incluyéndote a ti). Es útil cuando hay sesiones colgadas con "sesión expirada".',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, cerrar a todos',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc2626'
+    });
+    if (!confirmacion.isConfirmed) return;
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/usuarios/cerrar-sesiones-todas`, { method: 'POST' });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'No se pudo completar la acción');
+
+        await Swal.fire('Listo', data.mensaje || 'Se cerraron todas las sesiones.', 'success');
+
+        // También cerramos la sesión propia de inmediato, ya que el corte la incluye a ella también.
+        localStorage.removeItem('innova_token');
+        localStorage.removeItem('innova_refresh_token');
+        localStorage.removeItem('usuarioInnova');
+        location.reload();
+    } catch (e) {
+        Swal.fire('Error', e.message || 'Fallo de conexión', 'error');
+    }
+}
+
 /* ================================================================= */
 /* --- GESTIÓN DE PERSONAL (ADMIN) --- */
 /* ================================================================= */

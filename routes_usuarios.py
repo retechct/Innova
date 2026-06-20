@@ -5,7 +5,7 @@ Blueprint: usuarios_bp  (sin prefijo de URL)
 
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection
-from auth_middleware import generar_token, requiere_login, requiere_rol
+from auth_middleware import generar_token, requiere_login, requiere_rol, forzar_logout_global
 
 usuarios_bp = Blueprint('usuarios', __name__)
 
@@ -301,6 +301,29 @@ def crear_proveedor():
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+
+@usuarios_bp.route('/api/usuarios/cerrar-sesiones-todas', methods=['POST'])
+@requiere_rol('Admin')
+def cerrar_sesiones_todas():
+    """
+    Invalida de inmediato TODOS los tokens JWT emitidos hasta este momento,
+    para cualquier usuario en cualquier dispositivo. Útil cuando hay
+    sesiones colgadas mostrando 'sesión expirada' y la gente no puede
+    volver a entrar con normalidad.
+
+    No requiere que el usuario haga nada: en su siguiente acción dentro
+    del sistema recibirá un 401 y el frontend lo mandará al login solo.
+    """
+    try:
+        forzar_logout_global()
+        return jsonify({
+            'exito': True,
+            'mensaje': 'Se cerraron las sesiones de todos los usuarios. '
+                       'En su próxima acción serán enviados al login automáticamente.'
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 # ==========================================
 # LOGIN POR EMAIL + PIN (nuevo landing)
