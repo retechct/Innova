@@ -2,24 +2,40 @@
 // A3: Maneja FormData correctamente (no sobreescribe Content-Type)
 // FIX-1: Token en localStorage para que persista al recargar la página.
 // FIX-JWT: Intercepta 401 → intenta refresh automático → si falla, avisa.
-let _refreshEnCurso = false;   // evita bucles si el refresh también da 401
+// FIX-PARALLEL: _promesaRefresh evita que requests paralelos hagan múltiples
+//   refreshes simultáneos. Con _refreshEnCurso (bool), el 2° request veía
+//   true y caía al modal de logout sin intentar refresh. Con la promesa
+//   compartida, todos esperan el mismo resultado.
+let _promesaRefresh = null;   // promesa compartida para refreshes paralelos
+let _swalSesionMostrado = false; // evita mostrar el modal de sesión expirada más de una vez
 
 async function _intentarRefresh() {
     const refreshToken = localStorage.getItem('innova_refresh_token');
     if (!refreshToken) return false;
-    try {
-        const res = await fetch(`${API_URL}/api/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${refreshToken}` }
-        });
-        if (!res.ok) return false;
-        const data = await res.json();
-        if (data.access) {
-            localStorage.setItem('innova_token', data.access);
-            return true;
-        }
-    } catch(e) {}
-    return false;
+
+    // Si ya hay un refresh en curso, todos los requests paralelos esperan
+    // al mismo resultado en vez de lanzar llamadas duplicadas al backend.
+    if (_promesaRefresh) return _promesaRefresh;
+
+    _promesaRefresh = (async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${refreshToken}` }
+            });
+            if (!res.ok) return false;
+            const data = await res.json();
+            if (data.access) {
+                localStorage.setItem('innova_token', data.access);
+                return true;
+            }
+        } catch(e) {}
+        return false;
+    })();
+
+    const resultado = await _promesaRefresh;
+    _promesaRefresh = null;   // limpiar para el próximo ciclo
+    return resultado;
 }
 
 function apiFetch(url, options = {}) {
@@ -36,25 +52,29 @@ function apiFetch(url, options = {}) {
     });
 
     return fetchConToken(token).then(async res => {
-        if (res.status !== 401 || _refreshEnCurso) return res;
+        if (res.status !== 401) return res;
 
-        _refreshEnCurso = true;
         const renovado = await _intentarRefresh();
-        _refreshEnCurso = false;
-
         if (renovado) {
             return fetchConToken(localStorage.getItem('innova_token'));
         }
 
-        // Refresh fallido → sesión expirada, forzar re-login
+        // Refresh fallido → sesión expirada, forzar re-login.
+        // FIX: si varios requests fallan a la vez, mostrar el Swal solo una vez.
         localStorage.removeItem('innova_token');
         localStorage.removeItem('innova_refresh_token');
-        Swal.fire({
-            background: '#14100a', color: '#f5f0e8', icon: 'warning',
-            title: 'Sesión expirada',
-            text: 'Tu sesión ha caducado. Por favor vuelve a iniciar sesión.',
-            confirmButtonColor: '#c9a84c', confirmButtonText: 'Entendido'
-        }).then(() => location.reload());
+        if (!_swalSesionMostrado) {
+            _swalSesionMostrado = true;
+            Swal.fire({
+                background: '#14100a', color: '#f5f0e8', icon: 'warning',
+                title: 'Sesión expirada',
+                text: 'Tu sesión ha caducado. Por favor vuelve a iniciar sesión.',
+                confirmButtonColor: '#c9a84c', confirmButtonText: 'Entendido'
+            }).then(() => {
+                _swalSesionMostrado = false;
+                location.reload();
+            });
+        }
 
         return res;
     });

@@ -53,6 +53,11 @@ _cache_corte_ts     = 0      # último valor de corte leído de la BD
 _cache_leido_en     = 0      # timestamp (time.time()) de la última lectura
 _CACHE_TTL_SEGUNDOS = 5
 
+# FIX-RENDER: El servidor en Render puede reiniciarse y encontrar un timestamp
+# histórico en sistema_config de un "forzar logout" antiguo. Si ese corte tiene
+# más de 24h, lo ignoramos — ya no tiene sentido invalidar tokens tan viejos.
+_CORTE_MAX_ANTIGUEDAD_SEGUNDOS = 24 * 3600
+
 
 def _asegurar_tabla_config(cursor):
     cursor.execute("""
@@ -121,10 +126,25 @@ def forzar_logout_global():
 
 
 def _token_invalidado_por_corte_global() -> bool:
-    """True si el JWT actual fue emitido antes del último corte global."""
+    """
+    True si el JWT actual fue emitido antes del último corte global.
+
+    FIX-RENDER: Si el corte tiene más de 24h lo ignoramos. Render reinicia
+    el servidor periódicamente y al arrancar puede encontrar un timestamp
+    histórico en sistema_config (de un logout que ya nadie recuerda) que
+    invalida a TODOS los usuarios. Con este límite de antigüedad, el
+    "cerrar sesión a todos" solo tiene efecto durante las primeras 24h;
+    pasado ese tiempo los usuarios pueden volver a iniciar sesión con
+    normalidad aunque el registro siga en la BD.
+    """
     corte = _obtener_corte_global()
     if corte <= 0:
         return False
+
+    # Ignorar cortes históricos de más de 24h
+    if time.time() - corte > _CORTE_MAX_ANTIGUEDAD_SEGUNDOS:
+        return False
+
     claims = get_jwt()
     iat = claims.get('iat', 0)
     return iat < corte
