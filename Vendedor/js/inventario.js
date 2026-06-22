@@ -1284,7 +1284,7 @@ function _bindInvEventos() {
 /* ─── Imprimir Etiqueta de Código de Barras ─────────────────── */
 function imprimirEtiqueta(codigo, nombre, sede) {
     function _renderEtiqueta() {
-        const win = window.open('', '_blank', 'width=420,height=400');
+        const win = window.open('', '_blank', 'width=420,height=480');
         win.document.write(`<!DOCTYPE html>
 <html>
 <head>
@@ -1295,7 +1295,7 @@ function imprimirEtiqueta(codigo, nombre, sede) {
         body {
             font-family: 'Arial', sans-serif;
             display: flex; align-items: center; justify-content: center;
-            flex-direction: column; min-height: 100vh; background: #fff;
+            flex-direction: column; min-height: 100vh; background: #f8fafc;
             gap: 16px; padding: 20px;
         }
         .etiqueta {
@@ -1304,6 +1304,7 @@ function imprimirEtiqueta(codigo, nombre, sede) {
             padding: 16px 20px;
             width: 320px;
             text-align: center;
+            background: #fff;
         }
         .marca { font-size: 9px; letter-spacing: 0.35em; text-transform: uppercase; color: #c9a84c; margin-bottom: 4px; }
         .nombre { font-size: 13px; font-weight: 700; color: #1e140a; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1312,16 +1313,20 @@ function imprimirEtiqueta(codigo, nombre, sede) {
         .codigo-texto { font-size: 12px; font-weight: 900; color: #1e140a; letter-spacing: 0.15em; margin-top: 6px; }
         .btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 320px; }
         .btn-niimbot {
-            background: #c9a84c; color: #1e140a; border: none; padding: 10px 20px;
-            border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 800;
+            background: #c9a84c; color: #1e140a; border: none; padding: 12px 20px;
+            border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 800;
             flex: 1; min-width: 140px;
         }
         .btn-normal {
-            background: #1e140a; color: white; border: none; padding: 10px 20px;
+            background: #1e140a; color: white; border: none; padding: 12px 20px;
             border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700;
             flex: 1; min-width: 140px;
         }
-        .aviso { font-size: 11px; color: #8a7560; text-align: center; width: 320px; }
+        .aviso {
+            font-size: 12px; color: #15803d; text-align: center; width: 320px;
+            background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;
+            padding: 10px 14px; display: none;
+        }
         @media print {
             body { background: white; }
             .no-print { display: none !important; }
@@ -1339,14 +1344,14 @@ function imprimirEtiqueta(codigo, nombre, sede) {
     </div>
 
     <div class="btns no-print">
-        <button class="btn-niimbot" onclick="imprimirNiimbot()">
-            📲 Abrir en Niimbot
+        <button class="btn-niimbot" onclick="descargarParaNiimbot()">
+            📥 Descargar para Niimbot
         </button>
         <button class="btn-normal" onclick="window.print()">
             🖨️ Imprimir normal
         </button>
     </div>
-    <div class="aviso no-print" id="aviso-niimbot" style="display:none;"></div>
+    <div class="aviso no-print" id="aviso-descarga"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <script>
@@ -1354,89 +1359,69 @@ function imprimirEtiqueta(codigo, nombre, sede) {
             JsBarcode("#barcode", "${codigo}", {
                 format: "CODE128", width: 2, height: 60, displayValue: false, margin: 4
             });
-            // También renderizar en canvas para exportar como imagen
             const canvas = document.getElementById('barcode-canvas');
             JsBarcode(canvas, "${codigo}", {
                 format: "CODE128", width: 2, height: 60, displayValue: false, margin: 4
             });
         };
 
-        function imprimirNiimbot() {
-            // 1. Convertir la etiqueta completa a imagen via canvas
-            const svg    = document.getElementById('barcode');
+        function _generarPNG() {
             const canvas = document.createElement('canvas');
-            canvas.width  = 320;
-            canvas.height = 160;
+            // Dimensiones optimizadas para etiqueta Niimbot B21 (50mm x 30mm ~= 590x354px a 300dpi)
+            canvas.width  = 590;
+            canvas.height = 354;
             const ctx = canvas.getContext('2d');
 
-            // Fondo blanco
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Texto marca
-            ctx.fillStyle = '#c9a84c';
-            ctx.font = '9px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('INNOVA MÖBILI', 160, 18);
+            // Borde
+            ctx.strokeStyle = '#1e140a';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
 
-            // Nombre producto
+            ctx.textAlign = 'center';
+
+            // Marca
+            ctx.fillStyle = '#c9a84c';
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText('INNOVA MÖBILI', canvas.width / 2, 44);
+
+            // Nombre
             ctx.fillStyle = '#1e140a';
-            ctx.font = 'bold 13px Arial';
-            ctx.fillText('${nombre.replace(/'/g, "\\'")}', 160, 36);
+            ctx.font = 'bold 24px Arial';
+            const nombreTexto = '${nombre.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/`/g, '\\`')}';
+            // Truncar si es muy largo
+            ctx.fillText(nombreTexto.length > 28 ? nombreTexto.substring(0, 28) + '…' : nombreTexto, canvas.width / 2, 80);
 
             // Sede
             ctx.fillStyle = '#8a7560';
-            ctx.font = '10px Arial';
-            ctx.fillText('${sede.replace(/'/g, "\\'")}', 160, 50);
+            ctx.font = '18px Arial';
+            ctx.fillText('${sede.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/`/g, '\\`')}', canvas.width / 2, 108);
 
-            // Barcode desde el canvas ya renderizado
+            // Barcode — escalar el canvas pequeño al grande
             const bcCanvas = document.getElementById('barcode-canvas');
-            ctx.drawImage(bcCanvas, 40, 58, 240, 70);
+            ctx.drawImage(bcCanvas, 80, 120, 430, 170);
 
             // Código texto
             ctx.fillStyle = '#1e140a';
-            ctx.font = 'bold 11px Arial';
-            ctx.letterSpacing = '2px';
-            ctx.fillText('${codigo}', 160, 148);
+            ctx.font = 'bold 22px Arial';
+            ctx.letterSpacing = '3px';
+            ctx.fillText('${codigo}', canvas.width / 2, 322);
 
-            // Convertir a base64 PNG
-            const imgData = canvas.toDataURL('image/png');
+            return canvas.toDataURL('image/png');
+        }
 
-            // 2. Intentar abrir la app Niimbot con deep link
-            // La app Niimbot registra el scheme "niimbot://"
-            const niimbotUrl = 'niimbot://print?image=' + encodeURIComponent(imgData);
-            const aviso = document.getElementById('aviso-niimbot');
+        function descargarParaNiimbot() {
+            const imgData = _generarPNG();
+            const link    = document.createElement('a');
+            link.href     = imgData;
+            link.download = 'etiqueta-${codigo}.png';
+            link.click();
 
-            // Intentar abrir Niimbot
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-
-            let abrioApp = false;
-            const timer = setTimeout(() => {
-                if (!abrioApp) {
-                    // Niimbot no respondió al deep link — compartir imagen como fallback
-                    aviso.style.display = 'block';
-                    aviso.innerHTML = '⚠️ No se pudo abrir Niimbot directo. <br>Usa el botón de abajo para compartir la imagen a la app.';
-
-                    // Crear link de descarga de la imagen para compartir manualmente
-                    const link = document.createElement('a');
-                    link.href = imgData;
-                    link.download = 'etiqueta-${codigo}.png';
-                    link.style.cssText = 'display:block;margin-top:10px;background:#c9a84c;color:#1e140a;padding:8px 16px;border-radius:6px;font-weight:800;font-size:13px;text-decoration:none;';
-                    link.textContent = '📥 Descargar imagen → compartir a Niimbot';
-                    aviso.appendChild(link);
-                }
-            }, 1500);
-
-            window.addEventListener('blur', () => {
-                abrioApp = true;
-                clearTimeout(timer);
-                aviso.style.display = 'block';
-                aviso.textContent = '✅ Niimbot abierto. Selecciona la impresora B21 dentro de la app.';
-            });
-
-            iframe.src = niimbotUrl;
+            const aviso = document.getElementById('aviso-descarga');
+            aviso.style.display = 'block';
+            aviso.innerHTML = '✅ Imagen descargada. Abre Niimbot → toca <strong>+</strong> → <strong>Importar imagen</strong> → selecciona el archivo y listo.';
         }
     <\/script>
 </body>
@@ -1513,8 +1498,8 @@ function imprimirEtiquetasMasivas(lista) {
             <svg id="barcode-${i}"></svg>
             <div class="codigo-texto">${it.codigo}</div>
             <div class="btn-etiqueta no-print">
-                <button class="btn-niimbot-item" onclick="imprimirUnaEnNiimbot(${i})">
-                    📲 Niimbot
+                <button class="btn-niimbot-item" onclick="descargarUnaParaNiimbot(${i})">
+                    📥 Descargar
                 </button>
             </div>
         </div>
@@ -1549,8 +1534,8 @@ function imprimirEtiquetasMasivas(lista) {
     </head>
     <body>
         <div class="toolbar no-print">
-            <button class="btn-niimbot-todas" onclick="imprimirTodasEnNiimbot()">
-                📲 Enviar todas a Niimbot (${lista.length})
+            <button class="btn-niimbot-todas" onclick="descargarTodasParaNiimbot()">
+                📥 Descargar todas para Niimbot (${lista.length})
             </button>
             <button class="btn-imprimir-todas" onclick="window.print()">
                 🖨️ Imprimir normal (${lista.length})
@@ -1572,47 +1557,74 @@ function imprimirEtiquetasMasivas(lista) {
             function _generarImagenEtiqueta(i) {
                 const it     = _lista[i];
                 const canvas = document.createElement('canvas');
-                canvas.width = 320; canvas.height = 160;
+                // Alta resolución para Niimbot (50mm x 30mm a 300dpi)
+                canvas.width  = 590;
+                canvas.height = 354;
                 const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 320, 160);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Borde
+                ctx.strokeStyle = '#1e140a';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+
                 ctx.textAlign = 'center';
-                ctx.fillStyle = '#c9a84c'; ctx.font = '9px Arial';
-                ctx.fillText('INNOVA MÖBILI', 160, 18);
-                ctx.fillStyle = '#1e140a'; ctx.font = 'bold 13px Arial';
-                ctx.fillText(it.nombre, 160, 36);
-                ctx.fillStyle = '#8a7560'; ctx.font = '10px Arial';
-                ctx.fillText(it.sede, 160, 50);
+
+                // Marca
+                ctx.fillStyle = '#c9a84c';
+                ctx.font = 'bold 18px Arial';
+                ctx.fillText('INNOVA MÖBILI', canvas.width / 2, 44);
+
+                // Nombre
+                ctx.fillStyle = '#1e140a';
+                ctx.font = 'bold 24px Arial';
+                const nombre = it.nombre.length > 28 ? it.nombre.substring(0, 28) + '…' : it.nombre;
+                ctx.fillText(nombre, canvas.width / 2, 80);
+
+                // Sede
+                ctx.fillStyle = '#8a7560';
+                ctx.font = '18px Arial';
+                ctx.fillText(it.sede, canvas.width / 2, 108);
+
+                // Barcode escalado
                 const bcCanvas = document.getElementById('bc-canvas-' + i);
-                ctx.drawImage(bcCanvas, 40, 58, 240, 70);
-                ctx.fillStyle = '#1e140a'; ctx.font = 'bold 11px Arial';
-                ctx.fillText(it.codigo, 160, 148);
+                ctx.drawImage(bcCanvas, 80, 120, 430, 170);
+
+                // Código texto
+                ctx.fillStyle = '#1e140a';
+                ctx.font = 'bold 22px Arial';
+                ctx.fillText(it.codigo, canvas.width / 2, 322);
+
                 return canvas.toDataURL('image/png');
             }
 
-            function imprimirUnaEnNiimbot(i) {
+            function descargarUnaParaNiimbot(i) {
                 const imgData = _generarImagenEtiqueta(i);
-                _abrirNiimbot(imgData);
+                const link    = document.createElement('a');
+                link.href     = imgData;
+                link.download = 'etiqueta-' + _lista[i].codigo + '.png';
+                link.click();
+                const aviso = document.getElementById('aviso-masivo');
+                aviso.style.display = 'block';
+                aviso.textContent = '✅ Descargada: ' + _lista[i].codigo + '. Importa en Niimbot → + → Importar imagen.';
             }
 
-            // Enviar todas en secuencia con 2s de pausa entre cada una
-            async function imprimirTodasEnNiimbot() {
+            // Descargar todas en secuencia con 800ms de pausa entre cada una
+            async function descargarTodasParaNiimbot() {
                 const aviso = document.getElementById('aviso-masivo');
                 aviso.style.display = 'block';
                 for (let i = 0; i < _lista.length; i++) {
-                    aviso.textContent = '📲 Enviando etiqueta ' + (i+1) + ' de ' + _lista.length + ' a Niimbot...';
+                    aviso.textContent = '⬇️ Descargando etiqueta ' + (i + 1) + ' de ' + _lista.length + '...';
                     const imgData = _generarImagenEtiqueta(i);
-                    _abrirNiimbot(imgData);
-                    await new Promise(r => setTimeout(r, 2500));
+                    const link    = document.createElement('a');
+                    link.href     = imgData;
+                    link.download = 'etiqueta-' + _lista[i].codigo + '.png';
+                    link.click();
+                    await new Promise(r => setTimeout(r, 800));
                 }
-                aviso.textContent = '✅ Se enviaron las ' + _lista.length + ' etiquetas. Revisa la app Niimbot.';
-            }
-
-            function _abrirNiimbot(imgData) {
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                document.body.appendChild(iframe);
-                iframe.src = 'niimbot://print?image=' + encodeURIComponent(imgData);
-                setTimeout(() => iframe.remove(), 3000);
+                aviso.textContent = '✅ ' + _lista.length + ' imágenes descargadas. Ábrelas desde Niimbot → + → Importar imagen.';
             }
         <\/script>
     </body>
