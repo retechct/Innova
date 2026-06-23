@@ -300,71 +300,244 @@
         </button>
     </div>
     
+    <!-- view-productos: usado por Stock en Tienda -->
     <div id="view-productos" style="display:none;">
         <div id="product-grid" class="grid"></div>
     </div>
 
     <div id="view-plantillas" style="display: none;">
-        <div class="grid">
 
-            <div class="card card-template" style="position:relative;">
-                <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),#4a6a4a);display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-couch" style="font-size:4rem;color:var(--accent);opacity:0.9;"></i>
-                </div>
-                <div class="card-info">
-                    <span class="status-badge status-template">DISEÑO A MEDIDA</span>
-                    <h4>Sofás y Juegos de Sala</h4>
-                    <span class="price-tag">A Cotizar</span>
-                    <button class="btn-action btn-primary" onclick="openConfig('Plantilla de Sofá', '')">
-                        <i class="fa-solid fa-gears"></i> CONFIGURAR
-                    </button>
-                </div>
+        <!-- ── Tabs: Configuradores | Modelos Registrados ── -->
+        <div id="carta-tabs" style="display:flex; gap:8px; margin-bottom:20px; border-bottom:2px solid var(--border); padding-bottom:12px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+            <div style="display:flex; gap:8px;">
+                <button id="carta-tab-config" onclick="_cartaCambiarTab('config')"
+                    class="btn-action btn-primary"
+                    style="font-size:12px; padding:7px 16px; border-radius:20px;">
+                    <i class="fa-solid fa-gears"></i> Configuradores
+                </button>
+                <button id="carta-tab-modelos" onclick="_cartaCambiarTab('modelos')"
+                    class="btn-action btn-ghost"
+                    style="font-size:12px; padding:7px 16px; border-radius:20px;">
+                    <i class="fa-solid fa-images"></i> Modelos Registrados
+                </button>
             </div>
-
-            <div class="card card-template" style="position:relative;">
-                <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),#3a5c3a);display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-utensils" style="font-size:4rem;color:var(--success);opacity:0.9;"></i>
-                </div>
-                <div class="card-info">
-                    <span class="status-badge status-template">DISEÑO A MEDIDA</span>
-                    <h4>Comedor y Sillas</h4>
-                    <span class="price-tag">A Cotizar</span>
-                    <button class="btn-action btn-primary" onclick="openConfigComedor()">
-                        <i class="fa-solid fa-gears"></i> CONFIGURAR
-                    </button>
-                </div>
-            </div>
-
-            <div class="card card-template" style="position:relative;">
-                <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),var(--caramel));display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-table" style="font-size:4rem;color:#f59e0b;opacity:0.9;"></i>
-                </div>
-                <div class="card-info">
-                    <span class="status-badge status-template">DISEÑO A MEDIDA</span>
-                    <h4>Mesas de Centro y Consolas</h4>
-                    <span class="price-tag">A Cotizar</span>
-                    <button class="btn-action btn-primary" onclick="openConfigCentro()">
-                        <i class="fa-solid fa-gears"></i> CONFIGURAR
-                    </button>
-                </div>
-            </div>
-
-            <div class="card card-template" style="position:relative;">
-                <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),#6b3a2a);display:flex;align-items:center;justify-content:center;">
-                    <i class="fa-solid fa-chair" style="font-size:4rem;color:var(--accent-lt);opacity:0.9;"></i>
-                </div>
-                <div class="card-info">
-                    <span class="status-badge status-template">DISEÑO A MEDIDA</span>
-                    <h4>Butacas y Sillería Suelta</h4>
-                    <span class="price-tag">A Cotizar</span>
-                    <button class="btn-action btn-primary" onclick="openConfigButaca()">
-                        <i class="fa-solid fa-gears"></i> CONFIGURAR
-                    </button>
-                </div>
-            </div>
-
+            <!-- Botón Nueva Plantilla: solo visible en tab modelos, para admin -->
+            <button id="carta-btn-nueva-plantilla"
+                onclick="_abrirModalNuevaPlantilla()"
+                class="btn-action btn-primary sidebar-item--admin"
+                style="display:none; font-size:12px; padding:7px 16px; border-radius:20px;">
+                <i class="fa-solid fa-plus"></i> Nueva Plantilla
+            </button>
         </div>
-    </div> 
+
+        <!-- Tab: Configuradores (las 4 tarjetas de tipo de mueble) -->
+        <div id="carta-panel-config">
+            <div class="grid">
+
+                <div class="card card-template" style="position:relative;">
+                    <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),#4a6a4a);display:flex;align-items:center;justify-content:center;">
+                        <i class="fa-solid fa-couch" style="font-size:4rem;color:var(--accent);opacity:0.9;"></i>
+                    </div>
+                    <div class="card-info">
+                        <span class="status-badge status-template">DISEÑO A MEDIDA</span>
+                        <h4>Sofás y Juegos de Sala</h4>
+                        <span class="price-tag">A Cotizar</span>
+                        <button class="btn-action btn-primary" onclick="openConfig('Plantilla de Sofá', '')">
+                            <i class="fa-solid fa-gears"></i> CONFIGURAR
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card card-template" style="position:relative;">
+                    <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),#3a5c3a);display:flex;align-items:center;justify-content:center;">
+                        <i class="fa-solid fa-utensils" style="font-size:4rem;color:var(--success);opacity:0.9;"></i>
+                    </div>
+                    <div class="card-info">
+                        <span class="status-badge status-template">DISEÑO A MEDIDA</span>
+                        <h4>Comedor y Sillas</h4>
+                        <span class="price-tag">A Cotizar</span>
+                        <button class="btn-action btn-primary" onclick="openConfigComedor()">
+                            <i class="fa-solid fa-gears"></i> CONFIGURAR
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card card-template" style="position:relative;">
+                    <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),var(--caramel));display:flex;align-items:center;justify-content:center;">
+                        <i class="fa-solid fa-table" style="font-size:4rem;color:#f59e0b;opacity:0.9;"></i>
+                    </div>
+                    <div class="card-info">
+                        <span class="status-badge status-template">DISEÑO A MEDIDA</span>
+                        <h4>Mesas de Centro y Consolas</h4>
+                        <span class="price-tag">A Cotizar</span>
+                        <button class="btn-action btn-primary" onclick="openConfigCentro()">
+                            <i class="fa-solid fa-gears"></i> CONFIGURAR
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card card-template" style="position:relative;">
+                    <div style="width:100%;height:170px;background:linear-gradient(135deg,var(--primary),#6b3a2a);display:flex;align-items:center;justify-content:center;">
+                        <i class="fa-solid fa-chair" style="font-size:4rem;color:var(--accent-lt);opacity:0.9;"></i>
+                    </div>
+                    <div class="card-info">
+                        <span class="status-badge status-template">DISEÑO A MEDIDA</span>
+                        <h4>Butacas y Sillería Suelta</h4>
+                        <span class="price-tag">A Cotizar</span>
+                        <button class="btn-action btn-primary" onclick="openConfigButaca()">
+                            <i class="fa-solid fa-gears"></i> CONFIGURAR
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Tab: Modelos Registrados (plantillas con fotos reales de BD) -->
+        <div id="carta-panel-modelos" style="display:none;">
+            <div id="carta-modelos-grid"></div>
+        </div>
+
+    </div>
+
+    <script>
+    // ── Lógica de tabs de la Carta ──────────────────────────────────
+    window._cartaCambiarTab = function(tab) {
+        const panelConfig  = document.getElementById('carta-panel-config');
+        const panelModelos = document.getElementById('carta-panel-modelos');
+        const btnConfig    = document.getElementById('carta-tab-config');
+        const btnModelos   = document.getElementById('carta-tab-modelos');
+        const btnNueva     = document.getElementById('carta-btn-nueva-plantilla');
+
+        if (tab === 'config') {
+            panelConfig.style.display  = '';
+            panelModelos.style.display = 'none';
+            btnConfig.className  = 'btn-action btn-primary';
+            btnModelos.className = 'btn-action btn-ghost';
+            if (btnNueva) btnNueva.style.display = 'none';
+        } else {
+            panelConfig.style.display  = 'none';
+            panelModelos.style.display = '';
+            btnConfig.className  = 'btn-action btn-ghost';
+            btnModelos.className = 'btn-action btn-primary';
+            // Solo admin ve el botón Nueva Plantilla
+            if (btnNueva) {
+                const rol = (window.currentUserRol || window._currentRol || '');
+                btnNueva.style.display = (rol === 'admin' || rol === 'jefe') ? 'inline-flex' : 'none';
+            }
+            // Cargar modelos de BD si aún no se cargaron
+            _cartaCargarModelos();
+        }
+    };
+
+    // Carga y renderiza las plantillas de BD en carta-modelos-grid
+    window._cartaCargarModelos = async function() {
+        const grid = document.getElementById('carta-modelos-grid');
+        if (!grid) return;
+        grid.innerHTML = '<div style="padding:40px;text-align:center;color:#94a3b8;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p style="margin-top:12px;">Cargando modelos...</p></div>';
+        try {
+            const res  = await apiFetch(`${API_URL}/api/catalogo`);
+            const data = await res.json();
+            if (window.allProducts) window.allProducts = data; // sincronizar
+            const plantillas = data.filter(p => p.es_plantilla === true);
+
+            if (plantillas.length === 0) {
+                grid.innerHTML = `<div style="text-align:center;padding:60px 20px;color:#94a3b8;">
+                    <i class="fa-solid fa-images" style="font-size:3rem;margin-bottom:16px;display:block;"></i>
+                    <p style="font-size:16px;font-weight:600;">Aún no hay modelos registrados</p>
+                    <p style="font-size:13px;">Usa el botón "Nueva Plantilla" para agregar fotos reales de tus muebles.</p>
+                </div>`;
+                return;
+            }
+
+            const CATS = ['Sofá','Sillón','Butaca','Silla','Mesa','Cama','Otro'];
+            // Filtro por categoría
+            let filtroActivo = '';
+            function renderModelos() {
+                const lista = filtroActivo ? plantillas.filter(p => p.categoria === filtroActivo) : plantillas;
+                const rol = (window.currentUserRol || window._currentRol || '');
+                const esAdmin = (rol === 'admin' || rol === 'jefe');
+
+                let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+                    <span style="font-size:12px;color:#64748b;font-weight:700;">Filtrar:</span>
+                    <button onclick="document.querySelectorAll('.carta-cat-btn').forEach(b=>b.className='btn-action btn-ghost carta-cat-btn');this.className='btn-action btn-primary carta-cat-btn';_cartaSetFiltro('')"
+                        class="btn-action ${!filtroActivo?'btn-primary':'btn-ghost'} carta-cat-btn" style="font-size:11px;padding:4px 12px;border-radius:16px;">Todos</button>
+                    ${CATS.map(c=>`<button onclick="document.querySelectorAll('.carta-cat-btn').forEach(b=>b.className='btn-action btn-ghost carta-cat-btn');this.className='btn-action btn-primary carta-cat-btn';_cartaSetFiltro('${c}')"
+                        class="btn-action ${filtroActivo===c?'btn-primary':'btn-ghost'} carta-cat-btn" style="font-size:11px;padding:4px 12px;border-radius:16px;">${c}</button>`).join('')}
+                </div>`;
+
+                if (lista.length === 0) {
+                    html += `<p style="color:#94a3b8;text-align:center;padding:40px 0;">No hay modelos en esta categoría.</p>`;
+                } else {
+                    html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;">`;
+                    html += lista.map(p => {
+                        const fotos = (p.fotos && p.fotos.length) ? p.fotos : (p.foto ? [p.foto] : ['imagenes/sin_foto.jpg']);
+                        const idBase = `cmodelo-${p.id}`;
+                        const fotosAttr = fotos.map(f=>f.replace(/"/g,'&quot;')).join('||');
+
+                        const carouselHtml = fotos.length > 1
+                            ? `<div style="position:relative;width:100%;aspect-ratio:4/3;overflow:hidden;background:#f1f5f9;border-radius:10px 10px 0 0;">
+                                <img id="${idBase}-img" src="${fotos[0]}" onerror="this.src='imagenes/sin_foto.jpg'"
+                                     style="width:100%;height:100%;object-fit:cover;transition:opacity 0.25s;">
+                                <button onclick="_cmPrev('${idBase}','${fotosAttr}')"
+                                    style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:15px;">‹</button>
+                                <button onclick="_cmNext('${idBase}','${fotosAttr}')"
+                                    style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:15px;">›</button>
+                                <span id="${idBase}-cnt" style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,0.5);color:#fff;font-size:10px;border-radius:10px;padding:2px 7px;">1/${fotos.length}</span>
+                               </div>`
+                            : `<div style="width:100%;aspect-ratio:4/3;overflow:hidden;background:#f1f5f9;border-radius:10px 10px 0 0;">
+                                <img src="${fotos[0]}" onerror="this.src='imagenes/sin_foto.jpg'" style="width:100%;height:100%;object-fit:cover;">
+                               </div>`;
+
+                        return `<div class="card" style="border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                            ${carouselHtml}
+                            <div class="card-info" style="padding:12px;">
+                                <span style="font-size:10px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:1px;">${p.categoria||'Modelo'}</span>
+                                <h4 style="margin:4px 0 2px;font-size:15px;">${p.nombre||p.nombre_modelo}</h4>
+                                <span class="price-tag" style="font-size:14px;">${p.precio>0?'S/ '+parseFloat(p.precio).toFixed(2):'A Cotizar'}</span>
+                                <div style="display:flex;gap:6px;margin-top:10px;">
+                                    <button class="btn-action btn-primary" style="flex:1;font-size:12px;"
+                                            onclick="_cartaSeleccionarModelo(${p.id})">
+                                        <i class="fa-solid fa-cart-plus"></i> Seleccionar
+                                    </button>
+                                    ${esAdmin ? `<button class="btn-action btn-ghost" style="padding:6px 10px;font-size:12px;color:#ef4444;"
+                                            onclick="_cartaEliminarPlantilla(${p.id},'${(p.nombre||p.nombre_modelo||'').replace(/'/g,"\\'")}')">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>` : ''}
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('');
+                    html += `</div>`;
+                }
+                grid.innerHTML = html;
+            }
+
+            window._cartaSetFiltro = function(cat) { filtroActivo = cat; renderModelos(); };
+            // Carousel
+            const _cmIdx = {};
+            window._cmPrev = function(id, fotosStr) {
+                const fotos = fotosStr.split('||');
+                _cmIdx[id] = ((_cmIdx[id]||0) - 1 + fotos.length) % fotos.length;
+                const img = document.getElementById(id+'-img'); const cnt = document.getElementById(id+'-cnt');
+                if(img){img.style.opacity='0';setTimeout(()=>{img.src=fotos[_cmIdx[id]];img.style.opacity='1';},150);}
+                if(cnt) cnt.textContent = `${_cmIdx[id]+1}/${fotos.length}`;
+            };
+            window._cmNext = function(id, fotosStr) {
+                const fotos = fotosStr.split('||');
+                _cmIdx[id] = ((_cmIdx[id]||0) + 1) % fotos.length;
+                const img = document.getElementById(id+'-img'); const cnt = document.getElementById(id+'-cnt');
+                if(img){img.style.opacity='0';setTimeout(()=>{img.src=fotos[_cmIdx[id]];img.style.opacity='1';},150);}
+                if(cnt) cnt.textContent = `${_cmIdx[id]+1}/${fotos.length}`;
+            };
+
+            renderModelos();
+        } catch(e) {
+            grid.innerHTML = `<p style="color:#ef4444;text-align:center;padding:40px;">Error cargando modelos: ${e.message}</p>`;
+        }
+    };
+    </script>
+
 
     <div id="view-pedidos" style="display: none;">
         <div id="pedidos-container"></div>
