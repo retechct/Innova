@@ -17,7 +17,12 @@ function renderGrid() {
         return;
     }
 
-    // --- MODO CATÁLOGO ---
+    if (currentMode === 'carta') {
+        renderCarta(grid);
+        return;
+    }
+
+    // --- MODO CATÁLOGO (a medida) ---
     grid.style.display = 'block'; // ahora controla su propio layout (grid interno + paginación)
     let filtered = allProducts.filter(p => p.en_stock === false && p.es_plantilla === false);
 
@@ -1335,3 +1340,323 @@ async function procesarNotasConFotos(tipos) {
     if (hayFotos) Swal.close();
     return resultados;
 }
+/* ================================================================= */
+/* --- CARTA DE MODELOS: carousel + registro de plantillas        --- */
+/* ================================================================= */
+
+let _cartaPagina = 1;
+const _cartaItemsPorPagina = 12;
+let _cartaFiltroCategoria = '';
+
+const CATEGORIAS_CARTA = ['Sofá', 'Sillón', 'Butaca', 'Silla', 'Mesa', 'Cama', 'Otro'];
+
+function renderCarta(grid) {
+    grid.style.display = 'block';
+
+    let plantillas = allProducts.filter(p => p.es_plantilla === true);
+
+    if (_cartaFiltroCategoria) {
+        plantillas = plantillas.filter(p => (p.categoria || '') === _cartaFiltroCategoria);
+    }
+
+    // Botón "Nueva Plantilla" + filtros
+    const esBtnAdmin = `
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:18px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <span style="font-size:13px; color:#64748b; font-weight:600;">Categoría:</span>
+            <button onclick="_cartaFiltrar('')" class="btn-action ${!_cartaFiltroCategoria ? 'btn-primary' : 'btn-ghost'}" style="padding:4px 12px; font-size:12px;">Todos</button>
+            ${CATEGORIAS_CARTA.map(c => `
+            <button onclick="_cartaFiltrar('${c}')" class="btn-action ${_cartaFiltroCategoria === c ? 'btn-primary' : 'btn-ghost'}" style="padding:4px 12px; font-size:12px;">${c}</button>
+            `).join('')}
+        </div>
+        <button onclick="_abrirModalNuevaPlantilla()" class="btn-action btn-primary" style="gap:6px;">
+            <i class="fa-solid fa-plus"></i> Nueva Plantilla
+        </button>
+    </div>`;
+
+    if (plantillas.length === 0) {
+        grid.innerHTML = esBtnAdmin + `<div style="text-align:center; padding:60px 20px; color:#94a3b8;">
+            <i class="fa-solid fa-book-open" style="font-size:3rem; margin-bottom:16px; display:block;"></i>
+            <p style="font-size:16px; font-weight:600;">No hay modelos en la carta todavía</p>
+            <p style="font-size:13px;">Agrega un modelo con el botón "Nueva Plantilla".</p>
+        </div>`;
+        return;
+    }
+
+    const totalPaginas = Math.ceil(plantillas.length / _cartaItemsPorPagina) || 1;
+    if (_cartaPagina > totalPaginas) _cartaPagina = totalPaginas;
+    const inicio = (_cartaPagina - 1) * _cartaItemsPorPagina;
+    const paginaActual = plantillas.slice(inicio, inicio + _cartaItemsPorPagina);
+
+    let html = esBtnAdmin + `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px;">`;
+
+    html += paginaActual.map(p => {
+        const fotos = (p.fotos && p.fotos.length > 0) ? p.fotos : (p.foto ? [p.foto] : []);
+        const idBase = `carta-${p.id}`;
+        const fotosJSON = JSON.stringify(fotos).replace(/"/g, '&quot;');
+
+        const carouselFotos = fotos.length > 1
+            ? `<div id="${idBase}-carousel" style="position:relative; width:100%; aspect-ratio:4/3; overflow:hidden; background:#f1f5f9; border-radius:10px 10px 0 0;">
+                <img id="${idBase}-img" src="${fotos[0]}" onerror="this.src='imagenes/sin_foto.jpg'"
+                     style="width:100%; height:100%; object-fit:cover; transition:opacity 0.3s;">
+                <button onclick="_cartaCarouselPrev('${idBase}', ${fotosJSON})"
+                    style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">‹</button>
+                <button onclick="_cartaCarouselNext('${idBase}', ${fotosJSON})"
+                    style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);color:white;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">›</button>
+                <span style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,0.5);color:white;font-size:10px;border-radius:10px;padding:2px 7px;"
+                      id="${idBase}-counter">1 / ${fotos.length}</span>
+               </div>`
+            : `<div style="width:100%; aspect-ratio:4/3; overflow:hidden; background:#f1f5f9; border-radius:10px 10px 0 0;">
+                <img src="${fotos[0] || 'imagenes/sin_foto.jpg'}" onerror="this.src='imagenes/sin_foto.jpg'"
+                     style="width:100%; height:100%; object-fit:cover;">
+               </div>`;
+
+        return `
+        <div class="card" style="border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.08); position:relative;">
+            ${carouselFotos}
+            <div class="card-info" style="padding:12px;">
+                <span style="font-size:10px; font-weight:700; color:#6366f1; text-transform:uppercase; letter-spacing:1px;">
+                    ${p.categoria || 'Modelo'}
+                </span>
+                <h4 style="margin:4px 0 2px; font-size:15px;">${p.nombre}</h4>
+                <span class="price-tag" style="font-size:14px;">${p.precio > 0 ? 'S/ ' + p.precio.toFixed(2) : 'A Cotizar'}</span>
+                <div style="display:flex; gap:6px; margin-top:10px;">
+                    <button class="btn-action btn-primary" style="flex:1; font-size:12px;"
+                            onclick="_cartaSeleccionarModelo(${p.id})">
+                        <i class="fa-solid fa-cart-plus"></i> Seleccionar
+                    </button>
+                    <button class="btn-action btn-ghost" style="padding:6px 10px; font-size:12px; color:#ef4444;"
+                            onclick="_cartaEliminarPlantilla(${p.id}, '${p.nombre.replace(/'/g,"\\'")}')">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    html += `</div>`;
+
+    if (totalPaginas > 1) {
+        let pagButtons = '';
+        for (let i = 1; i <= totalPaginas; i++) {
+            if (i === 1 || i === totalPaginas || (i >= _cartaPagina - 1 && i <= _cartaPagina + 1)) {
+                pagButtons += `<button onclick="_cartaCambiarPagina(${i})" style="padding:6px 12px;margin:0 3px;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;background:${_cartaPagina===i?'#0f172a':'white'};color:${_cartaPagina===i?'white':'#475569'};font-weight:bold;">${i}</button>`;
+            } else if (i === _cartaPagina - 2 || i === _cartaPagina + 2) {
+                pagButtons += `<span style="color:#cbd5e1;padding:0 5px;">…</span>`;
+            }
+        }
+        html += `<div style="display:flex;justify-content:center;align-items:center;margin-top:20px;padding-bottom:30px;">
+            <button onclick="_cartaCambiarPagina(${_cartaPagina-1})" ${_cartaPagina===1?'disabled':''} style="padding:6px 12px;margin:0 3px;border:1px solid #cbd5e1;border-radius:6px;background:white;color:${_cartaPagina===1?'#cbd5e1':'#475569'};cursor:${_cartaPagina===1?'not-allowed':'pointer'};font-weight:bold;">&laquo; Ant</button>
+            ${pagButtons}
+            <button onclick="_cartaCambiarPagina(${_cartaPagina+1})" ${_cartaPagina===totalPaginas?'disabled':''} style="padding:6px 12px;margin:0 3px;border:1px solid #cbd5e1;border-radius:6px;background:white;color:${_cartaPagina===totalPaginas?'#cbd5e1':'#475569'};cursor:${_cartaPagina===totalPaginas?'not-allowed':'pointer'};font-weight:bold;">Sig &raquo;</button>
+        </div>`;
+    }
+
+    grid.innerHTML = html;
+}
+
+// Índice actual por tarjeta de carousel
+const _carouselIdx = {};
+
+window._cartaCarouselPrev = function(idBase, fotos) {
+    if (!fotos || !fotos.length) return;
+    _carouselIdx[idBase] = ((_carouselIdx[idBase] || 0) - 1 + fotos.length) % fotos.length;
+    _cartaCarouselActualizar(idBase, fotos);
+};
+window._cartaCarouselNext = function(idBase, fotos) {
+    if (!fotos || !fotos.length) return;
+    _carouselIdx[idBase] = ((_carouselIdx[idBase] || 0) + 1) % fotos.length;
+    _cartaCarouselActualizar(idBase, fotos);
+};
+function _cartaCarouselActualizar(idBase, fotos) {
+    const idx = _carouselIdx[idBase] || 0;
+    const img = document.getElementById(`${idBase}-img`);
+    const counter = document.getElementById(`${idBase}-counter`);
+    if (img) { img.style.opacity = '0'; setTimeout(() => { img.src = fotos[idx]; img.style.opacity = '1'; }, 150); }
+    if (counter) counter.textContent = `${idx + 1} / ${fotos.length}`;
+}
+
+window._cartaFiltrar = function(cat) {
+    _cartaFiltroCategoria = cat;
+    _cartaPagina = 1;
+    renderGrid();
+};
+
+window._cartaCambiarPagina = function(pag) {
+    _cartaPagina = pag;
+    renderGrid();
+    const grid = document.getElementById('product-grid');
+    if (grid) window.scrollTo({ top: grid.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+};
+
+// Al seleccionar un modelo de la carta, agrega al carrito con categoría incluida
+window._cartaSeleccionarModelo = function(productoId) {
+    const p = allProducts.find(x => x.id === productoId);
+    if (!p) return;
+    const nombre = p.nombre || p.nombre_modelo || '';
+    const foto = (p.fotos && p.fotos[0]) || p.foto || '';
+    const precio = p.precio || 0;
+    const categoria = p.categoria || '';
+
+    // addToCart acepta 6to parámetro: categoria (lo usa routes_ventas.py para asignar área)
+    addToCart(nombre, precio, foto, 'Venta Estándar', {}, categoria);
+};
+
+// Modal registro nueva plantilla
+window._abrirModalNuevaPlantilla = function() {
+    const catOpts = CATEGORIAS_CARTA.map(c => `<option value="${c}">${c}</option>`).join('');
+    Swal.fire({
+        title: '<i class="fa-solid fa-book-open" style="color:#6366f1;"></i> Nueva Plantilla de Modelo',
+        html: `
+        <div style="text-align:left; display:flex; flex-direction:column; gap:12px; padding:4px 0;">
+            <div>
+                <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">Nombre del Modelo *</label>
+                <input id="np-nombre" class="swal2-input" placeholder="Ej: Sofá Venecia 3 cuerpos" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                    <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">Categoría *</label>
+                    <select id="np-cat" class="swal2-input" style="margin:6px 0 0; width:100%; box-sizing:border-box;">${catOpts}</select>
+                </div>
+                <div>
+                    <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">Precio base (S/)</label>
+                    <input id="np-precio" type="number" step="0.01" class="swal2-input" placeholder="0.00" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+                </div>
+            </div>
+            <div>
+                <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">Fotos del Modelo * (puedes elegir varias)</label>
+                <input id="np-fotos" type="file" accept="image/*" multiple
+                       style="margin:6px 0 0; width:100%; box-sizing:border-box; padding:8px; border:2px dashed #cbd5e1; border-radius:8px; font-size:13px; cursor:pointer;"
+                       onchange="_npPreviewFotos(this)">
+                <div id="np-fotos-preview" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
+            </div>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-save"></i> Guardar Plantilla',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#6366f1',
+        width: '520px',
+        preConfirm: async () => {
+            const nombre  = document.getElementById('np-nombre')?.value.trim();
+            const cat     = document.getElementById('np-cat')?.value;
+            const precio  = parseFloat(document.getElementById('np-precio')?.value || 0);
+            const files   = document.getElementById('np-fotos')?.files;
+
+            if (!nombre) { Swal.showValidationMessage('El nombre es obligatorio'); return false; }
+            if (!files || files.length === 0) { Swal.showValidationMessage('Debes subir al menos una foto'); return false; }
+
+            Swal.showLoading();
+            try {
+                const fd = new FormData();
+                fd.append('nombre', nombre);
+                fd.append('categoria', cat);
+                fd.append('precio', precio);
+                for (let f of files) fd.append('fotos', f);
+
+                const res  = await apiFetch(`${API_URL}/api/catalogo/plantilla`, { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.error) { Swal.showValidationMessage(data.error); return false; }
+                return data;
+            } catch(e) {
+                Swal.showValidationMessage('Error de conexión: ' + e.message);
+                return false;
+            }
+        }
+    }).then(async result => {
+        if (result.isConfirmed && result.value?.exito) {
+            await _recargarCatalogo();
+            await Swal.fire({ icon: 'success', title: 'Plantilla guardada', text: result.value.mensaje, timer: 1800, showConfirmButton: false });
+            renderGrid();
+        }
+    });
+};
+
+window._npPreviewFotos = function(input) {
+    const preview = document.getElementById('np-fotos-preview');
+    if (!preview) return;
+    preview.innerHTML = '';
+    for (let f of input.files) {
+        const url = URL.createObjectURL(f);
+        preview.innerHTML += `<img src="${url}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:2px solid #e2e8f0;">`;
+    }
+};
+
+window._cartaEliminarPlantilla = async function(id, nombre) {
+    const { isConfirmed } = await Swal.fire({
+        title: '¿Eliminar plantilla?',
+        text: `Se eliminará "${nombre}" de la carta de modelos.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        confirmButtonColor: '#ef4444',
+        cancelButtonText: 'Cancelar'
+    });
+    if (!isConfirmed) return;
+    try {
+        const res  = await apiFetch(`${API_URL}/api/catalogo/plantilla/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.error) { await Swal.fire({ icon: 'error', title: 'Error', text: data.error }); return; }
+        await _recargarCatalogo();
+        renderGrid();
+        Swal.fire({ icon: 'success', title: 'Eliminado', timer: 1200, showConfirmButton: false });
+    } catch(e) {
+        Swal.fire({ icon: 'error', title: 'Error', text: e.message });
+    }
+};
+
+// Helper: recarga allProducts desde la API sin recargar la página
+async function _recargarCatalogo() {
+    try {
+        const res  = await apiFetch(`${API_URL}/api/catalogo`);
+        const data = await res.json();
+        if (Array.isArray(data)) window.allProducts = data;
+    } catch(e) { console.error('Error recargando catálogo', e); }
+}
+
+/* ================================================================= */
+/* --- PARCHE: asegurar que addToCart pase 'categoria' al carrito --- */
+/* ================================================================= */
+// Envuelve addToCart original para que el 6to parámetro (categoria) se incluya
+// en el cartItem y llegue al backend como m['categoria']
+(function _patchAddToCart() {
+    const _origAddToCart = window.addToCart;
+    if (!_origAddToCart) return; // se define en otro archivo, se parcheará en DOMContentLoaded
+    window.addToCart = function(name, precio, foto, specs, componentes, categoria) {
+        _origAddToCart(name, precio, foto, specs, componentes);
+        // Añadir categoria al último item del carrito
+        if (categoria && Array.isArray(window.cart) && window.cart.length > 0) {
+            window.cart[window.cart.length - 1].categoria = categoria;
+        }
+    };
+})();
+
+// Si addToCart se define después (en otro script), parchear en load
+window.addEventListener('load', function _patchAddToCartLoad() {
+    const _orig = window.addToCart;
+    if (!_orig || _orig._categoriaPatched) return;
+    window.addToCart = function(name, precio, foto, specs, componentes, categoria) {
+        _orig(name, precio, foto, specs, componentes);
+        if (categoria && Array.isArray(window.cart) && window.cart.length > 0) {
+            window.cart[window.cart.length - 1].categoria = categoria;
+        }
+    };
+    window.addToCart._categoriaPatched = true;
+});
+
+/* ================================================================= */
+/* --- API pública: cambiar a modo carta desde el HTML/nav        --- */
+/* ================================================================= */
+// Llamar desde el botón de navegación: onclick="setCatalogoMode('carta')"
+window.setCatalogoMode = function(mode) {
+    if (typeof window.currentMode !== 'undefined') {
+        window.currentMode = mode;
+    }
+    _cartaPagina = 1;
+    _cartaFiltroCategoria = '';
+    // Actualizar clases activas en los botones de modo si existen
+    document.querySelectorAll('[data-cat-mode]').forEach(btn => {
+        btn.classList.toggle('btn-primary', btn.dataset.catMode === mode);
+        btn.classList.toggle('btn-ghost',   btn.dataset.catMode !== mode);
+    });
+    renderGrid();
+};

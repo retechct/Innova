@@ -338,10 +338,14 @@ def guardar_venta():
             areas_internas_creadas = set()
 
             nombre_lower = m['tipo'].lower()
+            # categoria viene del catálogo (Sofá, Butaca, Silla, Sillón, etc.)
+            categoria_lower = (m.get('categoria') or '').lower()
             area_estructura = None
-            if any(p in nombre_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'multi', 'curvado', 'plantilla']):
+            if any(p in nombre_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'multi', 'curvado', 'plantilla']) \
+               or any(p in categoria_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'sillón', 'sillon']):
                 area_estructura = 'ESTRUCTURAS_MUEBLES'
-            elif any(p in nombre_lower for p in ['silla', 'butaca', 'sitial', 'puff']):
+            elif any(p in nombre_lower for p in ['silla', 'butaca', 'sitial', 'puff']) \
+                 or any(p in categoria_lower for p in ['silla', 'butaca', 'sitial', 'puff']):
                 area_estructura = 'ESTRUCTURAS_SILLAS'
 
             # Verificar si el componente principal (silla/butaca) es externo ANTES de crear tickets

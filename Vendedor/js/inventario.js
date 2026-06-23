@@ -864,8 +864,8 @@ function _formProducto() {
 
     return `
     <div class="form-group"><label>Categoría *</label>
-        <select id="nf-cat" class="form-input">${cats}</select></div>
-    <div class="form-group"><label>Modelo del Catálogo</label>
+        <select id="nf-cat" class="form-input" onchange="_invFiltrarCatalogoPorCat()">${cats}</select></div>
+    <div class="form-group"><label>Modelo del Catálogo <span style="font-size:11px;color:#94a3b8;">(filtra por categoría)</span></label>
         <select id="nf-catalogo" class="form-input" onchange="_invSelCatalogo()">
             <option value="">— O escribir manualmente —</option>${prods}</select></div>
     <div class="form-group"><label>Nombre Modelo *</label>
@@ -893,10 +893,46 @@ function _formProducto() {
 function _invSelCatalogo() {
     const sel = document.getElementById('nf-catalogo');
     if (!sel.value) return;
-    const [, nombre] = sel.value.split('|');
+    const [catId, nombre] = sel.value.split('|');
     const nf = document.getElementById('nf-nombre');
     if (nf) nf.value = nombre;
+    // Autocompletar categoría si el producto del catálogo la trae
+    const prod = _maestroInv.catalogo.find(p => String(p.id) === String(catId));
+    if (prod && prod.categoria) {
+        const selCat = document.getElementById('nf-cat');
+        if (selCat) {
+            const opt = [...selCat.options].find(o => o.value === prod.categoria);
+            if (opt) selCat.value = prod.categoria;
+        }
+    }
 }
+
+// Filtra el select de catálogo por la categoría elegida
+window._invFiltrarCatalogoPorCat = function() {
+    const cat = document.getElementById('nf-cat')?.value || '';
+    const selCatalogo = document.getElementById('nf-catalogo');
+    if (!selCatalogo) return;
+
+    // Mapeo: categoría de inventario → categoría del catálogo
+    const mapaCategoria = {
+        'Sofá':    ['Sofá', 'Seccional', 'Modular'],
+        'Sillón':  ['Sillón'],
+        'Butaca':  ['Butaca', 'Puff'],
+        'Silla':   ['Silla', 'Sitial'],
+        'Mesa':    ['Mesa'],
+        'Cama':    ['Cama'],
+    };
+
+    const catsCatalogo = mapaCategoria[cat] || null;
+    const prodsFiltrados = catsCatalogo
+        ? _maestroInv.catalogo.filter(p => catsCatalogo.includes(p.categoria || ''))
+        : _maestroInv.catalogo;
+
+    selCatalogo.innerHTML = `<option value="">— O escribir manualmente —</option>` +
+        prodsFiltrados.map(p =>
+            `<option value="${p.id}|${(p.nombre||p.nombre_modelo||'').replace(/"/g,'')}">${p.nombre||p.nombre_modelo}${p.categoria ? ' ('+p.categoria+')' : ''}</option>`
+        ).join('');
+};
 
 function _formPieza() {
     const sedes = [...document.querySelectorAll('#inv-filtro-sede option')]

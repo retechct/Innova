@@ -20,27 +20,120 @@ def obtener_catalogo():
     try:
         conexion = get_db_connection()
         cursor = conexion.cursor()
+        # Asegurar columnas categoria y fotos_urls existen (migración lazy)
+        cursor.execute("""
+            ALTER TABLE catalogo_productos
+                ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'Sofá',
+                ADD COLUMN IF NOT EXISTS fotos_urls TEXT DEFAULT ''
+        """)
+        conexion.commit()
         cursor.execute("""
             SELECT id, nombre_modelo, precio_base, foto_url,
                    es_plantilla, en_stock,
-                   COALESCE(stock_cantidad, 0) AS stock_cantidad
+                   COALESCE(stock_cantidad, 0) AS stock_cantidad,
+                   COALESCE(categoria, 'Sofá') AS categoria,
+                   COALESCE(fotos_urls, '') AS fotos_urls
             FROM catalogo_productos
+            ORDER BY es_plantilla DESC, nombre_modelo ASC
         """)
         productos = cursor.fetchall()
         lista_productos = []
         for p in productos:
+            # foto principal: primer elemento de fotos_urls si existe, si no foto_url
+            foto_principal = limpiar_foto(p[3])
+            fotos_extra = [f for f in (p[8] or '').split('|') if f.strip()]
+            # Construir lista completa de fotos sin duplicar
+            todas_fotos = []
+            if foto_principal:
+                todas_fotos.append(foto_principal)
+            for f in fotos_extra:
+                if f not in todas_fotos:
+                    todas_fotos.append(f)
             lista_productos.append({
                 "id":             p[0],
                 "nombre":         p[1],
                 "precio":         float(p[2]),
-                "foto":           limpiar_foto(p[3]),
+                "foto":           foto_principal,
+                "fotos":          todas_fotos,
                 "es_plantilla":   bool(p[4]),
                 "en_stock":       bool(p[5]),
                 "stock_cantidad": int(p[6]),
+                "categoria":      p[7] or 'Sofá',
             })
         return jsonify(lista_productos)
     except Exception as ex:
         return jsonify({"error": str(ex)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@catalogo_bp.route('/api/catalogo/plantilla', methods=['POST'])
+@requiere_login
+def agregar_plantilla_catalogo():
+    """Registra un modelo de la carta (es_plantilla=True) con múltiples fotos y categoría."""
+    try:
+        nombre    = request.form.get('nombre', '').strip()
+        precio    = float(request.form.get('precio', 0) or 0)
+        categoria = request.form.get('categoria', 'Sofá').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+
+        if not nombre:
+            return jsonify({'error': 'El nombre del modelo es obligatorio'}), 400
+
+        fotos = request.files.getlist('fotos')
+        fotos = [f for f in fotos if f and f.filename]
+        if not fotos:
+            return jsonify({'error': 'Debes subir al menos una foto del modelo'}), 400
+
+        urls_subidas = []
+        for f in fotos:
+            res = cloudinary.uploader.upload(f, folder="catalogo_plantillas")
+            urls_subidas.append(res.get('secure_url'))
+
+        foto_principal = urls_subidas[0]
+        fotos_urls_str = '|'.join(urls_subidas[1:]) if len(urls_subidas) > 1 else ''
+
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            INSERT INTO catalogo_productos
+                (nombre_modelo, precio_base, foto_url, fotos_urls, categoria,
+                 es_plantilla, en_stock, origen_produccion, stock_cantidad)
+            VALUES (%s, %s, %s, %s, %s, True, False, 'Producción', 0)
+            RETURNING id
+        """, (nombre, precio, foto_principal, fotos_urls_str, categoria))
+        nuevo_id = cursor.fetchone()[0]
+        conexion.commit()
+        return jsonify({'exito': True, 'id': nuevo_id, 'mensaje': f'Modelo "{nombre}" añadido a la carta'}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@catalogo_bp.route('/api/catalogo/plantilla/<int:producto_id>', methods=['DELETE'])
+@requiere_login
+def eliminar_plantilla_catalogo(producto_id):
+    """Elimina un modelo de la carta (solo si es_plantilla=True y no tiene ventas)."""
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("SELECT es_plantilla FROM catalogo_productos WHERE id = %s", (producto_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Producto no encontrado'}), 404
+        if not row[0]:
+            return jsonify({'error': 'Solo se pueden eliminar modelos de la carta'}), 400
+        cursor.execute("DELETE FROM catalogo_productos WHERE id = %s", (producto_id,))
+        conexion.commit()
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
