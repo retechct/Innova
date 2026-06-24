@@ -51,11 +51,11 @@ function _htmlEsqueleto() {
         <h2>Inventario por Tienda</h2>
         <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
             ${_puedeEditarInv() ? `
-            <button onclick="abrirModalNuevoItem()" 
+            <button id="btn-inv-nuevo" onclick="abrirModalNuevoItem()" 
                     style="background:var(--accent);color:white;border:none;padding:10px 16px;
                            border-radius:10px;font-weight:800;cursor:pointer;font-size:12px;
                            display:flex;align-items:center;gap:6px;">
-                <i class="fas fa-plus"></i> Registrar
+                <i class="fas fa-plus"></i> Registrar...
             </button>` : ''}
             ${_puedeEditarInv() ? `
             <button onclick="_invImprimirMasivo()" 
@@ -212,6 +212,20 @@ async function _invCambiarTab(tab) {
         const btn = document.getElementById(`tab-${t}`);
         if (btn) btn.classList.toggle('active', t === tab);
     });
+
+    // TAREA 1: Mostrar/ocultar y cambiar texto del botón de registro según el tab
+    const btnNuevo = document.getElementById('btn-inv-nuevo');
+    if (btnNuevo && _puedeEditarInv()) {
+        if (tab === 'productos') {
+            btnNuevo.style.display = 'flex';
+            btnNuevo.innerHTML = '<i class="fas fa-couch"></i> Registrar Producto';
+        } else if (tab === 'piezas') {
+            btnNuevo.style.display = 'flex';
+            btnNuevo.innerHTML = '<i class="fas fa-puzzle-piece"></i> Registrar Pieza';
+        } else { // historial
+            btnNuevo.style.display = 'none';
+        }
+    }
 
     // Actualizar categorías del filtro según tab
     const selCat = document.getElementById('inv-filtro-cat');

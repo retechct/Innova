@@ -686,7 +686,28 @@ async function cargarLogisticaExterna() {
 
         // ── Sección 2: Completados (colapsable) ───────────────────
         if (itemsCompletados.length > 0) {
+            // 1. Agrupar por código de venta
+            const groupedCompletados = itemsCompletados.reduce((acc, item) => {
+                const key = item.codigo_venta;
+                if (!acc[key]) {
+                    acc[key] = {
+                        codigo_venta: key,
+                        items: [],
+                        precio_total: 0,
+                        proveedor_resumen: new Set(),
+                        todos_recibidos: true
+                    };
+                }
+                acc[key].items.push(item);
+                acc[key].precio_total += (item.precio_cotizado || 0);
+                if (item.estado !== 'Recibido') acc[key].todos_recibidos = false;
+                acc[key].proveedor_resumen.add(item.proveedor);
+                return acc;
+            }, {});
+
+            const gruposArray = Object.values(groupedCompletados);
             const idCollapse = 'log-completados-body';
+
             html += `
             <div style="margin-top:8px;">
                 <button onclick="const b=document.getElementById('${idCollapse}');const ic=this.querySelector('i');
@@ -698,19 +719,68 @@ async function cargarLogisticaExterna() {
                     <i class="fa-solid fa-circle-check" style="color:#86efac;"></i>
                     Completados / Recibidos
                     <span style="margin-left:auto;background:#d1fae5;color:#065f46;border-radius:20px;
-                                 padding:2px 10px;font-size:11px;font-weight:800;">${itemsCompletados.length}</span>
+                                 padding:2px 10px;font-size:11px;font-weight:800;">${gruposArray.length}</span>
                 </button>
                 <div id="${idCollapse}" style="display:none;margin-top:8px;">`;
 
             if (esMobil) {
-                html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;opacity:.8;">`;
-                itemsCompletados.forEach(item => { html += _renderCardMobile(item, proveedores, esAdmin, coloresEstado); });
-                html += `</div>`;
+                html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;opacity:.8;">
+                    ${gruposArray.map((grupo, idx) => {
+                        const provs = [...grupo.proveedor_resumen];
+                        const provLabel = provs.length > 1 ? 'Múltiples' : provs[0] || 'N/A';
+                        const estadoLabel = grupo.todos_recibidos ? 'Recibido' : 'Parcial';
+                        const c = coloresEstado[estadoLabel] || coloresEstado['Recibido'];
+                        const subId = `log-comp-mob-${idx}`;
+                        return `
+                        <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                                <div style="font-weight:900;font-size:14px;color:#d97706;">#${grupo.codigo_venta}</div>
+                                <span style="background:${c.bg};color:${c.color};padding:3px 9px;border-radius:20px;font-weight:800;font-size:10px;">${estadoLabel}</span>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:10px;">
+                                <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;"><div style="font-size:10px;color:#94a3b8;font-weight:700;">PROVEEDOR</div><div style="font-weight:600;">${provLabel}</div></div>
+                                <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;"><div style="font-size:10px;color:#94a3b8;font-weight:700;">TOTAL</div><div style="font-weight:900;color:#166534;">S/ ${grupo.precio_total.toFixed(2)}</div></div>
+                            </div>
+                            <button onclick="document.getElementById('${subId}').style.display = document.getElementById('${subId}').style.display === 'none' ? 'block' : 'none';"
+                                    style="width:100%;background:#f1f5f9;color:#475569;border:none;padding:8px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;">
+                                Ver ${grupo.items.length} insumos <i class="fa-solid fa-chevron-down" style="font-size:9px;"></i>
+                            </button>
+                            <div id="${subId}" style="display:none;margin-top:10px;font-size:11px;border-top:1px solid #f1f5f9;padding-top:8px;">
+                                ${grupo.items.map(i => `<div style="display:flex;justify-content:space-between;padding:4px 0;"><span>${i.insumo}</span><span style="font-weight:600;">S/ ${(i.precio_cotizado||0).toFixed(2)}</span></div>`).join('')}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>`;
             } else {
-                html += `<div style="overflow-x:auto;opacity:.85;">`;
-                html += _tablaHeader(esAdmin);
-                itemsCompletados.forEach((item, idx) => { html += _renderFilaDesktop(item, idx, proveedores, esAdmin, coloresEstado, '#f9fafb'); });
-                html += `</tbody></table></div>`;
+                html += `<div style="overflow-x:auto;opacity:.85;">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px;">
+                        <thead><tr style="background:#f1f5f9;color:#475569;font-size:11px;font-weight:900;text-transform:uppercase;">
+                            <th style="padding:10px 14px;text-align:left;">Pedido</th><th style="padding:10px 14px;text-align:left;">Proveedor</th>
+                            <th style="padding:10px 10px;text-align:center;">Insumos</th><th style="padding:10px 10px;text-align:right;">Total</th>
+                            <th style="padding:10px 10px;text-align:center;">Estado</th>
+                        </tr></thead>
+                        <tbody>${gruposArray.map((grupo, idx) => {
+                            const provs = [...grupo.proveedor_resumen];
+                            const provLabel = provs.length > 1 ? 'Múltiples' : provs[0] || 'N/A';
+                            const estadoLabel = grupo.todos_recibidos ? 'Recibido' : 'Parcial';
+                            const c = coloresEstado[estadoLabel] || coloresEstado['Recibido'];
+                            const subId = `log-comp-desk-${idx}`;
+                            return `
+                            <tr style="cursor:pointer;background:#fafbfc;" onclick="const sub=document.getElementById('${subId}'); sub.style.display = sub.style.display === 'none' ? 'table-row' : 'none';">
+                                <td style="padding:12px 14px;font-weight:900;color:#d97706;">#${grupo.codigo_venta}</td>
+                                <td style="padding:12px 14px;">${provLabel}</td>
+                                <td style="padding:12px 10px;text-align:center;"><span style="background:#e2e8f0;color:#475569;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;">${grupo.items.length}</span></td>
+                                <td style="padding:12px 10px;text-align:right;font-weight:800;color:#166534;">S/ ${grupo.precio_total.toFixed(2)}</td>
+                                <td style="padding:12px 10px;text-align:center;"><span style="background:${c.bg};color:${c.color};padding:4px 10px;border-radius:20px;font-weight:800;font-size:11px;">${estadoLabel}</span></td>
+                            </tr>
+                            <tr id="${subId}" style="display:none;background:#fff;"><td colspan="5" style="padding:0 14px 14px 40px;border-bottom:2px solid #e2e8f0;">
+                                <table style="width:100%;font-size:12px;margin-top:10px;">
+                                    ${grupo.items.map(i => `<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:6px;">${i.insumo} ${i.sku ? `<span style="color:#94a3b8;font-size:10px;">(${i.sku})</span>` : ''}</td><td style="padding:6px;text-align:right;font-weight:600;">S/ ${(i.precio_cotizado||0).toFixed(2)}</td><td style="padding:6px;text-align:center;"><span style="background:${(coloresEstado[i.estado]||{}).bg||'#f1f5f9'};color:${(coloresEstado[i.estado]||{}).color||'#475569'};padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">${i.estado}</span></td></tr>`).join('')}
+                                </table>
+                            </td></tr>`;
+                        }).join('')}</tbody>
+                    </table>
+                </div>`;
             }
             html += `</div></div>`;
         }
