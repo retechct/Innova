@@ -624,28 +624,39 @@ async function _invMostrarDetalleUnidad(d) {
         }
     }
 
-    // ✅ FUNCIÓN HELPER: Extraer URL limpia y validar
-    function obtenerFotoLimpia(url) {
-        if (!url) return null;
-        // Si contiene |, tomar la primera parte (puede ser múltiples fotos separadas por |)
-        return url.split('|')[0].trim();
-    }
+    // ✅ NUEVO: Lógica de carrusel
+    const fotoMaestro = (fotoUrlFinal || '').split('|')[0].trim();
+    const fotosAdicionales = (d.fotos_adicionales || '').split('|').filter(Boolean);
+    const todasLasFotos = [fotoMaestro, ...fotosAdicionales].filter(Boolean);
 
-    const fotoLimpia = obtenerFotoLimpia(fotoUrlFinal);
-    
-    // 2. HTML de imagen mejorado (con fallback y mejor diseño responsive)
-    const fotoHTML = fotoLimpia 
-        ? `<div style="text-align:center; margin-bottom:15px; display:flex; flex-direction:column; align-items:center;">
-               <img src="${fotoLimpia}" 
-                    alt="${d.nombre_modelo}"
-                    style="max-width:180px; width:100%; height:auto; max-height:180px; object-fit:cover; border-radius:12px; border:2px solid #e2e8f0; box-shadow:0 4px 10px rgba(0,0,0,0.08);"
-                    onerror="this.src='imagenes/sin_foto.jpg'; this.style.opacity='0.6';">
-               <p style="font-size:10px; color:var(--text-muted); margin-top:6px; font-weight:bold; letter-spacing:0.5px;">FOTO DEL CATÁLOGO</p>
-           </div>`
-        : `<div style="text-align:center; margin-bottom:15px; padding:20px; background:#f1f5f9; border-radius:12px; color:var(--text-muted);">
+    let fotoHTML = '';
+    if (todasLasFotos.length > 0) {
+        const carouselId = `carousel-det-${d.id}`;
+        const slides = todasLasFotos.map((foto, index) => `
+            <div style="min-width:100%; scroll-snap-align:center;">
+                <img src="${foto}" alt="${d.nombre_modelo} - Foto ${index + 1}"
+                     style="width:100%; height:220px; object-fit:cover; border-radius:12px;"
+                     onerror="this.src='imagenes/sin_foto.jpg';">
+            </div>
+        `).join('');
+
+        fotoHTML = `
+            <div style="position:relative; margin-bottom:15px;">
+                <div id="${carouselId}" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; border-radius:12px; border:1px solid #e2e8f0; background:#f8fafc;">
+                    ${slides}
+                </div>
+                ${todasLasFotos.length > 1 ? `
+                <button onclick="_carouselNav('${carouselId}', -1)" style="position:absolute; top:50%; left:8px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;">‹</button>
+                <button onclick="_carouselNav('${carouselId}', 1)" style="position:absolute; top:50%; right:8px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;">›</button>
+                ` : ''}
+            </div>
+        `;
+    } else {
+        fotoHTML = `<div style="text-align:center; margin-bottom:15px; padding:20px; background:#f1f5f9; border-radius:12px; color:var(--text-muted);">
                <i class="fas fa-image" style="font-size:32px; opacity:0.3; margin-bottom:8px; display:block;"></i>
                <p style="font-size:12px; margin:0;">Sin foto disponible</p>
            </div>`;
+    }
 
     let html = fotoHTML + `
     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:15px;">
@@ -1423,6 +1434,14 @@ function _invEliminarFotoAdicional(index, containerId) {
 }
 
 /* ─── Helpers ────────────────────────────────────────────────── */
+function _carouselNav(carouselId, direction) {
+    const container = document.getElementById(carouselId);
+    if (container) {
+        const scrollAmount = container.clientWidth;
+        container.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+    }
+}
+
 function _fmtMedida(p) {
     if (p.forma === 'Circular') return p.largo_cm ? `⌀ ${p.largo_cm} cm` : 'Circular';
     if (p.forma === 'Rectangular') {
