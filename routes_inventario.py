@@ -128,7 +128,7 @@ _MAESTRO_FOTO_MAP = {
 def _obtener_foto_maestro(cur, categoria, nombre_modelo):
     """
     Busca la foto_url del maestro correspondiente a una categoría y nombre de modelo.
-    Devuelve la URL limpia (str) o '' si no encuentra nada.
+    Devuelve la URL o URLs (str) o '' si no encuentra nada.
     """
     if not categoria or not nombre_modelo:
         return ''
@@ -143,8 +143,7 @@ def _obtener_foto_maestro(cur, categoria, nombre_modelo):
         )
         row = cur.fetchone()
         if row and row[0]:
-            # Normalizar: tomar primera URL si hay varias separadas por |
-            return row[0].split('|')[0].strip()
+            return row[0]
     except Exception:
         pass
     return ''

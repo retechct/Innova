@@ -624,10 +624,10 @@ async function _invMostrarDetalleUnidad(d) {
         }
     }
 
-    // ✅ NUEVO: Lógica de carrusel
-    const fotoMaestro = (fotoUrlFinal || '').split('|')[0].trim();
+// ✅ Lógica de carrusel mejorada: mostrar todas las fotos del maestro primero
+    const fotosMaestro = (fotoUrlFinal || '').split('|').filter(Boolean);
     const fotosAdicionales = (d.fotos_adicionales || '').split('|').filter(Boolean);
-    const todasLasFotos = [fotoMaestro, ...fotosAdicionales].filter(Boolean);
+    const todasLasFotos = [...fotosMaestro, ...fotosAdicionales];
 
     let fotoHTML = '';
     if (todasLasFotos.length > 0) {
@@ -1403,11 +1403,14 @@ function _invRenderizarFotosPreview(containerId, fotoMaestro = null) {
     if (!previewContainer) return;
     previewContainer.innerHTML = '';
 
-    if (fotoMaestro) {
+    // Tomar solo la primera foto del maestro para el preview
+    const fotoPrincipal = (fotoMaestro || '').split('|')[0].trim();
+
+    if (fotoPrincipal) {
         const div = document.createElement('div');
         div.style.position = 'relative';
         div.innerHTML = `
-            <img src="${fotoMaestro}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:2px solid var(--accent);">
+            <img src="${fotoPrincipal}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:2px solid var(--accent);">
             <span style="position:absolute;top:-5px;left:-5px;background:var(--accent);color:white;font-size:8px;padding:1px 4px;border-radius:4px;font-weight:bold;">Catálogo</span>
         `;
         previewContainer.appendChild(div);
