@@ -284,19 +284,20 @@ def resumen_piezas():
                     MAX(mt.foto_url),
                     MAX(ms.foto_url),
                     MAX(mb.foto_url),
-                    MAX(mbu.foto_url)
+                    MAX(mbu.foto_url),
+                    MAX(sp.foto_url)
                 ) AS foto_maestro,
                 MAX(sp.fotos_adicionales) AS fotos_adicionales
             FROM stock_piezas sp
             JOIN sedes se ON sp.sede_id = se.id
             LEFT JOIN maestro_tableros      mt  ON sp.categoria = 'tablero'
-                AND LOWER(mt.nombre_modelo) = LOWER(sp.nombre_modelo)
+                AND (mt.sku = sp.sku_maestro OR LOWER(mt.nombre_modelo) = LOWER(sp.nombre_modelo))
             LEFT JOIN maestro_sillas        ms  ON sp.categoria = 'silla'
-                AND LOWER(ms.modelo) = LOWER(sp.nombre_modelo)
+                AND (ms.sku = sp.sku_maestro OR LOWER(ms.modelo) = LOWER(sp.nombre_modelo))
             LEFT JOIN maestro_bases_comedor mb  ON sp.categoria IN ('base-comedor','base-consola','base-mesa-centro')
-                AND LOWER(mb.modelo) = LOWER(sp.nombre_modelo)
+                AND (mb.sku = sp.sku_maestro OR LOWER(mb.modelo) = LOWER(sp.nombre_modelo))
             LEFT JOIN maestro_butacas       mbu ON sp.categoria = 'butaca'
-                AND LOWER(mbu.modelo) = LOWER(sp.nombre_modelo)
+                AND (mbu.sku = sp.sku_maestro OR LOWER(mbu.modelo) = LOWER(sp.nombre_modelo))
             {where_sql}
             GROUP BY sp.categoria, sp.sku_maestro, sp.nombre_modelo,
                      sp.material, sp.color_acabado, sp.forma,
