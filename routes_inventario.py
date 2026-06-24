@@ -483,10 +483,9 @@ def buscar_por_barcode(barcode):
         # 2. Buscar en stock_piezas
         cur.execute("""
             SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
-                   sp.material, sp.color_acabado, sp.estado, se.nombre AS sede,
-                   sp.forma, sp.largo_cm, sp.ancho_cm, sp.alto_cm,
-                   sp.costo_ingreso, sp.fecha_ingreso, 'pieza' AS tipo,
-                   sp.fotos_adicionales
+                   sp.material, sp.color_acabado, sp.estado, se.nombre AS sede, sp.forma,
+                   sp.largo_cm, sp.ancho_cm, sp.alto_cm, sp.costo_ingreso,
+                   sp.fecha_ingreso, 'pieza' AS tipo, sp.fotos_adicionales, sp.sku_maestro
             FROM stock_piezas sp
             LEFT JOIN sedes se ON sp.sede_id = se.id
             WHERE sp.codigo_barra = %s;
@@ -494,52 +493,44 @@ def buscar_por_barcode(barcode):
         row = cur.fetchone()
         if row:
             fotos_adicionales_str = row[15] or ""
+            sku_maestro_pieza     = row[16] or ""
             categoria_pieza       = (row[3] or '').lower()
             nombre_pieza          = row[2] or ''
 
             # Buscar foto del maestro según categoría (query separada, sin CASE)
             foto_maestro = ''
             try:
-                if categoria_pieza == 'tablero':
+                tabla_maestro, col_nombre = '', ''
+                if categoria_pieza == 'tablero': tabla_maestro, col_nombre = 'maestro_tableros', 'nombre_modelo'
+                elif categoria_pieza == 'silla': tabla_maestro, col_nombre = 'maestro_sillas', 'modelo'
+                elif categoria_pieza == 'butaca': tabla_maestro, col_nombre = 'maestro_butacas', 'modelo'
+                elif 'base' in categoria_pieza: tabla_maestro, col_nombre = 'maestro_bases_comedor', 'modelo'
+
+                if tabla_maestro:
                     cur.execute(
-                        'SELECT foto_url FROM maestro_tableros '
-                        'WHERE LOWER(nombre_modelo) = LOWER(%s) LIMIT 1',
-                        (nombre_pieza,)
+                        f"SELECT foto_url FROM {tabla_maestro} "
+                        f"WHERE sku = %s OR LOWER({col_nombre}) = LOWER(%s) LIMIT 1",
+                        (sku_maestro_pieza, nombre_pieza)
                     )
-                elif categoria_pieza == 'silla':
-                    cur.execute(
-                        'SELECT foto_url FROM maestro_sillas '
-                        'WHERE LOWER(modelo) = LOWER(%s) LIMIT 1',
-                        (nombre_pieza,)
-                    )
-                elif categoria_pieza == 'butaca':
-                    cur.execute(
-                        'SELECT foto_url FROM maestro_butacas '
-                        'WHERE LOWER(modelo) = LOWER(%s) LIMIT 1',
-                        (nombre_pieza,)
-                    )
-                else:  # base-comedor, base-consola, base-mesa-centro
-                    cur.execute(
-                        'SELECT foto_url FROM maestro_bases_comedor '
-                        'WHERE LOWER(modelo) = LOWER(%s) LIMIT 1',
-                        (nombre_pieza,)
-                    )
-                r_foto = cur.fetchone()
-                if r_foto and r_foto[0]:
-                    foto_maestro = r_foto[0]
+                    r_foto = cur.fetchone()
+                    if r_foto and r_foto[0]:
+                        foto_maestro = r_foto[0]
             except Exception:
                 pass
 
             # Maestro primero, luego fotos adicionales subidas al registrar
             todas_fotos = []
-            for f in foto_maestro.split('|'):
-                f = f.strip()
-                if f and f not in todas_fotos:
-                    todas_fotos.append(f)
-            for f in fotos_adicionales_str.split('|'):
-                f = f.strip()
-                if f and f not in todas_fotos:
-                    todas_fotos.append(f)
+            seen_fotos = set()
+            def add_photos(photo_str):
+                if not photo_str: return
+                for f_url in photo_str.split('|'):
+                    f = f_url.strip()
+                    if f and f not in seen_fotos:
+                        todas_fotos.append(f)
+                        seen_fotos.add(f)
+
+            add_photos(foto_maestro)
+            add_photos(fotos_adicionales_str)
 
             return jsonify({
                 "tipo":              "pieza",
