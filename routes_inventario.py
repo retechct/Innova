@@ -186,9 +186,12 @@ def resumen_productos():
                 COUNT(*) FILTER (WHERE sp.estado = 'Disponible')           AS disponibles,
                 COUNT(*) FILTER (WHERE sp.estado = 'Reservado')            AS reservados,
                 COUNT(*) FILTER (WHERE sp.estado = 'Vendido')              AS vendidos,
-                MAX(sp.foto_url)                                            AS foto_url
+                MAX(sp.foto_url)                                            AS foto_url,
+                MAX(cp.foto_url)                                            AS cat_foto_url,
+                MAX(cp.fotos_urls)                                          AS cat_fotos_urls
             FROM stock_productos sp
             JOIN sedes se ON sp.sede_id = se.id
+            LEFT JOIN catalogo_productos cp ON sp.catalogo_id = cp.id
             {where_sql}
             GROUP BY sp.categoria, sp.nombre_modelo, sp.catalogo_id, sp.sede_id, se.nombre
             ORDER BY sp.categoria, sp.nombre_modelo, se.nombre;
@@ -200,11 +203,26 @@ def resumen_productos():
         for r in rows:
             key = (r[0], r[1])  # (categoria, nombre_modelo)
             if key not in modelos:
+                # Construir lista de fotos: maestro primero, luego propias de stock
+                cat_foto_url   = r[10] or ""
+                cat_fotos_urls = r[11] or ""
+                stock_foto_url = r[9]  or ""
+                todas_fotos = []
+                if cat_foto_url:
+                    todas_fotos.append(cat_foto_url)
+                for f in cat_fotos_urls.split('|'):
+                    f = f.strip()
+                    if f and f not in todas_fotos:
+                        todas_fotos.append(f)
+                if stock_foto_url and stock_foto_url not in todas_fotos:
+                    todas_fotos.append(stock_foto_url)
+
                 modelos[key] = {
                     "categoria":     r[0],
                     "nombre_modelo": r[1],
                     "catalogo_id":   r[2],
-                    "foto_url":      r[9] or "",
+                    "foto_url":      todas_fotos[0] if todas_fotos else "",
+                    "fotos":         todas_fotos,
                     "total":         0,
                     "disponibles":   0,
                     "sede_stock":    {s[1]: {"total":0,"disponibles":0} for s in sedes},

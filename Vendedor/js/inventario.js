@@ -281,7 +281,7 @@ async function _cargarDatosTab() {
     }
 }
 
-/* ─── Render: tabla pivot de productos ─────────────────────── */
+/* ─── Render: tarjetas con carousel de productos ────────────── */
 function _renderTablaProductos() {
     const contenido = document.getElementById('inv-contenido');
     const sedes     = _invDataProd.sedes  || [];
@@ -292,82 +292,171 @@ function _renderTablaProductos() {
         return;
     }
 
+    // Checkbox maestro en barra superior
     let html = `
-    <div style="overflow-x:auto;border-radius:16px;border:1px solid #e2e8f0;
-                box-shadow:0 4px 12px rgba(0,0,0,0.05);">
-    <table style="width:100%;border-collapse:collapse;min-width:650px;">
-        <thead>
-            <tr style="background:#f1f5f9;font-size:11px;font-weight:900;
-                       text-transform:uppercase;color:var(--text-muted);">
-                <th style="padding:12px 16px;text-align:left;position:sticky;left:0;background:#f1f5f9;z-index:2;min-width:200px;">
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <input type="checkbox" onchange="document.querySelectorAll('.chk-prod').forEach(c=>c.checked=this.checked)">
-                        <span>Modelo</span>
-                    </div>
-                </th>
-                <th style="padding:12px 10px;text-align:center;color:var(--success);">Total Disp.</th>
-                ${sedes.map(s=>`<th style="padding:12px 8px;text-align:center;">${s}</th>`).join('')}
-                <th style="padding:12px 10px;text-align:center;">Acciones</th>
-            </tr>
-        </thead>
-        <tbody>`;
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;
+                      font-weight:700;color:var(--text-muted);cursor:pointer;">
+            <input type="checkbox" id="chk-prod-all"
+                   onchange="document.querySelectorAll('.chk-prod').forEach(c=>c.checked=this.checked)">
+            Seleccionar todos
+        </label>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:auto;">
+            ${modelos.length} modelos
+        </span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;">`;
 
     modelos.forEach((m, idx) => {
-        const bg = idx % 2 === 0 ? 'white' : '#fafbfc';
-        const catBadge = `<span style="background:#eff6ff;color:var(--accent);font-size:9px;
-            font-weight:900;padding:2px 7px;border-radius:8px;">${m.categoria.toUpperCase()}</span>`;
+        const cid  = `inv-car-${idx}`;
+        const fotos = (m.fotos && m.fotos.length) ? m.fotos
+                    : (m.foto_url ? [m.foto_url] : []);
+        const tieneCarousel = fotos.length > 1;
+
+        // Slides del carousel
+        const slides = fotos.length
+            ? fotos.map((f, i) => `
+                <div style="min-width:100%;scroll-snap-align:center;">
+                    <img src="${f}" alt="${m.nombre_modelo} foto ${i+1}"
+                         style="width:100%;height:180px;object-fit:cover;"
+                         onerror="this.src='imagenes/sin_foto.jpg'">
+                </div>`).join('')
+            : `<div style="min-width:100%;display:flex;align-items:center;justify-content:center;
+                           height:180px;background:#f1f5f9;color:#cbd5e1;flex-direction:column;gap:8px;">
+                   <i class="fas fa-image" style="font-size:2rem;"></i>
+                   <span style="font-size:11px;">Sin foto</span>
+               </div>`;
+
+        // Stock por sede (solo las con unidades)
+        const sedesConStock = sedes
+            .map(s => ({ nombre: s, st: (m.sede_stock||{})[s] || {disponibles:0,total:0} }))
+            .filter(x => x.st.total > 0);
+
+        const sedesHTML = sedesConStock.length
+            ? sedesConStock.map(x => `
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                            padding:4px 0;border-bottom:1px solid #f1f5f9;font-size:11px;">
+                    <span style="color:var(--text-muted);white-space:nowrap;overflow:hidden;
+                                 text-overflow:ellipsis;max-width:130px;" title="${x.nombre}">
+                        ${x.nombre}
+                    </span>
+                    <span style="font-weight:800;
+                                 color:${x.st.disponibles>0?'#16a34a':'#94a3b8'};">
+                        ${x.st.disponibles}
+                        ${x.st.total>x.st.disponibles
+                            ? `<span style="font-weight:400;color:#cbd5e1;">/${x.st.total}</span>`
+                            : ''}
+                    </span>
+                </div>`).join('')
+            : `<div style="font-size:11px;color:#cbd5e1;text-align:center;padding:6px 0;">Sin stock</div>`;
 
         html += `
-        <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
-            onmouseover="this.style.background='#eff6ff'"
-            onmouseout="this.style.background='${bg}'">
-            <td style="padding:12px 16px;position:sticky;left:0;background:inherit;z-index:1;">
-                <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <input type="checkbox" class="chk-prod" value="${encodeURIComponent(JSON.stringify(m))}" data-cant="${m.disponibles}" style="margin-top:2px;">
-                    <div>
-                        <div style="font-weight:800;font-size:13px;">${m.nombre_modelo}</div>
-                        <div style="margin-top:3px;">${catBadge}</div>
-                    </div>
+        <div style="background:white;border-radius:16px;border:1px solid #e2e8f0;
+                    box-shadow:0 2px 8px rgba(0,0,0,0.05);overflow:hidden;
+                    display:flex;flex-direction:column;">
+
+            <!-- Carousel foto -->
+            <div style="position:relative;">
+                <div id="${cid}"
+                     style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+                            scrollbar-width:none;">
+                    ${slides}
                 </div>
-            </td>
-            <td style="padding:12px 10px;text-align:center;">
-                <span style="background:${m.disponibles>0?'#dcfce7':'#fee2e2'};
-                    color:${m.disponibles>0?'#16a34a':'#dc2626'};
-                    font-weight:900;padding:4px 12px;border-radius:8px;font-size:13px;">
-                    ${m.disponibles}
-                </span>
-            </td>
-            ${sedes.map(s => {
-                const st = (m.sede_stock || {})[s] || {disponibles:0,total:0};
-                return `<td style="padding:12px 8px;text-align:center;">
-                    <div style="font-weight:700;font-size:13px;
-                         color:${st.disponibles>0?'var(--primary)':'#cbd5e1'};">
-                        ${st.disponibles}
-                    </div>
-                    ${st.total > st.disponibles ? `<div style="font-size:10px;color:var(--text-muted);">
-                        ${st.total} total</div>` : ''}
-                </td>`;
-            }).join('')}
-            <td style="padding:12px 8px;text-align:center;display:flex;gap:4px;justify-content:center;">
-                <button onclick="_invImprimirFisico('${encodeURIComponent(JSON.stringify(m))}')"
-                        style="background:#f8fafc;border:1px solid #cbd5e1;padding:6px 10px;border-radius:6px;
-                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Imprimir Código Físico">
-                    <i class="fas fa-barcode"></i> SKU
-                </button>
-                <button onclick="_invVerUnidades('${m.nombre_modelo.replace(/'/g,"\\'")}','${m.categoria}',${m.catalogo_id||'null'})"
-                        style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;
-                               color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;">
-                    <i class="fas fa-eye"></i> Ver
-                </button>
-            </td>
-        </tr>`;
+                ${tieneCarousel ? `
+                <button onclick="_carouselNav('${cid}',-1)"
+                        style="position:absolute;top:50%;left:6px;transform:translateY(-50%);
+                               background:rgba(0,0,0,0.45);color:white;border:none;
+                               border-radius:50%;width:28px;height:28px;cursor:pointer;
+                               font-size:15px;display:flex;align-items:center;justify-content:center;
+                               line-height:1;">‹</button>
+                <button onclick="_carouselNav('${cid}',1)"
+                        style="position:absolute;top:50%;right:6px;transform:translateY(-50%);
+                               background:rgba(0,0,0,0.45);color:white;border:none;
+                               border-radius:50%;width:28px;height:28px;cursor:pointer;
+                               font-size:15px;display:flex;align-items:center;justify-content:center;
+                               line-height:1;">›</button>
+                <!-- Dots -->
+                <div style="position:absolute;bottom:6px;left:0;right:0;
+                            display:flex;justify-content:center;gap:4px;">
+                    ${fotos.map((_,i)=>`
+                    <div class="inv-dot-${cid}" data-idx="${i}"
+                         style="width:6px;height:6px;border-radius:50%;
+                                background:${i===0?'white':'rgba(255,255,255,0.45)'};
+                                cursor:pointer;transition:.2s;"
+                         onclick="_carouselGoTo('${cid}',${i})"></div>`).join('')}
+                </div>` : ''}
+
+                <!-- Badge disponibles -->
+                <div style="position:absolute;top:8px;right:8px;
+                            background:${m.disponibles>0?'#16a34a':'#dc2626'};
+                            color:white;font-weight:900;font-size:12px;
+                            padding:3px 10px;border-radius:20px;">
+                    ${m.disponibles} disp.
+                </div>
+                <!-- Checkbox -->
+                <div style="position:absolute;top:8px;left:8px;">
+                    <input type="checkbox" class="chk-prod"
+                           value="${encodeURIComponent(JSON.stringify(m))}"
+                           data-cant="${m.disponibles}"
+                           style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
+                </div>
+            </div>
+
+            <!-- Cuerpo -->
+            <div style="padding:12px;flex:1;display:flex;flex-direction:column;gap:8px;">
+                <div>
+                    <div style="font-weight:800;font-size:13px;color:var(--primary);
+                                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                         title="${m.nombre_modelo}">${m.nombre_modelo}</div>
+                    <span style="background:#eff6ff;color:var(--accent);font-size:9px;
+                                 font-weight:900;padding:2px 7px;border-radius:8px;
+                                 display:inline-block;margin-top:3px;">
+                        ${m.categoria.toUpperCase()}
+                    </span>
+                </div>
+
+                <!-- Stock por sede -->
+                <div style="flex:1;">${sedesHTML}</div>
+
+                <!-- Acciones -->
+                <div style="display:flex;gap:6px;margin-top:4px;">
+                    <button onclick="_invImprimirFisico('${encodeURIComponent(JSON.stringify(m))}')"
+                            style="flex:1;background:#f8fafc;border:1px solid #cbd5e1;
+                                   padding:7px 0;border-radius:8px;color:var(--text-muted);
+                                   cursor:pointer;font-size:11px;font-weight:700;">
+                        <i class="fas fa-barcode"></i> SKU
+                    </button>
+                    <button onclick="_invVerUnidades('${m.nombre_modelo.replace(/'/g,"\\'")}','${m.categoria}',${m.catalogo_id||'null'})"
+                            style="flex:1;background:#f1f5f9;border:none;padding:7px 0;
+                                   border-radius:8px;color:var(--text-muted);cursor:pointer;
+                                   font-size:11px;font-weight:700;">
+                        <i class="fas fa-eye"></i> Ver
+                    </button>
+                </div>
+            </div>
+        </div>`;
     });
 
-    html += `</tbody></table></div>
-    <div style="margin-top:10px;font-size:11px;color:var(--text-muted);text-align:right;">
-        ${modelos.length} modelos — "Total Disp." = unidades en estado Disponible
-    </div>`;
+    html += `</div>`;
     contenido.innerHTML = html;
+
+    // Sincronizar dots con scroll en cada carousel
+    modelos.forEach((_, idx) => {
+        const cid = `inv-car-${idx}`;
+        const el  = document.getElementById(cid);
+        if (!el) return;
+        el.addEventListener('scroll', () => {
+            const i = Math.round(el.scrollLeft / el.clientWidth);
+            document.querySelectorAll(`.inv-dot-${cid}`).forEach((d, di) => {
+                d.style.background = di === i ? 'white' : 'rgba(255,255,255,0.45)';
+            });
+        }, { passive: true });
+    });
+}
+
+function _carouselGoTo(cid, idx) {
+    const el = document.getElementById(cid);
+    if (el) el.scrollTo({ left: el.clientWidth * idx, behavior: 'smooth' });
 }
 
 /* ─── Render: tabla pivot de piezas ────────────────────────── */
