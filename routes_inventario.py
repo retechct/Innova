@@ -427,6 +427,7 @@ def buscar_por_barcode(barcode):
         conn = _conn(); cur = conn.cursor()
 
         # 1. Buscar en stock_productos (con JOIN a catalogo para traer fotos base)
+        # El JOIN usa catalogo_id cuando existe; si es NULL, hace fallback por nombre_modelo
         cur.execute("""
             SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
                    sp.color_tela, sp.acabado, sp.estado, se.nombre AS sede,
@@ -436,15 +437,18 @@ def buscar_por_barcode(barcode):
                    COALESCE(cp.fotos_urls, '')  AS cat_fotos_urls
             FROM stock_productos sp
             LEFT JOIN sedes se ON sp.sede_id = se.id
-            LEFT JOIN catalogo_productos cp ON sp.catalogo_id = cp.id
+            LEFT JOIN catalogo_productos cp
+                   ON (sp.catalogo_id IS NOT NULL AND cp.id = sp.catalogo_id)
+                   OR (sp.catalogo_id IS NULL
+                       AND LOWER(cp.nombre_modelo) = LOWER(sp.nombre_modelo))
             WHERE sp.codigo_barra = %s;
         """, (barcode,))
         row = cur.fetchone()
         if row:
             # Construir lista completa de fotos: catálogo primero, luego propias del stock
-            cat_foto_url   = row[14] or ""
-            cat_fotos_urls = row[15] or ""
-            stock_foto_url = row[8]  or ""
+            cat_foto_url      = row[14] or ""
+            cat_fotos_urls    = row[15] or ""
+            stock_foto_url    = row[8]  or ""   # puede ser pipe-separated
             fotos_adicionales = row[13] or ""
 
             todas_fotos = []
@@ -456,8 +460,8 @@ def buscar_por_barcode(barcode):
                 f = f.strip()
                 if f and f not in todas_fotos:
                     todas_fotos.append(f)
-            # stock_foto_url puede ser pipe-separated (el frontend guarda
-            # todas las fotos del catálogo concatenadas al momento de registrar)
+            # stock_foto_url también puede ser pipe-separated (el frontend
+            # guarda todas las fotos del catálogo al momento de registrar)
             for f in stock_foto_url.split('|'):
                 f = f.strip()
                 if f and f not in todas_fotos:
