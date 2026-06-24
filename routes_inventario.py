@@ -446,28 +446,21 @@ def buscar_por_barcode(barcode):
         row = cur.fetchone()
         if row:
             # Fotos: catálogo primero, luego stock (pipe-sep), luego adicionales
-            cat_foto_url      = row[14] or ""
-            cat_fotos_urls    = row[15] or ""
-            stock_foto_url    = row[8]  or ""
-            fotos_adicionales = row[13] or ""
-
             todas_fotos = []
-            for f in cat_foto_url.split('|'):
-                f = f.strip()
-                if f and f not in todas_fotos:
-                    todas_fotos.append(f)
-            for f in cat_fotos_urls.split('|'):
-                f = f.strip()
-                if f and f not in todas_fotos:
-                    todas_fotos.append(f)
-            for f in stock_foto_url.split('|'):
-                f = f.strip()
-                if f and f not in todas_fotos:
-                    todas_fotos.append(f)
-            for f in fotos_adicionales.split('|'):
-                f = f.strip()
-                if f and f not in todas_fotos:
-                    todas_fotos.append(f)
+            seen_fotos = set()
+
+            def add_photos(photo_str):
+                if not photo_str: return
+                for f_url in photo_str.split('|'):
+                    f = f_url.strip()
+                    if f and f not in seen_fotos:
+                        todas_fotos.append(f)
+                        seen_fotos.add(f)
+
+            add_photos(row[14]) # cat_foto_url
+            add_photos(row[15]) # cat_fotos_urls
+            add_photos(row[8])  # sp.foto_url (legacy)
+            add_photos(row[13]) # sp.fotos_adicionales
 
             return jsonify({
                 "tipo":              "producto",
