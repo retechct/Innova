@@ -736,14 +736,26 @@ async function _invMostrarDetalleUnidad(d) {
             </div>
         `).join('');
 
+        const dotsHTML = todasLasFotos.map((_, i) => `
+            <div class="inv-dot-${carouselId}" data-idx="${i}"
+                 style="width:8px; height:8px; border-radius:50%;
+                        background:${i === 0 ? 'white' : 'rgba(255,255,255,0.5)'};
+                        border: 1px solid rgba(0,0,0,0.2);
+                        cursor:pointer; transition:background .2s;"
+                 onclick="_carouselGoTo('${carouselId}', ${i})"></div>
+        `).join('');
+
         fotoHTML = `
             <div style="position:relative; margin-bottom:15px;">
-                <div id="${carouselId}" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; border-radius:12px; border:1px solid #e2e8f0; background:#f8fafc;">
+                <div id="${carouselId}" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; border-radius:12px; border:1px solid #e2e8f0; background:#f8fafc; scrollbar-width: none;">
                     ${slides}
                 </div>
                 ${todasLasFotos.length > 1 ? `
                 <button onclick="_carouselNav('${carouselId}', -1)" style="position:absolute; top:50%; left:8px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;">‹</button>
                 <button onclick="_carouselNav('${carouselId}', 1)" style="position:absolute; top:50%; right:8px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;">›</button>
+                <div style="position:absolute; bottom:10px; left:0; right:0; display:flex; justify-content:center; gap:5px;">
+                    ${dotsHTML}
+                </div>
                 ` : ''}
             </div>
         `;
@@ -822,6 +834,20 @@ async function _invMostrarDetalleUnidad(d) {
         `${d.nombre_modelo} — ${d.codigo_barra}`;
     document.getElementById('modal-inv-det-cuerpo').innerHTML = html;
     document.getElementById('modal-inv-detalle').style.display = 'flex';
+
+    // Sincronizar dots del carousel con el scroll
+    if (todasLasFotos.length > 1) {
+        const carouselId = `carousel-det-${d.id}`;
+        const el = document.getElementById(carouselId);
+        if (el) {
+            el.addEventListener('scroll', () => {
+                const i = Math.round(el.scrollLeft / el.clientWidth);
+                document.querySelectorAll(`.inv-dot-${carouselId}`).forEach((dot, dotIdx) => {
+                    dot.style.background = dotIdx === i ? 'white' : 'rgba(255,255,255,0.5)';
+                });
+            }, { passive: true });
+        }
+    }
 }
 
 async function _invCambiarEstadoDesdeModal(tipo, id, estadoNuevo, barcode) {
