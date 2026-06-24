@@ -796,13 +796,27 @@ async function abrirModalPinterest(tipoInput) {
                 return false;
             }
 
-            Swal.getConfirmButton().innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Subiendo foto...';
-            Swal.disableButtons();
+            Swal.update({
+                title: 'Optimizando imagen...',
+                html: 'Reduciendo tamaño para subida rápida...',
+                showConfirmButton: false,
+            });
+            Swal.showLoading();
+
+            let blobFinal;
+            try {
+                blobFinal = await _comprimirImagen(file);
+            } catch(compErr) {
+                console.warn('Compresión de Pinterest falló, usando original:', compErr);
+                blobFinal = file;
+            }
+
+            Swal.update({ title: 'Subiendo foto...' });
 
             try {
                 // 1. Subir la imagen primero
                 const formData = new FormData();
-                formData.append('archivo', file);
+                formData.append('archivo', blobFinal, 'pinterest-ref.jpg');
                 const res = await apiFetch(`${API_URL}/api/upload-voucher`, { method: 'POST', body: formData });
                 const data = await res.json();
                 if (!data.url) throw new Error('No se pudo obtener la URL de la imagen');
@@ -830,8 +844,6 @@ async function abrirModalPinterest(tipoInput) {
                 return { desc, url: data.url, idSugerencia: dataSug.id || Date.now().toString().slice(-6) };
             } catch (e) {
                 Swal.showValidationMessage('Error al subir la imagen. Intenta de nuevo.');
-                Swal.enableButtons();
-                Swal.getConfirmButton().innerHTML = 'Subir y Guardar';
                 return false;
             }
         }

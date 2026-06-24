@@ -57,6 +57,45 @@ function goToStep(step) {
     document.querySelectorAll('.step-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
     document.getElementById(`step-${step}`).classList.add('active');
+
+    if (step === 3) {
+        const comprobanteInput = document.getElementById('pago-comprobante');
+        if (comprobanteInput && !comprobanteInput.dataset.enhanced) {
+            const container = comprobanteInput.parentElement;
+            comprobanteInput.style.display = 'none';
+            comprobanteInput.dataset.enhanced = 'true';
+
+            const btnContainer = document.createElement('div');
+            btnContainer.style.cssText = 'display:flex; gap:8px; margin-top:5px;';
+
+            const camLabel = document.createElement('label');
+            camLabel.innerHTML = '<i class="fa-solid fa-camera"></i> Tomar foto';
+            camLabel.className = 'btn-action btn-primary';
+            camLabel.style.cssText = 'flex:1; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;';
+            
+            const camInput = document.createElement('input');
+            camInput.type = 'file';
+            camInput.accept = 'image/*';
+            camInput.capture = 'environment';
+            camInput.style.display = 'none';
+            camInput.onchange = () => {
+                if (camInput.files.length > 0) comprobanteInput.files = camInput.files;
+            };
+            camLabel.appendChild(camInput);
+
+            const galLabel = document.createElement('label');
+            galLabel.innerHTML = '<i class="fa-solid fa-folder-open"></i> Seleccionar archivo';
+            galLabel.className = 'btn-action btn-ghost';
+            galLabel.style.cssText = 'flex:1; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;';
+            galLabel.htmlFor = 'pago-comprobante';
+            comprobanteInput.removeAttribute('capture');
+
+            btnContainer.appendChild(camLabel);
+            btnContainer.appendChild(galLabel);
+            container.insertBefore(btnContainer, comprobanteInput);
+        }
+    }
+
     for(let i = 1; i <= step; i++) document.getElementById(`s${i}`).classList.add('active');
     
     const btn = document.getElementById('btn-main');
