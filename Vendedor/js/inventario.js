@@ -9,6 +9,7 @@ let _invTab        = 'productos';   // 'productos' | 'piezas' | 'historial'
 let _invDataProd   = { sedes: [], modelos: [] };
 let _invDataPiezas = { sedes: [], piezas:  [] };
 let _invFiltroCat  = '';
+let _fotosAdicionalesActuales = [];
 let _invFiltroQ    = '';
 let _invFiltroSede = '';
 let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], catalogo: [], cargado: false };
@@ -841,6 +842,7 @@ async function _invEliminarUnidad(tipo, id) {
 
 /* ─── Modal: Registrar nuevo item ───────────────────────────── */
 function abrirModalNuevoItem() {
+    _fotosAdicionalesActuales = []; // Resetear fotos
     if (!_puedeEditarInv()) { Swal.fire('Sin permisos', 'Solo Admin o Jefe de Taller.', 'warning'); return; }
     const cuerpo = document.getElementById('modal-inv-cuerpo');
     const esProds = _invTab !== 'piezas';
@@ -863,31 +865,69 @@ function _formProducto() {
     ).join('');
 
     return `
-    <div class="form-group"><label>Categoría *</label>
-        <select id="nf-cat" class="form-input" onchange="_invFiltrarCatalogoPorCat()">${cats}</select></div>
-    <div class="form-group"><label>Modelo del Catálogo <span style="font-size:11px;color:#94a3b8;">(filtra por categoría)</span></label>
-        <select id="nf-catalogo" class="form-input" onchange="_invSelCatalogo()">
-            <option value="">— O escribir manualmente —</option>${prods}</select></div>
-    <div class="form-group"><label>Nombre Modelo *</label>
-        <input id="nf-nombre" type="text" class="form-input" placeholder="Sofá Venecia 3 cuerpos" /></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="form-group"><label>Color / Tela</label>
-            <input id="nf-color" type="text" class="form-input" placeholder="Beige" /></div>
-        <div class="form-group"><label>Acabado</label>
-            <input id="nf-acabado" type="text" class="form-input" placeholder="Liso" /></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="form-group"><label>Sede *</label>
-            <select id="nf-sede" class="form-input"><option value="">— Seleccionar —</option>${sedes}</select></div>
-        <div class="form-group"><label>Costo Ingreso (S/)</label>
-            <input id="nf-costo" type="number" class="form-input" placeholder="0.00" step="0.01"/></div>
-    </div>
-    <div class="form-group"><label>Observaciones</label>
-        <input id="nf-obs" type="text" class="form-input" placeholder="Opcional" /></div>
-    <button onclick="_invGuardarProducto()" class="btn-action btn-primary" style="margin-top:10px;">
-        <i class="fas fa-save"></i> Registrar y Generar Código
-    </button>
-    <button onclick="_cerrarModalInvNuevo()" class="btn-action btn-ghost">Cancelar</button>`;
+    <div id="inv-nuevo-form-container">
+        <div class="form-group"><label>Categoría *</label>
+            <select id="nf-cat" class="form-input" onchange="_invFiltrarCatalogoPorCat()">${cats}</select></div>
+        <div class="form-group"><label>Modelo del Catálogo <span style="font-size:11px;color:#94a3b8;">(filtra por categoría)</span></label>
+            <select id="nf-catalogo" class="form-input" onchange="_invSelCatalogo()">
+                <option value="">— O escribir manualmente —</option>${prods}</select></div>
+        <div class="form-group"><label>Nombre Modelo *</label>
+            <input id="nf-nombre" type="text" class="form-input" placeholder="Sofá Venecia 3 cuerpos" /></div>
+
+        <!-- === INICIO: CAMPOS DINÁMICOS === -->
+        <div id="nf-detalles-tela" style="display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="form-group"><label>Color / Tela</label>
+                    <input id="nf-color" type="text" class="form-input" placeholder="Beige" /></div>
+                <div class="form-group"><label>Acabado</label>
+                    <input id="nf-acabado" type="text" class="form-input" placeholder="Liso" /></div>
+            </div>
+        </div>
+        <div id="nf-detalles-mesa" style="display:none;">
+             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                <div class="form-group"><label>Largo (cm)</label><input id="nf-largo" type="number" class="form-input" /></div>
+                <div class="form-group"><label>Ancho (cm)</label><input id="nf-ancho" type="number" class="form-input" /></div>
+                <div class="form-group"><label>Alto (cm)</label><input id="nf-alto" type="number" class="form-input" /></div>
+            </div>
+        </div>
+        <div id="nf-detalles-espejo" style="display:none;">
+            <div class="form-group"><label>Medidas</label><input id="nf-medidas" type="text" class="form-input" placeholder="Ej: 120cm x 80cm" /></div>
+            <div class="form-group"><label>Marco</label><input id="nf-marco" type="text" class="form-input" placeholder="Ej: Dorado, Madera" /></div>
+        </div>
+        <!-- === FIN: CAMPOS DINÁMICOS === -->
+
+        <!-- === INICIO: FOTOS === -->
+        <div class="form-group" style="margin-top:15px;">
+            <label style="font-size:11px;font-weight:bold;color:var(--primary);">FOTOS</label>
+            <div id="nf-fotos-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px;min-height:60px;">
+                <!-- Fotos se renderizan aquí -->
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px;border-radius:8px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+                    <i class="fas fa-camera"></i> Tomar foto
+                    <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="_invManejarFotosAdicionales(event, 'nf-fotos-preview')">
+                </label>
+                <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px;border-radius:8px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+                    <i class="fas fa-folder-open"></i> Subir archivos
+                    <input type="file" accept="image/*" multiple style="display:none;" onchange="_invManejarFotosAdicionales(event, 'nf-fotos-preview')">
+                </label>
+            </div>
+        </div>
+        <!-- === FIN: FOTOS === -->
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:15px;">
+            <div class="form-group"><label>Sede *</label>
+                <select id="nf-sede" class="form-input"><option value="">— Seleccionar —</option>${sedes}</select></div>
+            <div class="form-group"><label>Costo Ingreso (S/)</label>
+                <input id="nf-costo" type="number" class="form-input" placeholder="0.00" step="0.01"/></div>
+        </div>
+        <div class="form-group"><label>Observaciones</label>
+            <input id="nf-obs" type="text" class="form-input" placeholder="Opcional" /></div>
+        <button onclick="_invGuardarProducto()" class="btn-action btn-primary" style="margin-top:10px;">
+            <i class="fas fa-save"></i> Registrar y Generar Código
+        </button>
+        <button onclick="_cerrarModalInvNuevo()" class="btn-action btn-ghost">Cancelar</button>
+    </div>`;
 }
 
 function _invSelCatalogo() {
@@ -897,18 +937,21 @@ function _invSelCatalogo() {
     const nf = document.getElementById('nf-nombre');
     if (nf) nf.value = nombre;
     // Autocompletar categoría si el producto del catálogo la trae
-    const prod = _maestroInv.catalogo.find(p => String(p.id) === String(catId));
-    if (prod && prod.categoria) {
+    const prod = _maestroInv.catalogo.find(p => String(p.id) === String(catId));    
+    if (prod) {
         const selCat = document.getElementById('nf-cat');
-        if (selCat) {
+        if (selCat && prod.categoria) {
             const opt = [...selCat.options].find(o => o.value === prod.categoria);
             if (opt) selCat.value = prod.categoria;
         }
+        _invRenderizarFotosPreview('nf-fotos-preview', prod.foto_url);
+        _invActualizarFormDinamico();
     }
 }
 
 // Filtra el select de catálogo por la categoría elegida
 window._invFiltrarCatalogoPorCat = function() {
+    _invActualizarFormDinamico();
     const cat = document.getElementById('nf-cat')?.value || '';
     const selCatalogo = document.getElementById('nf-catalogo');
     if (!selCatalogo) return;
@@ -933,6 +976,27 @@ window._invFiltrarCatalogoPorCat = function() {
             `<option value="${p.id}|${(p.nombre||p.nombre_modelo||'').replace(/"/g,'')}">${p.nombre||p.nombre_modelo}${p.categoria ? ' ('+p.categoria+')' : ''}</option>`
         ).join('');
 };
+
+function _invActualizarFormDinamico() {
+    const cat = document.getElementById('nf-cat')?.value || '';
+    const telaDiv = document.getElementById('nf-detalles-tela');
+    const mesaDiv = document.getElementById('nf-detalles-mesa');
+    const espejoDiv = document.getElementById('nf-detalles-espejo');
+
+    // Hide all
+    if (telaDiv) telaDiv.style.display = 'none';
+    if (mesaDiv) mesaDiv.style.display = 'none';
+    if (espejoDiv) espejoDiv.style.display = 'none';
+
+    // Show relevant one
+    if (['Sofa', 'Butaca', 'Silla'].includes(cat)) {
+        if (telaDiv) telaDiv.style.display = 'block';
+    } else if (['Mesa Centro', 'Consola'].includes(cat)) {
+        if (mesaDiv) mesaDiv.style.display = 'block';
+    } else if (['Espejo', 'Cuadro'].includes(cat)) {
+        if (espejoDiv) espejoDiv.style.display = 'block';
+    }
+}
 
 function _formPieza() {
     const sedes = [...document.querySelectorAll('#inv-filtro-sede option')]
@@ -962,6 +1026,25 @@ function _formPieza() {
             <i class="fa-solid fa-plus"></i> CREAR NUEVO MODELO AL VUELO
         </button>
     </div>
+
+    <!-- === INICIO: FOTOS PIEZA === -->
+    <div class="form-group" style="margin-top:15px;">
+        <label style="font-size:11px;font-weight:bold;color:var(--primary);">FOTOS ADICIONALES</label>
+        <div id="npf-fotos-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px;min-height:60px;">
+            <!-- Fotos se renderizan aquí -->
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+            <label style="flex:1;cursor:pointer;background:#0f172a;color:#fff;padding:8px;border-radius:8px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+                <i class="fas fa-camera"></i> Tomar foto
+                <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="_invManejarFotosAdicionales(event, 'npf-fotos-preview')">
+            </label>
+            <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:8px;border-radius:8px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;">
+                <i class="fas fa-folder-open"></i> Subir archivos
+                <input type="file" accept="image/*" multiple style="display:none;" onchange="_invManejarFotosAdicionales(event, 'npf-fotos-preview')">
+            </label>
+        </div>
+    </div>
+    <!-- === FIN: FOTOS PIEZA === -->
 
     <div class="form-group"><label>Forma *</label>
         <select id="npf-forma" class="form-input" onchange="_invToggleMedidasPieza()">
@@ -1033,25 +1116,40 @@ async function _invGuardarProducto() {
     if (!nombre || !cat || !sedeId) {
         Swal.fire('Incompleto', 'Completa Categoría, Modelo y Sede.', 'warning'); return;
     }
-    const catStr = document.getElementById('nf-catalogo')?.value || '';
-    const catId  = catStr.split('|')[0] ? parseInt(catStr.split('|')[0]) : null;
+    const catStr = document.getElementById('nf-catalogo')?.value || '';    const catId  = catStr.split('|')[0] ? parseInt(catStr.split('|')[0]) : null;
 
     try {
+        const payload = {
+            catalogo_id:    catId,
+            nombre_modelo:  nombre,
+            categoria:      cat,
+            sede_id:        parseInt(sedeId),
+            costo_ingreso:  parseFloat(document.getElementById('nf-costo')?.value) || null,
+            observaciones:  document.getElementById('nf-obs')?.value,
+            usuario_id:     window.usuarioActivo?.id,
+            usuario_rol:    window.usuarioActivo?.rol,
+            usuario_nombre: window.usuarioActivo?.nombre,
+            fotos_adicionales: _fotosAdicionalesActuales.join('|')
+        };
+
+        // Add dynamic fields to payload
+        if (['Sofa', 'Butaca', 'Silla'].includes(cat)) {
+            payload.color_tela = document.getElementById('nf-color')?.value;
+            payload.acabado = document.getElementById('nf-acabado')?.value;
+        } else if (['Mesa Centro', 'Consola'].includes(cat)) {
+            payload.largo_cm = parseFloat(document.getElementById('nf-largo')?.value) || null;
+            payload.ancho_cm = parseFloat(document.getElementById('nf-ancho')?.value) || null;
+            payload.alto_cm = parseFloat(document.getElementById('nf-alto')?.value) || null;
+        } else if (['Espejo', 'Cuadro'].includes(cat)) {
+            const obs = payload.observaciones || '';
+            const medidas = document.getElementById('nf-medidas')?.value || '';
+            const marco = document.getElementById('nf-marco')?.value || '';
+            payload.observaciones = `${obs} | Medidas: ${medidas} | Marco: ${marco}`.replace(/^ \| /, '');
+        }
+
         const res = await apiFetch(`${API_URL}/api/inventario/producto/nuevo`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                catalogo_id:    catId,
-                nombre_modelo:  nombre,
-                categoria:      cat,
-                color_tela:     document.getElementById('nf-color')?.value,
-                acabado:        document.getElementById('nf-acabado')?.value,
-                observaciones:  document.getElementById('nf-obs')?.value,
-                sede_id:        parseInt(sedeId),
-                costo_ingreso:  parseFloat(document.getElementById('nf-costo')?.value) || null,
-                usuario_id:     window.usuarioActivo?.id,
-                usuario_rol:    window.usuarioActivo?.rol,
-                usuario_nombre: window.usuarioActivo?.nombre,
-            })
+            body: JSON.stringify(payload)
         });
         const d = await res.json();
         if (d.error) throw new Error(d.error);
@@ -1113,6 +1211,7 @@ async function _invGuardarPieza() {
                 nombre_modelo:  nombre,
                 categoria:      cat,
                 material:       mat,
+                fotos_adicionales: _fotosAdicionalesActuales.join('|'),
                 color_acabado:  color,
                 forma,
                 largo_cm:  parseFloat(document.getElementById('npf-largo')?.value)    || null,
@@ -1175,44 +1274,36 @@ async function _invGuardarPieza() {
 async function _invVerUnidades(nombre, categoria, catalogoId) {
     try {
         const esPieza = (catalogoId === 'es_pieza');
-        const p = new URLSearchParams({ categoria, q: nombre });
-        const endpoint = esPieza 
-            ? `${API_URL}/api/inventario/piezas/resumen?${p}`
-            : `${API_URL}/api/inventario/resumen?${p}`;
-
-        const res  = await apiFetch(endpoint);
-        const data = await res.json();
+        const tipoQuery = esPieza ? 'pieza' : 'producto';
+        const resUnidades = await apiFetch(`${API_URL}/api/inventario/unidades-modelo?tipo=${tipoQuery}&modelo=${encodeURIComponent(nombre)}`);
         
-        const lista = esPieza ? (data.piezas || []) : (data.modelos || []);
-        const m    = lista.find(x => x.nombre_modelo === nombre);
-        if (!m) { Swal.fire('Sin datos', 'No hay stock registrado de este modelo.', 'info'); return; }
+        if (!resUnidades.ok) throw new Error('No se pudo cargar el detalle de unidades.');
+        
+        const unidades = await resUnidades.json();
 
-        let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:15px;">`;
-        (data.sedes||[]).forEach(s => {
-            // FIX: Manejar si el backend devuelve un número o un objeto incompleto
-            const stockSede = (m.sede_stock || {})[s];
-            const st = {
-                disponibles: (typeof stockSede === 'number') ? stockSede : (stockSede?.disponibles || 0),
-                total: (typeof stockSede === 'number') ? stockSede : (stockSede?.total || 0)
-            };
+        let html = '';
+        if (unidades.length > 0) {
+            // Agrupar por sede para mostrar totales
+            const porSede = unidades.reduce((acc, u) => {
+                const sede = u.sede || 'Sin sede';
+                if (!acc[sede]) acc[sede] = { disponibles: 0, total: 0 };
+                acc[sede].total++;
+                if (u.estado === 'Disponible') acc[sede].disponibles++;
+                return acc;
+            }, {});
 
-            html += `<div style="background:#f8fafc;border-radius:12px;padding:12px;text-align:center;border:1px solid #e2e8f0;">
-                <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:6px;">${s}</div>
-                <div style="font-size:2rem;font-weight:900;color:${st.disponibles>0?'#16a34a':'#cbd5e1'};">${st.disponibles}</div>
-                <div style="font-size:10px;color:var(--text-muted);">disponibles</div>
-                ${st.total > st.disponibles ? `<div style="font-size:10px;color:var(--text-muted);">${st.total} total</div>` : ''}
-            </div>`;
-        });
-        html += `</div>`;
+            html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:15px;">`;
+            Object.entries(porSede).forEach(([sede, counts]) => {
+                html += `<div style="background:#f8fafc;border-radius:12px;padding:12px;text-align:center;border:1px solid #e2e8f0;">
+                    <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:6px;">${sede}</div>
+                    <div style="font-size:2rem;font-weight:900;color:${counts.disponibles>0?'#16a34a':'#cbd5e1'};">${counts.disponibles}</div>
+                    <div style="font-size:10px;color:var(--text-muted);">disponibles</div>
+                    ${counts.total > counts.disponibles ? `<div style="font-size:10px;color:var(--text-muted);">${counts.total} total</div>` : ''}
+                </div>`;
+            });
+            html += `</div>`;
 
-        // Añadir tabla detallada de códigos
-        try {
-            const tipoQuery = esPieza ? 'pieza' : 'producto';
-            const resUnidades = await apiFetch(`${API_URL}/api/inventario/unidades-modelo?tipo=${tipoQuery}&modelo=${encodeURIComponent(nombre)}`);
-            if (resUnidades.ok) {
-                const unidades = await resUnidades.json();
-                if (unidades.length > 0) {
-                    html += `<div style="margin-top: 20px; text-align: left;">
+            html += `<div style="margin-top: 20px; text-align: left;">
                         <h4 style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">Unidades Físicas (Códigos):</h4>
                         <div style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
@@ -1240,10 +1331,9 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
                             </table>
                         </div>
                     </div>`;
-                }
-            }
-        } catch(err) {}
-
+        } else {
+            html = `<p style="color:var(--text-muted);text-align:center;padding:20px;">No hay unidades físicas registradas para este modelo.</p>`;
+        }
         Swal.fire({
             title: nombre,
             html, width: '90vw', maxWidth: '680px',
@@ -1251,6 +1341,71 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
             confirmButtonText: 'Cerrar'
         });
     } catch(e) { Swal.fire('Error', e.message, 'error'); }
+}
+
+async function _invManejarFotosAdicionales(event, previewContainerId) {
+    const files = event.target.files;
+    if (!files.length) return;
+
+    const previewContainer = document.getElementById(previewContainerId);
+    if (!previewContainer) return;
+
+    const loader = document.createElement('div');
+    loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo...';
+    loader.style.cssText = 'color: #94a3b8; font-size: 12px;';
+    previewContainer.appendChild(loader);
+
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append('foto', file);
+        try {
+            const res = await apiFetch(`${API_URL}/api/upload-foto`, { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.url) {
+                _fotosAdicionalesActuales.push(data.url);
+            }
+        } catch (e) {
+            console.error("Error subiendo foto adicional:", e);
+            Swal.fire('Error', 'No se pudo subir una de las imágenes.', 'error');
+        }
+    }
+    loader.remove();
+    _invRenderizarFotosPreview(previewContainerId);
+}
+
+function _invRenderizarFotosPreview(containerId, fotoMaestro = null) {
+    const previewContainer = document.getElementById(containerId);
+    if (!previewContainer) return;
+    previewContainer.innerHTML = '';
+
+    if (fotoMaestro) {
+        const div = document.createElement('div');
+        div.style.position = 'relative';
+        div.innerHTML = `
+            <img src="${fotoMaestro}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:2px solid var(--accent);">
+            <span style="position:absolute;top:-5px;left:-5px;background:var(--accent);color:white;font-size:8px;padding:1px 4px;border-radius:4px;font-weight:bold;">Catálogo</span>
+        `;
+        previewContainer.appendChild(div);
+    }
+
+    _fotosAdicionalesActuales.forEach((url, index) => {
+        const div = document.createElement('div');
+        div.style.position = 'relative';
+        div.innerHTML = `
+            <img src="${url}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;">
+            <button onclick="_invEliminarFotoAdicional(${index}, '${containerId}')"
+                    style="position:absolute;top:-5px;right:-5px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;">
+                &times;
+            </button>
+        `;
+        previewContainer.appendChild(div);
+    });
+}
+
+function _invEliminarFotoAdicional(index, containerId) {
+    _fotosAdicionalesActuales.splice(index, 1);
+    const fotoMaestro = document.querySelector(`#${containerId} img`)?.src || null;
+    _invRenderizarFotosPreview(containerId, fotoMaestro);
 }
 
 /* ─── Helpers ────────────────────────────────────────────────── */

@@ -25,6 +25,7 @@ from auth_middleware import requiere_login, requiere_rol
 
 inventario_bp = Blueprint('inventario', __name__)
 tz_peru = pytz.timezone('America/Lima')
+_schema_fotos_adicionales_listo = False
 
 # Roles autorizados para modificar stock
 ROLES_INVENTARIO = ('Admin', 'Jefe_Taller')
@@ -58,6 +59,30 @@ def _rel(c):
 
 def _verificar_rol(rol):
     return rol in ROLES_INVENTARIO
+
+
+def _asegurar_columna_fotos_adicionales():
+    """Añade fotos_adicionales a stock_productos y stock_piezas si no existen."""
+    global _schema_fotos_adicionales_listo
+    if _schema_fotos_adicionales_listo:
+        return
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
+        cur.execute("ALTER TABLE stock_piezas ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
+        _schema_fotos_adicionales_listo = True
+    except Exception as e:
+        print(f"⚠️  _asegurar_columna_fotos_adicionales: {e}")
+        _schema_fotos_adicionales_listo = True # Don't retry
+    finally:
+        if cur: cur.close()
+        if conn:
+            conn.autocommit = False
+            release_db_connection(conn)
 
 
 def _generar_codigo(cur, prefijo, tabla_col):
@@ -436,6 +461,7 @@ def buscar_por_barcode(barcode):
 @inventario_bp.route('/api/inventario/producto/nuevo', methods=['POST'])
 @requiere_login
 def registrar_producto():
+    _asegurar_columna_fotos_adicionales()
     data = request.json or {}
 
     if not _verificar_rol(data.get('usuario_rol', '')):
@@ -456,9 +482,9 @@ def registrar_producto():
         cur.execute("""
             INSERT INTO stock_productos
                 (catalogo_id, nombre_modelo, categoria, codigo_barra,
-                 color_tela, acabado, observaciones, foto_url,
+                 color_tela, acabado, observaciones, foto_url, fotos_adicionales,
                  sede_id, estado, costo_ingreso, precio_venta, creado_por)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
             RETURNING id;
         """, (
             data.get('catalogo_id'),
@@ -469,6 +495,7 @@ def registrar_producto():
             data.get('acabado'),
             data.get('observaciones'),
             data.get('foto_url'),
+            data.get('fotos_adicionales'),
             data['sede_id'],
             data.get('costo_ingreso'),
             data.get('precio_venta'),
@@ -501,6 +528,7 @@ def registrar_producto():
 @inventario_bp.route('/api/inventario/pieza/nueva', methods=['POST'])
 @requiere_login
 def registrar_pieza():
+    _asegurar_columna_fotos_adicionales()
     data = request.json or {}
 
     if not _verificar_rol(data.get('usuario_rol', '')):
@@ -525,9 +553,9 @@ def registrar_pieza():
             cur.execute("""
                 INSERT INTO stock_piezas
                     (categoria, sku_maestro, nombre_modelo, material, color_acabado,
-                    codigo_barra, forma, largo_cm, ancho_cm, alto_cm,
+                    codigo_barra, forma, largo_cm, ancho_cm, alto_cm, fotos_adicionales,
                     sede_id, estado, costo_ingreso, proveedor, usuario_ingreso_id)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
                 RETURNING id;
             """, (
                 data['categoria'],
@@ -540,6 +568,7 @@ def registrar_pieza():
                 data.get('largo_cm'),
                 data.get('ancho_cm'),
                 data.get('alto_cm'),
+                data.get('fotos_adicionales'),
                 data['sede_id'],
                 data.get('costo_ingreso'),
                 data.get('proveedor'),
