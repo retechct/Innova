@@ -426,8 +426,7 @@ def buscar_por_barcode(barcode):
     try:
         conn = _conn(); cur = conn.cursor()
 
-        # 1. Buscar en stock_productos (con JOIN a catalogo para traer fotos base)
-        # El JOIN usa catalogo_id cuando existe; si es NULL, hace fallback por nombre_modelo
+        # 1. Buscar en stock_productos (JOIN al catálogo para fotos del modelo maestro)
         cur.execute("""
             SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
                    sp.color_tela, sp.acabado, sp.estado, se.nombre AS sede,
@@ -438,17 +437,18 @@ def buscar_por_barcode(barcode):
             FROM stock_productos sp
             LEFT JOIN sedes se ON sp.sede_id = se.id
             LEFT JOIN catalogo_productos cp
-                   ON (sp.catalogo_id IS NOT NULL AND cp.id = sp.catalogo_id)
-                   OR (sp.catalogo_id IS NULL
-                       AND LOWER(cp.nombre_modelo) = LOWER(sp.nombre_modelo))
+                   ON cp.id = COALESCE(sp.catalogo_id,
+                        (SELECT id FROM catalogo_productos
+                         WHERE LOWER(nombre_modelo) = LOWER(sp.nombre_modelo)
+                         LIMIT 1))
             WHERE sp.codigo_barra = %s;
         """, (barcode,))
         row = cur.fetchone()
         if row:
-            # Construir lista completa de fotos: catálogo primero, luego propias del stock
+            # Fotos: catálogo primero, luego stock (pipe-sep), luego adicionales
             cat_foto_url      = row[14] or ""
             cat_fotos_urls    = row[15] or ""
-            stock_foto_url    = row[8]  or ""   # puede ser pipe-separated
+            stock_foto_url    = row[8]  or ""
             fotos_adicionales = row[13] or ""
 
             todas_fotos = []
@@ -460,8 +460,6 @@ def buscar_por_barcode(barcode):
                 f = f.strip()
                 if f and f not in todas_fotos:
                     todas_fotos.append(f)
-            # stock_foto_url también puede ser pipe-separated (el frontend
-            # guarda todas las fotos del catálogo al momento de registrar)
             for f in stock_foto_url.split('|'):
                 f = f.strip()
                 if f and f not in todas_fotos:
@@ -495,22 +493,55 @@ def buscar_por_barcode(barcode):
                    sp.material, sp.color_acabado, sp.estado, se.nombre AS sede,
                    sp.forma, sp.largo_cm, sp.ancho_cm, sp.alto_cm,
                    sp.costo_ingreso, sp.fecha_ingreso, 'pieza' AS tipo,
-                   NULL AS foto_url, sp.fotos_adicionales
+                   sp.fotos_adicionales
             FROM stock_piezas sp
             LEFT JOIN sedes se ON sp.sede_id = se.id
             WHERE sp.codigo_barra = %s;
         """, (barcode,))
         row = cur.fetchone()
         if row:
-            # Foto del maestro (tablero/silla/butaca/base)
-            foto_maestro = _obtener_foto_maestro(cur, row[3], row[2])
-            fotos_adicionales_str = row[16] or ""
+            fotos_adicionales_str = row[15] or ""
+            categoria_pieza       = (row[3] or '').lower()
+            nombre_pieza          = row[2] or ''
 
-            # Combinar: maestro primero, luego fotos adicionales subidas al registrar
+            # Buscar foto del maestro según categoría (query separada, sin CASE)
+            foto_maestro = ''
+            try:
+                if categoria_pieza == 'tablero':
+                    cur.execute(
+                        'SELECT foto_url FROM maestro_tableros '
+                        'WHERE LOWER(nombre_modelo) = LOWER(%s) LIMIT 1',
+                        (nombre_pieza,)
+                    )
+                elif categoria_pieza == 'silla':
+                    cur.execute(
+                        'SELECT foto_url FROM maestro_sillas '
+                        'WHERE LOWER(modelo) = LOWER(%s) LIMIT 1',
+                        (nombre_pieza,)
+                    )
+                elif categoria_pieza == 'butaca':
+                    cur.execute(
+                        'SELECT foto_url FROM maestro_butacas '
+                        'WHERE LOWER(modelo) = LOWER(%s) LIMIT 1',
+                        (nombre_pieza,)
+                    )
+                else:  # base-comedor, base-consola, base-mesa-centro
+                    cur.execute(
+                        'SELECT foto_url FROM maestro_bases_comedor '
+                        'WHERE LOWER(modelo) = LOWER(%s) LIMIT 1',
+                        (nombre_pieza,)
+                    )
+                r_foto = cur.fetchone()
+                if r_foto and r_foto[0]:
+                    foto_maestro = r_foto[0]
+            except Exception:
+                pass
+
+            # Maestro primero, luego fotos adicionales subidas al registrar
             todas_fotos = []
             for f in foto_maestro.split('|'):
                 f = f.strip()
-                if f:
+                if f and f not in todas_fotos:
                     todas_fotos.append(f)
             for f in fotos_adicionales_str.split('|'):
                 f = f.strip()
