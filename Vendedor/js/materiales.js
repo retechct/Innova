@@ -816,7 +816,7 @@ async function abrirModalPinterest(tipoInput) {
             try {
                 // 1. Subir la imagen primero
                 const formData = new FormData();
-                formData.append('archivo', blobFinal, 'pinterest-ref.jpg');
+                formData.append('archivo', blobFinal, 'pinterest-ref.webp');
                 const res = await apiFetch(`${API_URL}/api/upload-voucher`, { method: 'POST', body: formData });
                 const data = await res.json();
                 if (!data.url) throw new Error('No se pudo obtener la URL de la imagen');
@@ -2039,7 +2039,7 @@ function _comprimirImagen(file, maxWidth = 1200, quality = 0.82) {
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
                 canvas.toBlob(
                     blob => blob ? resolve(blob) : reject(new Error('Error al comprimir')),
-                    'image/jpeg',
+                    'image/webp',
                     quality
                 );
             };
@@ -2169,7 +2169,7 @@ async function abrirModalDiseno() {
         fd.append('url_pinterest', formValues.url);
         fd.append('descripcion',   formValues.descripcion);
         // Enviar el blob comprimido con nombre .jpg
-        fd.append('foto', blobFinal, 'referencia.jpg');
+        fd.append('foto', blobFinal, 'referencia.webp');
 
         const res  = await apiFetch(`${API_URL}/api/disenos-referencia`, {
             method: 'POST',

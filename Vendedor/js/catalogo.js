@@ -149,7 +149,7 @@ async function renderStockTiendas(grid) {
 
             const found = lista.find(x => x.sku === p.sku_maestro || x.nombre_modelo === p.nombre_modelo || x.modelo === p.nombre_modelo);
             if (found && found.foto_url) {
-                fotoPieza = found.foto_url.split('|')[0];
+                fotoPieza = found.foto_url;
             }
 
             let medidaStr = '';

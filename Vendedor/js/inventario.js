@@ -1154,7 +1154,8 @@ async function _invGuardarProducto() {
             usuario_id:     window.usuarioActivo?.id,
             usuario_rol:    window.usuarioActivo?.rol,
             usuario_nombre: window.usuarioActivo?.nombre,
-            fotos_adicionales: _fotosAdicionalesActuales.join('|')
+            fotos_adicionales: _fotosAdicionalesActuales.join('|'),
+            foto_url:       fotoUrlCatalogo
         };
 
         // Add dynamic fields to payload
@@ -1381,8 +1382,17 @@ async function _invManejarFotosAdicionales(event, previewContainerId) {
     previewContainer.appendChild(loader);
 
     for (const file of files) {
+        let blobFinal = file;
+        if (file.type.startsWith('image/')) {
+            try {
+                blobFinal = await _comprimirImagen(file);
+            } catch (compErr) {
+                console.warn('Compresión de imagen falló, usando original:', compErr);
+            }
+        }
+
         const formData = new FormData();
-        formData.append('foto', file);
+        formData.append('foto', blobFinal, 'inv-foto.webp');
         try {
             const res = await apiFetch(`${API_URL}/api/upload-foto`, { method: 'POST', body: formData });
             const data = await res.json();
@@ -1437,6 +1447,38 @@ function _invEliminarFotoAdicional(index, containerId) {
 }
 
 /* ─── Helpers ────────────────────────────────────────────────── */
+/**
+ * Comprime una imagen (File/Blob) en el browser usando Canvas.
+ * Reduce a máx 1200px de ancho y calidad 0.82 WebP.
+ * Retorna una Promise<Blob>.
+ */
+function _comprimirImagen(file, maxWidth = 1200, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+        reader.onload = e => {
+            const img = new Image();
+            img.onerror = () => reject(new Error('No se pudo procesar la imagen'));
+            img.onload = () => {
+                // Calcular nuevas dimensiones respetando proporción
+                let w = img.width;
+                let h = img.height;
+                if (w > maxWidth) {
+                    h = Math.round(h * maxWidth / w);
+                    w = maxWidth;
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width  = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Error al comprimir')), 'image/webp', quality);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 function _carouselNav(carouselId, direction) {
     const container = document.getElementById(carouselId);
     if (container) {
