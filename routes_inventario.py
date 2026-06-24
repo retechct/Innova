@@ -284,8 +284,7 @@ def resumen_piezas():
                     MAX(mt.foto_url),
                     MAX(ms.foto_url),
                     MAX(mb.foto_url),
-                    MAX(mbu.foto_url),
-                    MAX(sp.foto_url)
+                    MAX(mbu.foto_url)
                 ) AS foto_maestro,
                 MAX(sp.fotos_adicionales) AS fotos_adicionales
             FROM stock_piezas sp
