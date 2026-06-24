@@ -1,3 +1,4 @@
+
 // =============================================================
 // inventario.js — Módulo de Inventario Completo
 // Innova Mobili ERP

@@ -127,7 +127,8 @@ async function renderStockTiendas(grid) {
                         tipoElemento: 'Producto',
                         sede: sede,
                         cantidad: p.sede_stock[sede].disponibles,
-                        foto: p.foto_url,
+                        foto: (p.fotos && p.fotos.length) ? p.fotos[0] : (p.foto_url || ''),
+                        fotos: p.fotos || (p.foto_url ? [p.foto_url] : []),
                         nombre: p.nombre_modelo,
                         categoria: p.categoria,
                         catalogo_id: p.catalogo_id,
@@ -139,17 +140,22 @@ async function renderStockTiendas(grid) {
 
         // Aplanar Piezas
         (dataPiez.piezas || []).forEach(p => {
-            let fotoPieza = '';
-            const catLower = (p.categoria || '').toLowerCase();
-            let lista = [];
-            if (catLower === 'tablero') lista = maestroMateriales.tableros || [];
-            else if (catLower === 'silla') lista = maestroMateriales.sillas || [];
-            else if (catLower === 'butaca') lista = maestroMateriales.butacas || [];
-            else if (catLower.includes('base')) lista = maestroMateriales.bases_comedor || [];
-
-            const found = lista.find(x => x.sku === p.sku_maestro || x.nombre_modelo === p.nombre_modelo || x.modelo === p.nombre_modelo);
-            if (found && found.foto_url) {
-                fotoPieza = found.foto_url;
+            // Usar fotos del backend (maestro + adicionales ya combinadas)
+            // Con fallback al maestro local si el backend no las trajo aún
+            let fotoPieza = p.foto_url || '';
+            let fotosPieza = p.fotos || (fotoPieza ? [fotoPieza] : []);
+            if (!fotoPieza) {
+                const catLower = (p.categoria || '').toLowerCase();
+                let lista = [];
+                if (catLower === 'tablero') lista = maestroMateriales.tableros || [];
+                else if (catLower === 'silla') lista = maestroMateriales.sillas || [];
+                else if (catLower === 'butaca') lista = maestroMateriales.butacas || [];
+                else if (catLower.includes('base')) lista = maestroMateriales.bases_comedor || [];
+                const found = lista.find(x => x.sku === p.sku_maestro || x.nombre_modelo === p.nombre_modelo || x.modelo === p.nombre_modelo);
+                if (found && found.foto_url) {
+                    fotoPieza = found.foto_url;
+                    fotosPieza = [fotoPieza];
+                }
             }
 
             let medidaStr = '';
@@ -168,6 +174,7 @@ async function renderStockTiendas(grid) {
                         sede: sede,
                         cantidad: p.sede_stock[sede],
                         foto: fotoPieza,
+                        fotos: fotosPieza,
                         nombre: p.nombre_modelo,
                         categoria: medidaStr,
                         catalogo_id: null,
@@ -234,7 +241,21 @@ function _renderStockUI(grid) {
 
             html += `
             <div class="card" style="position:relative; margin:0; border:1px solid #e2e8f0; box-shadow:none; transition: transform 0.2s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                <img src="${item.foto}" onerror="this.src='imagenes/sin_foto.jpg'">
+                <!-- Carousel fotos -->
+                <div style="position:relative;" id="stk-wrap-${_stkItemsAplanados.indexOf(item)}">
+                    ${(()=>{
+                        const _sf = (item.fotos && item.fotos.length) ? item.fotos : (item.foto ? [item.foto] : []);
+                        const _cid = 'stkc-' + Math.random().toString(36).slice(2,8);
+                        const _slides = _sf.length
+                            ? _sf.map(f => '<div style="min-width:100%;scroll-snap-align:center;"><img src="'+f+'" onerror="this.src=\'imagenes/sin_foto.jpg\'" style="width:100%;height:170px;object-fit:cover;"></div>').join('')
+                            : '<div style="min-width:100%;height:170px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#cbd5e1;"><i class=\"fa-solid fa-image\" style=\"font-size:2rem;\"></i></div>';
+                        const _nav = _sf.length > 1
+                            ? '<button onclick="event.stopPropagation();_carouselNav(\''+_cid+'\',  -1)" style="position:absolute;top:50%;left:5px;transform:translateY(-50%);background:rgba(0,0,0,0.45);color:white;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">‹</button>'
+                              + '<button onclick="event.stopPropagation();_carouselNav(\''+_cid+'\',   1)" style="position:absolute;top:50%;right:5px;transform:translateY(-50%);background:rgba(0,0,0,0.45);color:white;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">›</button>'
+                            : '';
+                        return '<div id="'+_cid+'" style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;">'+_slides+'</div>'+_nav;
+                    })()}
+                </div>
                 <div class="card-info" style="padding:15px;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                         <span class="status-badge" style="background:#f0fdf4; color:#166534; font-size:10px;">

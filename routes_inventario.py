@@ -279,9 +279,24 @@ def resumen_piezas():
                 sp.largo_cm, sp.ancho_cm, sp.alto_cm,
                 sp.sede_id, se.nombre AS sede_nombre,
                 COUNT(*) FILTER (WHERE sp.estado = 'Disponible') AS disponibles,
-                COUNT(*) AS total
+                COUNT(*) AS total,
+                COALESCE(
+                    MAX(mt.foto_url),
+                    MAX(ms.foto_url),
+                    MAX(mb.foto_url),
+                    MAX(mbu.foto_url)
+                ) AS foto_maestro,
+                MAX(sp.fotos_adicionales) AS fotos_adicionales
             FROM stock_piezas sp
             JOIN sedes se ON sp.sede_id = se.id
+            LEFT JOIN maestro_tableros      mt  ON sp.categoria = 'tablero'
+                AND LOWER(mt.nombre_modelo) = LOWER(sp.nombre_modelo)
+            LEFT JOIN maestro_sillas        ms  ON sp.categoria = 'silla'
+                AND LOWER(ms.modelo) = LOWER(sp.nombre_modelo)
+            LEFT JOIN maestro_bases_comedor mb  ON sp.categoria IN ('base-comedor','base-consola','base-mesa-centro')
+                AND LOWER(mb.modelo) = LOWER(sp.nombre_modelo)
+            LEFT JOIN maestro_butacas       mbu ON sp.categoria = 'butaca'
+                AND LOWER(mbu.modelo) = LOWER(sp.nombre_modelo)
             {where_sql}
             GROUP BY sp.categoria, sp.sku_maestro, sp.nombre_modelo,
                      sp.material, sp.color_acabado, sp.forma,
@@ -295,6 +310,17 @@ def resumen_piezas():
         for r in rows:
             key = (r[1], r[5], r[6], r[7], r[8])  # sku+forma+medidas
             if key not in grupos:
+                foto_maestro      = r[13] or ""
+                fotos_adicionales = r[14] or ""
+                todas_fotos = []
+                for f in foto_maestro.split('|'):
+                    f = f.strip()
+                    if f:
+                        todas_fotos.append(f)
+                for f in fotos_adicionales.split('|'):
+                    f = f.strip()
+                    if f and f not in todas_fotos:
+                        todas_fotos.append(f)
                 grupos[key] = {
                     "categoria":     r[0],
                     "sku_maestro":   r[1],
@@ -305,6 +331,8 @@ def resumen_piezas():
                     "largo_cm":      float(r[6]) if r[6] else None,
                     "ancho_cm":      float(r[7]) if r[7] else None,
                     "alto_cm":       float(r[8]) if r[8] else None,
+                    "foto_url":      todas_fotos[0] if todas_fotos else "",
+                    "fotos":         todas_fotos,
                     "total":         0,
                     "disponibles":   0,
                     "sede_stock":    {s[1]: 0 for s in sedes},
@@ -459,9 +487,21 @@ def buscar_por_barcode(barcode):
         """, (barcode,))
         row = cur.fetchone()
         if row:
-            foto_url = row[15] or ""
-            if not foto_url:
-                foto_url = _obtener_foto_maestro(cur, row[3], row[2])
+            # Foto del maestro (tablero/silla/butaca/base)
+            foto_maestro = _obtener_foto_maestro(cur, row[3], row[2])
+            fotos_adicionales_str = row[16] or ""
+
+            # Combinar: maestro primero, luego fotos adicionales subidas al registrar
+            todas_fotos = []
+            for f in foto_maestro.split('|'):
+                f = f.strip()
+                if f:
+                    todas_fotos.append(f)
+            for f in fotos_adicionales_str.split('|'):
+                f = f.strip()
+                if f and f not in todas_fotos:
+                    todas_fotos.append(f)
+
             return jsonify({
                 "tipo":              "pieza",
                 "id":                row[0],
@@ -478,8 +518,9 @@ def buscar_por_barcode(barcode):
                 "alto_cm":           float(row[11]) if row[11] else None,
                 "costo_ingreso":     float(row[12]) if row[12] else None,
                 "fecha_ingreso":     row[13].strftime('%d/%m/%Y') if row[13] else None,
-                "foto_url":          foto_url,
-                "fotos_adicionales": row[16] or "",
+                "foto_url":          todas_fotos[0] if todas_fotos else "",
+                "fotos":             todas_fotos,
+                "fotos_adicionales": fotos_adicionales_str,
             }), 200
 
         # 3. ← NUEVO: Buscar en stock_unidades
