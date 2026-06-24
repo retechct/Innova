@@ -393,18 +393,41 @@ def buscar_por_barcode(barcode):
     try:
         conn = _conn(); cur = conn.cursor()
 
-        # 1. Buscar en stock_productos
+        # 1. Buscar en stock_productos (con JOIN a catalogo para traer fotos base)
         cur.execute("""
             SELECT sp.id, sp.codigo_barra, sp.nombre_modelo, sp.categoria,
                    sp.color_tela, sp.acabado, sp.estado, se.nombre AS sede,
                    sp.foto_url, sp.costo_ingreso, sp.precio_venta,
-                   sp.fecha_ingreso, 'producto' AS tipo, sp.fotos_adicionales
+                   sp.fecha_ingreso, 'producto' AS tipo, sp.fotos_adicionales,
+                   COALESCE(cp.foto_url, '')    AS cat_foto_url,
+                   COALESCE(cp.fotos_urls, '')  AS cat_fotos_urls
             FROM stock_productos sp
             LEFT JOIN sedes se ON sp.sede_id = se.id
+            LEFT JOIN catalogo_productos cp ON sp.catalogo_id = cp.id
             WHERE sp.codigo_barra = %s;
         """, (barcode,))
         row = cur.fetchone()
         if row:
+            # Construir lista completa de fotos: catálogo primero, luego propias del stock
+            cat_foto_url   = row[14] or ""
+            cat_fotos_urls = row[15] or ""
+            stock_foto_url = row[8]  or ""
+            fotos_adicionales = row[13] or ""
+
+            todas_fotos = []
+            if cat_foto_url:
+                todas_fotos.append(cat_foto_url)
+            for f in cat_fotos_urls.split('|'):
+                f = f.strip()
+                if f and f not in todas_fotos:
+                    todas_fotos.append(f)
+            if stock_foto_url and stock_foto_url not in todas_fotos:
+                todas_fotos.append(stock_foto_url)
+            for f in fotos_adicionales.split('|'):
+                f = f.strip()
+                if f and f not in todas_fotos:
+                    todas_fotos.append(f)
+
             return jsonify({
                 "tipo":              "producto",
                 "id":                row[0],
@@ -415,7 +438,8 @@ def buscar_por_barcode(barcode):
                 "acabado":           row[5],
                 "estado":            row[6],
                 "sede":              row[7],
-                "foto_url":          row[8] or "",
+                "foto_url":          todas_fotos[0] if todas_fotos else "",
+                "fotos":             todas_fotos,
                 "costo_ingreso":     float(row[9]) if row[9] else None,
                 "precio_venta":      float(row[10]) if row[10] else None,
                 "fecha_ingreso":     row[11].strftime('%d/%m/%Y') if row[11] else None,

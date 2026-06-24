@@ -682,41 +682,48 @@ async function _invMostrarDetalleUnidad(d) {
         'Dañado': '#fee2e2', 'Baja': '#f1f5f9'
     };
 
-    // 1. Intentar recuperar foto: primero en memoria, luego request al backend
-    let fotoUrlFinal = d.foto_url;
-    if (!fotoUrlFinal && d.tipo !== 'producto') {
-        const cat = (d.categoria || '').toLowerCase();
-        let lista = [];
-        if (cat === 'tablero') lista = _maestroInv.tableros || [];
-        else if (cat === 'silla') lista = _maestroInv.sillas || [];
-        else if (cat === 'butaca') lista = _maestroInv.butacas || [];
-        else if (cat.includes('base')) lista = _maestroInv.bases_comedor || [];
+    // 1. Construir lista completa de fotos para el carousel
+    //    - Para PRODUCTOS: el backend ya manda d.fotos (catálogo + stock + adicionales)
+    //    - Para PIEZAS: buscar foto del maestro de materiales
+    let todasLasFotos = [];
 
-        const f = lista.find(x =>
-            (x.nombre_modelo && x.nombre_modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
-            (x.modelo && x.modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
-            (x.nombre && x.nombre.toLowerCase() === (d.nombre_modelo || '').toLowerCase())
-        );
-        if (f && f.foto_url) {
-            fotoUrlFinal = f.foto_url;
-        } else {
-            // Fallback: pedir al backend directamente (cubre el caso donde
-            // _maestroInv no estaba cargado porque el usuario llegó desde otra vista)
-            try {
-                const params = new URLSearchParams({ tipo: cat, modelo: d.nombre_modelo || '' });
-                const resFoto = await apiFetch(`${API_URL}/api/materiales/maestro/buscar?${params}`);
-                const dataFoto = await resFoto.json();
-                if (dataFoto.foto_url) fotoUrlFinal = dataFoto.foto_url;
-            } catch(e) {
-                console.warn('[inventario] No se pudo obtener foto del maestro:', e);
+    if (d.fotos && d.fotos.length) {
+        // Caso producto: el backend ya hizo el merge (catálogo primero)
+        todasLasFotos = d.fotos.filter(Boolean);
+    } else {
+        // Caso pieza: buscar foto del maestro en memoria o backend
+        let fotoUrlFinal = d.foto_url || '';
+        if (!fotoUrlFinal) {
+            const cat = (d.categoria || '').toLowerCase();
+            let lista = [];
+            if (cat === 'tablero') lista = _maestroInv.tableros || [];
+            else if (cat === 'silla') lista = _maestroInv.sillas || [];
+            else if (cat === 'butaca') lista = _maestroInv.butacas || [];
+            else if (cat.includes('base')) lista = _maestroInv.bases_comedor || [];
+
+            const f = lista.find(x =>
+                (x.nombre_modelo && x.nombre_modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
+                (x.modelo && x.modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
+                (x.nombre && x.nombre.toLowerCase() === (d.nombre_modelo || '').toLowerCase())
+            );
+            if (f && f.foto_url) {
+                fotoUrlFinal = f.foto_url;
+            } else {
+                try {
+                    const params = new URLSearchParams({ tipo: cat, modelo: d.nombre_modelo || '' });
+                    const resFoto = await apiFetch(`${API_URL}/api/materiales/maestro/buscar?${params}`);
+                    const dataFoto = await resFoto.json();
+                    if (dataFoto.foto_url) fotoUrlFinal = dataFoto.foto_url;
+                } catch(e) {
+                    console.warn('[inventario] No se pudo obtener foto del maestro:', e);
+                }
             }
         }
+        // Maestro primero, luego fotos adicionales del stock
+        const fotosMaestro = fotoUrlFinal.split('|').filter(Boolean);
+        const fotosAdicionales = (d.fotos_adicionales || '').split('|').filter(Boolean);
+        todasLasFotos = [...fotosMaestro, ...fotosAdicionales];
     }
-
-// ✅ Lógica de carrusel mejorada: mostrar todas las fotos del maestro primero
-    const fotosMaestro = (fotoUrlFinal || '').split('|').filter(Boolean);
-    const fotosAdicionales = (d.fotos_adicionales || '').split('|').filter(Boolean);
-    const todasLasFotos = [...fotosMaestro, ...fotosAdicionales];
 
     let fotoHTML = '';
     if (todasLasFotos.length > 0) {
