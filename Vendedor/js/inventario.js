@@ -484,6 +484,7 @@ function _renderTablaPiezas() {
                         <span>Modelo</span>
                     </div>
                 </th>
+                <th style="padding:12px 10px;text-align:left;">Forma</th>
                 <th style="padding:12px 10px;text-align:left;">Medida</th>
                 <th style="padding:12px 10px;text-align:center;color:var(--success);">Total</th>
                 ${sedes.map(s=>`<th style="padding:12px 8px;text-align:center;">${s}</th>`).join('')}
@@ -520,6 +521,7 @@ function _renderTablaPiezas() {
                     </div>
                 </div>
             </td>
+            <td style="padding:12px 10px;font-weight:700;font-size:12px;">${p.forma || ''}</td>
             <td style="padding:12px 10px;font-weight:700;font-size:12px;">${medida}</td>
             <td style="padding:12px 10px;text-align:center;">
                 <span style="background:${p.disponibles>0?'#dcfce7':'#f1f5f9'};
@@ -1197,6 +1199,9 @@ function _formPieza() {
         <select id="npf-forma" class="form-input" onchange="_invToggleMedidasPieza()">
             <option value="Rectangular">Rectangular</option>
             <option value="Circular">Circular (diámetro)</option>
+            <option value="Ovalado">Ovalado</option>
+            <option value="Media Luna">Media Luna</option>
+            <option value="Balde">Balde</option>
             <option value="Irregular">Irregular</option>
         </select></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
