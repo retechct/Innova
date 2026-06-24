@@ -1,4 +1,3 @@
-
 // =============================================================
 // inventario.js — Módulo de Inventario Completo
 // Innova Mobili ERP
@@ -1238,7 +1237,23 @@ async function _invGuardarProducto() {
     if (!nombre || !cat || !sedeId) {
         Swal.fire('Incompleto', 'Completa Categoría, Modelo y Sede.', 'warning'); return;
     }
-    const catStr = document.getElementById('nf-catalogo')?.value || '';    const catId  = catStr.split('|')[0] ? parseInt(catStr.split('|')[0]) : null;
+    const catStr = document.getElementById('nf-catalogo')?.value || '';
+    const catId  = catStr.split('|')[0] ? parseInt(catStr.split('|')[0]) : null;
+
+    // Resolver foto del modelo maestro del catálogo para que aparezca
+    // primero en el carousel de detalle y en las tarjetas de stock.
+    // fotoUrlCatalogo: foto principal del catálogo (puede ser pipe-separated)
+    let fotoUrlCatalogo = '';
+    if (catId) {
+        const prodCat = _maestroInv.catalogo.find(p => String(p.id) === String(catId));
+        if (prodCat) {
+            // Tomar todas las fotos del modelo del catálogo como pipe-separated
+            const todasFotosCat = [prodCat.foto_url, ...(prodCat.fotos || [])]
+                .filter(Boolean)
+                .filter((f, i, arr) => arr.indexOf(f) === i); // dedup
+            fotoUrlCatalogo = todasFotosCat.join('|');
+        }
+    }
 
     try {
         const payload = {
@@ -1312,18 +1327,19 @@ async function _invGuardarPieza() {
 
     let mat = '';
     let color = '';
+    let fotoMaestro = '';
     if (cat === 'tablero') {
         const f = _maestroInv.tableros.find(x => x.sku === sku);
-        if (f) { mat = f.material_base; color = f.color; }
+        if (f) { mat = f.material_base; color = f.color; fotoMaestro = f.foto_url || ''; }
     } else if (cat === 'silla') {
         const f = _maestroInv.sillas.find(x => x.sku === sku);
-        if (f) { mat = f.material; color = f.color_estructura; }
+        if (f) { mat = f.material; color = f.color_estructura; fotoMaestro = f.foto_url || ''; }
     } else if (cat === 'butaca') {
         const f = _maestroInv.butacas.find(x => x.sku === sku);
-        if (f) { mat = f.material; color = f.color_estructura; }
+        if (f) { mat = f.material; color = f.color_estructura; fotoMaestro = f.foto_url || ''; }
     } else {
         const f = _maestroInv.bases_comedor.find(x => x.sku === sku);
-        if (f) { mat = f.material; color = f.color; }
+        if (f) { mat = f.material; color = f.color; fotoMaestro = f.foto_url || ''; }
     }
 
     try {
@@ -1335,6 +1351,7 @@ async function _invGuardarPieza() {
                 categoria:      cat,
                 material:       mat,
                 fotos_adicionales: _fotosAdicionalesActuales.join('|'),
+                foto_url:       fotoMaestro,
                 color_acabado:  color,
                 forma,
                 largo_cm:  parseFloat(document.getElementById('npf-largo')?.value)    || null,
