@@ -208,14 +208,19 @@ def resumen_productos():
                 cat_fotos_urls = r[11] or ""
                 stock_foto_url = r[9]  or ""
                 todas_fotos = []
-                if cat_foto_url:
-                    todas_fotos.append(cat_foto_url)
+                for f in cat_foto_url.split('|'):
+                    f = f.strip()
+                    if f and f not in todas_fotos:
+                        todas_fotos.append(f)
                 for f in cat_fotos_urls.split('|'):
                     f = f.strip()
                     if f and f not in todas_fotos:
                         todas_fotos.append(f)
-                if stock_foto_url and stock_foto_url not in todas_fotos:
-                    todas_fotos.append(stock_foto_url)
+                # stock_foto_url puede ser pipe-separated
+                for f in stock_foto_url.split('|'):
+                    f = f.strip()
+                    if f and f not in todas_fotos:
+                        todas_fotos.append(f)
 
                 modelos[key] = {
                     "categoria":     r[0],
@@ -443,14 +448,20 @@ def buscar_por_barcode(barcode):
             fotos_adicionales = row[13] or ""
 
             todas_fotos = []
-            if cat_foto_url:
-                todas_fotos.append(cat_foto_url)
+            for f in cat_foto_url.split('|'):
+                f = f.strip()
+                if f and f not in todas_fotos:
+                    todas_fotos.append(f)
             for f in cat_fotos_urls.split('|'):
                 f = f.strip()
                 if f and f not in todas_fotos:
                     todas_fotos.append(f)
-            if stock_foto_url and stock_foto_url not in todas_fotos:
-                todas_fotos.append(stock_foto_url)
+            # stock_foto_url puede ser pipe-separated (el frontend guarda
+            # todas las fotos del catálogo concatenadas al momento de registrar)
+            for f in stock_foto_url.split('|'):
+                f = f.strip()
+                if f and f not in todas_fotos:
+                    todas_fotos.append(f)
             for f in fotos_adicionales.split('|'):
                 f = f.strip()
                 if f and f not in todas_fotos:
