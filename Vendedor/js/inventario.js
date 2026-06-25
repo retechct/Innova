@@ -1009,17 +1009,31 @@ function _formProducto() {
         .filter(o=>o.value)
         .map(o=>`<option value="${o.value}">${o.textContent}</option>`).join('');
     const cats  = CATEGORIAS_PRODUCTO.map(c=>`<option value="${c}">${c}</option>`).join('');
-    const prods = _maestroInv.catalogo.map(p=>
-        `<option value="${p.id}|${(p.nombre||p.nombre_modelo||'').replace(/"/g,'')}">${p.nombre||p.nombre_modelo}</option>`
-    ).join('');
 
     return `
     <div id="inv-nuevo-form-container">
         <div class="form-group"><label>Categoría *</label>
             <select id="nf-cat" class="form-input" onchange="_invFiltrarCatalogoPorCat()">${cats}</select></div>
-        <div class="form-group"><label>Modelo del Catálogo <span style="font-size:11px;color:#94a3b8;">(filtra por categoría)</span></label>
-            <select id="nf-catalogo" class="form-input" onchange="_invSelCatalogo()">
-                <option value="">— O escribir manualmente —</option>${prods}</select></div>
+
+        <!-- === BUSCADOR INTELIGENTE CON FOTO (igual que piezas) === -->
+        <div class="form-group" style="margin-bottom:15px;">
+            <label style="font-size:11px;font-weight:bold;color:var(--primary);">MODELO DEL CATÁLOGO</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:5px;">
+                <div class="custom-select-wrapper" style="flex-grow:1;position:relative;">
+                    <input type="text" id="search-inv-prod" class="form-input"
+                           placeholder="🔍 Buscar modelo en el catálogo..."
+                           onkeyup="_invFiltrarCatalogoBuscador()"
+                           onfocus="_invMostrarCatalogoBuscador()"
+                           autocomplete="off">
+                    <div id="list-inv-prod" class="custom-options" style="position:absolute;width:100%;z-index:9999;"></div>
+                </div>
+                <img id="img-preview-inv-prod" src=""
+                     style="width:42px;height:42px;border-radius:6px;object-fit:cover;border:1px solid #cbd5e1;display:none;cursor:zoom-in;"
+                     onclick="ampliarImagen(this.src)" title="Haz clic para agrandar">
+            </div>
+            <input type="hidden" id="nf-catalogo-id">
+        </div>
+
         <div class="form-group"><label>Nombre Modelo *</label>
             <input id="nf-nombre" type="text" class="form-input" placeholder="Sofá Venecia 3 cuerpos" /></div>
 
@@ -1033,7 +1047,7 @@ function _formProducto() {
             </div>
         </div>
         <div id="nf-detalles-mesa" style="display:none;">
-             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
                 <div class="form-group"><label>Largo (cm)</label><input id="nf-largo" type="number" class="form-input" /></div>
                 <div class="form-group"><label>Ancho (cm)</label><input id="nf-ancho" type="number" class="form-input" /></div>
                 <div class="form-group"><label>Alto (cm)</label><input id="nf-alto" type="number" class="form-input" /></div>
@@ -1064,101 +1078,163 @@ function _formProducto() {
         </div>
         <!-- === FIN: FOTOS === -->
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:15px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:15px;">
             <div class="form-group"><label>Sede *</label>
                 <select id="nf-sede" class="form-input"><option value="">— Seleccionar —</option>${sedes}</select></div>
+            <div class="form-group"><label>Cantidad *</label>
+                <input id="nf-cantidad" type="number" class="form-input" value="1" min="1" placeholder="1" /></div>
             <div class="form-group"><label>Costo Ingreso (S/)</label>
                 <input id="nf-costo" type="number" class="form-input" placeholder="0.00" step="0.01"/></div>
         </div>
         <div class="form-group"><label>Observaciones</label>
             <input id="nf-obs" type="text" class="form-input" placeholder="Opcional" /></div>
         <button onclick="_invGuardarProducto()" class="btn-action btn-primary" style="margin-top:10px;">
-            <i class="fas fa-save"></i> Registrar y Generar Código
+            <i class="fas fa-save"></i> Registrar y Generar Código(s)
         </button>
         <button onclick="_cerrarModalInvNuevo()" class="btn-action btn-ghost">Cancelar</button>
     </div>`;
 }
 
-function _invSelCatalogo() {
-    const sel = document.getElementById('nf-catalogo');
-    if (!sel.value) return;
-    const [tipo, nombre] = sel.value.split('|');
-    const nf = document.getElementById('nf-nombre');
-    if (nf) nf.value = nombre;
+// ─── Buscador inteligente de productos del catálogo ──────────────────────────
 
-    // Si es modelo del maestro de materiales (silla/butaca), no hay catalogo_id
-    if (tipo === 'maestro-silla' || tipo === 'maestro-butaca') {
-        _invActualizarFormDinamico();
-        return;
-    }
+function _invMostrarCatalogoBuscador() {
+    const searchEl = document.getElementById('search-inv-prod');
+    if (!searchEl || searchEl.value.trim() !== '') return;
 
-    // Es un ID del catalogo_productos — autocompletar categoría y foto
-    const catId = tipo;
-    const prod = _maestroInv.catalogo.find(p => String(p.id) === String(catId));
-    if (prod) {
-        const selCat = document.getElementById('nf-cat');
-        if (selCat && prod.categoria) {
-            // Buscar opción case-insensitive para cubrir 'Sofá' vs 'Sofa'
-            const opt = [...selCat.options].find(
-                o => o.value.toLowerCase() === (prod.categoria || '').toLowerCase()
-            );
-            if (opt) selCat.value = opt.value;
-        }
-        _invRenderizarFotosPreview('nf-fotos-preview', prod.foto_url);
-        _invActualizarFormDinamico();
-    }
+    const cat = document.getElementById('nf-cat')?.value || '';
+    const lista = _invGetCatalogoPorCat(cat);
+
+    const listContainer = document.getElementById('list-inv-prod');
+    if (!listContainer) return;
+
+    const ultimas = lista.slice(0, 10);
+    const header = `<div style="padding:6px 12px;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f1f5f9;">
+        🕐 Últimos en catálogo — escribe para buscar
+    </div>`;
+
+    listContainer.innerHTML = header + ultimas.map(p => _invHtmlItemCatalogo(p)).join('');
+    listContainer.classList.add('show');
 }
 
-// Filtra el select de catálogo por la categoría elegida
-window._invFiltrarCatalogoPorCat = function() {
-    _invActualizarFormDinamico();
+function _invFiltrarCatalogoBuscador() {
+    const searchEl = document.getElementById('search-inv-prod');
+    const texto = (searchEl?.value || '').toLowerCase().trim();
+    const listContainer = document.getElementById('list-inv-prod');
+    if (!listContainer) return;
+
+    if (!texto) { _invMostrarCatalogoBuscador(); return; }
+
     const cat = document.getElementById('nf-cat')?.value || '';
-    const selCatalogo = document.getElementById('nf-catalogo');
-    if (!selCatalogo) return;
+    const lista = _invGetCatalogoPorCat(cat);
+    const filtrados = lista.filter(p =>
+        (p.nombre || p.nombre_modelo || '').toLowerCase().includes(texto) ||
+        (p.categoria || '').toLowerCase().includes(texto)
+    ).slice(0, 30);
 
-    // Silla y Butaca: vienen del maestro de materiales, NO del catalogo_productos
-    if (cat === 'Silla') {
-        const lista = _maestroInv.sillas || [];
-        selCatalogo.innerHTML = '<option value="">— O escribir manualmente —</option>' +
-            lista.map(s =>
-                '<option value="maestro-silla|' + (s.modelo||s.sku||'').replace(/"/g,'') + '">' +
-                (s.modelo || s.sku) + (s.material ? ' — '+s.material : '') + '</option>'
-            ).join('');
-        return;
-    }
-    if (cat === 'Butaca') {
-        const lista = _maestroInv.butacas || [];
-        selCatalogo.innerHTML = '<option value="">— O escribir manualmente —</option>' +
-            lista.map(b =>
-                '<option value="maestro-butaca|' + (b.modelo||b.sku||'').replace(/"/g,'') + '">' +
-                (b.modelo || b.sku) + (b.material ? ' — '+b.material : '') + '</option>'
-            ).join('');
-        return;
-    }
+    listContainer.innerHTML = filtrados.length
+        ? filtrados.map(p => _invHtmlItemCatalogo(p)).join('')
+        : `<div style="padding:12px;font-size:12px;color:#94a3b8;text-align:center;">Sin resultados para "${texto}"</div>`;
+    listContainer.classList.add('show');
+}
 
-    // Resto de categorías: filtrar desde catalogo_productos (case-insensitive)
+function _invGetCatalogoPorCat(cat) {
+    // Silla y Butaca: usar maestro de materiales
+    if (cat === 'Silla')  return (_maestroInv.sillas  || []).map(s => ({ _tipo:'silla',  id: s.sku, nombre_modelo: s.modelo || s.sku, categoria:'Silla',  foto_url: s.foto_url || '', _mat: s.material || '' }));
+    if (cat === 'Butaca') return (_maestroInv.butacas || []).map(b => ({ _tipo:'butaca', id: b.sku, nombre_modelo: b.modelo || b.sku, categoria:'Butaca', foto_url: b.foto_url || '', _mat: b.material || '' }));
+
+    // Resto: filtrar catálogo por categoría
     const mapaCategoria = {
         'Sofa':        ['sofa', 'sofá', 'seccional', 'modular'],
-        'Sillón':      ['sillón', 'silion'],
-        'Mesa':        ['mesa'],
         'Mesa Centro': ['mesa centro', 'mesa'],
         'Consola':     ['consola'],
         'Espejo':      ['espejo'],
         'Cuadro':      ['cuadro'],
         'Cojin':       ['cojin', 'cojín'],
-        'Cama':        ['cama'],
     };
-
-    const catsCatalogo = mapaCategoria[cat] || null;
-    const prodsFiltrados = catsCatalogo
-        ? _maestroInv.catalogo.filter(p => catsCatalogo.includes((p.categoria || '').toLowerCase()))
+    const cats = mapaCategoria[cat] || null;
+    return cats
+        ? _maestroInv.catalogo.filter(p => cats.includes((p.categoria || '').toLowerCase()))
         : _maestroInv.catalogo;
+}
 
-    selCatalogo.innerHTML = '<option value="">— O escribir manualmente —</option>' +
-        prodsFiltrados.map(p =>
-            '<option value="' + p.id + '|' + (p.nombre||p.nombre_modelo||'').replace(/"/g,'') + '">' +
-            (p.nombre||p.nombre_modelo) + (p.categoria ? ' ('+p.categoria+')' : '') + '</option>'
-        ).join('');
+function _invHtmlItemCatalogo(p) {
+    const nombre   = p.nombre || p.nombre_modelo || '';
+    const cat      = p.categoria || '';
+    const fotoUrl  = p.foto_url || p.foto || '';
+    const subtitulo = p._mat ? p._mat : cat;
+    const safeNom  = nombre.replace(/'/g, "\\'");
+    const safeFoto = fotoUrl.replace(/'/g, "\\'");
+    const safeId   = (p.id || '').toString().replace(/'/g, "\\'");
+    const esMaestro = p._tipo === 'silla' || p._tipo === 'butaca';
+
+    return `
+        <div class="custom-option-item" onclick="_invSeleccionarProductoCatalogo('${safeId}','${safeNom}','${safeFoto}','${esMaestro}')">
+            <img src="${fotoUrl || 'imagenes/sin_foto.jpg'}" class="custom-option-img"
+                 onerror="this.src='imagenes/sin_foto.jpg'">
+            <div style="flex-grow:1;">
+                <span class="custom-option-sku">${cat.toUpperCase()}</span>
+                <div class="custom-option-text"><strong>${nombre}</strong>${subtitulo ? '<br>' + subtitulo : ''}</div>
+            </div>
+        </div>`;
+}
+
+function _invSeleccionarProductoCatalogo(id, nombre, fotoUrl, esMaestro) {
+    // Rellenar campos
+    const nfNombre = document.getElementById('nf-nombre');
+    if (nfNombre) nfNombre.value = nombre;
+
+    // Guardar id en hidden (string 'maestro' si viene de silla/butaca)
+    const hidden = document.getElementById('nf-catalogo-id');
+    if (hidden) hidden.value = esMaestro === 'true' ? '' : id;
+
+    // Mostrar miniatura con foto
+    const imgPreview = document.getElementById('img-preview-inv-prod');
+    if (imgPreview) {
+        if (fotoUrl && fotoUrl.startsWith('http')) {
+            imgPreview.src = fotoUrl;
+            imgPreview.style.display = 'block';
+        } else {
+            imgPreview.style.display = 'none';
+        }
+    }
+
+    // Autocompletar categoría si viene del catálogo (no maestro)
+    if (esMaestro !== 'true') {
+        const prod = _maestroInv.catalogo.find(p => String(p.id) === String(id));
+        if (prod && prod.categoria) {
+            const selCat = document.getElementById('nf-cat');
+            if (selCat) {
+                const opt = [...selCat.options].find(
+                    o => o.value.toLowerCase() === (prod.categoria || '').toLowerCase()
+                );
+                if (opt) { selCat.value = opt.value; }
+            }
+            // Mostrar foto en preview de fotos del formulario
+            _invRenderizarFotosPreview('nf-fotos-preview', prod.foto_url || fotoUrl);
+        }
+    }
+
+    _invActualizarFormDinamico();
+
+    // Mostrar texto en buscador y cerrar lista
+    const searchEl = document.getElementById('search-inv-prod');
+    if (searchEl) searchEl.value = nombre;
+    const listContainer = document.getElementById('list-inv-prod');
+    if (listContainer) listContainer.classList.remove('show');
+}
+
+// Dispara actualización de forma dinámica cuando cambia la categoría
+window._invFiltrarCatalogoPorCat = function() {
+    _invActualizarFormDinamico();
+    // Limpiar buscador y preview al cambiar categoría
+    const searchEl = document.getElementById('search-inv-prod');
+    if (searchEl) searchEl.value = '';
+    const hidden = document.getElementById('nf-catalogo-id');
+    if (hidden) hidden.value = '';
+    const imgPreview = document.getElementById('img-preview-inv-prod');
+    if (imgPreview) imgPreview.style.display = 'none';
+    const listContainer = document.getElementById('list-inv-prod');
+    if (listContainer) listContainer.classList.remove('show');
 };
 
 function _invActualizarFormDinamico() {
@@ -1212,6 +1288,16 @@ function _formPieza() {
                 style="margin-top: 8px; width: 100%; background: #f8fafc; color: var(--accent); border: 1px dashed var(--accent); padding: 8px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;">
             <i class="fa-solid fa-plus"></i> CREAR NUEVO MODELO AL VUELO
         </button>
+    </div>
+
+    <!-- === CAMPOS DINÁMICOS: Tela para silla/butaca === -->
+    <div id="npf-detalles-tela" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-group"><label>Color / Tela</label>
+                <input id="npf-color-tela" type="text" class="form-input" placeholder="Beige, Marrón..." /></div>
+            <div class="form-group"><label>Acabado</label>
+                <input id="npf-acabado" type="text" class="form-input" placeholder="Liso, Texturado..." /></div>
+        </div>
     </div>
 
     <!-- === INICIO: FOTOS PIEZA === -->
@@ -1310,6 +1396,9 @@ function _invLimpiarSmartSearch() {
     if (sku) sku.value = '';
     if (img) img.style.display = 'none';
     if (list) list.classList.remove('show');
+    // Ocultar campos de tela al limpiar
+    const telaDiv = document.getElementById('npf-detalles-tela');
+    if (telaDiv) telaDiv.style.display = 'none';
 }
 
 function _invCrearAlVuelo() {
@@ -1331,6 +1420,7 @@ function _invToggleMedidasPieza() {
     const lblLargo  = document.getElementById('npf-lbl-largo');
     const wrapAncho = document.getElementById('npf-wrap-ancho');
     const wrapCorte = document.getElementById('npf-wrap-corte');
+    const telaDiv   = document.getElementById('npf-detalles-tela');
 
     if (!lblLargo) return;
     lblLargo.textContent = forma === 'Circular' ? 'Diámetro (cm) *' : 'Largo (cm) *';
@@ -1341,28 +1431,34 @@ function _invToggleMedidasPieza() {
         // Mostrar opciones de corte solo para tableros rectangulares
         wrapCorte.style.display = (cat === 'tablero' && forma === 'Rectangular') ? 'block' : 'none';
     }
+    // Mostrar campos de tela solo para silla y butaca
+    if (telaDiv) {
+        telaDiv.style.display = (cat === 'silla' || cat === 'butaca') ? 'block' : 'none';
+    }
 }
 
 async function _invGuardarProducto() {
     const nombre = document.getElementById('nf-nombre')?.value;
     const cat    = document.getElementById('nf-cat')?.value;
     const sedeId = document.getElementById('nf-sede')?.value;
+    const cantidad = parseInt(document.getElementById('nf-cantidad')?.value) || 1;
+
     if (!nombre || !cat || !sedeId) {
         Swal.fire('Incompleto', 'Completa Categoría, Modelo y Sede.', 'warning'); return;
     }
-    const catStr = document.getElementById('nf-catalogo')?.value || '';
-    const _catTipo = catStr.split('|')[0] || '';
-    // maestro-silla / maestro-butaca no tienen catalogo_id numérico
-    const catId  = (_catTipo && !_catTipo.startsWith('maestro')) ? (parseInt(_catTipo) || null) : null;
+    if (cantidad < 1 || cantidad > 50) {
+        Swal.fire('Cantidad inválida', 'La cantidad debe ser entre 1 y 50.', 'warning'); return;
+    }
+
+    // Leer el id del catálogo desde el hidden del buscador inteligente
+    const catId = parseInt(document.getElementById('nf-catalogo-id')?.value) || null;
 
     // Resolver foto del modelo maestro del catálogo para que aparezca
     // primero en el carousel de detalle y en las tarjetas de stock.
-    // fotoUrlCatalogo: foto principal del catálogo (puede ser pipe-separated)
     let fotoUrlCatalogo = '';
     if (catId) {
         const prodCat = _maestroInv.catalogo.find(p => String(p.id) === String(catId));
         if (prodCat) {
-            // Tomar todas las fotos del modelo del catálogo como pipe-separated
             const todasFotosCat = [prodCat.foto_url, ...(prodCat.fotos || [])]
                 .filter(Boolean)
                 .filter((f, i, arr) => arr.indexOf(f) === i); // dedup
@@ -1376,6 +1472,7 @@ async function _invGuardarProducto() {
             nombre_modelo:  nombre,
             categoria:      cat,
             sede_id:        parseInt(sedeId),
+            cantidad:       cantidad,
             costo_ingreso:  parseFloat(document.getElementById('nf-costo')?.value) || null,
             observaciones:  document.getElementById('nf-obs')?.value,
             usuario_id:     window.usuarioActivo?.id,
@@ -1412,16 +1509,22 @@ async function _invGuardarProducto() {
         const sedeSel    = document.getElementById('nf-sede');
         const sedeNombre = sedeSel?.options[sedeSel.selectedIndex]?.text || '';
 
+        // El backend devuelve unidades[] si se registraron múltiples, o codigo_barra si fue 1
+        const unidades = d.unidades || (d.codigo_barra ? [{ codigo_barra: d.codigo_barra }] : []);
+
+        const codigosHTML = unidades.map(u => `
+            <div style="margin:6px 0;">
+                <b style="color:var(--accent);">${u.codigo_barra}</b>
+                <button onclick="imprimirEtiqueta('${u.codigo_barra}','${nombreProd.replace(/'/g,"\\'")}','${sedeNombre}')"
+                    style="margin-left:10px;background:var(--primary);color:white;border:none;
+                           padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;">
+                    🖨️ Imprimir
+                </button>
+            </div>`).join('');
+
         Swal.fire({
-            icon: 'success', title: '¡Registrado!',
-            html: `
-                Código de barras generado:<br>
-                <b style="font-size:1.3rem;color:var(--accent);">${d.codigo_barra}</b><br><br>
-                <button onclick="imprimirEtiqueta('${d.codigo_barra}','${nombreProd.replace(/'/g,"\\'")}','${sedeNombre}')"
-                    style="background:var(--primary);color:white;border:none;padding:10px 20px;
-                           border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">
-                    🖨️ Imprimir Etiqueta
-                </button>`,
+            icon: 'success', title: `¡${unidades.length} unidad(es) registrada(s)!`,
+            html: `Códigos generados:<br>${codigosHTML}`,
             confirmButtonText: 'Cerrar',
             confirmButtonColor: '#0f172a'
         });
@@ -1482,6 +1585,9 @@ async function _invGuardarPieza() {
                 fotos_adicionales: _fotosAdicionalesActuales.join('|'),
                 foto_url:       fotoMaestro,
                 color_acabado:  color,
+                // Campos de tela/acabado para silla y butaca
+                color_tela:    (cat === 'silla' || cat === 'butaca') ? (document.getElementById('npf-color-tela')?.value || '') : '',
+                acabado:       (cat === 'silla' || cat === 'butaca') ? (document.getElementById('npf-acabado')?.value || '') : '',
                 forma,
                 largo_cm:  parseFloat(document.getElementById('npf-largo')?.value)    || null,
                 ancho_cm:  parseFloat(document.getElementById('npf-ancho')?.value)    || null,
