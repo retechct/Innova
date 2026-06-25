@@ -610,47 +610,57 @@ def registrar_producto():
     if missing:
         return jsonify({'error': f'Campos faltantes: {", ".join(missing)}'}), 400
 
+    cantidad = max(1, min(50, int(data.get('cantidad', 1))))
+
     conn = None
     try:
         conn = _conn(); cur = conn.cursor()
 
-        prefijo = PREFIJOS.get(data['categoria'], 'PRD')
-        barcode = _generar_codigo(cur, prefijo, 'stock_productos')
+        unidades_creadas = []
+        for _ in range(cantidad):
+            prefijo = PREFIJOS.get(data['categoria'], 'PRD')
+            barcode = _generar_codigo(cur, prefijo, 'stock_productos')
 
-        cur.execute("""
-            INSERT INTO stock_productos
-                (catalogo_id, nombre_modelo, categoria, codigo_barra,
-                 color_tela, acabado, observaciones, foto_url, fotos_adicionales,
-                 sede_id, estado, costo_ingreso, precio_venta, creado_por)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
-            RETURNING id;
-        """, (
-            data.get('catalogo_id'),
-            data['nombre_modelo'],
-            data['categoria'],
-            barcode,
-            data.get('color_tela'),
-            data.get('acabado'),
-            data.get('observaciones'),
-            data.get('foto_url'),
-            data.get('fotos_adicionales'),
-            data['sede_id'],
-            data.get('costo_ingreso'),
-            data.get('precio_venta'),
-            data['usuario_id'],
-        ))
-        nuevo_id = cur.fetchone()[0]
+            cur.execute("""
+                INSERT INTO stock_productos
+                    (catalogo_id, nombre_modelo, categoria, codigo_barra,
+                     color_tela, acabado, observaciones, foto_url, fotos_adicionales,
+                     sede_id, estado, costo_ingreso, precio_venta, creado_por)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
+                RETURNING id;
+            """, (
+                data.get('catalogo_id'),
+                data['nombre_modelo'],
+                data['categoria'],
+                barcode,
+                data.get('color_tela'),
+                data.get('acabado'),
+                data.get('observaciones'),
+                data.get('foto_url'),
+                data.get('fotos_adicionales'),
+                data['sede_id'],
+                data.get('costo_ingreso'),
+                data.get('precio_venta'),
+                data['usuario_id'],
+            ))
+            nuevo_id = cur.fetchone()[0]
 
-        _registrar_historial(
-            cur, 'producto', nuevo_id, barcode,
-            'Ingreso', None, data['sede_id'],
-            None, 'Disponible',
-            data['usuario_id'], data.get('usuario_nombre', ''),
-            notas=f"Ingreso inicial. {data.get('observaciones', '')}"
-        )
+            _registrar_historial(
+                cur, 'producto', nuevo_id, barcode,
+                'Ingreso', None, data['sede_id'],
+                None, 'Disponible',
+                data['usuario_id'], data.get('usuario_nombre', ''),
+                notas=f"Ingreso inicial. {data.get('observaciones', '')}"
+            )
+            unidades_creadas.append({'id': nuevo_id, 'codigo_barra': barcode})
 
         conn.commit()
-        return jsonify({'exito': True, 'id': nuevo_id, 'codigo_barra': barcode}), 201
+        # Compatibilidad: si solo se registró 1, devolver también codigo_barra directo
+        resp = {'exito': True, 'unidades': unidades_creadas}
+        if len(unidades_creadas) == 1:
+            resp['id'] = unidades_creadas[0]['id']
+            resp['codigo_barra'] = unidades_creadas[0]['codigo_barra']
+        return jsonify(resp), 201
 
     except Exception as e:
         if conn: conn.rollback()
