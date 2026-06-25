@@ -194,7 +194,8 @@ def resumen_productos():
                 COUNT(*) FILTER (WHERE sp.estado = 'Vendido')              AS vendidos,
                 MAX(sp.foto_url)                                            AS foto_url,
                 MAX(cp.foto_url)                                            AS cat_foto_url,
-                MAX(cp.fotos_urls)                                          AS cat_fotos_urls
+                MAX(cp.fotos_urls)                                          AS cat_fotos_urls,
+                MAX(sp.fotos_adicionales)                                   AS stock_fotos_adicionales
             FROM stock_productos sp
             JOIN sedes se ON sp.sede_id = se.id
             LEFT JOIN catalogo_productos cp
@@ -212,24 +213,28 @@ def resumen_productos():
         for r in rows:
             key = (r[0], r[1])  # (categoria, nombre_modelo)
             if key not in modelos:
-                # Construir lista de fotos: maestro primero, luego propias de stock
-                cat_foto_url   = r[10] or ""
-                cat_fotos_urls = r[11] or ""
-                stock_foto_url = r[9]  or ""
+                # Construir lista de fotos: catálogo, luego las del registro de stock
+                cat_foto_url      = r[10] or ""
+                cat_fotos_urls    = r[11] or ""
+                stock_fotos_adic  = r[12] or ""
+                # sp.foto_url (r[9]) es legacy, puede contener la foto del catálogo en el momento del registro
+                stock_foto_legacy = r[9]  or ""
+
                 todas_fotos = []
-                for f in cat_foto_url.split('|'):
-                    f = f.strip()
-                    if f and f not in todas_fotos:
-                        todas_fotos.append(f)
-                for f in cat_fotos_urls.split('|'):
-                    f = f.strip()
-                    if f and f not in todas_fotos:
-                        todas_fotos.append(f)
-                # stock_foto_url puede ser pipe-separated
-                for f in stock_foto_url.split('|'):
-                    f = f.strip()
-                    if f and f not in todas_fotos:
-                        todas_fotos.append(f)
+                seen_fotos = set()
+
+                def add_photos(photo_str):
+                    if not photo_str: return
+                    for f_url in photo_str.split('|'):
+                        f = f_url.strip()
+                        if f and f not in seen_fotos:
+                            todas_fotos.append(f)
+                            seen_fotos.add(f)
+
+                add_photos(cat_foto_url)
+                add_photos(cat_fotos_urls)
+                add_photos(stock_foto_legacy)
+                add_photos(stock_fotos_adic)
 
                 modelos[key] = {
                     "categoria":     r[0],
