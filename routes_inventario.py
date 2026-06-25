@@ -74,6 +74,12 @@ def _asegurar_columna_fotos_adicionales():
         cur = conn.cursor()
         cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
         cur.execute("ALTER TABLE stock_piezas ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
+        cur.execute("ALTER TABLE stock_piezas ADD COLUMN IF NOT EXISTS foto_url TEXT;")
+        # Índices de performance para queries frecuentes
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_nombre ON stock_productos (LOWER(nombre_modelo));")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_sede ON stock_productos (sede_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_piezas_sku ON stock_piezas (sku_maestro);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_piezas_sede ON stock_piezas (sede_id);")
         _schema_fotos_adicionales_listo = True
     except Exception as e:
         print(f"⚠️  _asegurar_columna_fotos_adicionales: {e}")
@@ -191,7 +197,10 @@ def resumen_productos():
                 MAX(cp.fotos_urls)                                          AS cat_fotos_urls
             FROM stock_productos sp
             JOIN sedes se ON sp.sede_id = se.id
-            LEFT JOIN catalogo_productos cp ON sp.catalogo_id = cp.id
+            LEFT JOIN catalogo_productos cp
+                   ON cp.id = sp.catalogo_id
+                   OR (sp.catalogo_id IS NULL
+                       AND LOWER(cp.nombre_modelo) = LOWER(sp.nombre_modelo))
             {where_sql}
             GROUP BY sp.categoria, sp.nombre_modelo, sp.catalogo_id, sp.sede_id, se.nombre
             ORDER BY sp.categoria, sp.nombre_modelo, se.nombre;
@@ -557,10 +566,12 @@ def buscar_por_barcode(barcode):
         cur.execute("""
             SELECT su.id, su.codigo_barra, su.nombre_modelo, su.categoria,
                    su.color_tela, su.acabado, su.estado, se.nombre AS sede,
-                   NULL AS foto_url, su.costo_ingreso, su.fecha_ingreso,
+                   COALESCE(cp.foto_url, '') AS foto_url, su.costo_ingreso, su.fecha_ingreso,
                    'unidad' AS tipo
             FROM stock_unidades su
             LEFT JOIN sedes se ON su.sede_id = se.id
+            LEFT JOIN catalogo_productos cp
+                   ON LOWER(cp.nombre_modelo) = LOWER(su.nombre_modelo)
             WHERE su.codigo_barra = %s;
         """, (barcode,))
         row = cur.fetchone()
@@ -681,8 +692,8 @@ def registrar_pieza():
                 INSERT INTO stock_piezas
                     (categoria, sku_maestro, nombre_modelo, material, color_acabado,
                     codigo_barra, forma, largo_cm, ancho_cm, alto_cm, fotos_adicionales,
-                    sede_id, estado, costo_ingreso, proveedor, usuario_ingreso_id)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
+                    foto_url, sede_id, estado, costo_ingreso, proveedor, usuario_ingreso_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
                 RETURNING id;
             """, (
                 data['categoria'],
@@ -696,6 +707,7 @@ def registrar_pieza():
                 data.get('ancho_cm'),
                 data.get('alto_cm'),
                 data.get('fotos_adicionales'),
+                data.get('foto_url'),          # foto del maestro de materiales
                 data['sede_id'],
                 data.get('costo_ingreso'),
                 data.get('proveedor'),
@@ -1018,6 +1030,74 @@ def eliminar_item_inventario(tipo, reg_id):
 # ─────────────────────────────────────────────────────────────────────────────
 # LISTAR UNIDADES DE UN MODELO (Para eliminar pruebas/gestión)
 # ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ENDPOINT FALTANTE: etiquetas-disponibles
+# Usado por el botón SKU de cada tarjeta en inventario.js → _ejecutarImpresionFisica
+# Recibe: { items: [{nombre_modelo, categoria, ...}], por_cantidad: bool }
+# Devuelve: { etiquetas: [{codigo, nombre, sede}] }
+# ─────────────────────────────────────────────────────────────────────────────
+@inventario_bp.route('/api/inventario/etiquetas-disponibles', methods=['POST'])
+@requiere_login
+def etiquetas_disponibles():
+    data  = request.json or {}
+    items = data.get('items', [])
+    por_cantidad = data.get('por_cantidad', False)  # True = todas las disp., False = 1 por modelo
+
+    if not items:
+        return jsonify({'etiquetas': []}), 200
+
+    conn = None
+    try:
+        conn = _conn(); cur = conn.cursor()
+        etiquetas = []
+
+        for item in items:
+            nombre   = item.get('nombre_modelo', '')
+            categoria = item.get('categoria', '')
+
+            # Determinar si es pieza o producto por la presencia de sku_maestro
+            es_pieza = bool(item.get('sku_maestro'))
+            tabla    = 'stock_piezas' if es_pieza else 'stock_productos'
+            col_sede = 'sede_id'
+
+            if es_pieza:
+                cur.execute(f"""
+                    SELECT sp.codigo_barra, sp.nombre_modelo, se.nombre AS sede
+                    FROM {tabla} sp
+                    LEFT JOIN sedes se ON sp.sede_id = se.id
+                    WHERE LOWER(sp.nombre_modelo) = LOWER(%s)
+                      AND sp.estado = 'Disponible'
+                    ORDER BY sp.fecha_ingreso DESC
+                    {'LIMIT 1' if not por_cantidad else ''};
+                """, (nombre,))
+            else:
+                cur.execute(f"""
+                    SELECT sp.codigo_barra, sp.nombre_modelo, se.nombre AS sede
+                    FROM {tabla} sp
+                    LEFT JOIN sedes se ON sp.sede_id = se.id
+                    WHERE LOWER(sp.nombre_modelo) = LOWER(%s)
+                      AND sp.estado = 'Disponible'
+                    ORDER BY sp.fecha_ingreso DESC
+                    {'LIMIT 1' if not por_cantidad else ''};
+                """, (nombre,))
+
+            rows = cur.fetchall()
+            for r in rows:
+                etiquetas.append({
+                    'codigo': r[0],
+                    'nombre': r[1],
+                    'sede':   r[2] or '',
+                })
+
+        return jsonify({'etiquetas': etiquetas}), 200
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        _rel(conn)
+
 @inventario_bp.route('/api/inventario/unidades-modelo', methods=['GET'])
 @requiere_login
 def unidades_modelo():

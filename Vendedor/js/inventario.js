@@ -1390,7 +1390,7 @@ async function _invGuardarProducto() {
         if (['sofa','butaca','silla'].includes(_catN)) {
             payload.color_tela = document.getElementById('nf-color')?.value;
             payload.acabado = document.getElementById('nf-acabado')?.value;
-        } else if (['Mesa Centro', 'Consola'].includes(cat)) {
+        } else if (['mesa centro','consola'].includes(_catN)) {
             payload.largo_cm = parseFloat(document.getElementById('nf-largo')?.value) || null;
             payload.ancho_cm = parseFloat(document.getElementById('nf-ancho')?.value) || null;
             payload.alto_cm = parseFloat(document.getElementById('nf-alto')?.value) || null;
@@ -1436,6 +1436,11 @@ async function _invGuardarPieza() {
     const cat    = document.getElementById('npf-cat')?.value;
     let forma    = document.getElementById('npf-forma')?.value;
     const sedeId = document.getElementById('npf-sede')?.value;
+
+    // Silla y butaca son piezas enteras, no tienen forma geométrica relevante
+    if (cat === 'silla' || cat === 'butaca') {
+        forma = forma || 'N/A';
+    }
 
     if (!sku || !nombre || !sedeId) {
         Swal.fire('Incompleto', 'Selecciona el modelo y la sede.', 'warning'); return;
