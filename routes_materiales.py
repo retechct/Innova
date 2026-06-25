@@ -516,8 +516,8 @@ def aprobar_creacion():
 
         cursor.execute("""
             INSERT INTO catalogo_productos (nombre_modelo, precio_base, foto_url, fotos_urls, es_plantilla, en_stock, origen_produccion, categoria, config_json)
-            VALUES (%s, %s, %s, %s, False, False, %s, %s, %s);
-        """, (nombre, precio_base, foto_principal, fotos_urls, origen, categoria, config_json))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+        """, (nombre, precio_base, foto_principal, fotos_urls, False, False, origen, categoria, config_json))
         cursor.execute("UPDATE creaciones_vendedores SET estado = 'Aprobado' WHERE id = %s;", (creacion_id,))
         conexion.commit()
         return jsonify({'exito': True, 'mensaje': 'Modelo aprobado y enviado al catálogo principal.'}), 200

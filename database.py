@@ -37,7 +37,7 @@ def release_db_connection(conn):
 
 def limpiar_foto(url):
     """Evita placeholders o URLs vacías en campos de foto."""
-    if not url or 'via.placeholder.com' in url:
+    if not url or 'via.placeholder.com' in url or 'sin_foto.jpg' in str(url):
         return "imagenes/sin_foto.jpg"
     if url.startswith('http'):
         return url

@@ -36,7 +36,7 @@ def init_taller_pool():
 
 def _limpiar_foto(url):
     backend = os.getenv("BACKEND_URL", "https://innova-4cnn.onrender.com")
-    if not url or "via.placeholder.com" in url:
+    if not url or "via.placeholder.com" in url or 'sin_foto.jpg' in str(url):
         return "imagenes/sin_foto.jpg"
     if url.startswith("http"):
         return url
