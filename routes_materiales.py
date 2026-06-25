@@ -459,17 +459,18 @@ def obtener_creaciones():
         cursor   = conexion.cursor()
         cursor.execute("""
             SELECT c.id, c.nombre_modelo, c.categoria, c.detalles_tecnicos, c.notas_casqueria,
-                   f.foto_url AS foto, c.config_json, c.estado
+                   f.foto_url AS foto, c.config_json, c.estado, u.nombre as vendedor
             FROM creaciones_vendedores c
             LEFT JOIN LATERAL (
                 SELECT foto_url FROM fotos_creaciones WHERE creacion_id = c.id ORDER BY id LIMIT 1
             ) f ON true
+            LEFT JOIN usuarios u ON c.vendedor_id = u.id
             WHERE c.estado = 'Pendiente'
             ORDER BY c.fecha_creacion DESC;
         """)
         creaciones = [{
-            "id": r[0], "nombre": r[1], "categoria": r[2], "detalles": r[3],
-            "notas": r[4], "foto_url": limpiar_foto(r[5]), "config_json": r[6], "estado": r[7]
+            "id": r[0], "nombre": r[1], "categoria": r[2], "detalles": r[3], "notas": r[4],
+            "foto_url": limpiar_foto(r[5]), "config_json": r[6], "estado": r[7], "vendedor": r[8]
         } for r in cursor.fetchall()]
         return jsonify(creaciones), 200
     except Exception as e:
@@ -491,19 +492,32 @@ def aprobar_creacion():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("""
-            SELECT c.nombre_modelo,
-                   (SELECT foto_url FROM fotos_creaciones WHERE creacion_id = c.id LIMIT 1)
+            SELECT c.nombre_modelo, c.config_json, c.categoria,
+                   (SELECT array_agg(fc.foto_url) FROM fotos_creaciones fc WHERE fc.creacion_id = c.id) AS fotos
             FROM creaciones_vendedores c WHERE c.id = %s;
         """, (creacion_id,))
         creacion = cursor.fetchone()
         if not creacion:
             return jsonify({'error': 'Creación no encontrada'}), 404
-        nombre   = creacion[0]
-        foto_url = limpiar_foto(creacion[1])
+        
+        nombre, config_json, categoria, fotos_array = creacion
+        
+        # Unir fotos en un string separado por |
+        fotos_urls = '|'.join(fotos_array) if fotos_array else ''
+        foto_principal = fotos_array[0] if fotos_array and fotos_array[0] else ''
+
+        # Asegurar que las columnas existen (auto-migración)
+        try:
+            cursor.execute("ALTER TABLE catalogo_productos ADD COLUMN IF NOT EXISTS config_json JSONB;")
+            cursor.execute("ALTER TABLE catalogo_productos ADD COLUMN IF NOT EXISTS fotos_urls TEXT;")
+            conexion.commit()
+        except Exception:
+            conexion.rollback()
+
         cursor.execute("""
-            INSERT INTO catalogo_productos (nombre_modelo, precio_base, foto_url, es_plantilla, en_stock, origen_produccion)
-            VALUES (%s,%s,%s,False,False,%s);
-        """, (nombre, precio_base, foto_url, origen))
+            INSERT INTO catalogo_productos (nombre_modelo, precio_base, foto_url, fotos_urls, es_plantilla, en_stock, origen_produccion, categoria, config_json)
+            VALUES (%s, %s, %s, %s, False, False, %s, %s, %s);
+        """, (nombre, precio_base, foto_principal, fotos_urls, origen, categoria, config_json))
         cursor.execute("UPDATE creaciones_vendedores SET estado = 'Aprobado' WHERE id = %s;", (creacion_id,))
         conexion.commit()
         return jsonify({'exito': True, 'mensaje': 'Modelo aprobado y enviado al catálogo principal.'}), 200

@@ -1374,6 +1374,8 @@ const CATEGORIAS_CARTA = ['Sofá', 'Sillón', 'Butaca', 'Silla', 'Mesa', 'Cama',
 function renderCarta(grid) {
     grid.style.display = 'block';
 
+    const esAdmin = window.usuarioActivo && window.usuarioActivo.rol === 'Admin';
+
     let plantillas = allProducts.filter(p => p.es_plantilla === true);
 
     if (_cartaFiltroCategoria) {
@@ -1381,7 +1383,9 @@ function renderCarta(grid) {
     }
 
     // Botón "Nueva Plantilla" + filtros
-    const esBtnAdmin = `
+    // FIX: El botón de "Nueva Plantilla" solo debe ser visible para el Admin.
+    // La variable se llamaba esBtnAdmin pero no era condicional. Ahora lo es.
+    const headerCarta = `
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:18px;">
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
             <span style="font-size:13px; color:#64748b; font-weight:600;">Categoría:</span>
@@ -1390,13 +1394,15 @@ function renderCarta(grid) {
             <button onclick="_cartaFiltrar('${c}')" class="btn-action ${_cartaFiltroCategoria === c ? 'btn-primary' : 'btn-ghost'}" style="padding:4px 12px; font-size:12px;">${c}</button>
             `).join('')}
         </div>
+        ${esAdmin ? `
         <button onclick="_abrirModalNuevaPlantilla()" class="btn-action btn-primary" style="gap:6px;">
             <i class="fa-solid fa-plus"></i> Nueva Plantilla
         </button>
+        ` : ''}
     </div>`;
 
     if (plantillas.length === 0) {
-        grid.innerHTML = esBtnAdmin + `<div style="text-align:center; padding:60px 20px; color:#94a3b8;">
+        grid.innerHTML = headerCarta + `<div style="text-align:center; padding:60px 20px; color:#94a3b8;">
             <i class="fa-solid fa-book-open" style="font-size:3rem; margin-bottom:16px; display:block;"></i>
             <p style="font-size:16px; font-weight:600;">No hay modelos en la carta todavía</p>
             <p style="font-size:13px;">Agrega un modelo con el botón "Nueva Plantilla".</p>
@@ -1409,7 +1415,7 @@ function renderCarta(grid) {
     const inicio = (_cartaPagina - 1) * _cartaItemsPorPagina;
     const paginaActual = plantillas.slice(inicio, inicio + _cartaItemsPorPagina);
 
-    let html = esBtnAdmin + `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px;">`;
+    let html = headerCarta + `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px;">`;
 
     html += paginaActual.map(p => {
         const fotos = (p.fotos && p.fotos.length > 0) ? p.fotos : (p.foto ? [p.foto] : []);
@@ -1446,10 +1452,10 @@ function renderCarta(grid) {
                             onclick="_cartaSeleccionarModelo(${p.id})">
                         <i class="fa-solid fa-cart-plus"></i> Seleccionar
                     </button>
-                    <button class="btn-action btn-ghost" style="padding:6px 10px; font-size:12px; color:#ef4444;"
+                    ${esAdmin ? `<button class="btn-action btn-ghost" style="padding:6px 10px; font-size:12px; color:#ef4444;"
                             onclick="_cartaEliminarPlantilla(${p.id}, '${p.nombre.replace(/'/g,"\\'")}')">
                         <i class="fa-solid fa-trash"></i>
-                    </button>
+                    </button>` : ''}
                 </div>
             </div>
         </div>`;

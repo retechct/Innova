@@ -54,6 +54,8 @@ class CatalogoProducto(db.Model):
     en_stock            = db.Column(db.Boolean, default=False)
     origen_produccion   = db.Column(db.String(50), nullable=True)
     stock_cantidad      = db.Column(db.Integer, default=0)
+    config_json         = db.Column(db.JSON, nullable=True)
+    fotos_urls          = db.Column(db.Text, nullable=True)
 
 
 class Proveedor(db.Model):

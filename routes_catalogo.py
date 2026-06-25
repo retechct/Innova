@@ -24,7 +24,9 @@ def obtener_catalogo():
         cursor.execute("""
             ALTER TABLE catalogo_productos
                 ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'Sofá',
-                ADD COLUMN IF NOT EXISTS fotos_urls TEXT DEFAULT ''
+                ADD COLUMN IF NOT EXISTS fotos_urls TEXT DEFAULT '',
+                ADD COLUMN IF NOT EXISTS config_json JSONB,
+                ADD COLUMN IF NOT EXISTS requiere_tela BOOLEAN DEFAULT FALSE
         """)
         conexion.commit()
         cursor.execute("""
@@ -32,7 +34,9 @@ def obtener_catalogo():
                    es_plantilla, en_stock,
                    COALESCE(stock_cantidad, 0) AS stock_cantidad,
                    COALESCE(categoria, 'Sofá') AS categoria,
-                   COALESCE(fotos_urls, '') AS fotos_urls
+                   COALESCE(fotos_urls, '') AS fotos_urls,
+                   config_json,
+                   requiere_tela
             FROM catalogo_productos
             ORDER BY es_plantilla DESC, nombre_modelo ASC
         """)
@@ -59,6 +63,8 @@ def obtener_catalogo():
                 "en_stock":       bool(p[5]),
                 "stock_cantidad": int(p[6]),
                 "categoria":      p[7] or 'Sofá',
+                "config_json":    p[9],
+                "requiere_tela":  bool(p[10])
             })
         return jsonify(lista_productos)
     except Exception as ex:
@@ -116,7 +122,7 @@ def agregar_plantilla_catalogo():
 
 
 @catalogo_bp.route('/api/catalogo/plantilla/<int:producto_id>', methods=['DELETE'])
-@requiere_login
+@requiere_rol('Admin')
 def eliminar_plantilla_catalogo(producto_id):
     """Elimina un modelo de la carta (solo si es_plantilla=True y no tiene ventas)."""
     try:
