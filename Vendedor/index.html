@@ -422,8 +422,8 @@
             btnModelos.className = 'btn-action btn-primary';
             // Solo admin ve el botón Nueva Plantilla
             if (btnNueva) {
-                const rol = (window.currentUserRol || window._currentRol || '');
-                btnNueva.style.display = (rol === 'admin' || rol === 'jefe') ? 'inline-flex' : 'none';
+                const rol = window.usuarioActivo?.rol?.toLowerCase() || '';
+                btnNueva.style.display = (rol === 'admin' || rol === 'jefe_taller') ? 'inline-flex' : 'none';
             }
             // Cargar modelos de BD si aún no se cargaron
             _cartaCargarModelos();
@@ -455,8 +455,8 @@
             let filtroActivo = '';
             function renderModelos() {
                 const lista = filtroActivo ? plantillas.filter(p => p.categoria === filtroActivo) : plantillas;
-                const rol = (window.currentUserRol || window._currentRol || '');
-                const esAdmin = (rol === 'admin' || rol === 'jefe');
+                const rol = window.usuarioActivo?.rol?.toLowerCase() || '';
+                const esAdmin = (rol === 'admin' || rol === 'jefe_taller');
 
                 let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
                     <span style="font-size:12px;color:#64748b;font-weight:700;">Filtrar:</span>

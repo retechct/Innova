@@ -1374,7 +1374,7 @@ const CATEGORIAS_CARTA = ['Sofá', 'Sillón', 'Butaca', 'Silla', 'Mesa', 'Cama',
 function renderCarta(grid) {
     grid.style.display = 'block';
 
-    const esAdmin = window.usuarioActivo && window.usuarioActivo.rol === 'Admin';
+    const esAdmin = window.usuarioActivo && window.usuarioActivo.rol.toLowerCase() === 'admin';
 
     let plantillas = allProducts.filter(p => p.es_plantilla === true);
 
