@@ -1082,16 +1082,27 @@ function _formProducto() {
 function _invSelCatalogo() {
     const sel = document.getElementById('nf-catalogo');
     if (!sel.value) return;
-    const [catId, nombre] = sel.value.split('|');
+    const [tipo, nombre] = sel.value.split('|');
     const nf = document.getElementById('nf-nombre');
     if (nf) nf.value = nombre;
-    // Autocompletar categoría si el producto del catálogo la trae
-    const prod = _maestroInv.catalogo.find(p => String(p.id) === String(catId));    
+
+    // Si es modelo del maestro de materiales (silla/butaca), no hay catalogo_id
+    if (tipo === 'maestro-silla' || tipo === 'maestro-butaca') {
+        _invActualizarFormDinamico();
+        return;
+    }
+
+    // Es un ID del catalogo_productos — autocompletar categoría y foto
+    const catId = tipo;
+    const prod = _maestroInv.catalogo.find(p => String(p.id) === String(catId));
     if (prod) {
         const selCat = document.getElementById('nf-cat');
         if (selCat && prod.categoria) {
-            const opt = [...selCat.options].find(o => o.value === prod.categoria);
-            if (opt) selCat.value = prod.categoria;
+            // Buscar opción case-insensitive para cubrir 'Sofá' vs 'Sofa'
+            const opt = [...selCat.options].find(
+                o => o.value.toLowerCase() === (prod.categoria || '').toLowerCase()
+            );
+            if (opt) selCat.value = opt.value;
         }
         _invRenderizarFotosPreview('nf-fotos-preview', prod.foto_url);
         _invActualizarFormDinamico();
@@ -1105,44 +1116,69 @@ window._invFiltrarCatalogoPorCat = function() {
     const selCatalogo = document.getElementById('nf-catalogo');
     if (!selCatalogo) return;
 
-    // Mapeo: categoría de inventario → categoría del catálogo
+    // Silla y Butaca: vienen del maestro de materiales, NO del catalogo_productos
+    if (cat === 'Silla') {
+        const lista = _maestroInv.sillas || [];
+        selCatalogo.innerHTML = '<option value="">— O escribir manualmente —</option>' +
+            lista.map(s =>
+                '<option value="maestro-silla|' + (s.modelo||s.sku||'').replace(/"/g,'') + '">' +
+                (s.modelo || s.sku) + (s.material ? ' — '+s.material : '') + '</option>'
+            ).join('');
+        return;
+    }
+    if (cat === 'Butaca') {
+        const lista = _maestroInv.butacas || [];
+        selCatalogo.innerHTML = '<option value="">— O escribir manualmente —</option>' +
+            lista.map(b =>
+                '<option value="maestro-butaca|' + (b.modelo||b.sku||'').replace(/"/g,'') + '">' +
+                (b.modelo || b.sku) + (b.material ? ' — '+b.material : '') + '</option>'
+            ).join('');
+        return;
+    }
+
+    // Resto de categorías: filtrar desde catalogo_productos (case-insensitive)
     const mapaCategoria = {
-        'Sofá':    ['Sofá', 'Seccional', 'Modular'],
-        'Sillón':  ['Sillón'],
-        'Butaca':  ['Butaca', 'Puff'],
-        'Silla':   ['Silla', 'Sitial'],
-        'Mesa':    ['Mesa'],
-        'Cama':    ['Cama'],
+        'Sofa':        ['sofa', 'sofá', 'seccional', 'modular'],
+        'Sillón':      ['sillón', 'silion'],
+        'Mesa':        ['mesa'],
+        'Mesa Centro': ['mesa centro', 'mesa'],
+        'Consola':     ['consola'],
+        'Espejo':      ['espejo'],
+        'Cuadro':      ['cuadro'],
+        'Cojin':       ['cojin', 'cojín'],
+        'Cama':        ['cama'],
     };
 
     const catsCatalogo = mapaCategoria[cat] || null;
     const prodsFiltrados = catsCatalogo
-        ? _maestroInv.catalogo.filter(p => catsCatalogo.includes(p.categoria || ''))
+        ? _maestroInv.catalogo.filter(p => catsCatalogo.includes((p.categoria || '').toLowerCase()))
         : _maestroInv.catalogo;
 
-    selCatalogo.innerHTML = `<option value="">— O escribir manualmente —</option>` +
+    selCatalogo.innerHTML = '<option value="">— O escribir manualmente —</option>' +
         prodsFiltrados.map(p =>
-            `<option value="${p.id}|${(p.nombre||p.nombre_modelo||'').replace(/"/g,'')}">${p.nombre||p.nombre_modelo}${p.categoria ? ' ('+p.categoria+')' : ''}</option>`
+            '<option value="' + p.id + '|' + (p.nombre||p.nombre_modelo||'').replace(/"/g,'') + '">' +
+            (p.nombre||p.nombre_modelo) + (p.categoria ? ' ('+p.categoria+')' : '') + '</option>'
         ).join('');
 };
 
 function _invActualizarFormDinamico() {
     const cat = document.getElementById('nf-cat')?.value || '';
-    const telaDiv = document.getElementById('nf-detalles-tela');
-    const mesaDiv = document.getElementById('nf-detalles-mesa');
+    const telaDiv   = document.getElementById('nf-detalles-tela');
+    const mesaDiv   = document.getElementById('nf-detalles-mesa');
     const espejoDiv = document.getElementById('nf-detalles-espejo');
 
-    // Hide all
-    if (telaDiv) telaDiv.style.display = 'none';
-    if (mesaDiv) mesaDiv.style.display = 'none';
+    // Ocultar todos primero
+    if (telaDiv)   telaDiv.style.display   = 'none';
+    if (mesaDiv)   mesaDiv.style.display   = 'none';
     if (espejoDiv) espejoDiv.style.display = 'none';
 
-    // Show relevant one
-    if (['Sofa', 'Butaca', 'Silla'].includes(cat)) {
+    // Sofá (con o sin acento), Butaca y Silla llevan campo de tela
+    const catNorm = cat.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if (['sofa','butaca','silla'].includes(catNorm)) {
         if (telaDiv) telaDiv.style.display = 'block';
-    } else if (['Mesa Centro', 'Consola'].includes(cat)) {
+    } else if (['mesa centro','consola'].includes(catNorm)) {
         if (mesaDiv) mesaDiv.style.display = 'block';
-    } else if (['Espejo', 'Cuadro'].includes(cat)) {
+    } else if (['espejo','cuadro'].includes(catNorm)) {
         if (espejoDiv) espejoDiv.style.display = 'block';
     }
 }
@@ -1315,7 +1351,9 @@ async function _invGuardarProducto() {
         Swal.fire('Incompleto', 'Completa Categoría, Modelo y Sede.', 'warning'); return;
     }
     const catStr = document.getElementById('nf-catalogo')?.value || '';
-    const catId  = catStr.split('|')[0] ? parseInt(catStr.split('|')[0]) : null;
+    const _catTipo = catStr.split('|')[0] || '';
+    // maestro-silla / maestro-butaca no tienen catalogo_id numérico
+    const catId  = (_catTipo && !_catTipo.startsWith('maestro')) ? (parseInt(_catTipo) || null) : null;
 
     // Resolver foto del modelo maestro del catálogo para que aparezca
     // primero en el carousel de detalle y en las tarjetas de stock.
@@ -1348,7 +1386,8 @@ async function _invGuardarProducto() {
         };
 
         // Add dynamic fields to payload
-        if (['Sofa', 'Butaca', 'Silla'].includes(cat)) {
+        const _catN = cat.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        if (['sofa','butaca','silla'].includes(_catN)) {
             payload.color_tela = document.getElementById('nf-color')?.value;
             payload.acabado = document.getElementById('nf-acabado')?.value;
         } else if (['Mesa Centro', 'Consola'].includes(cat)) {
