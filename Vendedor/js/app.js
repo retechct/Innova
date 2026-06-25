@@ -107,6 +107,20 @@ async function init() {
                 return; // Se queda en el landing
             }
 
+            // Verificación diaria de la sede para Vendedores
+            if (usuarioActivo.rol === 'Vendedor') {
+                const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+                const ultimaSedeCheck = localStorage.getItem('innova_ultima_sede_check');
+
+                if (hoyPeru !== ultimaSedeCheck) {
+                    // Es un nuevo día o nunca se ha verificado.
+                    // Mostramos el modal para confirmar/seleccionar la tienda.
+                    if (typeof imMostrarModalSede === 'function') {
+                        imMostrarModalSede();
+                    }
+                }
+            }
+
             configurarInterfazPorRol();
             mostrarUsuarioEnHeader();
             document.getElementById('pantalla-login').style.display = 'none';
@@ -1998,8 +2012,8 @@ function filtrarContratos() {
         const texto = `${v.codigo} ${v.cliente} ${v.productos || ''}`.toLowerCase();
         const okQ      = !q      || texto.includes(q);
         const okEstado = !estado || v.estado === estado;
-        const okDesde  = !desde  || v.fecha_entrega >= desde;
-        const okHasta  = !hasta  || v.fecha_entrega <= hasta;
+        const okDesde  = !desde  || v.fecha_emision >= desde;
+        const okHasta  = !hasta  || v.fecha_emision <= hasta;
         return okQ && okEstado && okDesde && okHasta;
     });
 
@@ -2376,18 +2390,50 @@ async function resolverCambioPrecio(cambioId, accion) {
     }
 }
 
-function descargarExcelContratos() {
+async function descargarExcelContratos() {
     const desde = document.getElementById('contratos-desde')?.value;
     const hasta = document.getElementById('contratos-hasta')?.value;
+    const btn = document.getElementById('btn-exportar-excel-contratos');
 
-    if (!desde || !hasta) {
-        // Si no hay fechas, exportar todo usando la ruta correcta
-        const url = `${API_URL}/api/ventas/exportar`;
-        window.open(url, '_blank');
-        return;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...';
     }
-    const url = `${API_URL}/api/ventas/exportar?inicio=${desde}&fin=${hasta}`;
-    window.open(url, '_blank');
+
+    try {
+        let url = `${API_URL}/api/ventas/exportar`;
+        const params = [];
+        if (desde) params.push(`inicio=${desde}`);
+        if (hasta) params.push(`fin=${hasta}`);
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
+
+        const res = await apiFetch(url);
+
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || 'No se pudo generar el Excel. El servidor devolvió un error.');
+        }
+
+        const blob = await res.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = downloadUrl;
+        a.download = `reporte_ventas_${new Date().toISOString().slice(0,10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+        a.remove();
+    } catch (e) {
+        Swal.fire('Error', e.message || 'Fallo al generar el Excel. Revisa la conexión.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-file-excel"></i> Exportar Excel';
+        }
+    }
 }
 
 // ==========================================

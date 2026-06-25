@@ -372,6 +372,10 @@ function imConfirmarSede() {
   usuarioActivo.sede_id = sel.value;
   usuarioActivo.tienda  = sel.options[sel.selectedIndex].text;
   localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
+  // Guardar la fecha de hoy para no volver a preguntar hasta mañana
+  const hoyPeru = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+  localStorage.setItem('innova_ultima_sede_check', hoyPeru);
+
   if (typeof localStorage !== 'undefined' && localStorage.getItem('innova_token')) {
     // token ya guardado en imEntrarAlSistema
   }

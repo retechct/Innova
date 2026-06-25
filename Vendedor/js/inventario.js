@@ -1151,11 +1151,13 @@ function _formPieza() {
     const sedes = [...document.querySelectorAll('#inv-filtro-sede option')]
         .filter(o=>o.value)
         .map(o=>`<option value="${o.value}">${o.textContent}</option>`).join('');
-    const cats  = CATEGORIAS_PIEZA.map(c=>`<option value="${c.val}">${c.label}</option>`).join('');
+    const cats = CATEGORIAS_PIEZA.map(c => `<option value="${c.val}">${c.label}</option>`).join('');
 
     return `
-    <div class="form-group"><label>Categoría *</label>
-        <select id="npf-cat" class="form-input" onchange="_invLimpiarSmartSearch()">${cats}</select></div>
+    <div class="form-group">
+        <label>Categoría *</label>
+        <select id="npf-cat" class="form-input" onchange="_invLimpiarSmartSearch(); _invUpdateFormaOptions();">${cats}</select>
+    </div>
         
     <div class="form-group" style="margin-bottom: 15px;">
         <label style="font-size: 11px; font-weight: bold; color: var(--primary);">MODELO MAESTRO *</label>
@@ -1195,15 +1197,25 @@ function _formPieza() {
     </div>
     <!-- === FIN: FOTOS PIEZA === -->
 
-    <div class="form-group"><label>Forma *</label>
+    <div class="form-group">
+        <label>Forma *</label>
         <select id="npf-forma" class="form-input" onchange="_invToggleMedidasPieza()">
             <option value="Rectangular">Rectangular</option>
             <option value="Circular">Circular (diámetro)</option>
-            <option value="Ovalado">Ovalado</option>
-            <option value="Media Luna">Media Luna</option>
-            <option value="Balde">Balde</option>
             <option value="Irregular">Irregular</option>
-        </select></div>
+        </select>
+    </div>
+    <div id="npf-wrap-corte" class="form-group" style="display:none;">
+        <label>Tipo de Corte (para Tablero Rectangular)</label>
+        <select id="npf-corte" class="form-input">
+            <option value="Normal">Normal (Recto)</option>
+            <option value="Codito">Codito</option>
+            <option value="Balde">Balde</option>
+            <option value="Media Luna">Media Luna</option>
+            <option value="Ovalado">Ovalado</option>
+        </select>
+    </div>
+
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div class="form-group"><label id="npf-lbl-largo">Largo (cm) *</label>
             <input id="npf-largo" type="number" class="form-input" placeholder="160" min="1"/></div>
@@ -1227,6 +1239,31 @@ function _formPieza() {
     </button>
     <button onclick="_cerrarModalInvNuevo()" class="btn-action btn-ghost">Cancelar</button>`;
 }
+
+function _invUpdateFormaOptions() {
+    const cat = document.getElementById('npf-cat')?.value;
+    const formaSelect = document.getElementById('npf-forma');
+    if (!formaSelect) return;
+
+    if (cat === 'tablero') {
+        formaSelect.innerHTML = `
+            <option value="Rectangular">Rectangular</option>
+            <option value="Circular">Circular (diámetro)</option>
+        `;
+    } else {
+        // Restaurar opciones por defecto para otras categorías
+        formaSelect.innerHTML = `
+            <option value="Rectangular">Rectangular</option>
+            <option value="Circular">Circular (diámetro)</option>
+            <option value="Irregular">Irregular</option>
+        `;
+    }
+    // Disparar el cambio para actualizar los campos dependientes (medidas, corte)
+    if (typeof _invToggleMedidasPieza === 'function') {
+        _invToggleMedidasPieza();
+    }
+}
+
 
 function _invLimpiarSmartSearch() {
     const search = document.getElementById('search-inv-pieza');
@@ -1253,12 +1290,21 @@ function _invCrearAlVuelo() {
 }
 
 function _invToggleMedidasPieza() {
+    const cat = document.getElementById('npf-cat')?.value;
     const forma = document.getElementById('npf-forma')?.value;
     const lblLargo  = document.getElementById('npf-lbl-largo');
     const wrapAncho = document.getElementById('npf-wrap-ancho');
+    const wrapCorte = document.getElementById('npf-wrap-corte');
+
     if (!lblLargo) return;
     lblLargo.textContent = forma === 'Circular' ? 'Diámetro (cm) *' : 'Largo (cm) *';
-    if (wrapAncho) wrapAncho.style.display = forma === 'Circular' ? 'none' : '';
+    if (wrapAncho) {
+        wrapAncho.style.display = forma === 'Circular' ? 'none' : '';
+    }
+    if (wrapCorte) {
+        // Mostrar opciones de corte solo para tableros rectangulares
+        wrapCorte.style.display = (cat === 'tablero' && forma === 'Rectangular') ? 'block' : 'none';
+    }
 }
 
 async function _invGuardarProducto() {
@@ -1349,11 +1395,19 @@ async function _invGuardarPieza() {
     const sku    = document.getElementById('sku-inv-pieza')?.value;
     const nombre = document.getElementById('search-inv-pieza')?.value;
     const cat    = document.getElementById('npf-cat')?.value;
-    const forma  = document.getElementById('npf-forma')?.value;
+    let forma    = document.getElementById('npf-forma')?.value;
     const sedeId = document.getElementById('npf-sede')?.value;
 
     if (!sku || !nombre || !sedeId) {
         Swal.fire('Incompleto', 'Selecciona el modelo y la sede.', 'warning'); return;
+    }
+
+    // Si es un tablero rectangular con un corte especial, usamos el corte como la forma final.
+    if (cat === 'tablero' && forma === 'Rectangular') {
+        const corte = document.getElementById('npf-corte')?.value;
+        if (corte && corte !== 'Normal') {
+            forma = corte;
+        }
     }
 
     let mat = '';
