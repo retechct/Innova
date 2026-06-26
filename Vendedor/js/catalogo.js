@@ -132,6 +132,7 @@ async function renderStockTiendas(grid) {
                         nombre: p.nombre_modelo,
                         categoria: p.categoria,
                         catalogo_id: p.catalogo_id,
+                        observaciones: p.observaciones || '',
                         sku: null
                     });
                 }
@@ -266,6 +267,11 @@ function _renderStockUI(grid) {
                         </span>
                     </div>
                     <h4 style="font-size:14px; margin-bottom:4px; min-height: 38px;">${item.nombre}</h4>
+                    ${item.observaciones ? `
+                    <div style="font-size:11px; color:#64748b; margin-top:2px; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${item.observaciones}">
+                        <i class="fa-solid fa-ruler-horizontal" style="margin-right:4px; color:#94a3b8;"></i> ${item.observaciones}
+                    </div>
+                    ` : ''}
                     <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${item.categoria}</span>
                     <button class="btn-action btn-primary" style="width:100%; border-radius:8px; ${!isProd ? 'background:#0f172a;' : ''}"
                         onclick="addStockItemToCart(${actionArgs})">
@@ -374,7 +380,8 @@ async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false)
         `Cód: ${unidad.codigo_barra}`,
         unidad.sede,
         unidad.color_tela || unidad.material,
-        unidad.acabado || unidad.color_acabado
+        unidad.acabado || unidad.color_acabado,
+        unidad.observaciones
     ].filter(Boolean).join(' · ');
 
     const cartItem = {

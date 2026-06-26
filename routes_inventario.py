@@ -76,6 +76,7 @@ def _asegurar_columna_fotos_adicionales():
         conn.autocommit = True
         cur = conn.cursor()
         cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
+        cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS observaciones TEXT;")
         cur.execute("ALTER TABLE stock_piezas ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
         cur.execute("ALTER TABLE stock_piezas ADD COLUMN IF NOT EXISTS foto_url TEXT;")
         # Índices de performance para queries frecuentes
@@ -199,7 +200,7 @@ def resumen_productos():
                 MAX(cp.foto_url)                                            AS cat_foto_url,
                 MAX(cp.fotos_urls)                                          AS cat_fotos_urls,
                 MAX(sp.fotos_adicionales)                                   AS stock_fotos_adicionales,
-                MAX(cp.observaciones)                                       AS observaciones
+                COALESCE(sp.observaciones, MAX(cp.observaciones))           AS observaciones
             FROM stock_productos sp
             JOIN sedes se ON sp.sede_id = se.id
             LEFT JOIN catalogo_productos cp
@@ -207,21 +208,22 @@ def resumen_productos():
                    OR (sp.catalogo_id IS NULL
                        AND LOWER(cp.nombre_modelo) = LOWER(sp.nombre_modelo))
             {where_sql}
-            GROUP BY sp.categoria, sp.nombre_modelo, sp.catalogo_id, sp.sede_id, se.nombre
-            ORDER BY sp.categoria, sp.nombre_modelo, se.nombre;
+            GROUP BY sp.categoria, sp.nombre_modelo, sp.catalogo_id, sp.observaciones, sp.sede_id, se.nombre
+            ORDER BY sp.categoria, sp.nombre_modelo, sp.observaciones, se.nombre;
         """, params)
         rows = cur.fetchall()
 
         # Agrupar por modelo
         modelos = {}
         for r in rows:
-            key = (r[0], r[1])  # (categoria, nombre_modelo)
+            observaciones_row = r[13] or ""
+            key = (r[0], r[1], observaciones_row)
             if key not in modelos:
                 # Construir lista de fotos: catálogo, luego las del registro de stock
                 cat_foto_url      = r[10] or ""
                 cat_fotos_urls    = r[11] or ""
                 stock_fotos_adic  = r[12] or ""
-                observaciones     = r[13] or ""
+                observaciones     = observaciones_row
                 # sp.foto_url (r[9]) es legacy, puede contener la foto del catálogo en el momento del registro
                 stock_foto_legacy = r[9]  or ""
 
