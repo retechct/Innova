@@ -1210,7 +1210,9 @@ function _invSeleccionarProductoCatalogo(id, nombre, fotoUrl, esMaestro) {
     // Autocompletar categoría si viene del catálogo (no maestro)
     if (esMaestro !== 'true') {
         const prod = _maestroInv.catalogo.find(p => String(p.id) === String(id));
-        if (prod && prod.categoria) {
+        if (prod) {
+            // Autocompletar categoría si existe
+            if (prod.categoria) {
             const selCat = document.getElementById('nf-cat');
             if (selCat) {
                 const opt = [...selCat.options].find(
@@ -1218,8 +1220,13 @@ function _invSeleccionarProductoCatalogo(id, nombre, fotoUrl, esMaestro) {
                 );
                 if (opt) { selCat.value = opt.value; }
             }
+            }
             // Mostrar foto en preview de fotos del formulario
             _invRenderizarFotosPreview('nf-fotos-preview', prod.foto_url || fotoUrl);
+
+            // Pre-rellenar observaciones del modelo base
+            const obsInput = document.getElementById('nf-obs');
+            if (obsInput && prod.observaciones) obsInput.value = prod.observaciones;
         }
     }
 
@@ -1636,7 +1643,7 @@ async function _invGuardarPieza() {
         const codigosHTML = (d.unidades || []).map(u => `
             <div style="margin:6px 0;">
                 <b style="color:var(--accent);">${u.codigo_barra}</b>
-                <button onclick="imprimirEtiqueta('${u.codigo_barra}','${nombrePieza.replace(/'/g,"\\'")}','${sedeNombre}')"
+                <button onclick="imprimirEtiqueta('${u.codigo_barra}','${nombrePieza.replace(/'/g,"\\'")}','${sedeNombre}', '')"
                     style="margin-left:10px;background:var(--primary);color:white;border:none;
                            padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;">
                     🖨️ Imprimir
@@ -1912,7 +1919,7 @@ function _bindInvEventos() {
 // Genera la imagen PNG directamente en la página (sin window.open / document.write)
 // y la descarga al instante. Funciona en PC y Android Chrome sin popups.
 
-function imprimirEtiqueta(codigo, nombre, sede) {
+function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
     // Inyectar JsBarcode si aún no está cargado
     function _cargarJsBarcode(cb) {
         if (typeof JsBarcode !== 'undefined') { cb(); return; }
@@ -1964,8 +1971,20 @@ function imprimirEtiqueta(codigo, nombre, sede) {
         ctx.font      = '19px Arial';
         ctx.fillText(sede, canvas.width / 2, 110);
 
-        // Barcode centrado
-        ctx.drawImage(bcCanvas, 75, 118, 440, 180);
+        // NEW: Observaciones (si existen)
+        let barcodeY = 118;
+        let barcodeHeight = 180;
+        if (observaciones) {
+            ctx.fillStyle = '#1e140a';
+            ctx.font = 'italic 18px Arial';
+            const obsCorto = observaciones.length > 40 ? observaciones.substring(0, 40) + '…' : observaciones;
+            ctx.fillText(obsCorto, canvas.width / 2, 130);
+            barcodeY = 140;
+            barcodeHeight = 150;
+        }
+
+        // Barcode
+        ctx.drawImage(bcCanvas, 75, barcodeY, 440, barcodeHeight);
 
         // Código en texto
         ctx.fillStyle = '#1e140a';

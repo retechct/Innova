@@ -1084,7 +1084,7 @@ def etiquetas_disponibles():
 
             if es_pieza:
                 cur.execute(f"""
-                    SELECT sp.codigo_barra, sp.nombre_modelo, se.nombre AS sede
+                    SELECT sp.codigo_barra, sp.nombre_modelo, se.nombre AS sede, NULL as observaciones
                     FROM {tabla} sp
                     LEFT JOIN sedes se ON sp.sede_id = se.id
                     WHERE LOWER(sp.nombre_modelo) = LOWER(%s)
@@ -1094,7 +1094,7 @@ def etiquetas_disponibles():
                 """, (nombre,))
             else:
                 cur.execute(f"""
-                    SELECT sp.codigo_barra, sp.nombre_modelo, se.nombre AS sede
+                    SELECT sp.codigo_barra, sp.nombre_modelo, se.nombre AS sede, sp.observaciones
                     FROM {tabla} sp
                     LEFT JOIN sedes se ON sp.sede_id = se.id
                     WHERE LOWER(sp.nombre_modelo) = LOWER(%s)
@@ -1109,6 +1109,7 @@ def etiquetas_disponibles():
                     'codigo': r[0],
                     'nombre': r[1],
                     'sede':   r[2] or '',
+                    'observaciones': r[3] or ''
                 })
 
         return jsonify({'etiquetas': etiquetas}), 200
