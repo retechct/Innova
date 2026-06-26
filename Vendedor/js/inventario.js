@@ -1428,8 +1428,8 @@ function _invToggleMedidasPieza() {
         wrapAncho.style.display = forma === 'Circular' ? 'none' : '';
     }
     if (wrapCorte) {
-        // Mostrar opciones de corte solo para tableros rectangulares
-        wrapCorte.style.display = (cat === 'tablero' && forma === 'Rectangular') ? 'block' : 'none';
+        // Mostrar opciones de corte solo para tableros
+        wrapCorte.style.display = (cat === 'tablero') ? 'block' : 'none';
     }
     // Mostrar campos de tela solo para silla y butaca
     if (telaDiv) {

@@ -505,10 +505,20 @@ function actualizarVistaSofa() {
     if (tipoMedidas === 'juego') {
         medContainer.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                <label style="font-size:10px; font-weight:bold; color:gray;">CONSTRUIR JUEGO (L, A, F, H)</label>
-                <button onclick="addCuerpoSofa(prompt('¿De cuántos cuerpos es esta pieza? (Ej: 3, 2, 1)'))" style="background:var(--accent); color:white; border:none; padding:4px 8px; border-radius:5px; cursor:pointer; font-size:10px;">+ Añadir Pieza</button>
+                <label style="font-size:10px; font-weight:bold; color:gray;">CONSTRUIR JUEGO (L, Ancho, Fondo, Alto)</label>
+                <button type="button" id="btn-estandar-sofa" data-estandar="0"
+                    onclick="toggleMedidasEstandar('btn-estandar-sofa','juego-medidas-inputs','sofa-medidas-estandar')"
+                    style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                    📐 Medidas Estándar
+                </button>
             </div>
-            <div id="lista-cuerpos"></div>
+            <div id="juego-medidas-inputs">
+                <div style="display:flex; justify-content:flex-end; margin-bottom:5px;">
+                    <button onclick="addCuerpoSofa(prompt('¿De cuántos cuerpos es esta pieza? (Ej: 3, 2, 1)'))" style="background:var(--accent); color:white; border:none; padding:4px 8px; border-radius:5px; cursor:pointer; font-size:10px;">+ Añadir Pieza</button>
+                </div>
+                <div id="lista-cuerpos"></div>
+            </div>
+            <input type="hidden" id="sofa-medidas-estandar" value="">
         `;
         addCuerpoSofa('3');
 
@@ -638,6 +648,7 @@ function addCuerpoSofa(cuerpos) {
     div.innerHTML = `
         <span style="font-size:11px; font-weight:bold; width:35px; text-align:center;">${cuerpos} C.</span>
         <input type="number" class="form-input-sm c-largo" title="Largo" placeholder="Largo">
+        <input type="number" class="form-input-sm c-ancho" title="Ancho" placeholder="Ancho">
         <input type="number" class="form-input-sm c-fondo" title="Fondo" placeholder="Fondo">
         <button type="button" onclick="event.stopPropagation(); toggleAltura(this.nextElementSibling)" title="Agregar altura" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:2px 5px;white-space:nowrap;">+ Alt</button>
         <span class="alto-wrap" style="display:none;"><input type="number" class="form-input-sm c-alto" title="Alto" placeholder="Alto"></span>
@@ -774,10 +785,11 @@ async function confirmarPersonalizadoSofa() {
         filas.forEach(f => {
             const c = f.querySelector('span').innerText;
             const l = f.querySelector('.c-largo').value || '0';
+            const ancho = f.querySelector('.c-ancho')?.value || '0';
             const fon = f.querySelector('.c-fondo').value || '0';
             const altWrap = f.querySelector('.alto-wrap');
             const a = (altWrap && altWrap.style.display !== 'none') ? (f.querySelector('.c-alto')?.value || '') : '';
-            medidasText += `[${c}: L${l}xP${fon}${a ? `xH${a}` : ''}] `;
+            medidasText += `[${c}: L${l}xA${ancho}xP${fon}${a ? `xH${a}` : ''}] `;
         });
     } else if (tipoMedidas === 'multi3') {
         const l1 = document.getElementById('m3-l1').value||'0', f1 = document.getElementById('m3-f1').value||'0';
