@@ -26,7 +26,8 @@ def obtener_catalogo():
                 ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'Sofá',
                 ADD COLUMN IF NOT EXISTS fotos_urls TEXT DEFAULT '',
                 ADD COLUMN IF NOT EXISTS config_json JSONB,
-                ADD COLUMN IF NOT EXISTS requiere_tela BOOLEAN DEFAULT FALSE
+                ADD COLUMN IF NOT EXISTS requiere_tela BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS observaciones TEXT
         """)
         conexion.commit()
         cursor.execute("""
@@ -36,7 +37,8 @@ def obtener_catalogo():
                    COALESCE(categoria, 'Sofá') AS categoria,
                    COALESCE(fotos_urls, '') AS fotos_urls,
                    config_json,
-                   requiere_tela
+                   requiere_tela,
+                   observaciones
             FROM catalogo_productos
             ORDER BY es_plantilla DESC, nombre_modelo ASC
         """)
@@ -64,7 +66,8 @@ def obtener_catalogo():
                 "stock_cantidad": int(p[6]),
                 "categoria":      p[7] or 'Sofá',
                 "config_json":    p[9],
-                "requiere_tela":  bool(p[10])
+                "requiere_tela":  bool(p[10]),
+                "observaciones":  p[11] or ''
             })
         return jsonify(lista_productos)
     except Exception as ex:
@@ -82,7 +85,7 @@ def agregar_plantilla_catalogo():
         nombre    = request.form.get('nombre', '').strip()
         precio    = float(request.form.get('precio', 0) or 0)
         categoria = request.form.get('categoria', 'Sofá').strip()
-        descripcion = request.form.get('descripcion', '').strip()
+        observaciones = request.form.get('observaciones', '').strip()
 
         if not nombre:
             return jsonify({'error': 'El nombre del modelo es obligatorio'}), 400
@@ -104,11 +107,11 @@ def agregar_plantilla_catalogo():
         cursor   = conexion.cursor()
         cursor.execute("""
             INSERT INTO catalogo_productos
-                (nombre_modelo, precio_base, foto_url, fotos_urls, categoria,
+                (nombre_modelo, precio_base, foto_url, fotos_urls, categoria, observaciones,
                  es_plantilla, en_stock, origen_produccion, stock_cantidad)
-            VALUES (%s, %s, %s, %s, %s, True, False, 'Producción', 0)
+            VALUES (%s, %s, %s, %s, %s, %s, True, False, 'Producción', 0)
             RETURNING id
-        """, (nombre, precio, foto_principal, fotos_urls_str, categoria))
+        """, (nombre, precio, foto_principal, fotos_urls_str, categoria, observaciones))
         nuevo_id = cursor.fetchone()[0]
         conexion.commit()
         return jsonify({'exito': True, 'id': nuevo_id, 'mensaje': f'Modelo "{nombre}" añadido a la carta'}), 200

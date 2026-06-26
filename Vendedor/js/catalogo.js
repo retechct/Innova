@@ -1562,6 +1562,10 @@ window._abrirModalNuevaPlantilla = function() {
                 </div>
             </div>
             <div>
+                <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">Observaciones / Medida</label>
+                <input id="np-observaciones" class="swal2-input" placeholder="Ej: 60cm diámetro, mármol blanco" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+            </div>
+            <div>
                 <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">Fotos del Modelo * (puedes elegir varias)</label>
                 <input id="np-fotos" type="file" accept="image/*" multiple
                        style="margin:6px 0 0; width:100%; box-sizing:border-box; padding:8px; border:2px dashed #cbd5e1; border-radius:8px; font-size:13px; cursor:pointer;"
@@ -1579,6 +1583,7 @@ window._abrirModalNuevaPlantilla = function() {
             const cat     = document.getElementById('np-cat')?.value;
             const precio  = parseFloat(document.getElementById('np-precio')?.value || 0);
             const files   = document.getElementById('np-fotos')?.files;
+            const observaciones = document.getElementById('np-observaciones')?.value.trim() || '';
 
             if (!nombre) { Swal.showValidationMessage('El nombre es obligatorio'); return false; }
             if (!files || files.length === 0) { Swal.showValidationMessage('Debes subir al menos una foto'); return false; }
@@ -1589,6 +1594,7 @@ window._abrirModalNuevaPlantilla = function() {
                 fd.append('nombre', nombre);
                 fd.append('categoria', cat);
                 fd.append('precio', precio);
+                fd.append('observaciones', observaciones);
                 for (let f of files) fd.append('fotos', f);
 
                 const res  = await apiFetch(`${API_URL}/api/catalogo/plantilla`, { method: 'POST', body: fd });

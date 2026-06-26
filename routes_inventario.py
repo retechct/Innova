@@ -198,7 +198,8 @@ def resumen_productos():
                 MAX(sp.foto_url)                                            AS foto_url,
                 MAX(cp.foto_url)                                            AS cat_foto_url,
                 MAX(cp.fotos_urls)                                          AS cat_fotos_urls,
-                MAX(sp.fotos_adicionales)                                   AS stock_fotos_adicionales
+                MAX(sp.fotos_adicionales)                                   AS stock_fotos_adicionales,
+                MAX(cp.observaciones)                                       AS observaciones
             FROM stock_productos sp
             JOIN sedes se ON sp.sede_id = se.id
             LEFT JOIN catalogo_productos cp
@@ -220,6 +221,7 @@ def resumen_productos():
                 cat_foto_url      = r[10] or ""
                 cat_fotos_urls    = r[11] or ""
                 stock_fotos_adic  = r[12] or ""
+                observaciones     = r[13] or ""
                 # sp.foto_url (r[9]) es legacy, puede contener la foto del catálogo en el momento del registro
                 stock_foto_legacy = r[9]  or ""
 
@@ -245,6 +247,7 @@ def resumen_productos():
                     "catalogo_id":   r[2],
                     "foto_url":      todas_fotos[0] if todas_fotos else "",
                     "fotos":         todas_fotos,
+                    "observaciones": observaciones,
                     "total":         0,
                     "disponibles":   0,
                     "sede_stock":    {s[1]: {"total":0,"disponibles":0} for s in sedes},

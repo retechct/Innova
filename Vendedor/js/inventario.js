@@ -409,6 +409,11 @@ function _renderTablaProductos() {
                     <div style="font-weight:800;font-size:13px;color:var(--primary);
                                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
                          title="${m.nombre_modelo}">${m.nombre_modelo}</div>
+                    ${m.observaciones ? `
+                    <div style="font-size:11px; color:#64748b; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${m.observaciones}">
+                        <i class="fas fa-ruler-horizontal" style="margin-right:4px; color:#94a3b8;"></i> ${m.observaciones}
+                    </div>
+                    ` : ''}
                     <span style="background:#eff6ff;color:var(--accent);font-size:9px;
                                  font-weight:900;padding:2px 7px;border-radius:8px;
                                  display:inline-block;margin-top:3px;">
