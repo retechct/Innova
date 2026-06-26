@@ -1380,8 +1380,7 @@ async function procesarNotasConFotos(tipos) {
 let _cartaPagina = 1;
 const _cartaItemsPorPagina = 12;
 let _cartaFiltroCategoria = '';
-
-const CATEGORIAS_CARTA = ['Sofá', 'Sillón', 'Butaca', 'Silla', 'Mesa', 'Cama', 'Otro'];
+const CATEGORIAS_CARTA = ['Sofá', 'Sillón', 'Butaca', 'Silla', 'Mesa', 'Cama', 'Esquinero', 'Florero', 'Manta', 'Otro'];
 
 function renderCarta(grid) {
     grid.style.display = 'block';

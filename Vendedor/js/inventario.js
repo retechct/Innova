@@ -15,7 +15,8 @@ let _invFiltroSede = '';
 let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], catalogo: [], cargado: false };
 
 const CATEGORIAS_PRODUCTO = [
-    'Sofa','Butaca','Silla','Espejo','Cuadro','Cojin','Mesa Centro','Consola'
+    'Sofa','Butaca','Silla','Espejo','Cuadro','Cojin','Mesa Centro','Consola',
+    'Esquinero', 'Florero', 'Manta'
 ];
 const CATEGORIAS_PIEZA = [
     { val: 'tablero',          label: 'Tablero (piedra / vidrio / madera)' },
@@ -1150,6 +1151,9 @@ function _invGetCatalogoPorCat(cat) {
         'Espejo':      ['espejo'],
         'Cuadro':      ['cuadro'],
         'Cojin':       ['cojin', 'cojín'],
+        'Esquinero':   ['esquinero'],
+        'Florero':     ['florero'],
+        'Manta':       ['manta'],
     };
     const cats = mapaCategoria[cat] || null;
     return cats
@@ -1252,7 +1256,7 @@ function _invActualizarFormDinamico() {
     const catNorm = cat.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     if (['sofa','butaca','silla'].includes(catNorm)) {
         if (telaDiv) telaDiv.style.display = 'block';
-    } else if (['mesa centro','consola'].includes(catNorm)) {
+    } else if (['mesa centro','consola', 'esquinero'].includes(catNorm)) {
         if (mesaDiv) mesaDiv.style.display = 'block';
     } else if (['espejo','cuadro'].includes(catNorm)) {
         if (espejoDiv) espejoDiv.style.display = 'block';
@@ -1487,7 +1491,7 @@ async function _invGuardarProducto() {
         if (['sofa','butaca','silla'].includes(_catN)) {
             payload.color_tela = document.getElementById('nf-color')?.value;
             payload.acabado = document.getElementById('nf-acabado')?.value;
-        } else if (['mesa centro','consola'].includes(_catN)) {
+        } else if (['mesa centro','consola', 'esquinero'].includes(_catN)) {
             payload.largo_cm = parseFloat(document.getElementById('nf-largo')?.value) || null;
             payload.ancho_cm = parseFloat(document.getElementById('nf-ancho')?.value) || null;
             payload.alto_cm = parseFloat(document.getElementById('nf-alto')?.value) || null;

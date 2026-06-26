@@ -40,12 +40,15 @@ PREFIJOS = {
     'Cojin':          'COJ',
     'Mesa Centro':    'MEC',
     'Consola':        'CON',
+    'Esquinero':      'ESQ',
+    'Florero':        'FLO',
+    'Manta':          'MAN',
     'tablero':        'TAB',
     'base-comedor':   'BAC',
     'base-consola':   'BCS',
     'base-mesa-centro': 'BMC',
-    'silla':            'SIL',   # ← AGREGAR
-    'butaca':           'BUT',   # ← AGREGAR
+    'silla':            'SIL',
+    'butaca':           'BUT',
 }
 
 
