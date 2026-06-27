@@ -613,7 +613,7 @@ def listar_ventas():
                 COALESCE(v.estado_general, 'Pendiente') AS estado,
                 v.fecha_entrega, v.vendedor_nombre,
                 COALESCE(itm.productos, '') AS productos,
-                v.sede
+                v.sede, v.fecha_emision
             FROM ventas v
             LEFT JOIN (
                 SELECT venta_id, SUM(monto_bruto) AS total_pagado
@@ -634,7 +634,8 @@ def listar_ventas():
             'saldo':         float(f[5]) if f[5] else 0,
             'estado':        f[6],
             'fecha_entrega': f[7].strftime('%Y-%m-%d') if f[7] else None,
-            'vendedor':      f[8], 'productos':     f[9], 'sede': f[10]
+            'vendedor':      f[8], 'productos':     f[9], 'sede': f[10],
+            'fecha_emision': f[11].strftime('%Y-%m-%d') if f[11] else None
         } for f in filas]
         return jsonify(resultado), 200
     except Exception as e:
