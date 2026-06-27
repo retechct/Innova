@@ -319,11 +319,12 @@ function _renderTablaProductos() {
             ? fotos.map((f, i) => `
                 <div style="min-width:100%;scroll-snap-align:center;">
                     <img src="${f}" alt="${m.nombre_modelo} foto ${i+1}"
-                         style="width:100%;height:180px;object-fit:cover;"
+                         style="width:100%;height:200px;object-fit:contain;object-position:center;background:#f8f6f2;cursor:zoom-in;"
+                         onclick="_invLightbox('${f}','${m.nombre_modelo}')"
                          onerror="this.src='imagenes/sin_foto.jpg'">
                 </div>`).join('')
             : `<div style="min-width:100%;display:flex;align-items:center;justify-content:center;
-                           height:180px;background:#f1f5f9;color:#cbd5e1;flex-direction:column;gap:8px;">
+                           height:200px;background:#f8f6f2;color:#cbd5e1;flex-direction:column;gap:8px;">
                    <i class="fas fa-image" style="font-size:2rem;"></i>
                    <span style="font-size:11px;">Sin foto</span>
                </div>`;
@@ -2295,4 +2296,34 @@ function _cerrarEscaneoCamara() {
         _html5QrcodeInv.stop().catch(e => console.error("Error al detener escáner.", e));
     }
     document.getElementById('modal-scanner-inv').style.display = 'none';
+}
+
+/* ─── Lightbox de imagen ─────────────────────────────────────── */
+function _invLightbox(url, titulo) {
+    // Crear overlay si no existe
+    let lb = document.getElementById('_inv-lightbox');
+    if (!lb) {
+        lb = document.createElement('div');
+        lb.id = '_inv-lightbox';
+        lb.style.cssText = [
+            'position:fixed','inset:0','z-index:99999',
+            'background:rgba(0,0,0,0.85)',
+            'display:flex','align-items:center','justify-content:center',
+            'flex-direction:column','gap:12px',
+            'cursor:zoom-out','padding:20px'
+        ].join(';');
+        lb.addEventListener('click', () => lb.remove());
+        document.body.appendChild(lb);
+    }
+    lb.innerHTML = `
+        <img src="${url}" alt="${titulo}"
+             style="max-width:92vw;max-height:82vh;object-fit:contain;
+                    border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.6);"
+             onerror="this.src='imagenes/sin_foto.jpg'">
+        <div style="color:rgba(255,255,255,0.85);font-size:14px;font-weight:600;
+                    text-align:center;max-width:80vw;">${titulo}</div>
+        <div style="color:rgba(255,255,255,0.4);font-size:12px;">
+            Toca o haz clic para cerrar
+        </div>`;
+    lb.style.display = 'flex';
 }
