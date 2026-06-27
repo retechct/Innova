@@ -1154,3 +1154,198 @@ def unidades_modelo():
         return jsonify({'error': str(e)}), 500
     finally:
         if conn: _rel(conn)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VENTA DIRECTA DESDE STOCK EN TIENDA
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _asegurar_tabla_ventas_tienda(cur):
+    """Crea la tabla ventas_tienda si no existe (migración lazy)."""
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ventas_tienda (
+            id              SERIAL PRIMARY KEY,
+            fecha           TIMESTAMP DEFAULT NOW(),
+            usuario_id      INTEGER,
+            usuario_nombre  VARCHAR(120),
+            tipo_registro   VARCHAR(20) DEFAULT 'producto',  -- 'producto' o 'pieza'
+            registro_id     INTEGER NOT NULL,                -- id en stock_productos o stock_piezas
+            codigo_barra    VARCHAR(80),
+            nombre_producto VARCHAR(200),
+            categoria       VARCHAR(80),
+            foto_url        TEXT,
+            sede_nombre     VARCHAR(120),
+            precio_venta    NUMERIC(10,2) NOT NULL,
+            observaciones   TEXT
+        );
+    """)
+
+
+@inventario_bp.route('/api/inventario/venta-directa', methods=['POST'])
+@requiere_login
+def venta_directa_tienda():
+    """
+    Registra una venta directa de un producto de stock de tienda.
+    Marca la unidad como 'Vendido' y guarda el registro en ventas_tienda.
+
+    Body JSON:
+    {
+        "tipo":            "producto" | "pieza",
+        "registro_id":     123,
+        "precio_venta":    350.00,
+        "usuario_id":      5,
+        "usuario_nombre":  "Rommel",
+        "nombre_producto": "Cojin peluche",
+        "categoria":       "Cojin",
+        "foto_url":        "https://...",
+        "sede_nombre":     "Tienda de Plaza Vea",
+        "codigo_barra":    "COJ-0023",
+        "observaciones":   ""
+    }
+    """
+    data = request.json or {}
+
+    tipo         = data.get('tipo', 'producto')
+    registro_id  = data.get('registro_id')
+    precio_venta = data.get('precio_venta')
+
+    if not registro_id or precio_venta is None:
+        return jsonify({'error': 'Faltan campos obligatorios: registro_id, precio_venta'}), 400
+    if tipo not in ('producto', 'pieza'):
+        return jsonify({'error': 'tipo debe ser producto o pieza'}), 400
+    try:
+        precio_venta = float(precio_venta)
+        if precio_venta < 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return jsonify({'error': 'precio_venta inválido'}), 400
+
+    tabla = 'stock_productos' if tipo == 'producto' else 'stock_piezas'
+    conn  = None
+    try:
+        conn = _conn()
+        cur  = conn.cursor()
+
+        # Verificar que la unidad existe y está disponible
+        cur.execute(
+            f"SELECT estado, sede_id, codigo_barra FROM {tabla} WHERE id = %s",
+            (registro_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'error': 'Unidad no encontrada'}), 404
+        if row[0] != 'Disponible':
+            return jsonify({'error': f'La unidad ya no está disponible (estado: {row[0]})'}), 409
+
+        estado_ant  = row[0]
+        sede_orig   = row[1]
+        codigo_barra = data.get('codigo_barra') or row[2]
+
+        # Marcar como Vendido en la tabla de stock
+        cur.execute(
+            f"UPDATE {tabla} SET estado = 'Vendido', actualizado_en = NOW() WHERE id = %s",
+            (registro_id,)
+        )
+
+        # Registrar en historial_inventario (para trazabilidad)
+        _registrar_historial(
+            cur, tipo, registro_id, codigo_barra,
+            'Venta Directa',
+            sede_orig, None,
+            estado_ant, 'Vendido',
+            data.get('usuario_id'), data.get('usuario_nombre', ''),
+            None, None,
+            f"Venta directa S/ {precio_venta:.2f}"
+        )
+
+        # Guardar en ventas_tienda
+        _asegurar_tabla_ventas_tienda(cur)
+        cur.execute("""
+            INSERT INTO ventas_tienda
+                (usuario_id, usuario_nombre, tipo_registro, registro_id,
+                 codigo_barra, nombre_producto, categoria, foto_url,
+                 sede_nombre, precio_venta, observaciones)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id;
+        """, (
+            data.get('usuario_id'),
+            data.get('usuario_nombre', ''),
+            tipo,
+            registro_id,
+            codigo_barra,
+            data.get('nombre_producto', ''),
+            data.get('categoria', ''),
+            data.get('foto_url', ''),
+            data.get('sede_nombre', ''),
+            precio_venta,
+            data.get('observaciones', '')
+        ))
+        venta_id = cur.fetchone()[0]
+        conn.commit()
+
+        return jsonify({'exito': True, 'venta_tienda_id': venta_id}), 200
+
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        _rel(conn)
+
+
+@inventario_bp.route('/api/inventario/ventas-tienda', methods=['GET'])
+@requiere_login
+def listar_ventas_tienda():
+    """
+    Lista las ventas directas registradas desde Stock en Tienda.
+    Params opcionales: ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&sede=nombre
+    """
+    desde = request.args.get('desde', '')
+    hasta = request.args.get('hasta', '')
+    sede  = request.args.get('sede', '')
+
+    conn = None
+    try:
+        conn = _conn()
+        cur  = conn.cursor()
+        _asegurar_tabla_ventas_tienda(cur)
+        conn.commit()
+
+        conds  = []
+        params = []
+        if desde:
+            conds.append("DATE(fecha) >= %s"); params.append(desde)
+        if hasta:
+            conds.append("DATE(fecha) <= %s"); params.append(hasta)
+        if sede:
+            conds.append("sede_nombre ILIKE %s"); params.append(f'%{sede}%')
+
+        where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
+
+        cur.execute(f"""
+            SELECT id, TO_CHAR(fecha AT TIME ZONE 'America/Lima', 'DD/MM/YYYY HH24:MI') AS fecha,
+                   usuario_nombre, nombre_producto, categoria,
+                   foto_url, sede_nombre, precio_venta, observaciones, codigo_barra
+            FROM ventas_tienda
+            {where}
+            ORDER BY fecha DESC
+            LIMIT 500;
+        """, params)
+
+        resultado = [{
+            'id':              r[0],
+            'fecha':           r[1],
+            'vendedor':        r[2],
+            'producto':        r[3],
+            'categoria':       r[4],
+            'foto_url':        r[5] or '',
+            'sede':            r[6],
+            'precio_venta':    float(r[7]),
+            'observaciones':   r[8] or '',
+            'codigo_barra':    r[9] or '',
+        } for r in cur.fetchall()]
+
+        return jsonify(resultado), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        _rel(conn)
