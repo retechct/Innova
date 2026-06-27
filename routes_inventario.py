@@ -1291,6 +1291,126 @@ def venta_directa_tienda():
         _rel(conn)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# AJUSTAR CANTIDAD DE STOCK (agregar o quitar unidades de un modelo/sede)
+# ─────────────────────────────────────────────────────────────────────────────
+@inventario_bp.route('/api/inventario/stock-producto/cantidad', methods=['PATCH'])
+@requiere_login
+def ajustar_cantidad_stock():
+    """
+    Ajusta la cantidad disponible de un modelo en una sede.
+    Si la nueva cantidad es mayor → inserta las unidades faltantes.
+    Si es menor → elimina las unidades 'Disponible' sobrantes (las más recientes).
+    No toca unidades Vendidas, Reservadas o en Traslado.
+
+    Body JSON:
+    {
+        "nombre_modelo": "Sofá Roma",
+        "categoria":     "Sofa",
+        "catalogo_id":   12,          (puede ser null)
+        "sede_id":       3,
+        "cantidad_nueva": 5,
+        "usuario_id":    7,
+        "usuario_nombre": "Carlos"
+    }
+    """
+    data = request.json or {}
+    required = ['nombre_modelo', 'categoria', 'sede_id', 'cantidad_nueva', 'usuario_id']
+    missing  = [f for f in required if data.get(f) is None]
+    if missing:
+        return jsonify({'error': f'Campos faltantes: {", ".join(missing)}'}), 400
+
+    cantidad_nueva = int(data['cantidad_nueva'])
+    if cantidad_nueva < 0:
+        return jsonify({'error': 'La cantidad no puede ser negativa'}), 400
+
+    conn = None
+    try:
+        conn = _conn(); cur = conn.cursor()
+
+        # Contar unidades Disponibles actuales del modelo en esa sede
+        cur.execute("""
+            SELECT id FROM stock_productos
+            WHERE LOWER(nombre_modelo) = LOWER(%s)
+              AND sede_id = %s
+              AND estado = 'Disponible'
+            ORDER BY id ASC;
+        """, (data['nombre_modelo'], data['sede_id']))
+        disponibles = [r[0] for r in cur.fetchall()]
+        cantidad_actual = len(disponibles)
+
+        diferencia = cantidad_nueva - cantidad_actual
+
+        if diferencia > 0:
+            # Agregar unidades nuevas
+            prefijo = PREFIJOS.get(data['categoria'], 'PRD')
+            # Obtener foto del catálogo si hay catalogo_id
+            foto_url = None
+            if data.get('catalogo_id'):
+                cur.execute("SELECT foto_url FROM catalogo_productos WHERE id = %s", (data['catalogo_id'],))
+                row = cur.fetchone()
+                if row:
+                    foto_url = row[0]
+
+            for _ in range(diferencia):
+                barcode = _generar_codigo(cur, prefijo, 'stock_productos')
+                cur.execute("""
+                    INSERT INTO stock_productos
+                        (catalogo_id, nombre_modelo, categoria, codigo_barra,
+                         observaciones, foto_url, sede_id, estado, creado_por)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'Disponible', %s)
+                    RETURNING id;
+                """, (
+                    data.get('catalogo_id'),
+                    data['nombre_modelo'],
+                    data['categoria'],
+                    barcode,
+                    data.get('observaciones'),
+                    foto_url,
+                    data['sede_id'],
+                    data['usuario_id'],
+                ))
+                nuevo_id = cur.fetchone()[0]
+                _registrar_historial(
+                    cur, 'producto', nuevo_id, barcode,
+                    'Ajuste de cantidad', None, data['sede_id'],
+                    None, 'Disponible',
+                    data['usuario_id'], data.get('usuario_nombre', ''),
+                    notas=f'Ajuste: {cantidad_actual} → {cantidad_nueva} uds'
+                )
+
+        elif diferencia < 0:
+            # Eliminar las unidades Disponibles más recientes (las últimas ingresadas)
+            ids_a_eliminar = disponibles[diferencia:]  # slice desde el final
+            for reg_id in ids_a_eliminar:
+                cur.execute("SELECT codigo_barra, sede_id FROM stock_productos WHERE id = %s", (reg_id,))
+                row = cur.fetchone()
+                barcode, sede_orig = row if row else (None, None)
+                _registrar_historial(
+                    cur, 'producto', reg_id, barcode,
+                    'Ajuste de cantidad', sede_orig, None,
+                    'Disponible', 'Eliminado',
+                    data['usuario_id'], data.get('usuario_nombre', ''),
+                    notas=f'Ajuste: {cantidad_actual} → {cantidad_nueva} uds'
+                )
+                cur.execute("DELETE FROM stock_productos WHERE id = %s", (reg_id,))
+
+        conn.commit()
+        return jsonify({
+            'exito':           True,
+            'cantidad_anterior': cantidad_actual,
+            'cantidad_nueva':    cantidad_nueva,
+            'diferencia':        diferencia,
+            'mensaje':          f'Stock actualizado: {cantidad_actual} → {cantidad_nueva} unidades'
+        }), 200
+
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        _rel(conn)
+
+
 @inventario_bp.route('/api/inventario/ventas-tienda', methods=['GET'])
 @requiere_login
 def listar_ventas_tienda():

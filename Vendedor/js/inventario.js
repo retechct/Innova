@@ -16,7 +16,7 @@ let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], ca
 
 const CATEGORIAS_PRODUCTO = [
     'Sofa','Butaca','Silla','Espejo','Cuadro','Cojin','Mesa Centro','Consola',
-    'Esquinero', 'Florero', 'Manta'
+    'Esquinero', 'Florero', 'Manta', 'Puff'
 ];
 const CATEGORIAS_PIEZA = [
     { val: 'tablero',          label: 'Tablero (piedra / vidrio / madera)' },
@@ -1160,6 +1160,7 @@ function _invGetCatalogoPorCat(cat) {
         'Esquinero':   ['esquinero'],
         'Florero':     ['florero'],
         'Manta':       ['manta'],
+        'Puff':        ['puff'],
     };
     const cats = mapaCategoria[cat] || null;
     return cats

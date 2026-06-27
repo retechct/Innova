@@ -273,10 +273,18 @@ function _renderStockUI(grid) {
                     </div>
                     ` : ''}
                     <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${item.categoria}</span>
-                    <button class="btn-action btn-primary" style="width:100%; border-radius:8px; ${!isProd ? 'background:#0f172a;' : ''}"
-                        onclick="addStockItemToCart(${actionArgs})">
-                        <i class="fa-solid fa-cart-plus"></i> AGREGAR
-                    </button>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn-action btn-primary" style="flex:1; border-radius:8px; ${!isProd ? 'background:#0f172a;' : ''}"
+                            onclick="addStockItemToCart(${actionArgs})">
+                            <i class="fa-solid fa-cart-plus"></i> AGREGAR
+                        </button>
+                        ${isProd && window.usuarioActivo && ['Admin','Almacen','ALMACEN'].includes(window.usuarioActivo.rol) ? `
+                        <button class="btn-action" style="border-radius:8px; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; padding:0 10px;"
+                            onclick="event.stopPropagation(); _editarCantidadStock('${item.nombre.replace(/[`']/g,'')}', '${item.categoria}', ${item.catalogo_id || 'null'}, '${item.sede}', ${item.cantidad})"
+                            title="Editar cantidad">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>` : ''}
+                    </div>
                 </div>
             </div>`;
         });
@@ -1740,3 +1748,95 @@ function _invLightbox(url, titulo) {
         </div>`;
     lb.style.display = 'flex';
 }
+
+// ─── EDITAR CANTIDAD DE STOCK ─────────────────────────────────────────────────
+window._editarCantidadStock = async function(nombre, categoria, catalogoId, sede, cantidadActual) {
+    const { value: cantidadNueva } = await Swal.fire({
+        title: '<i class="fa-solid fa-pen-to-square" style="color:#6366f1;"></i> Editar cantidad',
+        html: `
+        <div style="text-align:left; padding: 4px 0;">
+            <p style="margin:0 0 14px; font-size:14px; color:#374151;">
+                <b>${nombre}</b><br>
+                <span style="font-size:12px; color:#64748b;">Sede: ${sede} · Categoría: ${categoria}</span>
+            </p>
+            <label style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">
+                Nueva cantidad disponible
+            </label>
+            <input id="swal-cantidad" type="number" min="0" max="999" value="${cantidadActual}"
+                class="swal2-input" style="margin-top:8px; width:100%; box-sizing:border-box; font-size:20px; text-align:center;">
+            <p style="margin:10px 0 0; font-size:12px; color:#94a3b8;">
+                Cantidad actual: <b>${cantidadActual}</b> unidades disponibles
+            </p>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-check"></i> Guardar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#6366f1',
+        focusConfirm: false,
+        didOpen: () => {
+            const inp = document.getElementById('swal-cantidad');
+            inp.focus(); inp.select();
+        },
+        preConfirm: () => {
+            const val = parseInt(document.getElementById('swal-cantidad').value);
+            if (isNaN(val) || val < 0) {
+                Swal.showValidationMessage('Ingresa una cantidad válida (0 o más)');
+                return false;
+            }
+            return val;
+        }
+    });
+
+    if (cantidadNueva === undefined) return; // canceló
+
+    if (cantidadNueva === cantidadActual) {
+        return Swal.fire({ icon: 'info', title: 'Sin cambios', text: 'La cantidad no cambió.', timer: 1500, showConfirmButton: false });
+    }
+
+    // Buscar sede_id a partir del nombre
+    try {
+        const resSedes = await apiFetch(`${API_URL}/api/sedes`);
+        const sedes = await resSedes.json();
+        const sedeObj = sedes.find(s => s.nombre === sede);
+        if (!sedeObj) throw new Error('No se encontró la sede "' + sede + '"');
+
+        const usuario = window.usuarioActivo;
+        const body = {
+            nombre_modelo:  nombre,
+            categoria:      categoria,
+            catalogo_id:    catalogoId,
+            sede_id:        sedeObj.id,
+            cantidad_nueva: cantidadNueva,
+            usuario_id:     usuario?.id,
+            usuario_nombre: usuario?.nombre || ''
+        };
+
+        const res  = await apiFetch(`${API_URL}/api/inventario/stock-producto/cantidad`, {
+            method:  'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        const diff = cantidadNueva - cantidadActual;
+        const icono = diff > 0 ? '📦' : '🗑️';
+        const accion = diff > 0 ? `Se agregaron ${diff} unidad(es)` : `Se eliminaron ${Math.abs(diff)} unidad(es)`;
+
+        await Swal.fire({
+            icon: 'success',
+            title: `${icono} Stock actualizado`,
+            html: `<b>${nombre}</b><br>${accion}<br>Nueva cantidad: <b>${cantidadNueva}</b>`,
+            timer: 2000,
+            showConfirmButton: false
+        });
+
+        // Recargar la vista de stock
+        const grid = document.getElementById('product-grid');
+        if (grid) await renderStockTiendas(grid);
+
+    } catch(e) {
+        Swal.fire({ icon: 'error', title: 'Error', text: e.message });
+    }
+};
