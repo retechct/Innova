@@ -248,8 +248,8 @@ function _renderStockUI(grid) {
                         const _sf = (item.fotos && item.fotos.length) ? item.fotos : (item.foto ? [item.foto] : []);
                         const _cid = 'stkc-' + Math.random().toString(36).slice(2,8);
                         const _slides = _sf.length
-                            ? _sf.map(f => '<div style="min-width:100%;scroll-snap-align:center;"><img src="'+f+'" onerror="this.src=\'imagenes/sin_foto.jpg\'" style="width:100%;height:170px;object-fit:cover;"></div>').join('')
-                            : '<div style="min-width:100%;height:170px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#cbd5e1;"><i class=\"fa-solid fa-image\" style=\"font-size:2rem;\"></i></div>';
+                            ? _sf.map(f => '<div style="min-width:100%;scroll-snap-align:center;"><img src="'+f+'" onerror="this.src=\'imagenes/sin_foto.jpg\'" style="width:100%;height:200px;object-fit:contain;object-position:center;background:#f8f6f2;cursor:zoom-in;" onclick="_invLightbox(\''+f+'\',\''+(item.nombre||'').replace(/'/g,"\'")+'\')"></div>').join('')
+                            : '<div style="min-width:100%;height:200px;background:#f8f6f2;display:flex;align-items:center;justify-content:center;color:#cbd5e1;"><i class=\"fa-solid fa-image\" style=\"font-size:2rem;\"></i></div>';
                         const _nav = _sf.length > 1
                             ? '<button onclick="event.stopPropagation();_carouselNav(\''+_cid+'\',  -1)" style="position:absolute;top:50%;left:5px;transform:translateY(-50%);background:rgba(0,0,0,0.45);color:white;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">‹</button>'
                               + '<button onclick="event.stopPropagation();_carouselNav(\''+_cid+'\',   1)" style="position:absolute;top:50%;right:5px;transform:translateY(-50%);background:rgba(0,0,0,0.45);color:white;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">›</button>'
@@ -323,16 +323,15 @@ window._cambiarPaginaStock = function(pag) {
 };
 
 /**
- * addStockItemToCart — venta directa desde Stock en Tienda.
- * Pide precio al vendedor, registra en BD y quita el producto del listado.
+ * addStockItemToCart — maneja ítems de Stock (productos enteros y piezas).
  */
 async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false) {
+    const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
 
-    // 1. Consultar unidades disponibles
     let unidades = [];
     try {
-        const endpoint = isPieza
-            ? `${API_URL}/api/inventario/piezas/disponibles/${itemId}`
+        const endpoint = isPieza 
+            ? `${API_URL}/api/inventario/piezas/disponibles/${itemId}` 
             : `${API_URL}/api/inventario/disponibles/${itemId}`;
         const res = await apiFetch(endpoint);
         unidades  = await res.json();
@@ -350,7 +349,6 @@ async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false)
         });
     }
 
-    // 2. Si hay más de una unidad, elegir cuál
     let unidad;
     if (unidades.length === 1) {
         unidad = unidades[0];
@@ -371,109 +369,41 @@ async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false)
             confirmButtonColor: '#0f172a',
             preConfirm: () => document.getElementById('swal-picker-unidad').value
         });
+
         if (!isConfirmed || !idSeleccionado) return;
         unidad = unidades.find(u => u.id == idSeleccionado);
     }
+
     if (!unidad) return;
 
-    // 3. Pedir el precio de venta al vendedor
-    const precioSugerido = unidad.precio_venta || precio || '';
-    const { value: precioIngresado, isConfirmed: confirmoPrecio } = await Swal.fire({
-        title: `Registrar venta`,
-        html: `
-            <div style="text-align:left;padding:4px 0;">
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-                    <img src="${foto || 'imagenes/sin_foto.jpg'}" alt="${nombre}"
-                         style="width:64px;height:64px;object-fit:contain;border-radius:8px;
-                                background:#f8f6f2;border:1px solid #e2e8f0;"
-                         onerror="this.src='imagenes/sin_foto.jpg'">
-                    <div>
-                        <div style="font-weight:700;font-size:15px;color:#0f172a;">${nombre}</div>
-                        <div style="font-size:12px;color:#64748b;margin-top:3px;">
-                            ${unidad.sede} · Cód: ${unidad.codigo_barra}
-                            ${unidad.color_tela ? ' · ' + unidad.color_tela : ''}
-                        </div>
-                    </div>
-                </div>
-                <label style="font-size:11px;font-weight:700;color:#475569;
-                               text-transform:uppercase;letter-spacing:.5px;
-                               display:block;margin-bottom:6px;">
-                    Precio de venta (S/)
-                </label>
-                <input id="swal-precio-venta" type="number" min="0" step="0.50"
-                       value="${precioSugerido}"
-                       placeholder="Ej: 350.00"
-                       style="width:100%;padding:12px 14px;border:1.5px solid #cbd5e1;
-                              border-radius:8px;font-size:16px;font-weight:700;
-                              color:#0f172a;outline:none;box-sizing:border-box;"
-                       onfocus="this.select()">
-                <p style="font-size:11px;color:#94a3b8;margin-top:8px;">
-                    ℹ️  El producto se marcará como vendido y desaparecerá del listado.
-                </p>
-            </div>`,
-        showCancelButton: true,
-        confirmButtonText: '\u2714\ufe0f Confirmar venta',
-        cancelButtonText:  'Cancelar',
-        confirmButtonColor: '#0f172a',
-        focusConfirm: false,
-        preConfirm: () => {
-            const val = parseFloat(document.getElementById('swal-precio-venta').value);
-            if (isNaN(val) || val < 0) {
-                Swal.showValidationMessage('Ingresa un precio válido');
-                return false;
-            }
-            return val;
-        }
-    });
+    const detalleLabel = [
+        `Cód: ${unidad.codigo_barra}`,
+        unidad.sede,
+        unidad.color_tela || unidad.material,
+        unidad.acabado || unidad.color_acabado,
+        unidad.observaciones
+    ].filter(Boolean).join(' · ');
 
-    if (!confirmoPrecio || precioIngresado === undefined) return;
+    const cartItem = {
+        name:              nombre,
+        price:             precio || 0,
+        img:               foto,
+        details:           detalleLabel,
+        componentes:       {},
+        es_stock:          true,
+    };
 
-    // 4. Llamar al backend para registrar la venta y marcar como Vendido
-    const usuario = (typeof usuarioActivo !== 'undefined' && usuarioActivo) ? usuarioActivo : {};
-    try {
-        const res = await apiFetch(`${API_URL}/api/inventario/venta-directa`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                tipo:            isPieza ? 'pieza' : 'producto',
-                registro_id:     unidad.id,
-                precio_venta:    precioIngresado,
-                usuario_id:      usuario.id   || null,
-                usuario_nombre:  usuario.nombre || '',
-                nombre_producto: nombre,
-                categoria:       '',           // el backend lo puede enriquecer
-                foto_url:        foto || '',
-                sede_nombre:     unidad.sede || '',
-                codigo_barra:    unidad.codigo_barra || '',
-                observaciones:   unidad.observaciones || ''
-            })
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) {
-            return Swal.fire('Error', data.error || 'No se pudo registrar la venta.', 'error');
-        }
-    } catch(e) {
-        return Swal.fire('Error', 'Error de conexión. Intenta de nuevo.', 'error');
+    if (isPieza) {
+        cartItem.stock_pieza_id = unidad.id;
+    } else {
+        cartItem.stock_producto_id = unidad.id;
+        cartItem.catalogo_id = itemId;
     }
 
-    // 5. Éxito: toast y refrescar listado
-    Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500 })
-        .fire({ icon: 'success', title: `\u2705 Venta registrada — S/ ${precioIngresado.toFixed(2)}` });
-
-    // Refrescar el stock para que desaparezca la unidad vendida
-    if (typeof cargarStockEnTienda === 'function') {
-        setTimeout(cargarStockEnTienda, 600);
-    } else if (typeof _renderStockUI === 'function') {
-        setTimeout(() => {
-            if (typeof _stkTodosLocal !== 'undefined') {
-                _stkTodosLocal = _stkTodosLocal.filter(x => {
-                    if (!isPieza && x.catalogo_id == itemId) return x.disponibles > 1;
-                    return true;
-                });
-            }
-            _renderStockUI();
-        }, 600);
-    }
+    cart.push(cartItem);
+    document.getElementById('cart-count').innerText = cart.length;
+    if(typeof updateCartUI === 'function') updateCartUI();
+    Toast.fire({ icon: 'success', title: `"${nombre}" añadido al carrito` });
 }
 /* --- LÓGICA DEL NUEVO MODAL DE SOFÁS --- */
 /* --- REEMPLAZA TU FUNCIÓN openConfig COMPLETA --- */
@@ -1781,3 +1711,32 @@ window.setCatalogoMode = function(mode) {
     });
     renderGrid();
 };
+
+/* ─── Lightbox de imagen (Stock en Tienda) ──────────────────── */
+function _invLightbox(url, titulo) {
+    let lb = document.getElementById('_inv-lightbox');
+    if (!lb) {
+        lb = document.createElement('div');
+        lb.id = '_inv-lightbox';
+        lb.style.cssText = [
+            'position:fixed','inset:0','z-index:99999',
+            'background:rgba(0,0,0,0.85)',
+            'display:flex','align-items:center','justify-content:center',
+            'flex-direction:column','gap:12px',
+            'cursor:zoom-out','padding:20px'
+        ].join(';');
+        lb.addEventListener('click', () => lb.remove());
+        document.body.appendChild(lb);
+    }
+    lb.innerHTML = `
+        <img src="${url}" alt="${titulo}"
+             style="max-width:92vw;max-height:82vh;object-fit:contain;
+                    border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.6);"
+             onerror="this.src='imagenes/sin_foto.jpg'">
+        <div style="color:rgba(255,255,255,0.85);font-size:14px;font-weight:600;
+                    text-align:center;max-width:80vw;">${titulo}</div>
+        <div style="color:rgba(255,255,255,0.4);font-size:12px;">
+            Toca o haz clic para cerrar
+        </div>`;
+    lb.style.display = 'flex';
+}
