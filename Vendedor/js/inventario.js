@@ -13,6 +13,7 @@ let _fotosAdicionalesActuales = [];
 let _invFiltroQ    = '';
 let _invFiltroSede = '';
 let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], catalogo: [], cargado: false };
+let _invSedesList = []; // [{id, nombre}] — usado para armar el panel de stock por tienda en "Editar Producto"
 
 const CATEGORIAS_PRODUCTO = [
     'Sofa','Butaca','Silla','Espejo','Cuadro','Cojin','Mesa Centro','Consola',
@@ -214,6 +215,7 @@ async function _cargarMaestrosInv() {
             o.value = s.id; o.textContent = s.nombre;
             selSede.appendChild(o);
         });
+        _invSedesList = sedes || [];
     } catch(e) { console.error('Error maestros inventario:', e); }
 }
 
@@ -497,6 +499,24 @@ function _invAbrirEditarProducto(encodedObj) {
     ).join('');
 
     const cuerpo = document.getElementById('modal-inv-editar-cuerpo');
+
+    // Panel de stock por tienda: una fila por sede con su cantidad disponible actual
+    const filasStock = (_invSedesList || []).map(s => {
+        const stSede = (m.sede_stock && m.sede_stock[s.nombre]) ? m.sede_stock[s.nombre].disponibles : 0;
+        return `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="flex:1;font-size:12px;color:var(--text-muted);">${s.nombre}</span>
+            <input type="number" min="0" id="ef-stock-${s.id}" class="form-input"
+                   value="${stSede}" style="width:70px;padding:6px 8px;font-size:12px;text-align:center;" />
+            <button onclick="_invAjustarStockSede(${s.id}, '${(m.nombre_modelo||'').replace(/'/g,"\\'")}', '${(m.categoria||'').replace(/'/g,"\\'")}', ${m.catalogo_id ? m.catalogo_id : 'null'})"
+                    title="Guardar cantidad de esta tienda"
+                    style="background:#0f172a;color:white;border:none;padding:6px 12px;
+                           border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">
+                <i class="fas fa-check"></i>
+            </button>
+        </div>`;
+    }).join('');
+
     cuerpo.innerHTML = `
         <div class="form-group"><label>Nombre Modelo *</label>
             <input id="ef-nombre" type="text" class="form-input" value="${(m.nombre_modelo||'').replace(/"/g,'&quot;')}" /></div>
@@ -514,9 +534,57 @@ function _invAbrirEditarProducto(encodedObj) {
         <button onclick="_invGuardarEdicionProducto()" class="btn-action btn-primary" style="margin-top:10px;">
             <i class="fas fa-save"></i> Guardar Cambios
         </button>
-        <button onclick="document.getElementById('modal-inv-editar').style.display='none'" class="btn-action btn-ghost">Cancelar</button>
+
+        <hr style="margin:16px 0;border:none;border-top:1px solid #e2e8f0;">
+        <label style="display:block;font-size:12px;font-weight:800;color:#1e293b;margin-bottom:8px;">
+            <i class="fas fa-warehouse" style="color:#c2410c;"></i> Stock disponible por tienda
+        </label>
+        ${filasStock || '<p style="font-size:12px;color:var(--text-muted);">No hay sedes registradas.</p>'}
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+            Aumenta el número para generar unidades nuevas (con su código de barras), o redúcelo para quitar
+            las unidades <strong>Disponibles</strong> más recientes. No afecta unidades vendidas, reservadas o en traslado.
+        </p>
+
+        <button onclick="document.getElementById('modal-inv-editar').style.display='none'" class="btn-action btn-ghost" style="margin-top:10px;">Cerrar</button>
     `;
     document.getElementById('modal-inv-editar').style.display = 'flex';
+}
+
+/* ─── Ajustar (aumentar/reducir) el stock disponible de un modelo en una sede ─── */
+async function _invAjustarStockSede(sedeId, nombreModelo, categoria, catalogoId) {
+    const input = document.getElementById(`ef-stock-${sedeId}`);
+    if (!input) return;
+
+    const cantidadNueva = parseInt(input.value, 10);
+    if (isNaN(cantidadNueva) || cantidadNueva < 0) {
+        Swal.fire('Cantidad inválida', 'Ingresa un número de 0 a más.', 'warning');
+        return;
+    }
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/inventario/stock-producto/cantidad`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nombre_modelo:   nombreModelo,
+                categoria:       categoria,
+                catalogo_id:     catalogoId,
+                sede_id:         sedeId,
+                cantidad_nueva:  cantidadNueva,
+                usuario_id:      window.usuarioActivo?.id,
+                usuario_nombre:  window.usuarioActivo?.nombre,
+            })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            Swal.fire('Error', data.error || 'No se pudo ajustar el stock.', 'error');
+            return;
+        }
+        Swal.fire({ icon: 'success', title: 'Stock actualizado', text: data.mensaje, timer: 1600, showConfirmButton: false });
+        _cargarDatosTab();
+    } catch (e) {
+        Swal.fire('Error de conexión', 'No se pudo conectar con el servidor.', 'error');
+    }
 }
 
 async function _invGuardarEdicionProducto() {
