@@ -153,6 +153,17 @@ function _htmlEsqueleto() {
         </div>
     </div>
 
+    <!-- MODAL EDITAR PRODUCTO -->
+    <div id="modal-inv-editar" class="modal-overlay" style="display:none;align-items:center;justify-content:center;">
+        <div class="modal-content" style="width:92%;max-width:480px;border-radius:20px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-pen" style="color:#c2410c;margin-right:8px;"></i>Editar Producto</h3>
+                <button class="close-btn" onclick="document.getElementById('modal-inv-editar').style.display='none'"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="modal-inv-editar-cuerpo" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
     <!-- MODAL ESCANER CAMARA -->
     <div id="modal-scanner-inv" class="modal-overlay" style="display:none;align-items:center;justify-content:center;z-index:99999;">
         <div class="modal-content" style="width:92%;max-width:500px;border-radius:16px;padding:20px;text-align:center;">
@@ -439,6 +450,13 @@ function _renderTablaProductos() {
                                    font-size:11px;font-weight:700;">
                         <i class="fas fa-eye"></i> Ver
                     </button>
+                    ${_puedeEditarInv() ? `
+                    <button onclick="_invAbrirEditarProducto('${encodeURIComponent(JSON.stringify(m))}')"
+                            style="flex:1;background:#fff7ed;border:1px solid #fed7aa;padding:7px 0;
+                                   border-radius:8px;color:#c2410c;cursor:pointer;
+                                   font-size:11px;font-weight:700;">
+                        <i class="fas fa-pen"></i> Editar
+                    </button>` : ''}
                 </div>
             </div>
         </div>`;
@@ -464,6 +482,86 @@ function _renderTablaProductos() {
 function _carouselGoTo(cid, idx) {
     const el = document.getElementById(cid);
     if (el) el.scrollTo({ left: el.clientWidth * idx, behavior: 'smooth' });
+}
+
+/* ─── Editar producto (datos generales: nombre, categoría, observaciones, precio) ─── */
+let _invEditOriginal = null;
+
+function _invAbrirEditarProducto(encodedObj) {
+    if (!_puedeEditarInv()) { Swal.fire('Sin permisos', 'Solo Admin o Jefe de Taller.', 'warning'); return; }
+    const m = JSON.parse(decodeURIComponent(encodedObj));
+    _invEditOriginal = m;
+
+    const cats = CATEGORIAS_PRODUCTO.map(c =>
+        `<option value="${c}" ${c === m.categoria ? 'selected' : ''}>${c}</option>`
+    ).join('');
+
+    const cuerpo = document.getElementById('modal-inv-editar-cuerpo');
+    cuerpo.innerHTML = `
+        <div class="form-group"><label>Nombre Modelo *</label>
+            <input id="ef-nombre" type="text" class="form-input" value="${(m.nombre_modelo||'').replace(/"/g,'&quot;')}" /></div>
+        <div class="form-group"><label>Categoría *</label>
+            <select id="ef-categoria" class="form-input">${cats}</select></div>
+        <div class="form-group"><label>Observaciones</label>
+            <input id="ef-obs" type="text" class="form-input" value="${(m.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Opcional" /></div>
+        ${m.catalogo_id ? `
+        <div class="form-group"><label>Precio Base (S/) — modelo de la carta</label>
+            <input id="ef-precio" type="number" class="form-input" step="0.01" placeholder="Dejar vacío para no cambiar" /></div>
+        ` : ''}
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+            Este cambio se aplicará a las <strong>${m.total}</strong> unidad(es) de este modelo en todas las sedes.
+        </p>
+        <button onclick="_invGuardarEdicionProducto()" class="btn-action btn-primary" style="margin-top:10px;">
+            <i class="fas fa-save"></i> Guardar Cambios
+        </button>
+        <button onclick="document.getElementById('modal-inv-editar').style.display='none'" class="btn-action btn-ghost">Cancelar</button>
+    `;
+    document.getElementById('modal-inv-editar').style.display = 'flex';
+}
+
+async function _invGuardarEdicionProducto() {
+    const m = _invEditOriginal;
+    if (!m) return;
+
+    const nuevoNombre = document.getElementById('ef-nombre').value.trim();
+    const nuevaCategoria = document.getElementById('ef-categoria').value;
+    const nuevasObs = document.getElementById('ef-obs').value.trim();
+    const precioEl = document.getElementById('ef-precio');
+    const nuevoPrecio = precioEl ? precioEl.value : '';
+
+    if (!nuevoNombre) {
+        Swal.fire('Falta el nombre', 'El nombre del modelo no puede estar vacío.', 'warning');
+        return;
+    }
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/inventario/producto/editar`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                categoria:      m.categoria,
+                nombre_modelo:  m.nombre_modelo,
+                observaciones:  m.observaciones || '',
+                catalogo_id:    m.catalogo_id || null,
+                nuevo_nombre:         nuevoNombre,
+                nueva_categoria:      nuevaCategoria,
+                nuevas_observaciones: nuevasObs,
+                nuevo_precio:         nuevoPrecio !== '' ? parseFloat(nuevoPrecio) : null,
+                usuario_id:     window.usuarioActivo?.id,
+                usuario_nombre: window.usuarioActivo?.nombre,
+            })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            Swal.fire('Error', data.error || 'No se pudo actualizar el producto.', 'error');
+            return;
+        }
+        document.getElementById('modal-inv-editar').style.display = 'none';
+        Swal.fire('Actualizado', data.mensaje || 'Producto actualizado correctamente.', 'success');
+        _cargarDatosTab();
+    } catch (e) {
+        Swal.fire('Error de conexión', 'No se pudo conectar con el servidor.', 'error');
+    }
 }
 
 /* ─── Render: tabla pivot de piezas ────────────────────────── */

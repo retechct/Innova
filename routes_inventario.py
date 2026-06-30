@@ -1411,6 +1411,95 @@ def ajustar_cantidad_stock():
         _rel(conn)
 
 
+@inventario_bp.route('/api/inventario/producto/editar', methods=['PUT'])
+@requiere_login
+def editar_producto_inventario():
+    """
+    Edita los datos (nombre, categoría, observaciones) de un modelo agrupado
+    en el inventario por tiendas. Como /api/inventario/resumen agrupa las
+    unidades de stock_productos por (categoria, nombre_modelo, observaciones),
+    aquí identificamos el grupo original con esos 3 campos y actualizamos
+    TODAS las unidades que coincidan, en todas las sedes.
+
+    Si el modelo viene de un producto de catálogo (catalogo_id), también se
+    actualiza catalogo_productos para que el cambio se refleje en la carta.
+
+    Body JSON:
+    {
+        "categoria":          "Sofa",          (categoría actual, para ubicar el grupo)
+        "nombre_modelo":      "Sofá Roma",      (nombre actual)
+        "observaciones":      "",               (observaciones actuales, puede ser "")
+        "catalogo_id":        12,               (opcional)
+
+        "nuevo_nombre":         "Sofá Roma XL",
+        "nueva_categoria":      "Sofa",
+        "nuevas_observaciones": "Edición 2026",
+        "nuevo_precio":         1500.00,        (opcional, solo si hay catalogo_id)
+
+        "usuario_id":    7,
+        "usuario_nombre": "Carlos"
+    }
+    """
+    data = request.json or {}
+
+    required = ['categoria', 'nombre_modelo', 'nuevo_nombre', 'nueva_categoria', 'usuario_id']
+    missing  = [f for f in required if data.get(f) in (None, '')]
+    if missing:
+        return jsonify({'error': f'Campos faltantes: {", ".join(missing)}'}), 400
+
+    nuevo_nombre    = data['nuevo_nombre'].strip()
+    nueva_categoria = data['nueva_categoria'].strip()
+    if not nuevo_nombre:
+        return jsonify({'error': 'El nombre del modelo no puede estar vacío'}), 400
+
+    obs_actuales = data.get('observaciones') or ''
+    nuevas_obs   = data.get('nuevas_observaciones', obs_actuales) or ''
+
+    conn = None
+    try:
+        conn = _conn(); cur = conn.cursor()
+
+        cur.execute("""
+            UPDATE stock_productos
+               SET nombre_modelo = %s,
+                   categoria      = %s,
+                   observaciones  = %s
+             WHERE LOWER(nombre_modelo) = LOWER(%s)
+               AND categoria = %s
+               AND COALESCE(observaciones, '') = %s;
+        """, (
+            nuevo_nombre, nueva_categoria, nuevas_obs,
+            data['nombre_modelo'], data['categoria'], obs_actuales
+        ))
+        unidades_afectadas = cur.rowcount
+
+        if data.get('catalogo_id'):
+            campos  = ["nombre_modelo = %s", "categoria = %s", "observaciones = %s"]
+            valores = [nuevo_nombre, nueva_categoria, nuevas_obs]
+            if data.get('nuevo_precio') not in (None, ''):
+                campos.append("precio_base = %s")
+                valores.append(float(data['nuevo_precio']))
+            valores.append(data['catalogo_id'])
+            cur.execute(f"""
+                UPDATE catalogo_productos
+                   SET {', '.join(campos)}
+                 WHERE id = %s;
+            """, valores)
+
+        conn.commit()
+        return jsonify({
+            'exito': True,
+            'unidades_afectadas': unidades_afectadas,
+            'mensaje': f'Producto actualizado ({unidades_afectadas} unidad(es) en inventario)'
+        }), 200
+
+    except Exception as e:
+        if conn: conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        _rel(conn)
+
+
 @inventario_bp.route('/api/inventario/ventas-tienda', methods=['GET'])
 @requiere_login
 def listar_ventas_tienda():
