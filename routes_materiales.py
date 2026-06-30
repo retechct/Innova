@@ -18,7 +18,7 @@ MIGRACIÓN SQL REQUERIDA (solo una vez):
 
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
-from database import get_db_connection, release_db_connection, limpiar_foto
+from database import get_db_connection, release_db_connection, limpiar_foto, cloudinary_upload
 from auth_middleware import requiere_login, requiere_rol
 
 materiales_bp = Blueprint('materiales', __name__)
@@ -39,7 +39,7 @@ def agregar_nuevo_material():
         if 'foto' in request.files:
             foto_file = request.files['foto']
             if foto_file.filename != '':
-                respuesta_nube = cloudinary.uploader.upload(foto_file, folder="materiales")
+                respuesta_nube = cloudinary_upload(foto_file, folder="materiales")
                 foto_ruta = respuesta_nube.get('secure_url')
 
         conexion  = get_db_connection()
@@ -370,7 +370,7 @@ def actualizar_foto_aprobacion():
         return jsonify({'error': 'No se recibió ninguna foto.'}), 400
 
     try:
-        resultado = cloudinary.uploader.upload(request.files['foto'], folder='aprobaciones')
+        resultado = cloudinary_upload(request.files["foto"], folder="aprobaciones", max_width=1600)
         foto_url  = resultado.get('secure_url')
 
         conexion = get_db_connection()
@@ -434,7 +434,7 @@ def guardar_creacion():
 
         for archivo in request.files.getlist('fotos'):
             if archivo and archivo.filename != '':
-                respuesta_nube = cloudinary.uploader.upload(archivo, folder="creaciones")
+                respuesta_nube = cloudinary_upload(archivo, folder="creaciones")
                 cursor.execute(
                     "INSERT INTO fotos_creaciones (creacion_id, foto_url) VALUES (%s,%s);",
                     (creacion_id, respuesta_nube.get('secure_url'))
@@ -754,7 +754,7 @@ def subir_diseno_referencia():
             return jsonify({'error': 'La foto de referencia es obligatoria.'}), 400
 
         foto_file  = request.files['foto']
-        resultado  = cloudinary.uploader.upload(foto_file, folder='disenos_referencia')
+        resultado  = cloudinary_upload(foto_file, folder="disenos_referencia")
         foto_url   = resultado.get('secure_url')
 
         conexion = get_db_connection()

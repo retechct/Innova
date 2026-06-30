@@ -12,7 +12,7 @@ import cloudinary.uploader
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from flask import Blueprint, jsonify, request, send_file
-from database import get_db_connection, release_db_connection, limpiar_foto, notificar_usuario
+from database import get_db_connection, release_db_connection, limpiar_foto, notificar_usuario, cloudinary_upload
 from auth_middleware import requiere_login, requiere_rol
 
 # pip install reportlab==4.2.2
@@ -49,7 +49,7 @@ def finalizar_ticket(id):
             return jsonify({'error': 'La foto de evidencia es obligatoria'}), 400
 
         foto = request.files['foto']
-        respuesta_nube = cloudinary.uploader.upload(foto, folder="evidencias")
+        respuesta_nube = cloudinary_upload(foto, folder="evidencias")
         foto_url_final = respuesta_nube.get('secure_url')
 
         conexion = get_db_connection()
@@ -687,7 +687,7 @@ def derivar_ticket_con_foto(ticket_id):
         return jsonify({'error': 'nueva_area y nuevo_trabajador_id son obligatorios'}), 400
     foto_ruta = None
     if 'foto' in request.files and request.files['foto'].filename != '':
-        respuesta_nube = cloudinary.uploader.upload(request.files['foto'], folder="derivaciones")
+        respuesta_nube = cloudinary_upload(request.files['foto'], folder="derivaciones")
         foto_ruta = respuesta_nube.get('secure_url')
     try:
         conexion = get_db_connection()
@@ -1318,7 +1318,7 @@ def logistica_confirmar_recojo(id):
         if request.content_type and 'multipart/form-data' in request.content_type:
             if 'comprobante' in request.files and request.files['comprobante'].filename:
                 import cloudinary.uploader
-                res = cloudinary.uploader.upload(request.files['comprobante'], folder='pagos_proveedores')
+                res = cloudinary_upload(request.files['comprobante'], folder='pagos_proveedores', max_width=1600)
                 url_comprobante = res.get('secure_url')
         else:
             data = request.json or {}
@@ -1597,7 +1597,7 @@ def guardar_sugerencia():
             return jsonify({'error': 'El nombre y tipo de insumo son obligatorios'}), 400
         foto_ruta = request.form.get('foto_ref') or "imagenes/sin_foto.jpg"
         if 'foto' in request.files and request.files['foto'].filename != '':
-            respuesta_nube = cloudinary.uploader.upload(request.files['foto'], folder="sugerencias")
+            respuesta_nube = cloudinary_upload(request.files['foto'], folder="sugerencias")
             foto_ruta = respuesta_nube.get('secure_url')
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -2614,7 +2614,7 @@ def registrar_pago_proveedor(id):
         return jsonify({'error': 'Campo comprobante es obligatorio'}), 400
     archivo = request.files['comprobante']
     try:
-        resp = cloudinary.uploader.upload(archivo, folder='pagos_proveedores')
+        resp = cloudinary_upload(archivo, folder='pagos_proveedores', max_width=1600)
         url_voucher = resp.get('secure_url')
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -3639,7 +3639,7 @@ def registrar_stock_estructura():
 
         foto_url = None
         if 'foto' in request.files and request.files['foto'].filename:
-            res = cloudinary.uploader.upload(request.files['foto'], folder='stock_estructuras')
+            res = cloudinary_upload(request.files['foto'], folder='stock_estructuras')
             foto_url = res.get('secure_url')
 
         conexion = get_db_connection()
@@ -3900,7 +3900,7 @@ def completar_parte_estructura(stock_id):
         foto_url = None
         if 'foto' in request.files and request.files['foto'].filename:
             import cloudinary.uploader
-            res = cloudinary.uploader.upload(request.files['foto'], folder='stock_estructuras')
+            res = cloudinary_upload(request.files['foto'], folder='stock_estructuras')
             foto_url = res.get('secure_url')
 
         cursor.execute("""
@@ -4008,7 +4008,7 @@ def editar_estructura(stock_id):
         # Foto opcional
         foto_url = None
         if request.files and 'foto' in request.files and request.files['foto'].filename:
-            res      = cl_uploader.upload(request.files['foto'], folder='stock_estructuras')
+            res      = cloudinary_upload(request.files['foto'], folder='stock_estructuras')
             foto_url = res.get('secure_url')
 
         # Construir SET dinámico solo con campos enviados

@@ -36,12 +36,60 @@ def release_db_connection(conn):
 # ─── Utilidades compartidas ───────────────────────────────────────────────────
 
 def limpiar_foto(url):
-    """Evita placeholders o URLs vacías en campos de foto."""
+    """
+    Evita placeholders o URLs vacías en campos de foto.
+    Para URLs de Cloudinary inyecta transformación WebP + calidad automática al vuelo,
+    sin re-subir nada ni tocar la base de datos.
+    """
     if not url or 'via.placeholder.com' in url or 'sin_foto.jpg' in str(url):
         return "imagenes/sin_foto.jpg"
     if url.startswith('http'):
+        if 'res.cloudinary.com' in url and '/upload/' in url:
+            # Solo inyectar si aún no tiene transformaciones aplicadas
+            if '/upload/f_' not in url and '/upload/q_' not in url and '/upload/w_' not in url:
+                url = url.replace(
+                    '/upload/',
+                    '/upload/f_webp,q_auto:good,w_1200,c_limit/'
+                )
         return url
     return f"{BACKEND_URL}/uploads/{url}"
+
+
+def cloudinary_upload(file_obj, folder: str, max_width: int = 1200):
+    """
+    Sube un archivo a Cloudinary con compresión automática y conversión a WebP.
+
+    Usar en lugar de cloudinary.uploader.upload() en todos los blueprints:
+
+        # ANTES
+        res = cloudinary.uploader.upload(archivo, folder="vouchers_pagos")
+
+        # DESPUÉS
+        from database import cloudinary_upload
+        res = cloudinary_upload(archivo, folder="vouchers_pagos")
+
+    Parámetros:
+        file_obj   — el objeto de archivo (request.files['foto'], etc.)
+        folder     — carpeta en Cloudinary (igual que antes)
+        max_width  — ancho máximo en px (default 1200). Para vouchers/comprobantes
+                     donde se necesita leer texto, usar max_width=1600.
+
+    La transformación aplicada:
+        - w_{max_width},c_limit  → reduce si es más ancho, nunca agranda
+        - q_auto:good            → Cloudinary elige calidad óptima (~70-85%)
+        - f_webp                 → convierte a WebP (30% más liviano que JPEG)
+    """
+    import cloudinary.uploader
+    return cloudinary.uploader.upload(
+        file_obj,
+        folder=folder,
+        transformation=[
+            {"width": max_width, "crop": "limit"},
+            {"quality": "auto:good"},
+            {"fetch_format": "webp"},
+        ],
+        overwrite=False,
+    )
 
 
 def enviar_notificacion_venta(correo_destino, codigo_venta, cliente):

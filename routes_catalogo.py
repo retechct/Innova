@@ -5,7 +5,7 @@ Blueprint: catalogo_bp  (sin prefijo de URL)
 
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
-from database import get_db_connection, release_db_connection, limpiar_foto
+from database import get_db_connection, release_db_connection, limpiar_foto, cloudinary_upload
 from auth_middleware import requiere_login, requiere_rol
 
 catalogo_bp = Blueprint('catalogo', __name__)
@@ -97,7 +97,7 @@ def agregar_plantilla_catalogo():
 
         urls_subidas = []
         for f in fotos:
-            res = cloudinary.uploader.upload(f, folder="catalogo_plantillas")
+            res = cloudinary_upload(f, folder="catalogo_plantillas")
             urls_subidas.append(res.get('secure_url'))
 
         foto_principal = urls_subidas[0]
@@ -162,7 +162,7 @@ def agregar_producto_directo():
             return jsonify({'error': 'La foto del producto es obligatoria'}), 400
 
         foto_file = request.files['foto']
-        respuesta_nube = cloudinary.uploader.upload(foto_file, folder="catalogo")
+        respuesta_nube = cloudinary_upload(foto_file, folder="catalogo")
         foto_ruta = respuesta_nube.get('secure_url')
 
         conexion = get_db_connection()
@@ -216,7 +216,7 @@ def upload_voucher():
         return jsonify({'error': 'No se recibió ningún archivo'}), 400
     try:
         archivo = request.files['archivo']
-        respuesta_nube = cloudinary.uploader.upload(archivo, folder="vouchers_pagos")
+        respuesta_nube = cloudinary_upload(archivo, folder="vouchers_pagos", max_width=1600)
         url = respuesta_nube.get('secure_url')
         return jsonify({'url': url}), 200
     except Exception as e:
@@ -234,7 +234,7 @@ def upload_foto():
         return jsonify({'error': 'No se recibió ningún archivo'}), 400
     try:
         archivo = request.files['foto']
-        respuesta_nube = cloudinary.uploader.upload(archivo, folder="referencias")
+        respuesta_nube = cloudinary_upload(archivo, folder="referencias")
         url = respuesta_nube.get('secure_url')
         return jsonify({'url': url}), 200
     except Exception as e:
