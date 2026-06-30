@@ -1178,9 +1178,8 @@ function _cerrarModalInvNuevo() {
 }
 
 function _formProducto() {
-    const sedes = [...document.querySelectorAll('#inv-filtro-sede option')]
-        .filter(o=>o.value)
-        .map(o=>`<option value="${o.value}">${o.textContent}</option>`).join('');
+    const sedes = (_invSedesList || [])
+        .map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
     const cats  = CATEGORIAS_PRODUCTO.map(c=>`<option value="${c}">${c}</option>`).join('');
 
     return `
@@ -1444,9 +1443,8 @@ function _invActualizarFormDinamico() {
 }
 
 function _formPieza() {
-    const sedes = [...document.querySelectorAll('#inv-filtro-sede option')]
-        .filter(o=>o.value)
-        .map(o=>`<option value="${o.value}">${o.textContent}</option>`).join('');
+    const sedes = (_invSedesList || [])
+        .map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
     const cats = CATEGORIAS_PIEZA.map(c => `<option value="${c.val}">${c.label}</option>`).join('');
 
     return `

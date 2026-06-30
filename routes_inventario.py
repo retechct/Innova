@@ -1373,7 +1373,7 @@ def ajustar_cantidad_stock():
                 nuevo_id = cur.fetchone()[0]
                 _registrar_historial(
                     cur, 'producto', nuevo_id, barcode,
-                    'Ajuste de cantidad', None, data['sede_id'],
+                    'Ajuste', None, data['sede_id'],
                     None, 'Disponible',
                     data['usuario_id'], data.get('usuario_nombre', ''),
                     notas=f'Ajuste: {cantidad_actual} → {cantidad_nueva} uds'
@@ -1388,7 +1388,7 @@ def ajustar_cantidad_stock():
                 barcode, sede_orig = row if row else (None, None)
                 _registrar_historial(
                     cur, 'producto', reg_id, barcode,
-                    'Ajuste de cantidad', sede_orig, None,
+                    'Ajuste', sede_orig, None,
                     'Disponible', 'Eliminado',
                     data['usuario_id'], data.get('usuario_nombre', ''),
                     notas=f'Ajuste: {cantidad_actual} → {cantidad_nueva} uds'
