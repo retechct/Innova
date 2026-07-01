@@ -1071,21 +1071,14 @@
 
                     <div class="specs-section">
                         <h4><i class="fa-solid fa-couch"></i> B. Estructura y Cojinería</h4>
-                        
-                        <label style="font-size:10px; font-weight:800; color:var(--accent); display:block; margin-bottom:5px;">INTERIOR Y ACABADO:</label>
-                        <div class="row">
-                            <select id="c-espuma" class="form-input-sm">
-                                <option value="Zebra 400 (Estándar)">Espuma Zebra 400 (Estándar)</option>
-                                <option value="Zebra 600 (Alta Densidad)">Espuma Zebra 600 (Alta Dens)</option>
-                                <option value="Lila (Premium)">Espuma Lila (Premium)</option>
-                                <option value="Casata (Dura)">Espuma Casata (Dura)</option>
-                            </select>
-                            <select id="c-costura" class="form-input-sm">
-                                <option value="Costura Estándar">Costura Estándar</option>
-                                <option value="Doble Pespunte">Doble Pespunte</option>
-                                <option value="Con Vivo (Ribete)">Con Vivo (Ribete)</option>
-                                <option value="Capitoné (Botones)">Capitoné (Botones)</option>
-                            </select>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                            <label style="font-size:10px; font-weight:800; color:var(--accent);">INTERIOR Y ACABADO:</label>
+                            <button type="button" id="btn-estandar-brazo" data-estandar="0"
+                                onclick="toggleMedidasEstandar('btn-estandar-brazo','brazo-medida-container','brazo-medidas-estandar')"
+                                style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                                📐 Medidas Estándar
+                            </button>
                         </div>
 
                         <div class="row">
@@ -1093,13 +1086,16 @@
                                 <option value="Con Respaldo">Con Respaldo</option>
                                 <option value="Sin Respaldo">Sin Respaldo</option>
                             </select>
-                            <input type="number" id="med-brazo" placeholder="Medida Brazo (Ej: 20cm)" class="form-input-sm" style="border-color:var(--accent);">
+                            <div id="brazo-medida-container" style="flex:1;">
+                                <input type="number" id="med-brazo" placeholder="Medida Brazo (Ej: 20cm)" class="form-input-sm" style="border-color:var(--accent); width:100%; box-sizing:border-box;">
+                            </div>
                         </div>
+                        <input type="hidden" id="brazo-medidas-estandar" value="">
 
-                        <!-- NOTA + FOTO para Interior y Acabado (espuma) -->
+                        <!-- NOTA + FOTO para Estructura y Cojinería (id interno se mantiene como 'espuma' por compatibilidad) -->
                         <div style="display:flex; gap:5px; margin-top:6px; width:100%; align-items:center;">
                             <input type="text" id="nota-espuma" class="form-input-sm"
-                                placeholder="Añadir nota a esta pieza (opcional)"
+                                placeholder="Añadir nota sobre la estructura (opcional)"
                                 style="flex:1; font-size:11px; border:1px dashed #a78bfa; background-color:#fdf4ff; box-sizing:border-box; margin:0;">
                             <!-- Input real que procesarNotasConFotos lee -->
                             <input type="file" id="foto-nota-espuma" accept="image/*,application/pdf" style="display:none;"
@@ -1244,16 +1240,29 @@
                         
                         <div id="banqueta-inputs" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #cbd5e1;">
                             <input type="text" id="bq-mod" placeholder="Modelo de Banqueta" class="form-input-sm" style="margin-bottom: 8px;">
-                            <div class="row">
-                                <input type="number" id="bq-largo" placeholder="Largo" class="form-input-sm">
-                                <input type="number" id="bq-fondo" placeholder="Profundidad" class="form-input-sm">
+
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                <label style="font-size:10px; font-weight:bold; color:gray;">MEDIDAS (Largo, Ancho)</label>
+                                <button type="button" id="btn-estandar-banqueta" data-estandar="0"
+                                    onclick="toggleMedidasEstandar('btn-estandar-banqueta','banqueta-medida-container','bq-medidas-estandar')"
+                                    style="font-size:10px;padding:3px 8px;border:1px solid #94a3b8;border-radius:5px;background:#f1f5f9;color:#64748b;cursor:pointer;white-space:nowrap;">
+                                    📐 Medidas Estándar
+                                </button>
                             </div>
-                            <div class="row" style="align-items:center; gap:6px; margin-top:5px;">
-                                <button type="button" onclick="toggleAltura('bq-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:3px 8px;white-space:nowrap;">+ Altura</button>
-                                <span id="bq-alto-wrap" style="display:none;">
-                                    <input type="number" id="bq-alto" placeholder="Alto" class="form-input-sm">
-                                </span>
+
+                            <div id="banqueta-medida-container">
+                                <div class="row">
+                                    <input type="number" id="bq-largo" placeholder="Largo" class="form-input-sm">
+                                    <input type="number" id="bq-fondo" placeholder="Ancho" class="form-input-sm">
+                                </div>
+                                <div class="row" style="align-items:center; gap:6px; margin-top:5px;">
+                                    <button type="button" onclick="toggleAltura('bq-alto-wrap')" style="background:none;border:1px dashed #94a3b8;border-radius:5px;color:#94a3b8;cursor:pointer;font-size:10px;padding:3px 8px;white-space:nowrap;">+ Altura</button>
+                                    <span id="bq-alto-wrap" style="display:none;">
+                                        <input type="number" id="bq-alto" placeholder="Alto" class="form-input-sm">
+                                    </span>
+                                </div>
                             </div>
+                            <input type="hidden" id="bq-medidas-estandar" value="">
                         </div>
                     </div>
             

@@ -425,6 +425,24 @@ function openConfig(name, img) {
     document.getElementById('check-banqueta').checked = false;
     toggleBanqueta();
 
+    // Resetear botones "Medidas Estándar" (brazo y banqueta) a su estado inicial (desactivado)
+    [
+        { btn: 'btn-estandar-brazo',    cont: 'brazo-medida-container',    hidden: 'brazo-medidas-estandar' },
+        { btn: 'btn-estandar-banqueta', cont: 'banqueta-medida-container', hidden: 'bq-medidas-estandar' },
+    ].forEach(({ btn, cont, hidden }) => {
+        const btnEl = document.getElementById(btn);
+        const contEl = document.getElementById(cont);
+        const hiddenEl = document.getElementById(hidden);
+        if (btnEl) {
+            btnEl.dataset.estandar = '0';
+            btnEl.style.background = '#f1f5f9';
+            btnEl.style.color = '#64748b';
+            btnEl.innerHTML = '📐 Medidas Estándar';
+        }
+        if (contEl) contEl.style.display = '';
+        if (hiddenEl) hiddenEl.value = '';
+    });
+
     // Forzamos que el input de fotos acepte múltiples archivos
     const fInp = document.getElementById('sofa-fotos');
     if (fInp) {
@@ -834,11 +852,16 @@ async function confirmarPersonalizadoSofa() {
     let banquetaText = "";
     if (document.getElementById('check-banqueta').checked) {
         const bMod = document.getElementById('bq-mod').value || 'Estándar';
-        const bL = document.getElementById('bq-largo').value || '0';
-        const bF = document.getElementById('bq-fondo').value || '0';
-        const bqAltoWrap = document.getElementById('bq-alto-wrap');
-        const bA = (bqAltoWrap && bqAltoWrap.style.display !== 'none') ? (document.getElementById('bq-alto')?.value||'') : '';
-        banquetaText = `<br><b style="color:var(--accent)">BANQUETA:</b> Mod: ${bMod} | L${bL} x P${bF}${bA?` x H${bA}`:''}`;
+        const bqEstandarHidden = document.getElementById('bq-medidas-estandar');
+        if (bqEstandarHidden && bqEstandarHidden.value === 'MEDIDAS ESTÁNDAR') {
+            banquetaText = `<br><b style="color:var(--accent)">BANQUETA:</b> Mod: ${bMod} | [MEDIDAS ESTÁNDAR]`;
+        } else {
+            const bL = document.getElementById('bq-largo').value || '0';
+            const bA_ancho = document.getElementById('bq-fondo').value || '0';
+            const bqAltoWrap = document.getElementById('bq-alto-wrap');
+            const bA = (bqAltoWrap && bqAltoWrap.style.display !== 'none') ? (document.getElementById('bq-alto')?.value||'') : '';
+            banquetaText = `<br><b style="color:var(--accent)">BANQUETA:</b> Mod: ${bMod} | L${bL} x A${bA_ancho}${bA?` x H${bA}`:''}`;
+        }
     }
 
     // 3. CAPTURAR DATOS DE ERP
@@ -847,10 +870,10 @@ async function confirmarPersonalizadoSofa() {
     const notaTela = document.getElementById('nota-tela')?.value || '';
     if(!skuTela) return Swal.fire('Dato Faltante', 'Debe seleccionar una Tela Principal', 'warning');
 
-    const espuma = document.getElementById('c-espuma').value;
-    const costura = document.getElementById('c-costura').value;
     const respaldo = document.getElementById('c-respaldo').value;
-    const brazo = document.getElementById('med-brazo').value || '0';
+    const brazoEstandarHidden = document.getElementById('brazo-medidas-estandar');
+    const brazoEsEstandar = brazoEstandarHidden && brazoEstandarHidden.value === 'MEDIDAS ESTÁNDAR';
+    const brazo = brazoEsEstandar ? 'MEDIDAS ESTÁNDAR' : (document.getElementById('med-brazo').value || '0');
 
     const cojinPendiente = document.getElementById('cojin-pendiente')?.checked || false;
 
@@ -897,7 +920,7 @@ async function confirmarPersonalizadoSofa() {
     const specs = `
         ${nombreLibre ? `<b style="color:var(--accent);">📋 ${nombreLibre}</b><br>` : ''}<b>MOD:</b> ${modeloBase} ${medidasText}<br>
         <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${provTela ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provTela}]</span>` : ''}${notas['tela']}<br>
-        <b>INTERIOR/ESTRUCTURA:</b> ${espuma} | ${costura} | ${respaldo} | Brazo: ${brazo}cm${notas['espuma']}<br>
+        <b>INTERIOR/ESTRUCTURA:</b> ${respaldo} | Brazo: ${brazoEsEstandar ? brazo : brazo + 'cm'}${notas['espuma']}<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>
         ${cojinPendiente
             ? `- ⏳ <b style="color:#7c3aed;">POR CONFIRMAR AL FINAL</b> (cliente decide después)<br>`
