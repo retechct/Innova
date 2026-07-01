@@ -8,8 +8,8 @@ function toggleCart() {
     }
 }
 
-function addToCart(name, price, img, details, componentes = {}) {
-    cart.push({ name, price, img, details, componentes });
+function addToCart(name, price, img, details, componentes = {}, categoria = null) {
+    cart.push({ name, price, img, details, componentes, categoria });
     document.getElementById('cart-count').innerText = cart.length;
     updateCartUI();
 }
@@ -398,6 +398,7 @@ async function guardarVenta() {
         catalogo_id:       c.catalogo_id        || null,
         stock_producto_id: c.stock_producto_id  || null,   // ← NUEVO: id en stock_productos
         stock_pieza_id:    c.stock_pieza_id     || null,   // ← NUEVO: id en stock_piezas
+        categoria:         c.categoria          || null,
     }))
  
 };

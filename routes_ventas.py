@@ -1088,9 +1088,24 @@ def historial_precios_venta(codigo):
 @requiere_rol('Admin', 'Jefe_Taller')
 def exportar_ventas_excel():
     try:
+        inicio_str = request.args.get('inicio')
+        fin_str = request.args.get('fin')
+
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        cursor.execute("""
+
+        params = []
+        where_clauses = []
+        if inicio_str:
+            where_clauses.append("v.fecha_emision >= %s")
+            params.append(inicio_str)
+        if fin_str:
+            where_clauses.append("v.fecha_emision <= %s")
+            params.append(fin_str)
+        
+        where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+        cursor.execute(f"""
             SELECT v.codigo_venta, v.nombre_cliente, v.tipo_comprobante, v.dni_cliente,
                    v.fecha_emision, v.fecha_entrega, v.monto_total,
                    COALESCE(itm.productos, '') AS productos, v.direccion_cliente,
@@ -1110,52 +1125,85 @@ def exportar_ventas_excel():
                 SELECT venta_id, STRING_AGG(producto, ' / ') AS productos
                 FROM items_venta GROUP BY venta_id
             ) itm ON itm.venta_id = v.id
-            ORDER BY v.id DESC;
-        """)
+            {where_sql}
+            ORDER BY v.fecha_emision DESC;
+        """, params)
         filas = cursor.fetchall()
 
         wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Ventas"
-        header_font = Font(bold=True, color="FFFFFF", size=10)
-        header_fill = PatternFill("solid", fgColor="0F172A")
-        center      = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        thin        = Side(style="thin", color="CBD5E0")
-        border      = Border(left=thin, right=thin, top=thin, bottom=thin)
-        headers = [
-            "Cód. Venta", "Cliente", "Comprobante", "RUC/DNI/CE",
-            "F. Emisión", "F. Entrega", "Monto Total",
-            "Producto(s)", "Dirección", "Métodos Pago (Múltiples)",
-            "Adelanto Cobrado", "Empresa Receptora",
-            "Fecha Registro", "Teléfono", "Moneda", "Vendedor"
-        ]
-        for col, h in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col, value=h)
-            cell.font = header_font; cell.fill = header_fill
-            cell.alignment = center; cell.border = border
-        anchos = [12, 25, 12, 14, 14, 14, 12, 40, 30, 30, 15, 30, 14, 14, 10, 20]
-        for col, ancho in enumerate(anchos, 1):
-            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = ancho
-        fill_par   = PatternFill("solid", fgColor="F8FAFC")
-        fill_impar = PatternFill("solid", fgColor="FFFFFF")
-        for row_num, f in enumerate(filas, 2):
-            fill = fill_par if row_num % 2 == 0 else fill_impar
-            valores = [
-                f[0], f[1], f[2], f[3],
-                f[4].strftime('%d/%m/%Y') if f[4] else '',
-                f[5].strftime('%d/%m/%Y') if f[5] else '',
-                float(f[6]) if f[6] else 0,
-                f[7], f[8], f[9],
-                float(f[10]) if f[10] else 0,
-                f[11],
-                f[12].strftime('%d/%m/%Y') if f[12] else '',
-                f[13], f[14], f[15]
+        wb.remove(wb.active)
+
+        def _formatear_hoja_excel(ws, datos_hoja):
+            header_font = Font(bold=True, color="FFFFFF", size=10)
+            header_fill = PatternFill("solid", fgColor="0F172A")
+            center      = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            thin        = Side(style="thin", color="CBD5E0")
+            border      = Border(left=thin, right=thin, top=thin, bottom=thin)
+            headers = [
+                "Cód. Venta", "Cliente", "Comprobante", "RUC/DNI/CE",
+                "F. Emisión", "F. Entrega", "Monto Total",
+                "Producto(s)", "Dirección", "Métodos Pago (Múltiples)",
+                "Adelanto Cobrado", "Empresa Receptora",
+                "Fecha Registro", "Teléfono", "Moneda", "Vendedor"
             ]
-            for col, val in enumerate(valores, 1):
-                cell = ws.cell(row=row_num, column=col, value=val)
-                cell.fill = fill; cell.border = border
-                cell.alignment = Alignment(vertical="center", wrap_text=True)
-        ws.freeze_panes = "A2"
+            for col, h in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=h)
+                cell.font = header_font; cell.fill = header_fill
+                cell.alignment = center; cell.border = border
+            anchos = [12, 25, 12, 14, 14, 14, 12, 40, 30, 30, 15, 30, 14, 14, 10, 20]
+            for col, ancho in enumerate(anchos, 1):
+                ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = ancho
+            fill_par   = PatternFill("solid", fgColor="F8FAFC")
+            fill_impar = PatternFill("solid", fgColor="FFFFFF")
+            for row_num, f in enumerate(datos_hoja, 2):
+                fill = fill_par if row_num % 2 == 0 else fill_impar
+                valores = [
+                    f[0], f[1], f[2], f[3],
+                    f[4].strftime('%d/%m/%Y') if f[4] else '',
+                    f[5].strftime('%d/%m/%Y') if f[5] else '',
+                    float(f[6]) if f[6] else 0,
+                    f[7], f[8], f[9],
+                    float(f[10]) if f[10] else 0,
+                    f[11],
+                    f[12].strftime('%d/%m/%Y') if f[12] else '',
+                    f[13], f[14], f[15]
+                ]
+                for col, val in enumerate(valores, 1):
+                    cell = ws.cell(row=row_num, column=col, value=val)
+                    cell.fill = fill; cell.border = border
+                    cell.alignment = Alignment(vertical="center", wrap_text=True)
+            ws.freeze_panes = "A2"
+
+        semanas = {}
+        if inicio_str and fin_str:
+            from datetime import timedelta
+            inicio_dt = datetime.strptime(inicio_str, '%Y-%m-%d')
+            fin_dt = datetime.strptime(fin_str, '%Y-%m-%d')
+            if (fin_dt - inicio_dt).days > 6:
+                for fila in filas:
+                    fecha_emision = fila[4]
+                    if fecha_emision:
+                        inicio_semana = fecha_emision - timedelta(days=fecha_emision.weekday())
+                        semana_key = inicio_semana.strftime('%Y-%m-%d')
+                        semanas.setdefault(semana_key, []).append(fila)
+        
+        if not semanas:
+            semanas['Ventas'] = filas
+
+        sorted_semanas = sorted(semanas.items(), key=lambda item: item[0] if item[0] != 'Ventas' else '0000-00-00')
+
+        for i, (semana_key, datos_semana) in enumerate(sorted_semanas):
+            if semana_key == 'Ventas':
+                titulo_hoja = 'Ventas'
+            else:
+                from datetime import timedelta
+                inicio_sem = datetime.strptime(semana_key, '%Y-%m-%d')
+                fin_sem = inicio_sem + timedelta(days=6)
+                titulo_hoja = f"Sem {inicio_sem.strftime('%d')}-{fin_sem.strftime('%d %b')}"
+            
+            ws = wb.create_sheet(title=titulo_hoja, index=i)
+            _formatear_hoja_excel(ws, datos_semana)
+
         buffer = io.BytesIO()
         wb.save(buffer); buffer.seek(0)
         fecha_hoy = datetime.now().strftime('%Y%m%d_%H%M')
