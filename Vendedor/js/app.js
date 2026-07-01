@@ -2035,6 +2035,14 @@ function renderContratos(lista) {
     const stats  = document.getElementById('contratos-stats');
     const isMobile = window.innerWidth < 640;
 
+    // Mover el contenedor de estadísticas a la parte superior de la vista
+    const tableWrapper = document.getElementById('contratos-table-wrapper');
+    if (stats && tableWrapper && tableWrapper.parentElement) {
+        // Insertar stats antes del contenedor de la tabla para que aparezca arriba.
+        // Esto asegura que las estadísticas estén visibles justo debajo de los filtros.
+        tableWrapper.parentElement.insertBefore(stats, tableWrapper);
+    }
+
     // Estadísticas rápidas
     const totalVentas  = lista.reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
     const totalSaldo   = lista.reduce((s, v) => s + (parseFloat(v.saldo)  || 0), 0);
