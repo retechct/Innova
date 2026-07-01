@@ -521,7 +521,7 @@ def obtener_tickets_taller():
                 FROM logistica_externa l
                 JOIN ventas v ON l.venta_id = v.id
                 LEFT JOIN usuarios u ON l.operario_id = u.id
-                WHERE (l.categoria_insumo = 'TELA' OR LOWER(l.insumo_nombre) LIKE '%%tela%%' OR LOWER(l.unidad) = 'mts' OR l.operario_id IS NOT NULL)
+                WHERE (l.categoria_insumo = 'TELA' OR LOWER(l.insumo_nombre) LIKE '%%tela%%' OR LOWER(l.unidad) = 'mts')
                   AND l.estado_distribucion IN ('En Recojo', 'Recogido', 'Distribuido')
             """
             log_params = []
