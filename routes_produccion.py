@@ -3715,6 +3715,143 @@ def usar_stock_estructura(stock_id):
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
 
+# ==========================================
+# GESTOR DE MODELOS DE SOFÁ (CUSTOM)
+# ==========================================
+
+def _ensure_sofa_modelos_table(cursor):
+    """Crea la tabla para modelos de sofá personalizados si no existe."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sofa_modelos_custom (
+            id          SERIAL PRIMARY KEY,
+            key         VARCHAR(100) UNIQUE NOT NULL,
+            label       VARCHAR(255) NOT NULL,
+            medidas     VARCHAR(50) NOT NULL,
+            foto_url    TEXT,
+            created_by  INTEGER,
+            created_at  TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+@produccion_bp.route('/api/sofa-modelos', methods=['GET'])
+@requiere_login
+def get_sofa_modelos():
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        _ensure_sofa_modelos_table(cursor)
+        cursor.execute("SELECT id, key, label, medidas, foto_url FROM sofa_modelos_custom ORDER BY label ASC")
+        modelos = [{'id': r[0], 'key': r[1], 'label': r[2], 'medidas': r[3], 'foto': r[4]} for r in cursor.fetchall()]
+        return jsonify(modelos), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close()
+            release_db_connection(conexion)
+
+@produccion_bp.route('/api/sofa-modelos', methods=['POST'])
+@requiere_login
+def add_sofa_modelo():
+    from auth_middleware import get_usuario_actual
+    import time
+    try:
+        label = request.form.get('label')
+        medidas = request.form.get('medidas')
+        if not label or not medidas:
+            return jsonify({'error': 'Nombre y tipo de medidas son obligatorios'}), 400
+        if 'foto' not in request.files or not request.files['foto'].filename:
+            return jsonify({'error': 'La foto es obligatoria'}), 400
+
+        foto_url = None
+        try:
+            res = cloudinary_upload(request.files['foto'], folder='modelos_sofa')
+            foto_url = res.get('secure_url')
+        except Exception as e:
+            return jsonify({'error': f'Error al subir la foto: {e}'}), 500
+        
+        if not foto_url:
+            return jsonify({'error': 'No se pudo obtener la URL de la foto subida'}), 500
+
+        key = 'custom_' + str(int(time.time()))
+        user_id = get_usuario_actual().get('id')
+
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        _ensure_sofa_modelos_table(cursor)
+        cursor.execute("""
+            INSERT INTO sofa_modelos_custom (key, label, medidas, foto_url, created_by)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id, key, label, medidas, foto_url
+        """, (key, label, medidas, foto_url, user_id))
+        nuevo = cursor.fetchone()
+        conexion.commit()
+
+        return jsonify({
+            'exito': True,
+            'modelo': {'id': nuevo[0], 'key': nuevo[1], 'label': nuevo[2], 'medidas': nuevo[3], 'foto': nuevo[4]}
+        }), 201
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close()
+            release_db_connection(conexion)
+
+@produccion_bp.route('/api/sofa-modelos/<int:modelo_id>', methods=['DELETE'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def delete_sofa_modelo(modelo_id):
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        cursor.execute("DELETE FROM sofa_modelos_custom WHERE id = %s RETURNING id", (modelo_id,))
+        deleted = cursor.fetchone()
+        conexion.commit()
+        if not deleted:
+            return jsonify({'error': 'Modelo no encontrado'}), 404
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close()
+            release_db_connection(conexion)
+
+@produccion_bp.route('/api/sofa-modelos/<int:modelo_id>/foto', methods=['POST'])
+@requiere_login
+def update_sofa_modelo_foto(modelo_id):
+    if 'foto' not in request.files or not request.files['foto'].filename:
+        return jsonify({'error': 'La foto es obligatoria'}), 400
+    
+    try:
+        foto_url = None
+        try:
+            res = cloudinary_upload(request.files['foto'], folder='modelos_sofa')
+            foto_url = res.get('secure_url')
+        except Exception as e:
+            return jsonify({'error': f'Error al subir la foto: {e}'}), 500
+        
+        if not foto_url:
+            return jsonify({'error': 'No se pudo obtener la URL de la foto subida'}), 500
+
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        cursor.execute("UPDATE sofa_modelos_custom SET foto_url = %s WHERE id = %s RETURNING foto_url", (foto_url, modelo_id))
+        updated = cursor.fetchone()
+        conexion.commit()
+        if not updated:
+            return jsonify({'error': 'Modelo no encontrado'}), 404
+        return jsonify({'exito': True, 'foto_url': updated[0]}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close()
+            release_db_connection(conexion)
+
 # =============================================================================
 # INNOVA MÖBILI — routes_produccion.py  PATCH
 # Reemplazar SOLO la función sugerir_estructura() (~línea 2039).
