@@ -2085,10 +2085,8 @@ tbody.innerHTML = lista.map((v, i) => `
             <div style="font-size:11px; color:#94a3b8;">${v.vendedor || 'Sin asignar'}</div>
         </td>
         
-        <td style="padding:11px 14px;">
-            <span style="font-size:11px; background:#f1f5f9; color:#334155; padding:3px 8px; border-radius:6px; font-weight:600;">
-                <i class="fa-solid fa-shop" style="font-size:10px; margin-right:4px; color:#64748b;"></i>${v.sede || 'Sede Central'}
-            </span>
+        <td style="padding:11px 14px; font-size:12px; color:#64748b;">
+            ${v.fecha_emision ? v.fecha_emision.split('-').reverse().join('/') : '—'}
         </td>
         
         <td style="padding:11px 14px; font-weight:800; color:#10b981;">S/ ${parseFloat(v.total||0).toFixed(2)}</td>
@@ -2137,8 +2135,8 @@ cards.innerHTML = lista.map(v => `
         
         <div style="font-size:12px; color:#64748b; margin-bottom:10px; display:flex; align-items:center; gap:5px;">
             <span>${v.vendedor || 'Vendedor'}</span> · 
-            <span style="background:#f1f5f9; color:#475569; padding:1px 5px; border-radius:4px; font-size:11px; font-weight:600;">${v.sede || 'Sede Central'}</span>
-            · Entrega: ${v.fecha_entrega || '—'}
+            <span>Emisión: <b>${v.fecha_emision ? v.fecha_emision.split('-').reverse().join('/') : '—'}</b></span>
+            · Entrega: <b>${v.fecha_entrega || '—'}</b>
         </div>
         
         <div style="display:flex; gap:10px; font-size:13px; margin-bottom:12px;">
