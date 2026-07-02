@@ -2048,8 +2048,39 @@ function _htmlVacio(tipo) {
     </div>`;
 }
 
-function _invExportarCSV() {
-    window.open(`${API_URL}/api/inventario/exportar`, '_blank');
+async function _invExportarCSV() {
+    // FIX: antes usaba window.open(), que no puede mandar el header
+    // Authorization: Bearer <token>. El endpoint /api/inventario/exportar
+    // requiere rol Admin/Jefe_Taller, así que sin el JWT el backend
+    // devolvía 401 y la descarga nunca ocurría (sin error visible).
+    // Ahora usamos apiFetch (manda el token) + blob + link temporal.
+    try {
+        const res = await apiFetch(`${API_URL}/api/inventario/exportar`);
+
+        if (!res.ok) {
+            let mensaje = 'No se pudo exportar el inventario';
+            try {
+                const err = await res.json();
+                mensaje = err.error || mensaje;
+            } catch (e) {}
+            return Swal.fire('Error', mensaje, 'error');
+        }
+
+        const blob = await res.blob();
+        const url  = window.URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        const fecha = new Date().toISOString().slice(0, 10);
+
+        a.href = url;
+        a.download = `inventario_${fecha}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+    } catch (e) {
+        Swal.fire('Error', 'Error de conexión al exportar el inventario', 'error');
+    }
 }
 
 /* ─── Bind eventos (filtros con debounce) ───────────────────── */
