@@ -489,11 +489,37 @@ function _carouselGoTo(cid, idx) {
 /* ─── Editar producto (datos generales: nombre, categoría, observaciones, precio) ─── */
 let _invEditOriginal = null;
 
-function _invAbrirEditarProducto(encodedObj) {
+async function _invAbrirEditarProducto(encodedObj) {
     if (!_puedeEditarInv()) { Swal.fire('Sin permisos', 'Solo Admin o Jefe de Taller.', 'warning'); return; }
-    const m = JSON.parse(decodeURIComponent(encodedObj));
-    _invEditOriginal = m;
+    let m = JSON.parse(decodeURIComponent(encodedObj));
 
+    // FIX: si hay un filtro de tienda activo en la lista (ej. "Tienda Grande"),
+    // /api/inventario/resumen ya viene filtrado por esa sede desde el backend
+    // — las demás tiendas ni siquiera se incluyen en la respuesta. La tarjeta
+    // 'm' que llega aquí puede venir de ese resumen filtrado, así que el panel
+    // "Stock disponible por tienda" mostraba 0 en las demás sedes aunque sí
+    // tuvieran stock real (simplemente nunca las vio). Por eso, antes de abrir
+    // el modal, siempre pedimos el resumen de este modelo SIN filtro de sede,
+    // para que el panel muestre el desglose real de todas las tiendas.
+    try {
+        const params = new URLSearchParams({ categoria: m.categoria, q: m.nombre_modelo });
+        const res  = await apiFetch(`${API_URL}/api/inventario/resumen?${params}`);
+        const data = await res.json();
+        const encontrado = (data.modelos || []).find(x =>
+            x.categoria === m.categoria &&
+            (x.nombre_modelo || '').toLowerCase() === (m.nombre_modelo || '').toLowerCase() &&
+            (x.observaciones || '') === (m.observaciones || '')
+        );
+        if (encontrado) m = encontrado;
+    } catch (e) {
+        // Si falla el refresco, seguimos con los datos que ya teníamos (mejor que nada)
+    }
+
+    _invEditOriginal = m;
+    _invRenderModalEditarProducto(m);
+}
+
+function _invRenderModalEditarProducto(m) {
     const cats = CATEGORIAS_PRODUCTO.map(c =>
         `<option value="${c}" ${c === m.categoria ? 'selected' : ''}>${c}</option>`
     ).join('');
@@ -617,6 +643,30 @@ async function _invAjustarStockSede(sedeId, nombreModelo, categoria, catalogoId)
         }
         Swal.fire({ icon: 'success', title: 'Stock actualizado', text: data.mensaje, timer: 1600, showConfirmButton: false });
         _cargarDatosTab();
+
+        // Refrescar también el panel del modal (que sigue abierto) con datos
+        // frescos y SIN filtro de sede, para que se vea el stock actualizado
+        // de esta tienda junto con el de las demás, sin tener que cerrar y
+        // reabrir "Editar".
+        if (_invEditOriginal) {
+            try {
+                const params = new URLSearchParams({
+                    categoria: _invEditOriginal.categoria,
+                    q:         _invEditOriginal.nombre_modelo
+                });
+                const resFresh  = await apiFetch(`${API_URL}/api/inventario/resumen?${params}`);
+                const dataFresh = await resFresh.json();
+                const encontrado = (dataFresh.modelos || []).find(x =>
+                    x.categoria === _invEditOriginal.categoria &&
+                    (x.nombre_modelo || '').toLowerCase() === (_invEditOriginal.nombre_modelo || '').toLowerCase() &&
+                    (x.observaciones || '') === (_invEditOriginal.observaciones || '')
+                );
+                if (encontrado) {
+                    _invEditOriginal = encontrado;
+                    _invRenderModalEditarProducto(encontrado);
+                }
+            } catch (e) { /* si falla el refresco, el modal se queda como estaba */ }
+        }
     } catch (e) {
         Swal.fire('Error de conexión', 'No se pudo conectar con el servidor.', 'error');
     }
