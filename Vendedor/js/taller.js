@@ -841,18 +841,10 @@ async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, c
             profundidad: profundidad || 0,
             alto:        alto        || 0,
         });
-        if (modeloBase) params.append('modelo_base', modeloBase);
+        if (modeloBase) params.append('modelo_base', modeloBase.trim());
  
         const res          = await apiFetch(`${API_URL}/api/stock-estructuras/sugerir?${params}`);
-        let   sugerencias  = await res.json();
- 
-        // — Fallback: si no hay resultados, buscar solo estructuras estándar —
-        let soloEstandar = false;
-        if (!Array.isArray(sugerencias) || !sugerencias.length) {
-            const res2       = await apiFetch(`${API_URL}/api/stock-estructuras/sugerir?solo_estandar=true`);
-            sugerencias      = await res2.json();
-            soloEstandar     = true;
-        }
+        const sugerencias  = await res.json();
  
         if (!Array.isArray(sugerencias) || !sugerencias.length) return;
  
@@ -877,13 +869,7 @@ async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, c
  
         let opcionesHTML = `<option value="">— Seleccionar estructura del stock —</option>`;
  
-        if (soloEstandar) {
-            // Modo fallback: solo estándar, mostrar con título especial
-            opcionesHTML += `<optgroup label="⭐ Estructuras estándar disponibles">`;
-            opcionesHTML += sugerencias.map(renderOption).join('');
-            opcionesHTML += `</optgroup>`;
-        } else {
-            if (porModelo.length > 0) {
+        if (porModelo.length > 0) {
                 opcionesHTML += `<optgroup label="🎯 Mismo modelo (${modeloBase})">`;
                 opcionesHTML += porModelo.map(renderOption).join('');
                 opcionesHTML += `</optgroup>`;
@@ -902,7 +888,6 @@ async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, c
             if (!porModelo.length && !estandares.length && !porMedidas.length) {
                 opcionesHTML += sugerencias.map(renderOption).join('');
             }
-        }
  
         cont.innerHTML = `
           <div style="background:#f5f3ff;border:1.5px solid #7c3aed;border-radius:10px;

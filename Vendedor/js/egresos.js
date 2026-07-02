@@ -322,10 +322,8 @@ function egAbrirPagarCarpintero() {
                 try {
                     const fd = new FormData();
                     fd.append('archivo', voucherFile);
-                    const token = sessionStorage.getItem('token') || localStorage.getItem('token') || '';
-                    const upRes = await fetch(`${API_URL}/api/upload-voucher`, {
+                    const upRes = await apiFetch(`${API_URL}/api/upload-voucher`, {
                         method: 'POST',
-                        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                         body: fd
                     });
                     const upData = await upRes.json();

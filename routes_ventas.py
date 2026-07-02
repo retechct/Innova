@@ -52,6 +52,7 @@ def _asegurar_columnas_inventario():
         cur  = conn.cursor()
         cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS stock_producto_id INTEGER;")
         cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS stock_pieza_id INTEGER;")
+        cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS es_stock BOOLEAN DEFAULT FALSE;")
         _schema_listo = True
     except Exception as e:
         print(f"⚠️ _asegurar_columnas_inventario: {e}")
@@ -328,9 +329,9 @@ def guardar_venta():
                 foto_url_raw = foto_url_raw[foto_url_raw.index('/uploads/http://') + len('/uploads/'):]
 
             cursor.execute("""
-                INSERT INTO items_venta (venta_id, producto, color_tela, foto_url, precio_unitario)
-                VALUES (%s, %s, %s, %s, %s) RETURNING id;
-            """, (venta_id, m.get('tipo'), m.get('tela'), foto_url_raw, m.get('precio')))
+                INSERT INTO items_venta (venta_id, producto, color_tela, foto_url, precio_unitario, es_stock)
+                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;
+            """, (venta_id, m.get('tipo'), m.get('tela'), foto_url_raw, m.get('precio'), m.get('es_stock', False)))
             item_id = cursor.fetchone()[0]
             print(f"[PASO 4.{idx_m+1}] item_id={item_id}")
 
@@ -777,9 +778,10 @@ def anular_venta_completa(venta_id):
 
         # 4. Devolver stock genérico (contador en catalogo_productos)
         cursor.execute("""
-            SELECT cp.id
+            SELECT cp.id, iv.es_stock
             FROM catalogo_productos cp
             JOIN items_venta iv ON cp.nombre_modelo = iv.producto
+            -- Solo devolver al stock si originalmente se descontó de él
             WHERE iv.venta_id = %s
         """, (venta_id,))
         for p in cursor.fetchall():

@@ -3645,7 +3645,7 @@ def registrar_stock_estructura():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        if tipo == 'estructura' and cantidad > 1:
+        if cantidad > 1:
             new_ids = []
             for _ in range(cantidad):
                 cursor.execute("""
