@@ -1482,10 +1482,20 @@ def editar_producto_inventario():
         "nueva_categoria":      "Sofa",
         "nuevas_observaciones": "Edición 2026",
         "nuevo_precio":         1500.00,        (opcional, solo si hay catalogo_id)
+        "nueva_foto_url":       "https://res.cloudinary.com/...",  (opcional — ver más abajo)
 
         "usuario_id":    7,
         "usuario_nombre": "Carlos"
     }
+
+    FIX (julio 2026): antes no existía forma de subir/cambiar la foto de un
+    modelo ya registrado en inventario — si se creó sin foto (p.ej. desde
+    "Registrar..." sin adjuntar imagen), quedaba "Sin foto" para siempre,
+    sin importar en cuántas tiendas se le sumara stock después. Ahora, si
+    el body trae 'nueva_foto_url' (subida antes con /api/upload-foto desde
+    el frontend), se aplica a TODAS las unidades del modelo en TODAS las
+    sedes, y también a catalogo_productos si el modelo está enlazado a la
+    carta (catalogo_id).
     """
     data = request.json or {}
 
@@ -1499,25 +1509,41 @@ def editar_producto_inventario():
     if not nuevo_nombre:
         return jsonify({'error': 'El nombre del modelo no puede estar vacío'}), 400
 
-    obs_actuales = data.get('observaciones') or ''
-    nuevas_obs   = data.get('nuevas_observaciones', obs_actuales) or ''
+    obs_actuales  = data.get('observaciones') or ''
+    nuevas_obs    = data.get('nuevas_observaciones', obs_actuales) or ''
+    nueva_foto_url = (data.get('nueva_foto_url') or '').strip()
 
     conn = None
     try:
         conn = _conn(); cur = conn.cursor()
 
-        cur.execute("""
-            UPDATE stock_productos
-               SET nombre_modelo = %s,
-                   categoria      = %s,
-                   observaciones  = %s
-             WHERE LOWER(nombre_modelo) = LOWER(%s)
-               AND categoria = %s
-               AND COALESCE(observaciones, '') = %s;
-        """, (
-            nuevo_nombre, nueva_categoria, nuevas_obs,
-            data['nombre_modelo'], data['categoria'], obs_actuales
-        ))
+        if nueva_foto_url:
+            cur.execute("""
+                UPDATE stock_productos
+                   SET nombre_modelo = %s,
+                       categoria      = %s,
+                       observaciones  = %s,
+                       foto_url       = %s
+                 WHERE LOWER(nombre_modelo) = LOWER(%s)
+                   AND categoria = %s
+                   AND COALESCE(observaciones, '') = %s;
+            """, (
+                nuevo_nombre, nueva_categoria, nuevas_obs, nueva_foto_url,
+                data['nombre_modelo'], data['categoria'], obs_actuales
+            ))
+        else:
+            cur.execute("""
+                UPDATE stock_productos
+                   SET nombre_modelo = %s,
+                       categoria      = %s,
+                       observaciones  = %s
+                 WHERE LOWER(nombre_modelo) = LOWER(%s)
+                   AND categoria = %s
+                   AND COALESCE(observaciones, '') = %s;
+            """, (
+                nuevo_nombre, nueva_categoria, nuevas_obs,
+                data['nombre_modelo'], data['categoria'], obs_actuales
+            ))
         unidades_afectadas = cur.rowcount
 
         if data.get('catalogo_id'):
@@ -1526,6 +1552,9 @@ def editar_producto_inventario():
             if data.get('nuevo_precio') not in (None, ''):
                 campos.append("precio_base = %s")
                 valores.append(float(data['nuevo_precio']))
+            if nueva_foto_url:
+                campos.append("foto_url = %s")
+                valores.append(nueva_foto_url)
             valores.append(data['catalogo_id'])
             cur.execute(f"""
                 UPDATE catalogo_productos

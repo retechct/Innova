@@ -500,6 +500,10 @@ function _invAbrirEditarProducto(encodedObj) {
 
     const cuerpo = document.getElementById('modal-inv-editar-cuerpo');
 
+    // Foto actual del modelo (si tiene) — para mostrar preview y permitir cambiarla
+    const fotoActual = (m.fotos && m.fotos.length) ? m.fotos[0] : (m.foto_url || '');
+    _invEditNuevaFotoFile = null; // se llena en _invPreviewNuevaFotoEdicion si el usuario elige una
+
     // Panel de stock por tienda: una fila por sede con su cantidad disponible actual
     const filasStock = (_invSedesList || []).map(s => {
         const stSede = (m.sede_stock && m.sede_stock[s.nombre]) ? m.sede_stock[s.nombre].disponibles : 0;
@@ -518,6 +522,23 @@ function _invAbrirEditarProducto(encodedObj) {
     }).join('');
 
     cuerpo.innerHTML = `
+        <div class="form-group">
+            <label>Foto del modelo</label>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+                <img id="ef-foto-preview" src="${fotoActual || 'imagenes/sin_foto.jpg'}"
+                     onerror="this.src='imagenes/sin_foto.jpg'"
+                     style="width:70px;height:70px;object-fit:cover;border-radius:8px;
+                            border:1px solid #e2e8f0;background:#f8fafc;" />
+                <div style="flex:1;">
+                    <input type="file" id="ef-foto-input" accept="image/*"
+                           onchange="_invPreviewNuevaFotoEdicion(event)"
+                           style="font-size:12px;" />
+                    <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                        ${fotoActual ? 'Sube una imagen para reemplazar la foto actual.' : 'Este modelo no tiene foto — sube una para que deje de aparecer "Sin foto".'}
+                    </p>
+                </div>
+            </div>
+        </div>
         <div class="form-group"><label>Nombre Modelo *</label>
             <input id="ef-nombre" type="text" class="form-input" value="${(m.nombre_modelo||'').replace(/"/g,'&quot;')}" /></div>
         <div class="form-group"><label>Categoría *</label>
@@ -548,6 +569,20 @@ function _invAbrirEditarProducto(encodedObj) {
         <button onclick="document.getElementById('modal-inv-editar').style.display='none'" class="btn-action btn-ghost" style="margin-top:10px;">Cerrar</button>
     `;
     document.getElementById('modal-inv-editar').style.display = 'flex';
+}
+
+/* ─── Preview de la foto elegida al editar (no se sube todavía) ─── */
+let _invEditNuevaFotoFile = null;
+function _invPreviewNuevaFotoEdicion(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    _invEditNuevaFotoFile = file;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = document.getElementById('ef-foto-preview');
+        if (img) img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
 }
 
 /* ─── Ajustar (aumentar/reducir) el stock disponible de un modelo en una sede ─── */
@@ -603,6 +638,21 @@ async function _invGuardarEdicionProducto() {
     }
 
     try {
+        // Si el usuario eligió una foto nueva, subirla primero a Cloudinary
+        let nuevaFotoUrl = '';
+        if (_invEditNuevaFotoFile) {
+            Swal.fire({ title: 'Subiendo foto...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const fd = new FormData();
+            fd.append('foto', _invEditNuevaFotoFile);
+            const resUpload = await apiFetch(`${API_URL}/api/upload-foto`, { method: 'POST', body: fd });
+            const dataUpload = await resUpload.json();
+            if (!resUpload.ok || dataUpload.error) {
+                Swal.fire('Error', dataUpload.error || 'No se pudo subir la foto.', 'error');
+                return;
+            }
+            nuevaFotoUrl = dataUpload.url;
+        }
+
         const res = await apiFetch(`${API_URL}/api/inventario/producto/editar`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -615,6 +665,7 @@ async function _invGuardarEdicionProducto() {
                 nueva_categoria:      nuevaCategoria,
                 nuevas_observaciones: nuevasObs,
                 nuevo_precio:         nuevoPrecio !== '' ? parseFloat(nuevoPrecio) : null,
+                nueva_foto_url:       nuevaFotoUrl || null,
                 usuario_id:     window.usuarioActivo?.id,
                 usuario_nombre: window.usuarioActivo?.nombre,
             })
@@ -624,6 +675,7 @@ async function _invGuardarEdicionProducto() {
             Swal.fire('Error', data.error || 'No se pudo actualizar el producto.', 'error');
             return;
         }
+        _invEditNuevaFotoFile = null;
         document.getElementById('modal-inv-editar').style.display = 'none';
         Swal.fire('Actualizado', data.mensaje || 'Producto actualizado correctamente.', 'success');
         _cargarDatosTab();
