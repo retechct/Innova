@@ -3215,7 +3215,7 @@ async function cargarOrdenesProduccion(contenedor) {
         const ordenes = await res.json();
 
         // Separar activas (todo excepto Entregado/Cancelado) de entregadas
-        const activas     = (ordenes || []).filter(o => o.estado !== 'Entregado' && o.estado !== 'Cancelado');
+        const activas     = (ordenes || []).filter(o => o.estado !== 'Entregado' && o.estado !== 'Cancelado' && o.progreso < 100);
         const entregadas  = (ordenes || []).filter(o => o.estado === 'Entregado');
 
         if (!Array.isArray(ordenes) || activas.length === 0) {
