@@ -1308,6 +1308,7 @@ def ajustar_cantidad_stock():
         "usuario_nombre": "Carlos"
     }
     """
+    _asegurar_columna_fotos_adicionales()
     data = request.json or {}
     required = ['nombre_modelo', 'categoria', 'sede_id', 'cantidad_nueva', 'usuario_id']
     missing  = [f for f in required if data.get(f) is None]
@@ -1338,12 +1339,52 @@ def ajustar_cantidad_stock():
         if diferencia > 0:
             # Agregar unidades nuevas
             prefijo = PREFIJOS.get(data['categoria'], 'PRD')
-            # Obtener foto del catálogo si hay catalogo_id
+
+            # ── Resolver la foto para las unidades nuevas ────────────────────
+            # FIX: antes solo se buscaba la foto en catalogo_productos usando
+            # catalogo_id. Pero la mayoría de productos registrados directo
+            # en inventario (botón "Registrar...") NO tienen catalogo_id, y
+            # aunque lo tuvieran, esa ficha del catálogo puede no tener foto.
+            # Resultado: las unidades nuevas creadas en otra tienda quedaban
+            # con foto_url = NULL y aparecían "sin imagen".
+            #
+            # Ahora se busca en 3 pasos, en orden:
+            #   1) Foto del catálogo, si el modelo viene de la carta.
+            #   2) Foto de CUALQUIER unidad existente de este mismo modelo
+            #      (en cualquier sede) que sí tenga foto — la fuente más
+            #      confiable, porque es la imagen real que ya se venía usando.
+            #   3) Coincidencia por nombre en catalogo_productos (igual que
+            #      hace /api/inventario/resumen), por si el modelo tiene
+            #      ficha en la carta pero no quedó enlazado por catalogo_id.
             foto_url = None
+            fotos_adicionales = None
+
             if data.get('catalogo_id'):
                 cur.execute("SELECT foto_url FROM catalogo_productos WHERE id = %s", (data['catalogo_id'],))
                 row = cur.fetchone()
+                if row and row[0]:
+                    foto_url = row[0]
+
+            if not foto_url:
+                cur.execute("""
+                    SELECT foto_url, fotos_adicionales FROM stock_productos
+                    WHERE LOWER(nombre_modelo) = LOWER(%s)
+                      AND categoria = %s
+                      AND foto_url IS NOT NULL AND foto_url != ''
+                    ORDER BY id ASC LIMIT 1;
+                """, (data['nombre_modelo'], data['categoria']))
+                row = cur.fetchone()
                 if row:
+                    foto_url = row[0]
+                    fotos_adicionales = row[1]
+
+            if not foto_url:
+                cur.execute("""
+                    SELECT foto_url FROM catalogo_productos
+                    WHERE LOWER(nombre_modelo) = LOWER(%s) LIMIT 1;
+                """, (data['nombre_modelo'],))
+                row = cur.fetchone()
+                if row and row[0]:
                     foto_url = row[0]
 
             for _ in range(diferencia):
@@ -1351,8 +1392,8 @@ def ajustar_cantidad_stock():
                 cur.execute("""
                     INSERT INTO stock_productos
                         (catalogo_id, nombre_modelo, categoria, codigo_barra,
-                         observaciones, foto_url, sede_id, estado, creado_por)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'Disponible', %s)
+                         observaciones, foto_url, fotos_adicionales, sede_id, estado, creado_por)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Disponible', %s)
                     RETURNING id;
                 """, (
                     data.get('catalogo_id'),
@@ -1361,6 +1402,7 @@ def ajustar_cantidad_stock():
                     barcode,
                     data.get('observaciones'),
                     foto_url,
+                    fotos_adicionales,
                     data['sede_id'],
                     data['usuario_id'],
                 ))
