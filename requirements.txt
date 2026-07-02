@@ -6,8 +6,6 @@ cloudinary
 python-dotenv
 gunicorn
 openpyxl
-flask-sqlalchemy
-flask-migrate
 flask-jwt-extended
 werkzeug
 pytz

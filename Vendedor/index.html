@@ -2771,10 +2771,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     <script src="js/taller.js"></script>
     <script src="js/inventario.js"></script>
     <script src="js/seguimiento.js"></script>
-    <script src="js/busqueda_filtros.js"></script>
     <script src="js/gestores_modelos.js"></script>
 
     <!-- ── APP (siempre al final) ── -->
     <script src="js/egresos.js"></script>
     <script src="js/app.js"></script>
+
+    <!-- busqueda_filtros.js DEBE cargar después de app.js y taller.js: redefine
+         loadMisPedidos(), cargarVistaEntregados() y cargarOrdenesProduccion()
+         a propósito para añadirles buscador/filtros. Si se mueve antes de
+         app.js, app.js vuelve a pisar esas funciones con sus versiones sin
+         filtros (bug detectado en auditoría de julio 2026). -->
+    <script src="js/busqueda_filtros.js"></script>
 </body>

@@ -3,21 +3,29 @@ app.py — Punto de entrada principal.
 
 Responsabilidades de este archivo:
   - Crear la app Flask y configurarla
-  - Inicializar extensiones (db, migrate, jwt, limiter, cloudinary)
+  - Inicializar extensiones (jwt, limiter, cloudinary)
   - Registrar todos los Blueprints
   - Arrancar el servidor
 
 La lógica de negocio vive en los módulos de rutas:
-  database.py          → pool de conexiones y utilidades compartidas
+  database.py          → pool de conexiones (psycopg2) y utilidades compartidas
   routes_catalogo.py   → catálogo, insumos, upload vouchers          (módulo 1)
   routes_ventas.py     → ventas, seguimiento, exportación, precios   (módulos 2-3-14)
   routes_materiales.py → maestro de materiales y creaciones          (módulos 4-5)
   routes_usuarios.py   → usuarios, login, proveedores                (módulos 6-7)
   routes_produccion.py → taller, inventario, logística, BOM,
                          sugerencias, despacho                       (módulos 8-13)
-  routes_kardex.py     → kardex (blueprint externo existente)
   routes_taller.py     → taller extra (blueprint externo existente)
   routes_inventario.py → inventario extra (blueprint externo existente)
+
+NOTA (limpieza julio 2026): se eliminaron routes_kardex.py y models.py.
+Todo el sistema usa psycopg2 crudo vía database.py (pool de conexiones a
+Neon); models.py con SQLAlchemy solo lo usaba ese blueprint huérfano de
+kardex, que exponía /api/kardex/sedes y /api/kardex/catalogo pero nunca
+era llamado por el frontend (que siempre usó /api/sedes y /api/catalogo,
+ya definidos aquí y en routes_catalogo.py). Se quitó también Flask-Migrate
+y Flask-SQLAlchemy del arranque por la misma razón: no tenían nada más
+que inicializar.
 """
 
 import os
@@ -31,10 +39,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
-from flask_migrate import Migrate
 from dotenv import load_dotenv
-
-from models import db
 
 # ─── Carga de variables de entorno ───────────────────────────────────────────
 load_dotenv()
@@ -69,15 +74,11 @@ CORS(app, origins=[
     os.getenv('FRONTEND_URL', 'https://innova-4cnn.onrender.com'),
 ])
 
-app.config['SQLALCHEMY_DATABASE_URI']        = os.getenv('DATABASE_URL')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY']                 = _JWT_SECRET_KEY
 app.config['JWT_ACCESS_TOKEN_EXPIRES']       = timedelta(hours=8)   # jornada laboral completa
 app.config['JWT_REFRESH_TOKEN_EXPIRES']      = timedelta(days=30)   # renovar sin re-login
 
-db.init_app(app)
-migrate = Migrate(app, db)
-jwt     = JWTManager(app)
+jwt = JWTManager(app)
 
 # ─── Rate limiter ─────────────────────────────────────────────────────────────
 limiter = Limiter(
@@ -110,11 +111,11 @@ app.register_blueprint(clientes_bp)           # ← sin aprobación
 limiter.limit("10 per minute")(app.view_functions['usuarios.verificar_pin'])
 
 # ─── Blueprints externos (ya existían antes de la refactorización) ────────────
-from routes_kardex    import kardex_bp
+# NOTA: routes_kardex.py fue eliminado (julio 2026) — era un blueprint
+# huérfano (SQLAlchemy) nunca llamado por el frontend; ver docstring arriba.
 from routes_taller    import taller_bp, init_taller_pool
 from routes_inventario import inventario_bp
 
-app.register_blueprint(kardex_bp, url_prefix='/api/kardex')
 app.register_blueprint(taller_bp)
 app.register_blueprint(inventario_bp)
 init_taller_pool()

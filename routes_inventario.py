@@ -1055,72 +1055,17 @@ def eliminar_item_inventario(tipo, reg_id):
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ENDPOINT FALTANTE: etiquetas-disponibles
-# Usado por el botón SKU de cada tarjeta en inventario.js → _ejecutarImpresionFisica
-# Recibe: { items: [{nombre_modelo, categoria, ...}], por_cantidad: bool }
-# Devuelve: { etiquetas: [{codigo, nombre, sede}] }
+# NOTA (limpieza julio 2026): este archivo tenía una segunda definición de
+# POST /api/inventario/etiquetas-disponibles que colisionaba con la de
+# routes_produccion.py (misma ruta y método registradas en dos blueprints).
+# Como produccion_bp se registra antes que inventario_bp en app.py, la versión
+# de aquí NUNCA se ejecutaba (Flask/Werkzeug usa la primera regla que matchea).
+# Se eliminó por ser además menos precisa: matcheaba solo por nombre_modelo,
+# mientras que la de routes_produccion.py matchea por catalogo_id (productos
+# enteros) o por sku_maestro+forma+medidas exactas (piezas a medida), que es
+# lo que realmente envía inventario.js. La versión activa vive en:
+#   routes_produccion.py → obtener_etiquetas_disponibles()
 # ─────────────────────────────────────────────────────────────────────────────
-@inventario_bp.route('/api/inventario/etiquetas-disponibles', methods=['POST'])
-@requiere_login
-def etiquetas_disponibles():
-    data  = request.json or {}
-    items = data.get('items', [])
-    por_cantidad = data.get('por_cantidad', False)  # True = todas las disp., False = 1 por modelo
-
-    if not items:
-        return jsonify({'etiquetas': []}), 200
-
-    conn = None
-    try:
-        conn = _conn(); cur = conn.cursor()
-        etiquetas = []
-
-        for item in items:
-            nombre   = item.get('nombre_modelo', '')
-            categoria = item.get('categoria', '')
-
-            # Determinar si es pieza o producto por la presencia de sku_maestro
-            es_pieza = bool(item.get('sku_maestro'))
-            tabla    = 'stock_piezas' if es_pieza else 'stock_productos'
-            col_sede = 'sede_id'
-
-            if es_pieza:
-                cur.execute(f"""
-                    SELECT sp.codigo_barra, sp.nombre_modelo, se.nombre AS sede, NULL as observaciones
-                    FROM {tabla} sp
-                    LEFT JOIN sedes se ON sp.sede_id = se.id
-                    WHERE LOWER(sp.nombre_modelo) = LOWER(%s)
-                      AND sp.estado = 'Disponible'
-                    ORDER BY sp.fecha_ingreso DESC
-                    {'LIMIT 1' if not por_cantidad else ''};
-                """, (nombre,))
-            else:
-                cur.execute(f"""
-                    SELECT sp.codigo_barra, sp.nombre_modelo, se.nombre AS sede, sp.observaciones
-                    FROM {tabla} sp
-                    LEFT JOIN sedes se ON sp.sede_id = se.id
-                    WHERE LOWER(sp.nombre_modelo) = LOWER(%s)
-                      AND sp.estado = 'Disponible'
-                    ORDER BY sp.fecha_ingreso DESC
-                    {'LIMIT 1' if not por_cantidad else ''};
-                """, (nombre,))
-
-            rows = cur.fetchall()
-            for r in rows:
-                etiquetas.append({
-                    'codigo': r[0],
-                    'nombre': r[1],
-                    'sede':   r[2] or '',
-                    'observaciones': r[3] or ''
-                })
-
-        return jsonify({'etiquetas': etiquetas}), 200
-
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-    finally:
-        _rel(conn)
 
 @inventario_bp.route('/api/inventario/unidades-modelo', methods=['GET'])
 @requiere_login
