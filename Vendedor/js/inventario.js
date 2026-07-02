@@ -70,7 +70,7 @@ function _htmlEsqueleto() {
                     style="background:white;color:var(--text-muted);border:1px solid #e2e8f0;
                            padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;
                            font-size:12px;display:flex;align-items:center;gap:6px;">
-                <i class="fas fa-download"></i> CSV
+                <i class="fas fa-file-excel"></i> Excel
             </button>
         </div>
     </div>
@@ -2054,6 +2054,8 @@ async function _invExportarCSV() {
     // requiere rol Admin/Jefe_Taller, así que sin el JWT el backend
     // devolvía 401 y la descarga nunca ocurría (sin error visible).
     // Ahora usamos apiFetch (manda el token) + blob + link temporal.
+    // El backend ahora genera un .xlsx (Excel real) con productos y
+    // piezas juntos en una sola tabla, en vez de CSV.
     try {
         const res = await apiFetch(`${API_URL}/api/inventario/exportar`);
 
@@ -2072,7 +2074,7 @@ async function _invExportarCSV() {
         const fecha = new Date().toISOString().slice(0, 10);
 
         a.href = url;
-        a.download = `inventario_${fecha}.csv`;
+        a.download = `inventario_${fecha}.xlsx`;
         document.body.appendChild(a);
         a.click();
         a.remove();

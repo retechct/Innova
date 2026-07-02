@@ -11,7 +11,7 @@ Rutas:
   PUT  /api/inventario/<tipo>/<id>/estado → cambiar estado (traslado, venta, baja, etc.)
   GET  /api/inventario/historial/<tipo>/<id> → historial de una unidad
   GET  /api/inventario/historial/sede/<sede_id> → movimientos de una sede
-  GET  /api/inventario/exportar          → CSV completo
+  GET  /api/inventario/exportar          → Excel (.xlsx) completo, productos y piezas juntos
 """
 
 import os
@@ -19,7 +19,9 @@ import csv
 import io
 from datetime import datetime
 import pytz
-from flask import Blueprint, request, jsonify, Response
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from flask import Blueprint, request, jsonify, Response, send_file
 from database import get_db_connection, release_db_connection
 from auth_middleware import requiere_login, requiere_rol
 
@@ -899,7 +901,7 @@ def historial_sede(sede_id):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9. EXPORTAR CSV COMPLETO
+# 9. EXPORTAR EXCEL COMPLETO (productos + piezas, todo en una sola tabla)
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/exportar', methods=['GET'])
 @requiere_rol('Admin', 'Jefe_Taller')
@@ -908,42 +910,89 @@ def exportar_inventario():
     try:
         conn = _conn(); cur = conn.cursor()
 
-        # Productos enteros
+        # Productos enteros + Piezas a medida, unidos en un solo conjunto
+        # (mismo orden de columnas para ambos, por eso los NULL de relleno)
         cur.execute("""
             SELECT 'Producto', sp.categoria, sp.nombre_modelo, sp.codigo_barra,
                    sp.color_tela, sp.acabado, sp.estado, se.nombre,
                    sp.costo_ingreso, sp.precio_venta,
-                   TO_CHAR(sp.fecha_ingreso,'DD/MM/YYYY'), sp.observaciones,
+                   sp.fecha_ingreso, sp.observaciones,
                    NULL, NULL, NULL, NULL, NULL
             FROM stock_productos sp JOIN sedes se ON sp.sede_id = se.id
             UNION ALL
             SELECT 'Pieza', sp.categoria, sp.nombre_modelo, sp.codigo_barra,
                    sp.material, sp.color_acabado, sp.estado, se.nombre,
                    sp.costo_ingreso, NULL,
-                   TO_CHAR(sp.fecha_ingreso,'DD/MM/YYYY'), NULL,
-                   sp.forma, sp.largo_cm::text, sp.ancho_cm::text, sp.alto_cm::text,
+                   sp.fecha_ingreso, NULL,
+                   sp.forma, sp.largo_cm, sp.ancho_cm, sp.alto_cm,
                    sp.proveedor
             FROM stock_piezas sp JOIN sedes se ON sp.sede_id = se.id
             ORDER BY 1, 2, 3;
         """)
-        rows = cur.fetchall()
+        filas = cur.fetchall()
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow([
+        # ── Construir el Excel ──────────────────────────────────────────────
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Inventario'
+
+        headers = [
             'Tipo', 'Categoría', 'Modelo', 'Código Barras',
             'Color/Material', 'Acabado/Color', 'Estado', 'Sede',
             'Costo Ingreso', 'Precio Venta', 'Fecha Ingreso', 'Observaciones',
             'Forma', 'Largo/Diám (cm)', 'Ancho (cm)', 'Alto (cm)', 'Proveedor'
-        ])
-        writer.writerows(rows)
-        output.seek(0)
+        ]
+
+        header_font = Font(bold=True, color="FFFFFF", size=10)
+        header_fill = PatternFill("solid", fgColor="0F172A")
+        center      = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin        = Side(style="thin", color="CBD5E0")
+        border      = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.font = header_font; cell.fill = header_fill
+            cell.alignment = center; cell.border = border
+
+        anchos = [10, 14, 22, 16, 16, 16, 14, 16, 13, 13, 14, 28, 12, 14, 12, 12, 20]
+        for col, ancho in enumerate(anchos, 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = ancho
+
+        fill_par   = PatternFill("solid", fgColor="F8FAFC")
+        fill_impar = PatternFill("solid", fgColor="FFFFFF")
+
+        for row_num, f in enumerate(filas, 2):
+            fill = fill_par if row_num % 2 == 0 else fill_impar
+            valores = [
+                f[0], f[1], f[2], f[3],
+                f[4], f[5], f[6], f[7],
+                float(f[8]) if f[8] is not None else None,
+                float(f[9]) if f[9] is not None else None,
+                f[10].strftime('%d/%m/%Y') if f[10] else '',
+                f[11],
+                f[12],
+                float(f[13]) if f[13] is not None else None,
+                float(f[14]) if f[14] is not None else None,
+                float(f[15]) if f[15] is not None else None,
+                f[16],
+            ]
+            for col, val in enumerate(valores, 1):
+                cell = ws.cell(row=row_num, column=col, value=val)
+                cell.fill = fill; cell.border = border
+                cell.alignment = Alignment(vertical="center", wrap_text=True)
+
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = f"A1:Q{max(len(filas) + 1, 1)}"
+
+        buffer = io.BytesIO()
+        wb.save(buffer); buffer.seek(0)
 
         fecha = datetime.now(tz_peru).strftime('%Y%m%d_%H%M')
-        return Response(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename=inventario_{fecha}.csv'}
+        return send_file(
+            buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'inventario_{fecha}.xlsx'
         )
     except Exception as e:
         return jsonify({'error': str(e)}), 500
