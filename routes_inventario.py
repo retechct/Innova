@@ -216,54 +216,65 @@ def resumen_productos():
         rows = cur.fetchall()
 
         # Agrupar por modelo
+        # FIX: como la consulta SQL agrupa (GROUP BY) también por sede, cada
+        # fila 'r' representa un modelo EN UNA SOLA sede. Antes, la lista de
+        # fotos del modelo se armaba solo con los datos de la PRIMERA fila
+        # encontrada (la primera sede en orden alfabético) — si esa sede no
+        # tenía foto pero otra sí (p.ej. "Tienda Grande"), la tarjeta del
+        # modelo completo se mostraba "Sin foto" aunque sí hubiera fotos
+        # reales en otras tiendas. Ahora se recorren las fotos de TODAS las
+        # filas (todas las sedes) del mismo modelo antes de decidir cuál usar.
         modelos = {}
         for r in rows:
             observaciones_row = r[13] or ""
             key = (r[0], r[1], observaciones_row)
             if key not in modelos:
-                # Construir lista de fotos: catálogo, luego las del registro de stock
-                cat_foto_url      = r[10] or ""
-                cat_fotos_urls    = r[11] or ""
-                stock_fotos_adic  = r[12] or ""
-                observaciones     = observaciones_row
-                # sp.foto_url (r[9]) es legacy, puede contener la foto del catálogo en el momento del registro
-                stock_foto_legacy = r[9]  or ""
-
-                todas_fotos = []
-                seen_fotos = set()
-
-                def add_photos(photo_str):
-                    if not photo_str: return
-                    for f_url in photo_str.split('|'):
-                        f = f_url.strip()
-                        if f and f not in seen_fotos:
-                            todas_fotos.append(f)
-                            seen_fotos.add(f)
-
-                add_photos(cat_foto_url)
-                add_photos(cat_fotos_urls)
-                add_photos(stock_foto_legacy)
-                add_photos(stock_fotos_adic)
-
                 modelos[key] = {
                     "categoria":     r[0],
                     "nombre_modelo": r[1],
                     "catalogo_id":   r[2],
-                    "foto_url":      todas_fotos[0] if todas_fotos else "",
-                    "fotos":         todas_fotos,
-                    "observaciones": observaciones,
+                    "foto_url":      "",
+                    "fotos":         [],
+                    "_fotos_seen":   set(),
+                    "observaciones": observaciones_row,
                     "total":         0,
                     "disponibles":   0,
                     "sede_stock":    {s[1]: {"total":0,"disponibles":0} for s in sedes},
                 }
-            modelos[key]["total"]       += r[5]
-            modelos[key]["disponibles"] += r[6]
-            modelos[key]["sede_stock"][r[4]] = {
+
+            m = modelos[key]
+
+            # Si esta fila trae un catalogo_id y el modelo aún no tiene uno, usarlo
+            if not m["catalogo_id"] and r[2]:
+                m["catalogo_id"] = r[2]
+
+            # Acumular fotos de esta sede: catálogo, luego las del registro de stock
+            # sp.foto_url (r[9]) es legacy, puede contener la foto del catálogo
+            # en el momento del registro
+            for photo_str in (r[10] or "", r[11] or "", r[9] or "", r[12] or ""):
+                if not photo_str:
+                    continue
+                for f_url in photo_str.split('|'):
+                    f = f_url.strip()
+                    if f and f not in m["_fotos_seen"]:
+                        m["fotos"].append(f)
+                        m["_fotos_seen"].add(f)
+
+            if not m["foto_url"] and m["fotos"]:
+                m["foto_url"] = m["fotos"][0]
+
+            m["total"]       += r[5]
+            m["disponibles"] += r[6]
+            m["sede_stock"][r[4]] = {
                 "total":      r[5],
                 "disponibles": r[6],
                 "reservados":  r[7],
                 "vendidos":    r[8],
             }
+
+        # Limpiar el set interno auxiliar (no serializable a JSON)
+        for m in modelos.values():
+            m.pop("_fotos_seen", None)
 
         return jsonify({
             "sedes":   [s[1] for s in sedes],
