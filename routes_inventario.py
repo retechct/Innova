@@ -176,8 +176,14 @@ def resumen_productos():
         where.append("sp.categoria = %s"); params.append(categoria)
     if q:
         where.append("LOWER(sp.nombre_modelo) LIKE %s"); params.append(f"%{q}%")
-    if sede_id:
-        where.append("sp.sede_id = %s"); params.append(sede_id)
+    # FIX-SEDE-FILTRO: sede_id NO va en el WHERE de SQL. Si se filtra ahí,
+    # las filas de las DEMÁS tiendas quedan completamente fuera de la
+    # consulta desde antes del GROUP BY — y como la foto y el desglose
+    # por tienda se calculan agregando TODAS las filas del modelo
+    # (MAX(sp.foto_url), sede_stock, etc.), el resultado filtrado pierde
+    # la foto (si está en otra sede) y no muestra el stock de las demás
+    # tiendas, aunque sí exista. El filtro de tienda se aplica más abajo,
+    # en Python, sobre el modelo ya armado con todos sus datos completos.
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     conn = None
@@ -276,9 +282,24 @@ def resumen_productos():
         for m in modelos.values():
             m.pop("_fotos_seen", None)
 
+        modelos_lista = list(modelos.values())
+
+        # FIX-SEDE-FILTRO: el filtro de tienda se aplica AQUÍ, sobre modelos
+        # ya armados con la foto y el desglose completo de todas las sedes.
+        # Así, un modelo con stock en "Tienda Grande" pero cuya foto está
+        # registrada en "Tienda del Medio" sigue mostrando esa foto y el
+        # resto de tiendas donde también tiene stock, en vez de perderlos.
+        if sede_id:
+            sede_nombre_filtro = next((s[1] for s in sedes if str(s[0]) == str(sede_id)), None)
+            if sede_nombre_filtro:
+                modelos_lista = [
+                    m for m in modelos_lista
+                    if m["sede_stock"].get(sede_nombre_filtro, {}).get("total", 0) > 0
+                ]
+
         return jsonify({
             "sedes":   [s[1] for s in sedes],
-            "modelos": list(modelos.values())
+            "modelos": modelos_lista
         }), 200
 
     except Exception as e:
