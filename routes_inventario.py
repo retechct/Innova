@@ -1351,6 +1351,28 @@ def ajustar_cantidad_stock():
             # Agregar unidades nuevas
             prefijo = PREFIJOS.get(data['categoria'], 'PRD')
 
+            # ── Resolver observaciones para las unidades nuevas ──────────────
+            # FIX-DUPLICADO (red de seguridad backend): /api/inventario/resumen
+            # agrupa las tarjetas por (categoria, nombre_modelo, observaciones).
+            # Si las unidades nuevas se crean con observaciones distintas (o NULL)
+            # a las del resto del modelo, aparecen como una tarjeta aparte —
+            # duplicada, sin foto y sin ver el stock que ya existía. El frontend
+            # ya manda las observaciones correctas, pero por si algún llamador
+            # las omite, heredamos las de cualquier unidad hermana existente
+            # del mismo modelo (misma lógica que ya se usa para la foto abajo).
+            observaciones_nuevas = data.get('observaciones')
+            if not observaciones_nuevas:
+                cur.execute("""
+                    SELECT observaciones FROM stock_productos
+                    WHERE LOWER(nombre_modelo) = LOWER(%s)
+                      AND categoria = %s
+                      AND observaciones IS NOT NULL AND observaciones != ''
+                    ORDER BY id ASC LIMIT 1;
+                """, (data['nombre_modelo'], data['categoria']))
+                row_obs = cur.fetchone()
+                if row_obs:
+                    observaciones_nuevas = row_obs[0]
+
             # ── Resolver la foto para las unidades nuevas ────────────────────
             # FIX: antes solo se buscaba la foto en catalogo_productos usando
             # catalogo_id. Pero la mayoría de productos registrados directo
@@ -1411,7 +1433,7 @@ def ajustar_cantidad_stock():
                     data['nombre_modelo'],
                     data['categoria'],
                     barcode,
-                    data.get('observaciones'),
+                    observaciones_nuevas,
                     foto_url,
                     fotos_adicionales,
                     data['sede_id'],
