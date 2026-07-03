@@ -506,8 +506,9 @@ async function _invAbrirEditarProducto(encodedObj) {
         const res  = await apiFetch(`${API_URL}/api/inventario/resumen?${params}`);
         const data = await res.json();
         const encontrado = (data.modelos || []).find(x =>
-            (x.categoria || '').toLowerCase() === (m.categoria || '').toLowerCase() &&
-            (x.nombre_modelo || '').toLowerCase() === (m.nombre_modelo || '').toLowerCase()
+            x.categoria === m.categoria &&
+            (x.nombre_modelo || '').toLowerCase() === (m.nombre_modelo || '').toLowerCase() &&
+            (x.observaciones || '') === (m.observaciones || '')
         );
         if (encontrado) m = encontrado;
     } catch (e) {
@@ -985,17 +986,13 @@ async function _invMostrarDetalleUnidad(d) {
             if (f && f.foto_url) {
                 fotoUrlFinal = f.foto_url;
             } else {
-                // No intentar buscar en el maestro de materiales si la categoría no es de una pieza (ej: 'Sofa')
-                const isMaterialCategory = ['tablero', 'silla', 'butaca'].includes(cat) || cat.includes('base');
-                if (isMaterialCategory) {
-                    try {
-                        const params = new URLSearchParams({ tipo: cat, modelo: d.nombre_modelo || '' });
-                        const resFoto = await apiFetch(`${API_URL}/api/materiales/maestro/buscar?${params}`);
-                        const dataFoto = await resFoto.json();
-                        if (dataFoto.foto_url) fotoUrlFinal = dataFoto.foto_url;
-                    } catch(e) {
-                        console.warn('[inventario] No se pudo obtener foto del maestro:', e);
-                    }
+                try {
+                    const params = new URLSearchParams({ tipo: cat, modelo: d.nombre_modelo || '' });
+                    const resFoto = await apiFetch(`${API_URL}/api/materiales/maestro/buscar?${params}`);
+                    const dataFoto = await resFoto.json();
+                    if (dataFoto.foto_url) fotoUrlFinal = dataFoto.foto_url;
+                } catch(e) {
+                    console.warn('[inventario] No se pudo obtener foto del maestro:', e);
                 }
             }
         }
@@ -1998,7 +1995,7 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
         }
         Swal.fire({
             title: nombre,
-            html, width: '680px',
+            html, width: '90vw', maxWidth: '680px',
             confirmButtonColor: '#0f172a',
             confirmButtonText: 'Cerrar'
         });
