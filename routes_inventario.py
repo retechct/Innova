@@ -1420,26 +1420,53 @@ def ajustar_cantidad_stock():
                     foto_url = row[0]
 
             if not foto_url:
+                # FIX (foto en fotos_adicionales): antes este query exigía
+                # foto_url IS NOT NULL, así que un modelo sin catalogo_id cuya
+                # única foto viviera en fotos_adicionales (subida con "Tomar
+                # foto" / "Subir fotos" al registrarlo) quedaba totalmente
+                # descartado — sus unidades hermanas tienen foto_url = NULL,
+                # aunque sí tengan foto en fotos_adicionales. Resultado: las
+                # unidades nuevas creadas en otra tienda (o más stock en la
+                # misma) se creaban sin foto, aunque el modelo sí tuviera una
+                # (visible en la tarjeta de /api/inventario/resumen, que sí
+                # mezcla fotos_adicionales). Ahora el WHERE también matchea
+                # filas cuya foto vive únicamente en fotos_adicionales.
                 cur.execute("""
                     SELECT foto_url, fotos_adicionales FROM stock_productos
                     WHERE LOWER(nombre_modelo) = LOWER(%s)
                       AND categoria = %s
-                      AND foto_url IS NOT NULL AND foto_url != ''
+                      AND (
+                          (foto_url IS NOT NULL AND foto_url != '')
+                          OR (fotos_adicionales IS NOT NULL AND fotos_adicionales != '')
+                      )
                     ORDER BY id ASC LIMIT 1;
                 """, (data['nombre_modelo'], data['categoria']))
                 row = cur.fetchone()
                 if row:
-                    foto_url = row[0]
-                    fotos_adicionales = row[1]
+                    foto_url = row[0] or None
+                    fotos_adicionales = row[1] or None
+                    # Si la foto real estaba solo en fotos_adicionales, usar
+                    # la primera de esa lista como foto_url de las unidades
+                    # nuevas, para que el carousel de detalle siempre tenga
+                    # algo en la posición principal.
+                    if not foto_url and fotos_adicionales:
+                        foto_url = fotos_adicionales.split('|')[0].strip()
 
             if not foto_url:
+                # Igual que el paso 1, pero por nombre en vez de catalogo_id.
+                # Se incluye fotos_urls como respaldo por si el registro del
+                # catálogo tiene su foto principal (foto_url) vacía pero sí
+                # fotos extra guardadas en fotos_urls.
                 cur.execute("""
-                    SELECT foto_url FROM catalogo_productos
+                    SELECT foto_url, fotos_urls FROM catalogo_productos
                     WHERE LOWER(nombre_modelo) = LOWER(%s) LIMIT 1;
                 """, (data['nombre_modelo'],))
                 row = cur.fetchone()
-                if row and row[0]:
-                    foto_url = row[0]
+                if row:
+                    if row[0]:
+                        foto_url = row[0]
+                    elif row[1]:
+                        foto_url = row[1].split('|')[0].strip()
 
             for _ in range(diferencia):
                 barcode = _generar_codigo(cur, prefijo, 'stock_productos')
