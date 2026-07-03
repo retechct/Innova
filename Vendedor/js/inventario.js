@@ -12,7 +12,7 @@ let _invFiltroCat  = '';
 let _fotosAdicionalesActuales = [];
 let _invFiltroQ    = '';
 let _invFiltroSede = '';
-let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], catalogo: [], cargado: false };
+let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], cojines: [], catalogo: [], cargado: false };
 let _invSedesList = []; // [{id, nombre}] — usado para armar el panel de stock por tienda en "Editar Producto"
 
 const CATEGORIAS_PRODUCTO = [
@@ -205,6 +205,7 @@ async function _cargarMaestrosInv() {
         _maestroInv.bases_comedor = mat.bases_comedor || [];
         _maestroInv.sillas        = mat.sillas        || [];
         _maestroInv.butacas       = mat.butacas       || [];
+        _maestroInv.cojines       = mat.cojines       || [];
         _maestroInv.catalogo      = cat || [];
         _maestroInv.cargado       = true;
 
@@ -983,12 +984,14 @@ async function _invMostrarDetalleUnidad(d) {
             if (cat === 'tablero') lista = _maestroInv.tableros || [];
             else if (cat === 'silla') lista = _maestroInv.sillas || [];
             else if (cat === 'butaca') lista = _maestroInv.butacas || [];
+            else if (cat === 'cojin') lista = _maestroInv.cojines || [];
             else if (cat.includes('base')) lista = _maestroInv.bases_comedor || [];
 
             const f = lista.find(x =>
                 (x.nombre_modelo && x.nombre_modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
                 (x.modelo && x.modelo.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
-                (x.nombre && x.nombre.toLowerCase() === (d.nombre_modelo || '').toLowerCase())
+                (x.nombre && x.nombre.toLowerCase() === (d.nombre_modelo || '').toLowerCase()) ||
+                (x.nombre_diseno && x.nombre_diseno.toLowerCase() === (d.nombre_modelo || '').toLowerCase())
             );
             if (f && f.foto_url) {
                 fotoUrlFinal = f.foto_url;

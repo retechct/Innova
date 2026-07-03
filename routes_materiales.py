@@ -307,13 +307,17 @@ def buscar_maestro_por_modelo():
 
     # Mapa: tipo → (tabla, columna_nombre_modelo)
     # base-consola y base-mesa-centro comparten la tabla maestro_bases_comedor
+    # 'cojin' faltaba acá — por eso el fallback de foto en el modal de detalle
+    # de inventario nunca encontraba nada para piezas de categoría Cojín y
+    # siempre terminaba en "Sin foto disponible".
     TABLA_MAP = {
-        'tablero':          ('maestro_tableros',     'nombre_modelo'),
-        'silla':            ('maestro_sillas',        'modelo'),
-        'butaca':           ('maestro_butacas',       'modelo'),
-        'base-comedor':     ('maestro_bases_comedor', 'modelo'),
-        'base-consola':     ('maestro_bases_comedor', 'modelo'),
-        'base-mesa-centro': ('maestro_bases_comedor', 'modelo'),
+        'tablero':          ('maestro_tableros',       'nombre_modelo'),
+        'silla':            ('maestro_sillas',         'modelo'),
+        'butaca':           ('maestro_butacas',        'modelo'),
+        'base-comedor':     ('maestro_bases_comedor',  'modelo'),
+        'base-consola':     ('maestro_bases_comedor',  'modelo'),
+        'base-mesa-centro': ('maestro_bases_comedor',  'modelo'),
+        'cojin':            ('maestro_disenos_cojin',  'nombre_diseno'),
     }
 
     info = TABLA_MAP.get(tipo)
