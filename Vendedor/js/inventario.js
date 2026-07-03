@@ -986,13 +986,17 @@ async function _invMostrarDetalleUnidad(d) {
             if (f && f.foto_url) {
                 fotoUrlFinal = f.foto_url;
             } else {
-                try {
-                    const params = new URLSearchParams({ tipo: cat, modelo: d.nombre_modelo || '' });
-                    const resFoto = await apiFetch(`${API_URL}/api/materiales/maestro/buscar?${params}`);
-                    const dataFoto = await resFoto.json();
-                    if (dataFoto.foto_url) fotoUrlFinal = dataFoto.foto_url;
-                } catch(e) {
-                    console.warn('[inventario] No se pudo obtener foto del maestro:', e);
+                // No intentar buscar en el maestro de materiales si la categoría no es de una pieza (ej: 'Sofa')
+                const isMaterialCategory = ['tablero', 'silla', 'butaca'].includes(cat) || cat.includes('base');
+                if (isMaterialCategory) {
+                    try {
+                        const params = new URLSearchParams({ tipo: cat, modelo: d.nombre_modelo || '' });
+                        const resFoto = await apiFetch(`${API_URL}/api/materiales/maestro/buscar?${params}`);
+                        const dataFoto = await resFoto.json();
+                        if (dataFoto.foto_url) fotoUrlFinal = dataFoto.foto_url;
+                    } catch(e) {
+                        console.warn('[inventario] No se pudo obtener foto del maestro:', e);
+                    }
                 }
             }
         }
@@ -1995,7 +1999,7 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
         }
         Swal.fire({
             title: nombre,
-            html, width: '90vw', maxWidth: '680px',
+            html, width: '680px',
             confirmButtonColor: '#0f172a',
             confirmButtonText: 'Cerrar'
         });
