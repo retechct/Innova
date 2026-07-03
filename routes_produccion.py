@@ -823,14 +823,33 @@ def obtener_taller_stats():
 @produccion_bp.route('/api/taller/ordenes', methods=['GET'])
 @requiere_login
 def obtener_ordenes_produccion():
-    estado = request.args.get('estado', 'activas')
+    """
+    Julio 2026 — se eliminó el N+1 de este endpoint (era el más grave de
+    todo el sistema, según la auditoría de rendimiento): antes hacía
+    1 query por venta (items_venta) + 1 por venta (logistica_externa) +
+    1 por CADA ítem de cada venta (tickets_produccion). Con 50 ventas
+    activas y 3 ítems promedio, eso eran ~250 queries por cada carga de
+    esta vista.
+
+    Ahora son 3 queries fijas sin importar cuántas ventas/ítems haya:
+      1. Ventas (activas + últimas 30 entregadas, igual que antes)
+      2. TODOS los items_venta + TODA la logística de tela de esas ventas,
+         con WHERE venta_id IN (...)
+      3. TODOS los tickets de TODOS esos items, con WHERE item_id IN (...)
+    y el armado por venta/item se hace en Python con diccionarios, no con
+    más queries.
+
+    Tope de seguridad: 'activas' ahora tiene LIMIT 150 (antes no tenía
+    ningún límite y crecía sin techo con cada venta no entregada/cancelada).
+    Es un parche, no paginación real — si este número se vuelve chico,
+    conviene aplicarle el mismo patrón de paginación server-side que ya
+    tienen Mis Pedidos y Entregados.
+    """
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        
-        # Activas: todo excepto Cancelado, ordenadas por urgencia (fecha_entrega ASC, nulls al final)
-        # Entregadas: solo las últimas 30, más recientes primero
-        # El frontend separa visualmente activas vs entregadas usando el campo estado_general
+
+        # 1) Ventas: activas (tope 150) + últimas 30 entregadas
         cursor.execute("""
             (
                 SELECT v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega,
@@ -838,6 +857,7 @@ def obtener_ordenes_produccion():
                 FROM ventas v
                 WHERE v.estado_general NOT IN ('Entregado', 'Cancelado')
                 ORDER BY v.fecha_entrega ASC NULLS LAST
+                LIMIT 150
             )
             UNION ALL
             (
@@ -850,76 +870,109 @@ def obtener_ordenes_produccion():
             )
         """)
         ventas = cursor.fetchall()
-        
+
+        if not ventas:
+            return jsonify([]), 200
+
+        venta_ids = [v[0] for v in ventas]
+
+        # 2) TODOS los items_venta de estas ventas, en una sola query
+        cursor.execute("""
+            SELECT id, venta_id, producto, foto_url
+            FROM items_venta
+            WHERE venta_id = ANY(%s)
+            ORDER BY venta_id, id
+        """, (venta_ids,))
+        items_por_venta = {}
+        item_ids = []
+        for item_id, venta_id, producto, foto_url in cursor.fetchall():
+            items_por_venta.setdefault(venta_id, []).append((item_id, producto, foto_url))
+            item_ids.append(item_id)
+
+        # 3) TODA la logística de tela de estas ventas, en una sola query
+        #    (el subquery de tapicero_destino sigue correlacionado por fila,
+        #    pero eso lo resuelve Postgres en UNA sola pasada, no es un
+        #    query por venta desde Python)
+        cursor.execute("""
+            SELECT l.venta_id, l.id, l.insumo_nombre, l.estado_distribucion,
+                   COALESCE(u.nombre, 'Sin asignar') AS operario_nombre,
+                   (SELECT COALESCE(u2.nombre, 'Sin asignar')
+                    FROM tickets_produccion tp2
+                    JOIN items_venta iv2 ON tp2.item_id = iv2.id
+                    LEFT JOIN usuarios u2 ON tp2.trabajador_asignado_id = u2.id
+                    WHERE iv2.venta_id = l.venta_id
+                      AND tp2.area_trabajo IN ('TAPICERIA_SOFAS','TAPICERIA_SILLAS')
+                    LIMIT 1) AS tapicero_destino
+            FROM logistica_externa l
+            LEFT JOIN usuarios u ON l.operario_id = u.id
+            WHERE l.venta_id = ANY(%s)
+              AND (l.categoria_insumo = 'TELA'
+                   OR LOWER(l.insumo_nombre) LIKE '%%tela%%'
+                   OR LOWER(l.unidad) = 'mts')
+              AND l.estado_distribucion IS NOT NULL
+            ORDER BY l.venta_id, l.id
+        """, (venta_ids,))
+        logistica_por_venta = {}
+        for venta_id, log_id, insumo_nombre, estado_dist, operario_nombre, tapicero_destino in cursor.fetchall():
+            logistica_por_venta.setdefault(venta_id, []).append(
+                (log_id, insumo_nombre, estado_dist, operario_nombre, tapicero_destino)
+            )
+
+        # 4) TODOS los tickets de TODOS los items, en una sola query.
+        #    DISTINCT ON (item_id, area_trabajo) reproduce exactamente el
+        #    comportamiento anterior (un ticket por área por item, el más
+        #    antiguo de esa área) pero para todos los items a la vez.
+        tickets_por_item = {}
+        if item_ids:
+            cursor.execute("""
+                SELECT DISTINCT ON (item_id, area_trabajo)
+                       item_id, id, area_trabajo, estado_ticket,
+                       COALESCE((SELECT nombre FROM usuarios WHERE id = trabajador_asignado_id), 'Sin asignar')
+                FROM tickets_produccion
+                WHERE item_id = ANY(%s)
+                ORDER BY item_id, area_trabajo, id ASC
+            """, (item_ids,))
+            for item_id, t_id, area, estado_ticket, trabajador in cursor.fetchall():
+                tickets_por_item.setdefault(item_id, []).append((t_id, area, estado_ticket, trabajador))
+
+        # 5) Armar el resultado por venta, igual que antes, pero sin
+        #    disparar ninguna query dentro de este loop.
         resultado = []
         for v in ventas:
             venta_id = v[0]
-
-            cursor.execute("SELECT id, producto, foto_url FROM items_venta WHERE venta_id = %s", (venta_id,))
-            items = cursor.fetchall()
-
-            # Logística externa de TELA para esta venta (una fila por registro)
-            cursor.execute("""
-                SELECT l.id, l.insumo_nombre, l.estado_distribucion,
-                       COALESCE(u.nombre, 'Sin asignar') AS operario_nombre,
-                       -- Tapicero destino: primer tapicero asignado en esta venta
-                       (SELECT COALESCE(u2.nombre, 'Sin asignar')
-                        FROM tickets_produccion tp2
-                        JOIN items_venta iv2 ON tp2.item_id = iv2.id
-                        LEFT JOIN usuarios u2 ON tp2.trabajador_asignado_id = u2.id
-                        WHERE iv2.venta_id = l.venta_id
-                          AND tp2.area_trabajo IN ('TAPICERIA_SOFAS','TAPICERIA_SILLAS')
-                        LIMIT 1) AS tapicero_destino
-                FROM logistica_externa l
-                LEFT JOIN usuarios u ON l.operario_id = u.id
-                WHERE l.venta_id = %s
-                  AND (l.categoria_insumo = 'TELA'
-                       OR LOWER(l.insumo_nombre) LIKE '%%tela%%'
-                       OR LOWER(l.unidad) = 'mts')
-                  AND l.estado_distribucion IS NOT NULL
-                ORDER BY l.id
-            """, (venta_id,))
-            logistica_telas = cursor.fetchall()
+            items = items_por_venta.get(venta_id, [])
+            logistica_telas = logistica_por_venta.get(venta_id, [])
 
             items_list = []
             tickets_term = 0
             tickets_total = 0
 
-            for item in items:
-                item_id = item[0]
-                cursor.execute("""
-                    SELECT DISTINCT ON (area_trabajo) id, area_trabajo, estado_ticket,
-                           COALESCE((SELECT nombre FROM usuarios WHERE id = trabajador_asignado_id), 'Sin asignar')
-                    FROM tickets_produccion
-                    WHERE item_id = %s
-                    ORDER BY area_trabajo, id ASC
-                """, (item_id,))
-                tickets = cursor.fetchall()
+            for item_id, producto, foto_url in items:
+                tickets = tickets_por_item.get(item_id, [])
 
                 tickets_list = []
-                for t in tickets:
+                for t_id, area, estado_ticket, trabajador in tickets:
                     tickets_total += 1
-                    if t[2] in ('Terminado', 'Listo para Recojo', 'Recogido'):
+                    if estado_ticket in ('Terminado', 'Listo para Recojo', 'Recogido'):
                         tickets_term += 1
                     tickets_list.append({
-                        'id': t[0],
-                        'area': t[1],
-                        'estado': t[2],
-                        'trabajador': t[3],
+                        'id': t_id,
+                        'area': area,
+                        'estado': estado_ticket,
+                        'trabajador': trabajador,
                         'es_logistica': False,
                     })
 
                 items_list.append({
                     'id': item_id,
-                    'producto': item[1],
-                    'foto': limpiar_foto(item[2].split('|')[0] if item[2] else ''),
+                    'producto': producto,
+                    'foto': limpiar_foto(foto_url.split('|')[0] if foto_url else ''),
                     'tickets': tickets_list,
                 })
 
             # Agregar filas de logística de tela al primer item (afecta a toda la venta)
             for lg in logistica_telas:
                 log_id, insumo_nombre, estado_dist, operario_nombre, tapicero_destino = lg
-                # Mapear estado_distribucion a algo legible
                 estado_display = {
                     'En Recojo':   'En Recojo',
                     'Recogido':    'Recogido',
@@ -928,7 +981,6 @@ def obtener_ordenes_produccion():
                 tickets_total += 1
                 if estado_dist == 'Distribuido':
                     tickets_term += 1
-                # Adjuntar al primer item si existe, o crear entrada suelta
                 entrada_logistica = {
                     'id': log_id,
                     'area': 'CORTE_Y_CONTROL_TELAS',
