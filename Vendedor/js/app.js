@@ -61,8 +61,13 @@ function apiFetch(url, options = {}) {
 
         // Refresh fallido → sesión expirada, forzar re-login.
         // FIX: si varios requests fallan a la vez, mostrar el Swal solo una vez.
+        // FIX-LOOP: también hay que borrar usuarioInnova. Si se queda en localStorage,
+        // init() cree que la sesión sigue activa al recargar, vuelve a meter al usuario
+        // al panel ERP sin token válido, dispara otro 401 en la siguiente petición
+        // protegida, y el modal "Sesión expirada" reaparece en bucle infinito.
         localStorage.removeItem('innova_token');
         localStorage.removeItem('innova_refresh_token');
+        localStorage.removeItem('usuarioInnova');
         if (!_swalSesionMostrado) {
             _swalSesionMostrado = true;
             Swal.fire({
