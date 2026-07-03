@@ -813,10 +813,42 @@ def anular_venta_completa(venta_id):
 @ventas_bp.route('/api/mis-ventas/<int:vendedor_id>', methods=['GET'])
 @requiere_login
 def obtener_mis_ventas(vendedor_id):
+    """
+    Paginado server-side (julio 2026). Antes traía TODAS las ventas del
+    vendedor sin límite y el frontend paginaba/filtraba en memoria
+    (_mpTodos en busqueda_filtros.js) — con pocos cientos de pedidos ya
+    implicaba bajar un JSON completo en cada apertura de "Mis Pedidos".
+
+    Query params opcionales:
+        page      (default 1)
+        per_page  (default 20, tope 100 — ver database.paginar)
+        q         texto libre: busca en código de venta o nombre de cliente
+        estado    filtra por estado_general exacto (mismo valor que ya
+                  manda el <select> del frontend, ej. "Entregado")
+    """
+    from database import paginar
+
+    page     = request.args.get('page', 1)
+    per_page = request.args.get('per_page', 20)
+    q        = (request.args.get('q') or '').strip()
+    estado   = (request.args.get('estado') or '').strip()
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        cursor.execute("""
+
+        condiciones = ["v.vendedor_id = %s"]
+        params      = [vendedor_id]
+
+        if q:
+            condiciones.append("(v.codigo_venta ILIKE %s OR v.nombre_cliente ILIKE %s)")
+            params.extend([f"%{q}%", f"%{q}%"])
+
+        if estado:
+            condiciones.append("COALESCE(v.estado_general, 'Pendiente') = %s")
+            params.append(estado)
+
+        query = f"""
             SELECT v.codigo_venta, v.nombre_cliente, v.fecha_entrega,
                    COALESCE(COUNT(t.id), 0) AS total,
                    COALESCE(SUM(CASE WHEN t.estado_ticket = 'Terminado' THEN 1 ELSE 0 END), 0) AS terminados,
@@ -824,15 +856,18 @@ def obtener_mis_ventas(vendedor_id):
             FROM ventas v
             LEFT JOIN items_venta i        ON v.id  = i.venta_id
             LEFT JOIN tickets_produccion t ON i.id  = t.item_id
-            WHERE v.vendedor_id = %s
+            WHERE {' AND '.join(condiciones)}
             GROUP BY v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega, v.monto_total, v.estado_general
-            ORDER BY v.id DESC;
-        """, (vendedor_id,))
+            ORDER BY v.id DESC
+        """
+
+        filas, total, total_pages = paginar(cursor, query, params, page=page, per_page=per_page)
+
         res = []
-        for v in cursor.fetchall():
-            total      = v[3]
-            terminados = v[4]
-            porcentaje = round((terminados / total * 100), 0) if total > 0 else 0
+        for v in filas:
+            total_tickets = v[3]
+            terminados    = v[4]
+            porcentaje    = round((terminados / total_tickets * 100), 0) if total_tickets > 0 else 0
             res.append({
                 "codigo":      v[0], "cliente":    v[1],
                 "entrega":     v[2].strftime('%d/%m/%Y') if v[2] else "S/F",
@@ -840,7 +875,13 @@ def obtener_mis_ventas(vendedor_id):
                 "monto_total": float(v[5]),
                 "estado":      v[6]
             })
-        return jsonify(res)
+
+        return jsonify({
+            "items":       res,
+            "total":       total,
+            "page":        min(max(1, int(page or 1)), total_pages),
+            "total_pages": total_pages
+        })
     except Exception as ex:
         print("Error en seguimiento:", ex)
         return jsonify({"error": str(ex)}), 500

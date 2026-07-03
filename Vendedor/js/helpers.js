@@ -423,6 +423,77 @@ function showWarning(message) {
 }
 
 /**
+ * PAGINACIÓN GENÉRICA (server-side)
+ * ─────────────────────────────────────────────────────────────────────
+ * Pinta los controles ‹« Ant 1 2 3 Sig »› con el mismo look que ya usaba
+ * el catálogo (_cambiarPaginaCatalogo en catalogo.js), pero reutilizable
+ * para cualquier vista paginada desde el backend.
+ *
+ * Uso:
+ *   renderPaginacion(document.getElementById('mp-paginacion'), {
+ *     page: data.page,
+ *     totalPages: data.total_pages,
+ *     onChange: (nuevaPagina) => cargarPagina(nuevaPagina)
+ *   });
+ *
+ * onChange se llama con el número de página elegido; quien llama decide
+ * qué hacer (normalmente: actualizar una variable de estado y volver a
+ * pedir esa página al backend).
+ */
+function renderPaginacion(container, { page, totalPages, onChange }) {
+  if (!container) return;
+  if (!totalPages || totalPages <= 1) { container.innerHTML = ''; return; }
+
+  const estiloBoton = (activo, deshabilitado) => `
+    padding: 6px 12px; margin: 0 3px; border: 1px solid #cbd5e1;
+    border-radius: 6px; font-weight: bold; transition: all 0.2s;
+    cursor: ${deshabilitado ? 'not-allowed' : 'pointer'};
+    background: ${activo ? '#0f172a' : 'white'};
+    color: ${activo ? 'white' : (deshabilitado ? '#cbd5e1' : '#475569')};
+  `;
+
+  let botones = '';
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
+      botones += `<button data-pag="${i}" style="${estiloBoton(i === page, false)}">${i}</button>`;
+    } else if (i === page - 2 || i === page + 2) {
+      botones += `<span style="color:#cbd5e1; padding:0 5px;">...</span>`;
+    }
+  }
+
+  container.innerHTML = `
+    <div style="display:flex; justify-content:center; align-items:center; margin-top:20px; padding-bottom:10px; flex-wrap:wrap;">
+      <button data-pag="${page - 1}" ${page === 1 ? 'disabled' : ''}
+        style="${estiloBoton(false, page === 1)}">&laquo; Ant</button>
+      ${botones}
+      <button data-pag="${page + 1}" ${page === totalPages ? 'disabled' : ''}
+        style="${estiloBoton(false, page === totalPages)}">Sig &raquo;</button>
+    </div>`;
+
+  container.querySelectorAll('button[data-pag]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = parseInt(btn.dataset.pag, 10);
+      if (p >= 1 && p <= totalPages && p !== page && typeof onChange === 'function') {
+        onChange(p);
+      }
+    });
+  });
+}
+
+/**
+ * Debounce genérico — usado para no disparar un fetch al backend en cada
+ * tecla que el usuario escribe en un buscador (espera a que pare de
+ * escribir `delay` ms antes de ejecutar `fn`).
+ */
+function debounce(fn, delay = 350) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
+/**
  * DEBUG / LOGGING
  */
 function debugElement(element) {

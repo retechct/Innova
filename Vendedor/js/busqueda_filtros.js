@@ -20,35 +20,30 @@
         y ahora muestra también los Entregados.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// Guardamos todos los pedidos del vendedor en memoria para filtrar sin fetch
-let _mpTodos = [];
+// ─── Estado de la vista (julio 2026: paginación server-side) ────────────────
+// Ya NO guardamos todos los pedidos en memoria. Cada cambio de búsqueda,
+// filtro o página dispara un fetch nuevo al backend, que hace el filtrado
+// y el LIMIT/OFFSET en el query (ver /api/mis-ventas en routes_ventas.py).
+let _mpPagina  = 1;
+let _mpQuery   = '';
+let _mpEstado  = '';
+
+// Debounce del buscador: no pegamos un fetch por cada tecla.
+const _mpBuscarDebounced = debounce(() => { _mpPagina = 1; _mpCargarPagina(); }, 350);
 
 async function loadMisPedidos() {
     const container = document.getElementById('pedidos-container');
     if (!container || !usuarioActivo) return;
 
-    container.innerHTML = _mpSpinner();
-
-    try {
-        const res  = await apiFetch(`${API_URL}/api/mis-ventas/${usuarioActivo.id}`);
-        const data = await res.json();
-
-        if (!Array.isArray(data) || data.length === 0) {
-            container.innerHTML = _mpVacio('No tienes pedidos registrados todavía.');
-            return;
-        }
-
-        _mpTodos = data;
-        _mpRenderUI(container);
-
-    } catch (e) {
-        container.innerHTML = `<p style="text-align:center;color:#ef4444;padding:20px;">
-            <i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el servidor.</p>`;
-    }
+    _mpPagina = 1;
+    _mpQuery  = '';
+    _mpEstado = '';
+    _mpRenderUI(container);
 }
 
 function _mpRenderUI(container) {
-    // Barra de herramientas
+    // Barra de herramientas (se pinta una sola vez; los fetches solo
+    // reemplazan #mp-lista y #mp-paginacion, no todo el toolbar)
     container.innerHTML = `
         <div id="mp-toolbar" style="
             display:flex; flex-wrap:wrap; gap:10px; align-items:center;
@@ -61,7 +56,7 @@ function _mpRenderUI(container) {
                     position:absolute; left:10px; top:50%; transform:translateY(-50%);
                     color:#94a3b8; font-size:12px; pointer-events:none;"></i>
                 <input id="mp-buscar" type="text" placeholder="Buscar por contrato o cliente…"
-                    oninput="_mpFiltrar()"
+                    oninput="_mpQuery = this.value; _mpBuscarDebounced()"
                     style="width:100%; padding:9px 12px 9px 32px; box-sizing:border-box;
                         border:1px solid #e2e8f0; border-radius:8px; font-size:12px;
                         font-family:'Jost',sans-serif; outline:none; background:#fff;
@@ -71,7 +66,7 @@ function _mpRenderUI(container) {
             </div>
 
             <!-- Filtro estado -->
-            <select id="mp-estado" onchange="_mpFiltrar()"
+            <select id="mp-estado" onchange="_mpEstado = this.value; _mpPagina = 1; _mpCargarPagina()"
                 style="padding:9px 12px; border:1px solid #e2e8f0; border-radius:8px;
                     font-size:12px; font-family:'Jost',sans-serif; outline:none;
                     background:#fff; color:#0f172a; cursor:pointer; min-width:150px;">
@@ -91,35 +86,59 @@ function _mpRenderUI(container) {
             </span>
         </div>
 
-        <!-- Lista filtrada -->
-        <div id="mp-lista"></div>`;
+        <!-- Lista de la página actual -->
+        <div id="mp-lista">${_mpSpinner()}</div>
+        <div id="mp-paginacion"></div>`;
 
-    _mpFiltrar(); // render inicial con todos
+    _mpCargarPagina();
 }
 
-function _mpFiltrar() {
-    const q      = (document.getElementById('mp-buscar')?.value  || '').toLowerCase().trim();
-    const estado = (document.getElementById('mp-estado')?.value  || '');
-    const lista  = document.getElementById('mp-lista');
-    const cont   = document.getElementById('mp-contador');
-    if (!lista) return;
+async function _mpCargarPagina() {
+    const lista = document.getElementById('mp-lista');
+    const cont  = document.getElementById('mp-contador');
+    const pagEl = document.getElementById('mp-paginacion');
+    if (!lista || !usuarioActivo) return;
 
-    let filtrados = _mpTodos.filter(v => {
-        const matchQ = !q ||
-            v.codigo.toLowerCase().includes(q) ||
-            v.cliente.toLowerCase().includes(q);
-        const matchE = !estado || v.estado === estado;
-        return matchQ && matchE;
-    });
+    lista.innerHTML = _mpSpinner();
 
-    if (cont) cont.textContent = `${filtrados.length} pedido${filtrados.length !== 1 ? 's' : ''}`;
+    try {
+        const params = new URLSearchParams({ page: _mpPagina, per_page: 20 });
+        if (_mpQuery)  params.set('q', _mpQuery);
+        if (_mpEstado) params.set('estado', _mpEstado);
 
-    if (filtrados.length === 0) {
-        lista.innerHTML = _mpVacio('Sin resultados para esta búsqueda.');
-        return;
+        const res  = await apiFetch(`${API_URL}/api/mis-ventas/${usuarioActivo.id}?${params}`);
+        const data = await res.json();
+
+        if (!data || !Array.isArray(data.items)) {
+            lista.innerHTML = `<p style="text-align:center;color:#ef4444;padding:20px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el servidor.</p>`;
+            return;
+        }
+
+        _mpPagina = data.page || 1;
+
+        if (cont) cont.textContent = `${data.total} pedido${data.total !== 1 ? 's' : ''}`;
+
+        if (data.items.length === 0) {
+            lista.innerHTML = _mpVacio(
+                (_mpQuery || _mpEstado) ? 'Sin resultados para esta búsqueda.' : 'No tienes pedidos registrados todavía.'
+            );
+            if (pagEl) pagEl.innerHTML = '';
+            return;
+        }
+
+        lista.innerHTML = data.items.map(v => _mpCardHTML(v)).join('');
+
+        renderPaginacion(pagEl, {
+            page: data.page,
+            totalPages: data.total_pages,
+            onChange: (p) => { _mpPagina = p; _mpCargarPagina(); }
+        });
+
+    } catch (e) {
+        lista.innerHTML = `<p style="text-align:center;color:#ef4444;padding:20px;">
+            <i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el servidor.</p>`;
     }
-
-    lista.innerHTML = filtrados.map(v => _mpCardHTML(v)).join('');
 }
 
 function _mpCardHTML(v) {
@@ -235,54 +254,46 @@ function _mpSpinner() {
    Con: buscador por nº contrato o cliente, filtro por sede/chofer
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// Cache de entregados para filtrar en memoria
-let _entTodos = [];
+// ─── Estado de la vista (julio 2026: paginación server-side) ────────────────
+// El array de entregados en memoria (_entTodos) desapareció junto con el
+// LIMIT 200 fijo del backend. Ahora cada búsqueda/filtro/página pide solo
+// lo que se va a mostrar (ver /api/despacho/entregados en routes_produccion.py).
+let _entPagina  = 1;
+let _entQuery   = '';
+let _entSede    = '';
+let _entChofer  = '';
+let _entChoferIdFijo = null; // choferId de la URL (vista "mi historial" del chofer)
+
+const _entBuscarDebounced = debounce(() => { _entPagina = 1; _entCargarPagina(); }, 350);
 
 async function cargarVistaEntregados(contenedor, choferId) {
+    _entPagina = 1;
+    _entQuery  = '';
+    _entSede   = '';
+    _entChofer = '';
+    _entChoferIdFijo = choferId || null;
+
+    // Opciones de filtro (sedes/choferes) — endpoint chico y aparte,
+    // porque con paginación ya no tenemos todo el historial en memoria
+    // para sacar los valores únicos como antes.
+    let opciones = { sedes: [], choferes: [] };
     try {
-        const url = choferId
-            ? `${API_URL}/api/despacho/entregados?chofer_id=${choferId}`
-            : `${API_URL}/api/despacho/entregados`;
-
-        const res  = await apiFetch(url);
-        const data = await res.json();
-
-        if (!Array.isArray(data) || data.length === 0) {
-            contenedor.innerHTML = `
-                <div style="text-align:center; padding:60px 20px; color:#64748b;">
-                    <div style="font-size:48px; margin-bottom:16px;">✅</div>
-                    <p style="font-weight:700; font-size:15px; color:#374151;
-                        margin:0 0 8px;">Sin entregas registradas aún</p>
-                    <p style="font-size:13px; margin:0;">
-                        Cuando confirmes una entrega aparecerá aquí.</p>
-                </div>`;
-            return;
-        }
-
-        _entTodos = data;
-        _entRenderUI(contenedor, choferId);
-
+        const res = await apiFetch(`${API_URL}/api/despacho/entregados/filtros`);
+        opciones = await res.json();
     } catch (e) {
-        console.error('Error cargando entregados:', e);
-        contenedor.innerHTML = `<p style="color:red; text-align:center; padding:30px;">
-            Error al cargar el historial. Intenta de nuevo.</p>`;
+        console.error('Error cargando opciones de filtro de entregados:', e);
     }
+
+    _entRenderUI(contenedor, choferId, opciones);
 }
 
-function _entRenderUI(contenedor, choferId) {
-    // Construir opciones únicas de sede para el filtro
-    const sedes  = [...new Set(_entTodos.map(e => e.sede).filter(Boolean))].sort();
-    const opsSede = sedes.map(s =>
-        `<option value="${s}">${s}</option>`
-    ).join('');
+function _entRenderUI(contenedor, choferId, opciones) {
+    const sedes  = (opciones?.sedes || []);
+    const opsSede = sedes.map(s => `<option value="${s}">${s}</option>`).join('');
 
     // Si hay varios choferes (vista Admin), ofrecer filtro por chofer
-    const choferes = !choferId
-        ? [...new Set(_entTodos.map(e => e.chofer).filter(Boolean))].sort()
-        : [];
-    const opsChofer = choferes.map(c =>
-        `<option value="${c}">${c}</option>`
-    ).join('');
+    const choferes  = !choferId ? (opciones?.choferes || []) : [];
+    const opsChofer = choferes.map(c => `<option value="${c}">${c}</option>`).join('');
 
     // ── IMPORTANTE: el contenedor padre es un grid multi-columna.
     // Envolvemos todo en un div con grid-column:1/-1 para que ocupe el ancho
@@ -308,7 +319,7 @@ function _entRenderUI(contenedor, choferId) {
                         color:#94a3b8; font-size:12px; pointer-events:none;"></i>
                     <input id="ent-buscar" type="text"
                         placeholder="Buscar por contrato o cliente…"
-                        oninput="_entFiltrar()"
+                        oninput="_entQuery = this.value; _entBuscarDebounced()"
                         style="width:100%; padding:9px 12px 9px 32px; box-sizing:border-box;
                             border:1px solid #bbf7d0; border-radius:8px; font-size:12px;
                             font-family:'Jost',sans-serif; outline:none; background:#fff;
@@ -319,7 +330,7 @@ function _entRenderUI(contenedor, choferId) {
 
                 <!-- Filtro sede -->
                 ${sedes.length > 1 ? `
-                <select id="ent-sede" onchange="_entFiltrar()"
+                <select id="ent-sede" onchange="_entSede = this.value; _entPagina = 1; _entCargarPagina()"
                     style="padding:9px 12px; border:1px solid #bbf7d0; border-radius:8px;
                         font-size:12px; font-family:'Jost',sans-serif; outline:none;
                         background:#fff; color:#0f172a; cursor:pointer; min-width:140px;">
@@ -329,7 +340,7 @@ function _entRenderUI(contenedor, choferId) {
 
                 <!-- Filtro chofer (solo Admin) -->
                 ${choferes.length > 1 ? `
-                <select id="ent-chofer" onchange="_entFiltrar()"
+                <select id="ent-chofer" onchange="_entChofer = this.value; _entPagina = 1; _entCargarPagina()"
                     style="padding:9px 12px; border:1px solid #bbf7d0; border-radius:8px;
                         font-size:12px; font-family:'Jost',sans-serif; outline:none;
                         background:#fff; color:#0f172a; cursor:pointer; min-width:140px;">
@@ -344,46 +355,75 @@ function _entRenderUI(contenedor, choferId) {
                 </span>
             </div>
 
-            <!-- Lista filtrada -->
-            <div id="ent-lista"></div>
+            <!-- Lista de la página actual -->
+            <div id="ent-lista">${_mpSpinner()}</div>
+            <div id="ent-paginacion"></div>
         </div>`;
 
-    _entFiltrar(); // render inicial
+    _entCargarPagina();
 }
 
-function _entFiltrar() {
-    const q      = (document.getElementById('ent-buscar')?.value  || '').toLowerCase().trim();
-    const sede   = (document.getElementById('ent-sede')?.value    || '');
-    const chofer = (document.getElementById('ent-chofer')?.value  || '');
-    const lista  = document.getElementById('ent-lista');
-    const cont   = document.getElementById('ent-contador');
+async function _entCargarPagina() {
+    const lista = document.getElementById('ent-lista');
+    const cont  = document.getElementById('ent-contador');
+    const pagEl = document.getElementById('ent-paginacion');
     if (!lista) return;
 
-    let filtrados = _entTodos.filter(e => {
-        const matchQ = !q ||
-            (e.codigo_venta || '').toLowerCase().includes(q) ||
-            (e.cliente      || '').toLowerCase().includes(q) ||
-            (e.producto     || '').toLowerCase().includes(q);
-        const matchS = !sede   || e.sede   === sede;
-        const matchC = !chofer || e.chofer === chofer;
-        return matchQ && matchS && matchC;
-    });
+    lista.innerHTML = _mpSpinner();
 
-    if (cont) cont.textContent =
-        `${filtrados.length} entrega${filtrados.length !== 1 ? 's' : ''}`;
+    try {
+        const params = new URLSearchParams({ page: _entPagina, per_page: 20 });
+        if (_entChoferIdFijo) params.set('chofer_id', _entChoferIdFijo);
+        if (_entQuery)  params.set('q', _entQuery);
+        if (_entSede)   params.set('sede', _entSede);
+        if (_entChofer) params.set('chofer', _entChofer);
 
-    if (filtrados.length === 0) {
-        lista.innerHTML = `
-            <div style="text-align:center; padding:40px 20px; color:#64748b;">
-                <div style="font-size:36px; margin-bottom:12px;">🔍</div>
-                <p style="font-weight:700; color:#374151; margin:0;">
-                    Sin resultados para esta búsqueda.</p>
-            </div>`;
-        return;
+        const res  = await apiFetch(`${API_URL}/api/despacho/entregados?${params}`);
+        const data = await res.json();
+
+        if (!data || !Array.isArray(data.items)) {
+            lista.innerHTML = `<p style="color:red; text-align:center; padding:30px;">
+                Error al cargar el historial. Intenta de nuevo.</p>`;
+            return;
+        }
+
+        _entPagina = data.page || 1;
+
+        if (cont) cont.textContent = `${data.total} entrega${data.total !== 1 ? 's' : ''}`;
+
+        if (data.items.length === 0) {
+            lista.innerHTML = `
+                <div style="text-align:center; padding:40px 20px; color:#64748b;">
+                    <div style="font-size:36px; margin-bottom:12px;">🔍</div>
+                    <p style="font-weight:700; color:#374151; margin:0;">
+                        Sin resultados para esta búsqueda.</p>
+                </div>`;
+            if (pagEl) pagEl.innerHTML = '';
+            return;
+        }
+
+        lista.innerHTML = _entTarjetasHTML(data.items);
+
+        renderPaginacion(pagEl, {
+            page: data.page,
+            totalPages: data.total_pages,
+            onChange: (p) => { _entPagina = p; _entCargarPagina(); }
+        });
+
+    } catch (e) {
+        console.error('Error cargando entregados:', e);
+        lista.innerHTML = `<p style="color:red; text-align:center; padding:30px;">
+            Error al cargar el historial. Intenta de nuevo.</p>`;
     }
+}
 
+/**
+ * Arma el HTML de las tarjetas de entregados. Extraído de la vieja
+ * _entFiltrar para poder llamarlo con la página que venga del backend.
+ */
+function _entTarjetasHTML(entregas) {
     let html = '';
-    for (const e of filtrados) {
+    for (const e of entregas) {
         const saldoCobrado = e.saldo === 0
             ? `<span style="color:#15803d; font-weight:800;">✓ Pagado</span>`
             : `<span style="color:#dc2626; font-weight:800;">
@@ -456,7 +496,7 @@ function _entFiltrar() {
         </div>`;
     }
 
-    lista.innerHTML = html;
+    return html;
 }
 
 

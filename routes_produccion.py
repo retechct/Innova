@@ -2077,25 +2077,102 @@ def ficha_chofer(item_id):
 # DESPACHO — HISTORIAL DE ENTREGADOS
 # ==========================================
 
+@produccion_bp.route('/api/despacho/entregados/filtros', methods=['GET'])
+@requiere_login
+def despacho_entregados_filtros():
+    """
+    Devuelve las sedes y choferes distintos que aparecen en el historial de
+    entregados, para llenar los <select> del frontend.
+
+    Antes esto se sacaba de _entTodos (el array completo ya cargado en
+    memoria). Con paginación server-side ya no tenemos todo cargado, así
+    que este endpoint chico cubre solo lo necesario para los filtros —
+    no trae los datos completos de cada entrega.
+    """
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT DISTINCT v.sede
+            FROM tickets_produccion t
+            JOIN items_venta i ON t.item_id  = i.id
+            JOIN ventas v      ON i.venta_id = v.id
+            WHERE t.area_trabajo = 'DESPACHO_CENTRAL' AND t.estado_ticket = 'Terminado'
+              AND v.sede IS NOT NULL AND v.sede != ''
+            ORDER BY v.sede;
+        """)
+        sedes = [r[0] for r in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT DISTINCT COALESCE(u.nombre, 'Sin asignar')
+            FROM tickets_produccion t
+            LEFT JOIN usuarios u ON t.trabajador_asignado_id = u.id
+            WHERE t.area_trabajo = 'DESPACHO_CENTRAL' AND t.estado_ticket = 'Terminado'
+            ORDER BY 1;
+        """)
+        choferes = [r[0] for r in cursor.fetchall()]
+
+        return jsonify({'sedes': sedes, 'choferes': choferes}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
 @produccion_bp.route('/api/despacho/entregados', methods=['GET'])
 @requiere_login
 def despacho_entregados():
     """
-    Devuelve todos los tickets DESPACHO_CENTRAL ya Terminados (= entregados).
-    Opcional: ?chofer_id=X para filtrar por chofer (usado por el chofer para su historial).
+    Devuelve los tickets DESPACHO_CENTRAL ya Terminados (= entregados), paginados.
+
+    Antes tenía un LIMIT 200 fijo sin paginación real (un parche para que no
+    se descontrolara el tamaño de la respuesta, pero pasadas las 200 entregas
+    las más viejas simplemente dejaban de aparecer). Julio 2026: paginación
+    server-side de verdad + los filtros que antes se hacían en memoria
+    (_entTodos en busqueda_filtros.js) ahora se hacen en el query.
+
+    Query params opcionales:
+        page      (default 1)
+        per_page  (default 20, tope 100)
+        chofer_id filtra por chofer asignado (uso: historial del chofer)
+        q         texto libre: busca en código de venta, cliente o producto
+        sede      filtra por sede exacta
+        chofer    filtra por nombre de chofer exacto (uso: vista Admin)
     """
-    chofer_id = request.args.get('chofer_id')
+    from database import paginar
+
+    chofer_id     = request.args.get('chofer_id')
+    page          = request.args.get('page', 1)
+    per_page      = request.args.get('per_page', 20)
+    q             = (request.args.get('q') or '').strip()
+    sede_filtro   = (request.args.get('sede') or '').strip()
+    chofer_nombre = (request.args.get('chofer') or '').strip()
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
+        condiciones = ["t.area_trabajo = 'DESPACHO_CENTRAL'", "t.estado_ticket = 'Terminado'"]
         params = []
-        filtro_chofer = ''
+
         if chofer_id:
-            filtro_chofer = ' AND t.trabajador_asignado_id = %s'
+            condiciones.append("t.trabajador_asignado_id = %s")
             params.append(int(chofer_id))
 
-        cursor.execute(f"""
+        if q:
+            condiciones.append("(v.codigo_venta ILIKE %s OR v.nombre_cliente ILIKE %s OR i.producto ILIKE %s)")
+            params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
+
+        if sede_filtro:
+            condiciones.append("v.sede = %s")
+            params.append(sede_filtro)
+
+        if chofer_nombre:
+            condiciones.append("COALESCE(u.nombre, 'Sin asignar') = %s")
+            params.append(chofer_nombre)
+
+        query = f"""
             SELECT
                 t.id, i.producto, v.codigo_venta, v.nombre_cliente,
                 COALESCE(u.nombre, 'Sin asignar') AS chofer,
@@ -2112,17 +2189,16 @@ def despacho_entregados():
             JOIN items_venta i    ON t.item_id  = i.id
             JOIN ventas v         ON i.venta_id = v.id
             LEFT JOIN usuarios u  ON t.trabajador_asignado_id = u.id
-            WHERE t.area_trabajo = 'DESPACHO_CENTRAL'
-              AND t.estado_ticket = 'Terminado'
-              {filtro_chofer}
+            WHERE {' AND '.join(condiciones)}
             ORDER BY t.fecha_fin DESC
-            LIMIT 200;
-        """, params)
+        """
+
+        filas, total, total_pages = paginar(cursor, query, params, page=page, per_page=per_page)
 
         resultado = []
-        for r in cursor.fetchall():
-            total    = float(r[12])
-            adelanto = float(r[13])
+        for r in filas:
+            total_venta = float(r[12])
+            adelanto    = float(r[13])
             resultado.append({
                 'ticket_id':      r[0],
                 'producto':       r[1],
@@ -2136,13 +2212,18 @@ def despacho_entregados():
                 'direccion':      r[9] or '',
                 'fecha_entrega_pactada': r[10].strftime('%d/%m/%Y') if r[10] else '—',
                 'item_id':        r[11],
-                'total':          total,
+                'total':          total_venta,
                 'adelanto':       adelanto,
-                'saldo':          max(0, total - adelanto),
+                'saldo':          max(0, total_venta - adelanto),
                 'sede':           r[14] or '',
             })
 
-        return jsonify(resultado), 200
+        return jsonify({
+            'items':       resultado,
+            'total':       total,
+            'page':        min(max(1, int(page or 1)), total_pages),
+            'total_pages': total_pages
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:

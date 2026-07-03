@@ -33,6 +33,70 @@ def release_db_connection(conn):
         _db_pool.putconn(conn)
 
 
+# ─── Paginación genérica (server-side) ───────────────────────────────────────
+
+def paginar(cursor, query, params, page=1, per_page=20):
+    """
+    Envuelve un SELECT ya armado (con WHERE/JOIN/GROUP BY/ORDER BY, lo que sea)
+    y le agrega LIMIT/OFFSET, calculando también el total de filas para poder
+    pintar los controles de página en el frontend.
+
+    Uso:
+        query = '''
+            SELECT v.id, v.codigo_venta, v.nombre_cliente
+            FROM ventas v
+            WHERE v.vendedor_id = %s
+            ORDER BY v.id DESC
+        '''
+        rows, total, total_pages = paginar(cursor, query, [vendedor_id], page=2, per_page=20)
+
+    Parámetros:
+        cursor    — cursor psycopg2 ya abierto
+        query     — el SELECT completo, SIN ';' final y SIN LIMIT/OFFSET propios
+        params    — lista/tupla de parámetros posicionales para `query`
+        page      — página pedida (1-indexed). Se corrige a 1 si viene inválida.
+        per_page  — tamaño de página. Tope de 100 para evitar abusos desde el
+                    frontend (?per_page=99999).
+
+    Retorna:
+        (rows, total, total_pages)
+        rows        — lista de tuplas de la página pedida (cursor.fetchall())
+        total       — cantidad total de filas que matchean el query, sin paginar
+        total_pages — total de páginas (mínimo 1, incluso si total == 0)
+
+    Nota sobre el COUNT: envolver el query original en
+    "SELECT COUNT(*) FROM (query) AS _conteo" funciona igual con GROUP BY
+    (cuenta los grupos resultantes, no las filas crudas) y es más simple que
+    mantener un segundo query de conteo a mano en cada endpoint.
+    """
+    try:
+        page = int(page)
+    except (TypeError, ValueError):
+        page = 1
+    page = max(1, page)
+
+    try:
+        per_page = int(per_page)
+    except (TypeError, ValueError):
+        per_page = 20
+    per_page = max(1, min(per_page, 100))
+
+    params = list(params) if params else []
+
+    cursor.execute(f"SELECT COUNT(*) FROM ({query}) AS _conteo;", params)
+    total = cursor.fetchone()[0] or 0
+    total_pages = max(1, -(-total // per_page))  # ceil sin importar math
+
+    if page > total_pages:
+        page = total_pages
+
+    offset = (page - 1) * per_page
+    cursor.execute(f"{query} LIMIT %s OFFSET %s;", params + [per_page, offset])
+    rows = cursor.fetchall()
+
+    return rows, total, total_pages
+
+
 # ─── Utilidades compartidas ───────────────────────────────────────────────────
 
 def limpiar_foto(url):
