@@ -506,9 +506,8 @@ async function _invAbrirEditarProducto(encodedObj) {
         const res  = await apiFetch(`${API_URL}/api/inventario/resumen?${params}`);
         const data = await res.json();
         const encontrado = (data.modelos || []).find(x =>
-            x.categoria === m.categoria &&
-            (x.nombre_modelo || '').toLowerCase() === (m.nombre_modelo || '').toLowerCase() &&
-            (x.observaciones || '') === (m.observaciones || '')
+            (x.categoria || '').toLowerCase() === (m.categoria || '').toLowerCase() &&
+            (x.nombre_modelo || '').toLowerCase() === (m.nombre_modelo || '').toLowerCase()
         );
         if (encontrado) m = encontrado;
     } catch (e) {
