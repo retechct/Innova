@@ -12,9 +12,24 @@ from psycopg2 import pool as pg_pool
 BACKEND_URL = os.getenv("BACKEND_URL", "https://innova-4cnn.onrender.com")
 
 # ─── Pool de conexiones ───────────────────────────────────────────────────────
+# Julio 2026 — DB_HOST ya apunta al endpoint "-pooler" de Neon (PgBouncer),
+# no a Postgres directo. Eso significa que el techo real NO es el límite de
+# conexiones de Neon (~97 en conexión directa con el compute de 0.25 CU del
+# plan free; con el pooler son hasta 10,000 conexiones de cliente), sino
+# este número que nosotros mismos elegimos abajo.
+#
+# DB_POOL_MAXCONN permite subir/bajar el pool sin tocar código (Render →
+# Environment). Si no está seteada, usa 20 por defecto — con margen sobre
+# el valor anterior (10) pero lejos de estresar el compute del free tier.
+#
+# OJO si en Render corres varios workers de gunicorn: cada proceso crea SU
+# PROPIO pool en memoria. El total real de conexiones abiertas hacia Neon
+# es (cantidad de workers) × DB_POOL_MAXCONN, no solo este número.
+_DB_POOL_MAXCONN = int(os.getenv("DB_POOL_MAXCONN", "20"))
+
 _db_pool = pg_pool.ThreadedConnectionPool(
     minconn=2,
-    maxconn=10,
+    maxconn=_DB_POOL_MAXCONN,
     host     = os.getenv("DB_HOST"),
     database = os.getenv("DB_NAME"),
     user     = os.getenv("DB_USER"),

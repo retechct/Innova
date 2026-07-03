@@ -70,9 +70,17 @@ app = Flask(__name__, static_folder='Vendedor', static_url_path='')
 
 # Restringir CORS al dominio de producción.
 # En desarrollo local, agregar también: 'http://localhost:5000'
+#
+# expose_headers: por defecto el navegador NO deja leer con fetch() ningún
+# header de respuesta que no sea uno de la lista "simple" del spec CORS
+# (Content-Type, Content-Length, etc.), aunque el backend sí lo mande.
+# X-Ordenes-Truncado / X-Ordenes-Activas-Total los usa /api/taller/ordenes
+# para avisar cuando el LIMIT 150 de seguridad está cortando pedidos
+# activos de verdad — si no se exponen acá, ese aviso llega al navegador
+# pero JavaScript jamás puede verlo.
 CORS(app, origins=[
     os.getenv('FRONTEND_URL', 'https://innova-4cnn.onrender.com'),
-])
+], expose_headers=['X-Ordenes-Truncado', 'X-Ordenes-Activas-Total'])
 
 app.config['JWT_SECRET_KEY']                 = _JWT_SECRET_KEY
 app.config['JWT_ACCESS_TOKEN_EXPIRES']       = timedelta(hours=8)   # jornada laboral completa

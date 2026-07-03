@@ -849,6 +849,17 @@ def obtener_ordenes_produccion():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
+        # 0) Conteo real de ventas activas — sirve para detectar si el
+        #    LIMIT 150 de abajo está cortando pedidos de verdad. Es una
+        #    query barata (COUNT sobre el mismo WHERE) y evita que el
+        #    corte sea silencioso.
+        cursor.execute("""
+            SELECT COUNT(*) FROM ventas
+            WHERE estado_general NOT IN ('Entregado', 'Cancelado')
+        """)
+        total_activas_real = cursor.fetchone()[0] or 0
+        truncado = total_activas_real > 150
+
         # 1) Ventas: activas (tope 150) + últimas 30 entregadas
         cursor.execute("""
             (
@@ -872,7 +883,11 @@ def obtener_ordenes_produccion():
         ventas = cursor.fetchall()
 
         if not ventas:
-            return jsonify([]), 200
+            respuesta = jsonify([])
+            if truncado:
+                respuesta.headers['X-Ordenes-Truncado']      = 'true'
+                respuesta.headers['X-Ordenes-Activas-Total'] = str(total_activas_real)
+            return respuesta, 200
 
         venta_ids = [v[0] for v in ventas]
 
@@ -1009,7 +1024,14 @@ def obtener_ordenes_produccion():
                 'tickets_total': tickets_total, 'items': items_list,
             })
 
-        return jsonify(resultado), 200
+        respuesta = jsonify(resultado)
+        if truncado:
+            # No cambia la forma del JSON (sigue siendo un array plano, el
+            # frontend hace `_opTodos = data` directo) — el aviso va en
+            # headers para no romper esa asignación en busqueda_filtros.js.
+            respuesta.headers['X-Ordenes-Truncado']      = 'true'
+            respuesta.headers['X-Ordenes-Activas-Total'] = str(total_activas_real)
+        return respuesta, 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:

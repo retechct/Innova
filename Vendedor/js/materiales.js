@@ -6,171 +6,171 @@
  * (los últimos del array, que vienen ordenados por id ASC desde el backend).
  * Si ya tiene texto, no hace nada (filtrarMaterial se encarga).
  */
+/**
+ * _tipoDataDesdeInput — mapeo compartido tipoInput -> tipoData (telas, cojines, etc.)
+ * Antes vivía duplicado dentro de mostrarUltimasMaterial y filtrarMaterial;
+ * se extrae para que "Ver más" y ambas funciones nunca queden desincronizadas.
+ */
+function _tipoDataDesdeInput(tipoInput) {
+    if (tipoInput === 'inv-pieza') {
+        const cat = document.getElementById('npf-cat')?.value;
+        if (cat === 'tablero') return 'tableros';
+        if (cat === 'silla') return 'sillas';
+        if (cat === 'butaca') return 'butacas';
+        return 'bases_comedor';
+    }
+    if (['tela', 'cojin-entero', 'tela-silla', 'tela-butaca', 'tela-cojin', 'cojin-rev-entero', 'tela-inv'].includes(tipoInput)) return 'telas';
+    if (['cojin-diseno', 'cojin-rev-diseno', 'cojin-inv'].includes(tipoInput)) return 'cojines';
+    if (['base', 'base-inv'].includes(tipoInput)) return 'bases';
+    if (['tablero', 'tablero-centro', 'tablero-inv'].includes(tipoInput)) return 'tableros';
+    if (['base-mesa', 'base-centro', 'base-comedor-inv'].includes(tipoInput)) return 'bases_comedor';
+    if (['silla', 'silla-inv'].includes(tipoInput)) return 'sillas';
+    if (['estructura-butaca', 'butaca-inv'].includes(tipoInput)) return 'butacas';
+    return '';
+}
+
+function _htmlBotonPinterest(tipoInput) {
+    return `
+        <div class="custom-option-item" style="background: #fffcf0; border-left: 4px solid #f59e0b;" onclick="abrirModalPinterest('${tipoInput}')">
+            <div style="width: 45px; height: 45px; border-radius: 5px; background: #f59e0b; color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
+                <i class="fa-brands fa-pinterest-p"></i>
+            </div>
+            <div>
+                <span class="custom-option-sku" style="color: #d97706;">COMPRA A MEDIDA</span>
+                <div class="custom-option-text"><strong style="color: #b45309;">✨ DISEÑO PINTEREST / ESPECIAL</strong><br>Añadir detalles de esta pieza</div>
+            </div>
+        </div>
+    `;
+}
+
+function _htmlItemMaterial(tipoInput, tipoData, item) {
+    let titulo = '', subtitulo = '';
+    if (tipoData === 'telas') { titulo = `${item.coleccion} - ${item.color}`; subtitulo = item.proveedor; }
+    else if (tipoData === 'cojines') { titulo = item.nombre_diseno; subtitulo = item.tipo_tela; }
+    else if (tipoData === 'bases') { titulo = `${item.modelo} - ${item.color}`; subtitulo = `${item.tipo} ${item.material} ${item.medida}`; }
+    else if (tipoData === 'tableros') { titulo = `${item.nombre} (${item.color})`; subtitulo = `${item.material_base} - ${item.acabado}`; }
+    else if (tipoData === 'bases_comedor') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
+    else if (tipoData === 'sillas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
+    else if (tipoData === 'butacas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
+
+    const safeTitulo       = titulo.replace(/'/g, "\\'");
+    const isAgotado        = item.estado === 'Agotado';
+    const isDescontinuado  = item.estado === 'Descontinuado';
+    const noDisponible     = isAgotado || isDescontinuado;
+    const styleAgotado     = noDisponible ? 'filter: grayscale(1); opacity: 0.5; cursor: not-allowed; background: #f1f5f9;' : '';
+    const provSeguro       = (item.proveedor || '').replace(/'/g, "\'");
+    const action           = noDisponible ? '' : `onclick="seleccionarMaterial('${tipoInput}', '${item.sku}', '${safeTitulo}', '${item.foto_url}', '${provSeguro}')"`;
+    const badge            = isAgotado       ? '<b style="color:red;">(AGOTADO)</b>'
+                           : isDescontinuado ? '<b style="color:#6b7280;">(DESCONTINUADO)</b>'
+                           : '';
+    return `
+        <div class="custom-option-item" ${action} style="${styleAgotado}">
+            <img src="${item.foto_url}" class="custom-option-img" onerror="this.src='imagenes/sin_foto.jpg'">
+            <div style="flex-grow:1;">
+                <span class="custom-option-sku">${item.sku} ${badge}</span>
+                <div class="custom-option-text"><strong>${titulo}</strong><br>${subtitulo}</div>
+            </div>
+        </div>`;
+}
+
+// Tope duro al "Ver todas" — evita pintar de golpe un maestro con cientos
+// de materiales dentro del dropdown si el catálogo crece mucho.
+const _MATERIAL_TOPE_VER_TODAS = 200;
+
+/**
+ * mostrarUltimasMaterial — se llama en el onfocus del input de búsqueda.
+ * Si el campo está vacío, muestra las últimas 10 telas/materiales ingresados
+ * (los últimos del array, que vienen ordenados por id ASC desde el backend).
+ * Si ya tiene texto, no hace nada (filtrarMaterial se encarga).
+ */
 function mostrarUltimasMaterial(tipoInput) {
     const searchEl = document.getElementById(`search-${tipoInput}`);
     if (!searchEl || searchEl.value.trim() !== '') return;
 
-    let tipoData = '';
-    if (tipoInput === 'inv-pieza') {
-        const cat = document.getElementById('npf-cat')?.value;
-        if (cat === 'tablero') tipoData = 'tableros';
-        else if (cat === 'silla') tipoData = 'sillas';
-        else if (cat === 'butaca') tipoData = 'butacas';
-        else tipoData = 'bases_comedor';
-    }
-    else if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero' || tipoInput === 'tela-inv') tipoData = 'telas';
-    else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno' || tipoInput === 'cojin-inv') tipoData = 'cojines';
-    else if (tipoInput === 'base' || tipoInput === 'base-inv') tipoData = 'bases';
-    else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro' || tipoInput === 'tablero-inv') tipoData = 'tableros';
-    else if (tipoInput === 'base-mesa' || tipoInput === 'base-centro' || tipoInput === 'base-comedor-inv') tipoData = 'bases_comedor';
-    else if (tipoInput === 'silla' || tipoInput === 'silla-inv') tipoData = 'sillas';
-    else if (tipoInput === 'estructura-butaca' || tipoInput === 'butaca-inv') tipoData = 'butacas';
-
+    const tipoData = _tipoDataDesdeInput(tipoInput);
     if (!maestroMateriales[tipoData]) return;
 
+    const total   = maestroMateriales[tipoData].length;
     // Últimas 10: tomamos el inicio del array (backend devuelve ORDER BY id DESC)
     const ultimas = maestroMateriales[tipoData].slice(0, 10);
 
     const listContainer = document.getElementById(`list-${tipoInput}`);
     if (!listContainer) return;
 
-    const htmlPinterest = `
-        <div class="custom-option-item" style="background: #fffcf0; border-left: 4px solid #f59e0b;" onclick="abrirModalPinterest('${tipoInput}')">
-            <div style="width: 45px; height: 45px; border-radius: 5px; background: #f59e0b; color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
-                <i class="fa-brands fa-pinterest-p"></i>
-            </div>
-            <div>
-                <span class="custom-option-sku" style="color: #d97706;">COMPRA A MEDIDA</span>
-                <div class="custom-option-text"><strong style="color: #b45309;">✨ DISEÑO PINTEREST / ESPECIAL</strong><br>Añadir detalles de esta pieza</div>
-            </div>
-        </div>
-    `;
-
-    const htmlItems = ultimas.map(item => {
-        let titulo = '', subtitulo = '';
-        if (tipoData === 'telas') { titulo = `${item.coleccion} - ${item.color}`; subtitulo = item.proveedor; }
-        else if (tipoData === 'cojines') { titulo = item.nombre_diseno; subtitulo = item.tipo_tela; }
-        else if (tipoData === 'bases') { titulo = `${item.modelo} - ${item.color}`; subtitulo = `${item.tipo} ${item.material} ${item.medida}`; }
-        else if (tipoData === 'tableros') { titulo = `${item.nombre} (${item.color})`; subtitulo = `${item.material_base} - ${item.acabado}`; }
-        else if (tipoData === 'bases_comedor') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
-        else if (tipoData === 'sillas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
-        else if (tipoData === 'butacas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
-
-        const safeTitulo = titulo.replace(/'/g, "\\'");
-        const isAgotado       = item.estado === 'Agotado';
-        const isDescontinuado = item.estado === 'Descontinuado';
-        const noDisponible    = isAgotado || isDescontinuado;
-        const styleAgotado    = noDisponible ? 'filter: grayscale(1); opacity: 0.5; cursor: not-allowed; background: #f1f5f9;' : '';
-        const provSeguro      = (item.proveedor || '').replace(/'/g, "\'");
-        const action          = noDisponible ? '' : `onclick="seleccionarMaterial('${tipoInput}', '${item.sku}', '${safeTitulo}', '${item.foto_url}', '${provSeguro}')"`;
-        const badge           = isAgotado       ? '<b style="color:red;">(AGOTADO)</b>'
-                              : isDescontinuado ? '<b style="color:#6b7280;">(DESCONTINUADO)</b>'
-                              : '';
-        return `
-            <div class="custom-option-item" ${action} style="${styleAgotado}">
-                <img src="${item.foto_url}" class="custom-option-img" onerror="this.src='imagenes/sin_foto.jpg'">
-                <div style="flex-grow:1;">
-                    <span class="custom-option-sku">${item.sku} ${badge}</span>
-                    <div class="custom-option-text"><strong>${titulo}</strong><br>${subtitulo}</div>
-                </div>
-            </div>`;
-    }).join('');
-
-    // Encabezado indicando que son las últimas
     const htmlHeader = `<div style="padding:6px 12px; font-size:10px; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #f1f5f9;">
         🕐 Últimas agregadas — escribe para buscar
     </div>`;
 
-    listContainer.innerHTML = htmlHeader + htmlPinterest + htmlItems;
+    const htmlItems = ultimas.map(item => _htmlItemMaterial(tipoInput, tipoData, item)).join('');
+
+    // "Ver más" solo aparece si de verdad hay más de 10.
+    const htmlVerMas = total > 10
+        ? `<div class="custom-option-item" style="justify-content:center; color:#2563eb; font-weight:700; font-size:12px; cursor:pointer;"
+                 onclick="mostrarTodasMaterial('${tipoInput}')">
+               + Ver todas (${total}) →
+           </div>`
+        : '';
+
+    listContainer.innerHTML = htmlHeader + _htmlBotonPinterest(tipoInput) + htmlItems + htmlVerMas;
+    listContainer.classList.add('show');
+}
+
+/**
+ * mostrarTodasMaterial — se dispara al hacer click en "Ver todas (N)".
+ * Pinta el maestro completo del tipo (con tope de seguridad), sin pasar
+ * por el backend: maestroMateriales ya está cargado entero en memoria.
+ */
+function mostrarTodasMaterial(tipoInput) {
+    const tipoData = _tipoDataDesdeInput(tipoInput);
+    if (!maestroMateriales[tipoData]) return;
+
+    const listContainer = document.getElementById(`list-${tipoInput}`);
+    if (!listContainer) return;
+
+    const total  = maestroMateriales[tipoData].length;
+    const todas  = maestroMateriales[tipoData].slice(0, _MATERIAL_TOPE_VER_TODAS);
+    const excede = total > _MATERIAL_TOPE_VER_TODAS;
+
+    const htmlHeader = `<div style="padding:6px 12px; font-size:10px; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #f1f5f9;">
+        📋 ${excede ? `Mostrando ${_MATERIAL_TOPE_VER_TODAS} de ${total}` : `Todas (${total})`} — escribe para filtrar
+    </div>`;
+
+    const htmlItems = todas.map(item => _htmlItemMaterial(tipoInput, tipoData, item)).join('');
+
+    listContainer.innerHTML = htmlHeader + _htmlBotonPinterest(tipoInput) + htmlItems;
     listContainer.classList.add('show');
 }
 
 function filtrarMaterial(tipoInput) {
-    let tipoData = '';
-    let listContainer = document.getElementById(`list-${tipoInput}`);
-    let searchInput = document.getElementById(`search-${tipoInput}`).value.toLowerCase();
-    
+    const listContainer = document.getElementById(`list-${tipoInput}`);
+    const searchInput   = document.getElementById(`search-${tipoInput}`).value.toLowerCase();
+
     if (searchInput.trim() === '') {
         // Si borran todo el texto, volver a mostrar las últimas (igual que focus)
         mostrarUltimasMaterial(tipoInput);
         return;
     }
 
-   // 1. SEPARACIÓN ABSOLUTA (Butacas tienen su propio almacén)
-    if (tipoInput === 'inv-pieza') {
-        const cat = document.getElementById('npf-cat')?.value;
-        if (cat === 'tablero') tipoData = 'tableros';
-        else if (cat === 'silla') tipoData = 'sillas';
-        else if (cat === 'butaca') tipoData = 'butacas';
-        else tipoData = 'bases_comedor';
-    }
-    else if (tipoInput === 'tela' || tipoInput === 'cojin-entero' || tipoInput === 'tela-silla' || tipoInput === 'tela-butaca' || tipoInput === 'tela-cojin' || tipoInput === 'cojin-rev-entero' || tipoInput === 'tela-inv') tipoData = 'telas';
-    else if (tipoInput === 'cojin-diseno' || tipoInput === 'cojin-rev-diseno' || tipoInput === 'cojin-inv') tipoData = 'cojines';
-    else if (tipoInput === 'base' || tipoInput === 'base-inv') tipoData = 'bases';
-    else if (tipoInput === 'tablero' || tipoInput === 'tablero-centro' || tipoInput === 'tablero-inv') tipoData = 'tableros'; 
-    else if (tipoInput === 'base-mesa' || tipoInput === 'base-centro' || tipoInput === 'base-comedor-inv') tipoData = 'bases_comedor'; 
-    else if (tipoInput === 'silla' || tipoInput === 'silla-inv') tipoData = 'sillas';
-    else if (tipoInput === 'estructura-butaca' || tipoInput === 'butaca-inv') tipoData = 'butacas';
-
+    const tipoData = _tipoDataDesdeInput(tipoInput);
     // Protección por si el catálogo aún no carga
     if (!maestroMateriales[tipoData]) return;
 
-    let opciones = maestroMateriales[tipoData].filter(item => {
-        let textoCompleto = Object.values(item).join(' ').toLowerCase();
+    const coincidencias = maestroMateriales[tipoData].filter(item => {
+        const textoCompleto = Object.values(item).join(' ').toLowerCase();
         return textoCompleto.includes(searchInput);
-    }).slice(0, 50); // Máximo 50 resultados al buscar (ampliado para ver más opciones)
+    });
+    const opciones = coincidencias.slice(0, 50); // Máximo 50 resultados pintados al buscar
 
-    // --- MAGIA FASE 2: El botón de Pinterest estático siempre al inicio ---
-    // --- MAGIA FASE 2: El botón de Pinterest estático siempre al inicio ---
-    let htmlPinterest = `
-        <div class="custom-option-item" style="background: #fffcf0; border-left: 4px solid #f59e0b;" onclick="abrirModalPinterest('${tipoInput}')">
-            <div style="width: 45px; height: 45px; border-radius: 5px; background: #f59e0b; color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
-                <i class="fa-brands fa-pinterest-p"></i>
-            </div>
-            <div>
-                <span class="custom-option-sku" style="color: #d97706;">COMPRA A MEDIDA</span>
-                <div class="custom-option-text"><strong style="color: #b45309;">✨ DISEÑO PINTEREST / ESPECIAL</strong><br>Añadir detalles de esta pieza</div>
-            </div>
-        </div>
-    `;
+    const htmlOpcionesBD = opciones.map(item => _htmlItemMaterial(tipoInput, tipoData, item)).join('');
 
-    // 2. ENSEÑAMOS AL SISTEMA A DIBUJAR CADA COSA (Datos de la BD)
-    let htmlOpcionesBD = opciones.map(item => {
-        let titulo = '', subtitulo = '';
-        
-        if (tipoData === 'telas') { titulo = `${item.coleccion} - ${item.color}`; subtitulo = item.proveedor; }
-        else if (tipoData === 'cojines') { titulo = item.nombre_diseno; subtitulo = item.tipo_tela; }
-        else if (tipoData === 'bases') { titulo = `${item.modelo} - ${item.color}`; subtitulo = `${item.tipo} ${item.material} ${item.medida}`; }
-        else if (tipoData === 'tableros') { titulo = `${item.nombre} (${item.color})`; subtitulo = `${item.material_base} - ${item.acabado}`; }
-        else if (tipoData === 'bases_comedor') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
-        else if (tipoData === 'sillas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
-        else if (tipoData === 'butacas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
+    // Si hay más coincidencias de las que se pintaron, avisamos al pie.
+    const htmlAvisoMas = coincidencias.length > opciones.length
+        ? `<div style="padding:8px 12px; font-size:11px; color:#94a3b8; text-align:center; border-top:1px solid #f1f5f9;">
+               Mostrando ${opciones.length} de ${coincidencias.length} — sigue escribiendo para afinar
+           </div>`
+        : '';
 
-        let safeTitulo = titulo.replace(/'/g, "\\'"); 
-        
-        const isAgotado       = item.estado === 'Agotado';
-        const isDescontinuado = item.estado === 'Descontinuado';
-        const noDisponible    = isAgotado || isDescontinuado;
-        const styleAgotado    = noDisponible ? 'filter: grayscale(1); opacity: 0.5; cursor: not-allowed; background: #f1f5f9;' : '';
-        const provSeguro      = (item.proveedor || '').replace(/'/g, "\'");
-        const action          = noDisponible ? '' : `onclick="seleccionarMaterial('${tipoInput}', '${item.sku}', '${safeTitulo}', '${item.foto_url}', '${provSeguro}')"`;
-        const badge           = isAgotado       ? '<b style="color:red;">(AGOTADO)</b>'
-                              : isDescontinuado ? '<b style="color:#6b7280;">(DESCONTINUADO)</b>'
-                              : '';
-
-        return `
-            <div class="custom-option-item" ${action} style="${styleAgotado}">
-                <img src="${item.foto_url}" class="custom-option-img" onerror="this.src='imagenes/sin_foto.jpg'">
-                <div style="flex-grow:1;">
-                    <span class="custom-option-sku">${item.sku} ${badge}</span>
-                    <div class="custom-option-text"><strong>${titulo}</strong><br>${subtitulo}</div>
-                </div>
-            </div>`;
-    }).join('');
-    
-    // 3. Unimos la opción Pinterest + Las opciones de la Base de Datos
-    listContainer.innerHTML = htmlPinterest + htmlOpcionesBD;
-    
+    listContainer.innerHTML = _htmlBotonPinterest(tipoInput) + htmlOpcionesBD + htmlAvisoMas;
     listContainer.classList.add('show');
 }
 function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl, proveedor) {

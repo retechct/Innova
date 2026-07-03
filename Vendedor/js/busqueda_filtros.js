@@ -508,6 +508,14 @@ function _entTarjetasHTML(entregas) {
 // Reemplaza cargarOrdenesProduccion para añadir buscador + filtros de estado
 let _opTodos = [];
 
+// Julio 2026 — el backend tiene un tope de seguridad de 150 pedidos activos
+// (LIMIT 150, ver comentario en obtener_ordenes_produccion). Si algún día
+// hay más de 150 activos a la vez, el backend avisa por header (no cambia
+// la forma del JSON para no romper _opTodos = data) y acá lo convertimos
+// en un banner visible, para que el corte nunca sea silencioso.
+let _opTruncado         = false;
+let _opTotalActivasReal = 0;
+
 async function cargarOrdenesProduccion(contenedor) {
     contenedor.innerHTML = `
         <p style="color:gray; font-size:13px; text-align:center; padding:20px;">
@@ -515,6 +523,9 @@ async function cargarOrdenesProduccion(contenedor) {
     try {
         const res  = await apiFetch(`${API_URL}/api/taller/ordenes`);
         const data = await res.json();
+
+        _opTruncado         = res.headers.get('X-Ordenes-Truncado') === 'true';
+        _opTotalActivasReal = parseInt(res.headers.get('X-Ordenes-Activas-Total') || '0', 10);
 
         if (!Array.isArray(data) || data.length === 0) {
             contenedor.innerHTML = `
@@ -541,6 +552,21 @@ function _opRenderUI(contenedor) {
         `<option value="${s}">${s}</option>`
     ).join('');
 
+    const htmlAvisoTruncado = _opTruncado ? `
+        <div style="
+            display:flex; align-items:center; gap:10px;
+            padding:12px 16px; background:#fef2f2; border:1px solid #fca5a5;
+            border-radius:12px; margin-bottom:14px; color:#991b1b;
+            font-size:12px; font-family:'Jost',sans-serif;">
+            <i class="fa-solid fa-triangle-exclamation" style="font-size:16px;"></i>
+            <div>
+                <strong>Hay ${_opTotalActivasReal} pedidos activos</strong> y esta vista solo
+                muestra los 150 con entrega más próxima. Los ${_opTotalActivasReal - 150}
+                restantes (entrega más lejana o sin fecha) no aparecen aquí — pide que se
+                active paginación completa para esta vista.
+            </div>
+        </div>` : '';
+
     contenedor.innerHTML = `
         <div style="
             grid-column: 1 / -1;
@@ -548,6 +574,8 @@ function _opRenderUI(contenedor) {
             flex-direction: column;
             width: 100%;
             min-width: 0;">
+
+            ${htmlAvisoTruncado}
 
             <!-- Barra de herramientas -->
             <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;
