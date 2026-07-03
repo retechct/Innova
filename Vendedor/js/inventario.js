@@ -1381,6 +1381,10 @@ function _formProducto() {
 
 // ─── Buscador inteligente de productos del catálogo ──────────────────────────
 
+// Tope duro al "Ver todas" — mismo criterio que _MATERIAL_TOPE_VER_TODAS en
+// materiales.js, para no pintar de golpe cientos de productos del catálogo.
+const _INV_CATALOGO_TOPE_VER_TODAS = 200;
+
 function _invMostrarCatalogoBuscador() {
     const searchEl = document.getElementById('search-inv-prod');
     if (!searchEl || searchEl.value.trim() !== '') return;
@@ -1391,12 +1395,46 @@ function _invMostrarCatalogoBuscador() {
     const listContainer = document.getElementById('list-inv-prod');
     if (!listContainer) return;
 
+    const total   = lista.length;
     const ultimas = lista.slice(0, 10);
     const header = `<div style="padding:6px 12px;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f1f5f9;">
         🕐 Últimos en catálogo — escribe para buscar
     </div>`;
 
-    listContainer.innerHTML = header + ultimas.map(p => _invHtmlItemCatalogo(p)).join('');
+    // "Ver todas" solo aparece si de verdad hay más de 10 (igual que en
+    // el buscador de materiales — mismo patrón, mismo texto).
+    const htmlVerMas = total > 10
+        ? `<div class="custom-option-item" style="justify-content:center; color:#2563eb; font-weight:700; font-size:12px; cursor:pointer;"
+                 onclick="_invMostrarTodasCatalogoBuscador()">
+               + Ver todas (${total}) →
+           </div>`
+        : '';
+
+    listContainer.innerHTML = header + ultimas.map(p => _invHtmlItemCatalogo(p)).join('') + htmlVerMas;
+    listContainer.classList.add('show');
+}
+
+/**
+ * _invMostrarTodasCatalogoBuscador — se dispara al hacer click en "Ver todas (N)".
+ * Pinta el catálogo completo de la categoría actual (con tope de seguridad),
+ * sin pasar por el backend: _maestroInv.catalogo ya está cargado en memoria.
+ */
+function _invMostrarTodasCatalogoBuscador() {
+    const cat = document.getElementById('nf-cat')?.value || '';
+    const lista = _invGetCatalogoPorCat(cat);
+
+    const listContainer = document.getElementById('list-inv-prod');
+    if (!listContainer) return;
+
+    const total  = lista.length;
+    const todas  = lista.slice(0, _INV_CATALOGO_TOPE_VER_TODAS);
+    const excede = total > _INV_CATALOGO_TOPE_VER_TODAS;
+
+    const header = `<div style="padding:6px 12px;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f1f5f9;">
+        📋 ${excede ? `Mostrando ${_INV_CATALOGO_TOPE_VER_TODAS} de ${total}` : `Todas (${total})`} — escribe para filtrar
+    </div>`;
+
+    listContainer.innerHTML = header + todas.map(p => _invHtmlItemCatalogo(p)).join('');
     listContainer.classList.add('show');
 }
 
@@ -1410,13 +1448,22 @@ function _invFiltrarCatalogoBuscador() {
 
     const cat = document.getElementById('nf-cat')?.value || '';
     const lista = _invGetCatalogoPorCat(cat);
-    const filtrados = lista.filter(p =>
+    const coincidencias = lista.filter(p =>
         (p.nombre || p.nombre_modelo || '').toLowerCase().includes(texto) ||
         (p.categoria || '').toLowerCase().includes(texto)
-    ).slice(0, 30);
+    );
+    const filtrados = coincidencias.slice(0, 30);
+
+    // Si hay más coincidencias de las que se pintaron, avisamos al pie
+    // (mismo patrón que filtrarMaterial en materiales.js).
+    const htmlAvisoMas = coincidencias.length > filtrados.length
+        ? `<div style="padding:8px 12px; font-size:11px; color:#94a3b8; text-align:center; border-top:1px solid #f1f5f9;">
+               Mostrando ${filtrados.length} de ${coincidencias.length} — sigue escribiendo para afinar
+           </div>`
+        : '';
 
     listContainer.innerHTML = filtrados.length
-        ? filtrados.map(p => _invHtmlItemCatalogo(p)).join('')
+        ? filtrados.map(p => _invHtmlItemCatalogo(p)).join('') + htmlAvisoMas
         : `<div style="padding:12px;font-size:12px;color:#94a3b8;text-align:center;">Sin resultados para "${texto}"</div>`;
     listContainer.classList.add('show');
 }
