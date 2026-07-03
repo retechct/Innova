@@ -2533,8 +2533,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (typeof imagenesSofa !== 'undefined') imagenesSofa[key] = foto;
     });
   } catch(e) {}
-  await gmPopularSelect();
+  // FIX-401-LOOP: /api/sofa-modelos requiere login. Antes se llamaba aquí sin
+  // importar si el usuario ya había iniciado sesión, así que en cada carga de
+  // la página (incluida la primera vez, sin sesión) disparaba un 401 que
+  // mostraba "Sesión expirada" y no dejaba llegar a la pantalla de login.
+  // Ahora solo se puebla aquí si ya hay un token guardado (sesión persistida
+  // al recargar); si no, se puebla justo después del login (ver app.js/landing.js).
+  if (localStorage.getItem('innova_token')) {
+    await gmPopularSelect();
+  }
 });
+
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════

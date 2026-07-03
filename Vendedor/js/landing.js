@@ -175,6 +175,12 @@ async function imEntrarAlSistema() {
           confirmButtonColor:'#c9a84c' });
       }
 
+      // Trabajador con acceso al panel: recién con token guardado es seguro
+      // pedir /api/sofa-modelos (requiere login). FIX-401-LOOP.
+      if (usuarioActivo.rol !== 'Cliente' && typeof gmPopularSelect === 'function') {
+        gmPopularSelect();
+      }
+
       // Trabajador: mostrar modal de sede ANTES de entrar al ERP
       document.getElementById('pantalla-login').style.display = 'none';
       // Cerrar panel de login
