@@ -1225,7 +1225,7 @@ async function _abrirEditarLogistica(item, proveedores) {
 
     // ETAPA 3 → Cotizado: revisar y aprobar para emitir Orden de Compra
     if (estado === 'Cotizado') {
-        const { isConfirmed, isDenied } = await Swal.fire({
+        const { value: opciones, isConfirmed } = await Swal.fire({
             title: `✅ Revisar Cotización`,
             html: `
                 <div style="text-align:left;font-size:13px;">
@@ -1250,23 +1250,40 @@ async function _abrirEditarLogistica(item, proveedores) {
                             <div style="font-weight:900;font-size:14px;color:#854d0e;">${item.fecha_entrega_proveedor || '—'}</div>
                         </div>
                     </div>
-                    <div style="color:#64748b;font-size:12px;">Al aprobar, se genera la <b>Orden de Compra</b> y se notifica al proveedor.</div>
+                    <div style="color:#64748b;font-size:12px;margin-bottom:12px;">Al aprobar, se genera la <b>Orden de Compra</b> y se notifica al proveedor.</div>
+                    
+                    <!-- NEW: Radio buttons for payment/delivery flow -->
+                    <div style="background:#f1f5f9;border-radius:8px;padding:12px;font-size:12px;">
+                        <label style="font-weight:700;display:block;margin-bottom:8px;color:#475569;">¿Cómo proceder con este proveedor?</label>
+                        <label style="display:block;margin-bottom:8px;cursor:pointer;">
+                            <input type="radio" name="oc_flow" value="pagar_primero" checked>
+                            <b>Pagar primero:</b> Se registrará el pago y luego se recogerá el material.
+                        </label>
+                        <label style="display:block;cursor:pointer;">
+                            <input type="radio" name="oc_flow" value="recoger_primero">
+                            <b>Recoger ahora (proveedor de confianza):</b> El material pasa a la cola de recojo y se paga después.
+                        </label>
+                    </div>
                 </div>`,
             showCancelButton: true,
-            showDenyButton: true,
+            showDenyButton: false,
             confirmButtonText: '🛒 Aprobar y generar Orden de Compra',
-            denyButtonText:    '✏️ Editar cotización',
             cancelButtonText:  'Cerrar',
             confirmButtonColor: '#166534',
-            denyButtonColor:   '#0369a1',
+            preConfirm: () => {
+                const flow = document.querySelector('input[name="oc_flow"]:checked').value;
+                return { recoger_primero: flow === 'recoger_primero' };
+            }
         });
 
-        if (isConfirmed) {
+        if (isConfirmed && opciones) {
             try {
                 Swal.fire({ title: 'Generando Orden de Compra...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
                 const resOC = await apiFetch(`${API_URL}/api/logistica/${item.id}/generar-orden`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(opciones)
                 });
                 const dOC = await resOC.json();
                 if (!resOC.ok || !dOC.exito) throw new Error(dOC.error || 'No se pudo generar la OC');
@@ -1334,8 +1351,6 @@ async function _abrirEditarLogistica(item, proveedores) {
 
                 cargarLogisticaExterna();
             } catch(e) { Swal.fire('Error', e.message, 'error'); }
-        } else if (isDenied) {
-            await _ingresarCotizacionManual(item);
         }
         return;
     }

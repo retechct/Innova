@@ -654,7 +654,7 @@ def guardar_venta():
                         cursor.execute("ROLLBACK TO SAVEPOINT sp_nombre_insumo")
                         cursor.execute("RELEASE SAVEPOINT sp_nombre_insumo")
                         nombre_insumo_real = sku
-
+    
                     # Intentar obtener proveedor_id desde la tabla del maestro correspondiente
                     prov_id_logistica = None
                     col_prov = 'proveedor_id'  # todas las tablas del maestro ahora tienen esta columna
@@ -664,25 +664,36 @@ def guardar_venta():
                         prov_id_logistica = row_prov[0] if row_prov else None
                     except Exception:
                         pass
-
-                    # tipo_gestion: si tiene proveedor_id es Externo formal,
-                    # si no tiene proveedor asignado aún se deja como Externo
-                    # (el jefe puede cambiarlo a Informal desde la interfaz)
-                    #
-                    # FIX (julio 2026): se agrega el rol del componente entre
-                    # paréntesis (ej. "Cojín Entero", "Base", "Tela para
-                    # Cojines") al nombre del insumo que se guarda. Antes
-                    # "Requerimientos" solo mostraba el nombre puro del
-                    # material (ej. "Boucle - #14" o, si era una sugerencia
-                    # de Pinterest, literalmente el SKU "REQ-PIN-117") sin
-                    # decir para qué pieza del mueble era — esto pasa incluso
-                    # cuando nombre_insumo_real cae al SKU (arriba) porque no
-                    # se encontró el material en el maestro.
+    
+                    # --- Check for existing logistica entry to consolidate ---
+                    cursor.execute("""
+                        SELECT id, insumo_nombre FROM logistica_externa
+                        WHERE venta_id = %s AND sku = %s AND proveedor_id IS NOT DISTINCT FROM %s
+                        LIMIT 1;
+                    """, (venta_id, sku, prov_id_logistica))
+                    
+                    existing_log_row = cursor.fetchone()
                     rol_componente = SUFIJO_TELA.get(key, '')
-                    nombre_insumo_con_rol = (
-                        f"{nombre_insumo_real} ({rol_componente})" if rol_componente else nombre_insumo_real
-                    )
-
+    
+                    if existing_log_row:
+                        existing_log_id, existing_insumo_nombre = existing_log_row
+                        # Append new role to name if not already present
+                        if rol_componente and rol_componente.lower() not in existing_insumo_nombre.lower():
+                            if '(' in existing_insumo_nombre and existing_insumo_nombre.endswith(')'):
+                                # Append inside parenthesis
+                                nuevo_nombre = f"{existing_insumo_nombre[:-1]}, {rol_componente})"
+                            else:
+                                # Add parenthesis
+                                nuevo_nombre = f"{existing_insumo_nombre} ({rol_componente})"
+                            
+                            cursor.execute(
+                                "UPDATE logistica_externa SET insumo_nombre = %s WHERE id = %s",
+                                (nuevo_nombre, existing_log_id)
+                            )
+                        continue # Skip insertion
+    
+                    nombre_insumo_con_rol = f"{nombre_insumo_real} ({rol_componente})" if rol_componente else nombre_insumo_real
+    
                     # FIX (julio 2026 - v3): antes categoria_insumo se quedaba
                     # NULL/'OTRO' hasta que alguien subía el comprobante de pago
                     # (ver registrar_pago_proveedor en routes_produccion.py).

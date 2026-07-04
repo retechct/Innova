@@ -2698,6 +2698,9 @@ def responder_cotizacion(token):
 @requiere_rol('Admin', 'Jefe_Taller')
 def generar_orden_compra(id):
     """Genera PDF de Orden de Compra con diseño corporativo y lo sube a Cloudinary."""
+    data = request.get_json(silent=True) or {}
+    recoger_primero = data.get('recoger_primero', False)
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -2980,15 +2983,36 @@ def generar_orden_compra(id):
                 cursor.execute("SELECT 1 FROM maestro_telas WHERE sku = %s LIMIT 1", (sku_cat,))
                 if cursor.fetchone():
                     cat_insumo = 'TELA'
+                else:
+                    # Check if it's structural
+                    cursor.execute("""
+                        SELECT 1 FROM (
+                            SELECT sku FROM maestro_tableros WHERE sku = %s UNION ALL
+                            SELECT sku FROM maestro_bases WHERE sku = %s UNION ALL
+                            SELECT sku FROM maestro_bases_comedor WHERE sku = %s UNION ALL
+                            SELECT sku FROM maestro_sillas WHERE sku = %s UNION ALL
+                            SELECT sku FROM maestro_butacas WHERE sku = %s
+                        ) t LIMIT 1
+                    """, (sku_cat, sku_cat, sku_cat, sku_cat, sku_cat))
+                    if cursor.fetchone():
+                        cat_insumo = 'ESTRUCTURAL'
+
             if cat_insumo == 'OTRO' and ('tela' in (insumo_nombre_cat or '').lower() or (unidad_cat or '').lower() == 'mts'):
                 cat_insumo = 'TELA'
                 
+            estado_dist = None
+            if recoger_primero:
+                if cat_insumo == 'TELA':
+                    estado_dist = 'En Recojo'
+                elif cat_insumo == 'ESTRUCTURAL':
+                    estado_dist = 'Listo para Recojo'
+
             cursor.execute("""
                 UPDATE logistica_externa SET estado = 'Orden Enviada',
                     categoria_insumo = %s,
-                    estado_distribucion = CASE WHEN %s = 'TELA' THEN 'En Recojo' ELSE estado_distribucion END
+                    estado_distribucion = %s
                 WHERE id = %s
-            """, (cat_insumo, cat_insumo, id))
+            """, (cat_insumo, estado_dist, id))
             conexion.commit()
         except Exception as e_upd:
             conexion.rollback()
