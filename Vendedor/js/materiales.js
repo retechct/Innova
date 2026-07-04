@@ -179,6 +179,18 @@ function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl, proveedor) {
     // Ponemos el nombre en el buscador
     document.getElementById(`search-${tipoInput}`).value = nombre;
 
+    // FIX (julio 2026): la foto del modelo elegido en el buscador inteligente
+    // (tablero, base de mesa, sillería, tapiz, etc.) antes solo se usaba para
+    // la miniatura en pantalla y se perdía al confirmar el pedido — el PDF/
+    // impresión de "Órdenes por Pedido" nunca la mostraba. Ahora queda guardada
+    // en dataset.foto del campo sku-${tipoInput} para que las funciones
+    // confirmarComedor / confirmarCentro / etc. la recojan e incluyan en las
+    // fotos del ítem (junto con cualquier foto de referencia subida a mano).
+    const skuHidden = document.getElementById(`sku-${tipoInput}`);
+    if (skuHidden) {
+        skuHidden.dataset.foto = (fotoUrl && fotoUrl.startsWith('http')) ? fotoUrl : '';
+    }
+
     // Guardamos el proveedor en su campo hidden (si existe)
     const provHidden = document.getElementById(`proveedor-${tipoInput}`);
     if (provHidden) provHidden.value = proveedor || '';

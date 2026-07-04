@@ -1035,7 +1035,23 @@ async function confirmarComedor() {
     };
 
     const imagenFinal = await subirFotosReferencia('comedor-fotos', imagenUrl);
-    addToCart(nombreProducto, precio, imagenFinal, specs, componentes);
+
+    // FIX (julio 2026): además de la foto de referencia (imagenFinal), se
+    // suman las fotos reales de los modelos base elegidos en el buscador
+    // inteligente (tablero, base de mesa, sillería, tapiz) — antes se
+    // perdían y el PDF/impresión de "Órdenes por Pedido" solo mostraba la
+    // referencia manual, sin los modelos exactos del catálogo.
+    const fotosComponentes = ['tablero', 'base-mesa', 'silla', 'tela-silla']
+        .map(id => document.getElementById(`sku-${id}`)?.dataset.foto || '')
+        .filter(url => url && url.startsWith('http'));
+
+    const todasLasFotos = [imagenFinal, ...fotosComponentes]
+        .join('|')
+        .split('|')
+        .filter((url, idx, arr) => url && arr.indexOf(url) === idx)
+        .join('|');
+
+    addToCart(nombreProducto, precio, todasLasFotos, specs, componentes);
 
     document.getElementById('modal-config-comedor').style.display = 'none';
     
@@ -1212,7 +1228,21 @@ async function confirmarCentro() {
     };
     
     const imagenFinal = await subirFotosReferencia('centro-fotos', imagenUrl);
-    addToCart(tipo + " Personalizada", precio, imagenFinal, specs, componentes);
+
+    // FIX (julio 2026): mismo caso que confirmarComedor — sumar las fotos
+    // reales del tablero y la base estructural elegidos en el buscador
+    // inteligente, no solo la foto de referencia manual.
+    const fotosComponentesCentro = ['tablero-centro', 'base-centro']
+        .map(id => document.getElementById(`sku-${id}`)?.dataset.foto || '')
+        .filter(url => url && url.startsWith('http'));
+
+    const todasLasFotosCentro = [imagenFinal, ...fotosComponentesCentro]
+        .join('|')
+        .split('|')
+        .filter((url, idx, arr) => url && arr.indexOf(url) === idx)
+        .join('|');
+
+    addToCart(tipo + " Personalizada", precio, todasLasFotosCentro, specs, componentes);
 
     document.getElementById('modal-config-centro').style.display = 'none';
     
