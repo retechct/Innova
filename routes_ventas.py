@@ -317,13 +317,26 @@ def guardar_venta():
             print(f"[PASO 3b] UPDATE monto_adelanto OK")
 
         # ── Motor Make-vs-Buy ─────────────────────────────────────────────────
+        # FIX (julio 2026): este diccionario existía desde antes pero nunca se
+        # usaba en ningún INSERT — por eso en "Logística Externa / Requerimientos"
+        # solo se veía el nombre puro del material (ej. "Boucle - #14") sin
+        # indicar para qué pieza del mueble era (¿cojín?, ¿butaca?, ¿base?).
+        # Ahora se completa para TODAS las claves de componentes (antes solo
+        # cubría telas y cojines) y se usa más abajo al armar insumo_nombre.
         SUFIJO_TELA = {
-            'tela':        ' - Para Sofá/Silla',
-            'tela-silla':  ' - Para Silla Comedor',
-            'tela-butaca': ' - Para Butaca',
-            'tela-cojin':  ' - Para Cojines',
-            'cojin-entero':'Cojines Enteros',
-            'cojin-diseno':'Cojines c/Diseño',
+            'tela':              'Tela Principal (Sofá/Silla)',
+            'tela-silla':        'Tela para Silla Comedor',
+            'tela-butaca':       'Tela para Butaca',
+            'tela-cojin':        'Tela para Cojines',
+            'cojin-entero':      'Cojín Entero',
+            'cojin-diseno':      'Cojín c/Diseño',
+            'base':              'Base',
+            'tablero':           'Tablero',
+            'tablero-centro':    'Tablero Mesa de Centro',
+            'silla':             'Sillería',
+            'estructura-butaca': 'Estructura de Butaca',
+            'base-mesa':         'Base de Mesa',
+            'base-centro':       'Base Mesa de Centro',
         }
         mapeo_erp = {
             'tela':              ('maestro_telas',         'CORTE_Y_CONTROL_TELAS'),
@@ -497,11 +510,21 @@ def guardar_venta():
                             cursor.execute(
                                 "ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS cantidad INTEGER;"
                             )
+                            # FIX (julio 2026): se agrega el rol del componente
+                            # (ej. "Sillería") entre paréntesis al nombre del
+                            # insumo, para que en "Requerimientos" se sepa para
+                            # qué pieza del pedido es esta compra externa —
+                            # antes solo se veía el nombre del modelo de silla,
+                            # sin contexto de qué parte del mueble representaba.
+                            rol_silla = SUFIJO_TELA.get(key, '')
+                            nombre_insumo_silla_ctx = (
+                                f"{nombre_insumo_silla} ({rol_silla})" if rol_silla else nombre_insumo_silla
+                            )
                             cursor.execute(
                                 """INSERT INTO logistica_externa
                                        (venta_id, item_id, insumo_nombre, sku, estado, tipo_gestion, proveedor_id, cantidad)
                                    VALUES (%s, %s, %s, %s, 'Pendiente', 'Externo', %s, %s)""",
-                                (venta_id, item_id, nombre_insumo_silla, sku, prov_id_silla, cantidad_silla)
+                                (venta_id, item_id, nombre_insumo_silla_ctx, sku, prov_id_silla, cantidad_silla)
                             )
                             continue
 
@@ -597,11 +620,25 @@ def guardar_venta():
                     # tipo_gestion: si tiene proveedor_id es Externo formal,
                     # si no tiene proveedor asignado aún se deja como Externo
                     # (el jefe puede cambiarlo a Informal desde la interfaz)
+                    #
+                    # FIX (julio 2026): se agrega el rol del componente entre
+                    # paréntesis (ej. "Cojín Entero", "Base", "Tela para
+                    # Cojines") al nombre del insumo que se guarda. Antes
+                    # "Requerimientos" solo mostraba el nombre puro del
+                    # material (ej. "Boucle - #14" o, si era una sugerencia
+                    # de Pinterest, literalmente el SKU "REQ-PIN-117") sin
+                    # decir para qué pieza del mueble era — esto pasa incluso
+                    # cuando nombre_insumo_real cae al SKU (arriba) porque no
+                    # se encontró el material en el maestro.
+                    rol_componente = SUFIJO_TELA.get(key, '')
+                    nombre_insumo_con_rol = (
+                        f"{nombre_insumo_real} ({rol_componente})" if rol_componente else nombre_insumo_real
+                    )
                     cursor.execute(
                         """INSERT INTO logistica_externa
                                (venta_id, item_id, insumo_nombre, sku, estado, proveedor_id, tipo_gestion)
                            VALUES (%s, %s, %s, %s, 'Pendiente', %s, 'Externo')""",
-                        (venta_id, item_id, nombre_insumo_real, sku, prov_id_logistica)
+                        (venta_id, item_id, nombre_insumo_con_rol, sku, prov_id_logistica)
                     )
 
             # Ticket de Despacho
