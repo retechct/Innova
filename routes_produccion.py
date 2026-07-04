@@ -1753,7 +1753,7 @@ def asignar_operario_logistica(id):
         try:
             cursor.execute("""
                 SELECT u.nombre, u.email, u.telefono,
-                       le.insumo, le.sku, v.codigo_venta, c.nombre AS proveedor
+                       le.insumo_nombre, le.sku, v.codigo_venta, c.nombre AS proveedor
                 FROM logistica_externa le
                 JOIN usuarios u         ON u.id            = le.operario_id
                 LEFT JOIN items_venta i ON le.item_id      = i.id
