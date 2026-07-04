@@ -666,17 +666,31 @@ def guardar_venta():
                         pass
     
                     # --- Check for existing logistica entry to consolidate ---
+                    # FIX (julio 2026 - v2): antes, al consolidar, el item_id
+                    # del segundo/tercer componente (ej. la silla que comparte
+                    # tela con el sofá) se perdía por completo — la fila de
+                    # logistica_externa solo quedaba asociada al primer
+                    # item_id. Eso dejaba a _tela_pendiente_para_item()
+                    # (routes_produccion.py) sin forma de saber que ese
+                    # segundo ítem también estaba esperando esta tela. Ahora
+                    # se guarda en item_ids_extra (lista separada por comas)
+                    # para que el semáforo revise también esos item_id.
+                    cursor.execute(
+                        "ALTER TABLE logistica_externa "
+                        "ADD COLUMN IF NOT EXISTS item_ids_extra TEXT DEFAULT NULL;"
+                    )
                     cursor.execute("""
-                        SELECT id, insumo_nombre FROM logistica_externa
+                        SELECT id, insumo_nombre, item_id, COALESCE(item_ids_extra, '')
+                        FROM logistica_externa
                         WHERE venta_id = %s AND sku = %s AND proveedor_id IS NOT DISTINCT FROM %s
                         LIMIT 1;
                     """, (venta_id, sku, prov_id_logistica))
-                    
+
                     existing_log_row = cursor.fetchone()
                     rol_componente = SUFIJO_TELA.get(key, '')
-    
+
                     if existing_log_row:
-                        existing_log_id, existing_insumo_nombre = existing_log_row
+                        existing_log_id, existing_insumo_nombre, existing_item_id, existing_extra = existing_log_row
                         # Append new role to name if not already present
                         if rol_componente and rol_componente.lower() not in existing_insumo_nombre.lower():
                             if '(' in existing_insumo_nombre and existing_insumo_nombre.endswith(')'):
@@ -690,6 +704,18 @@ def guardar_venta():
                                 "UPDATE logistica_externa SET insumo_nombre = %s WHERE id = %s",
                                 (nuevo_nombre, existing_log_id)
                             )
+
+                        # Registrar este item_id como "invitado" de la fila
+                        # consolidada, si todavía no está anotado.
+                        ids_extra = [x for x in existing_extra.split(',') if x.strip()]
+                        item_id_str = str(item_id)
+                        if item_id_str != str(existing_item_id) and item_id_str not in ids_extra:
+                            ids_extra.append(item_id_str)
+                            cursor.execute(
+                                "UPDATE logistica_externa SET item_ids_extra = %s WHERE id = %s",
+                                (','.join(ids_extra), existing_log_id)
+                            )
+
                         continue # Skip insertion
     
                     nombre_insumo_con_rol = f"{nombre_insumo_real} ({rol_componente})" if rol_componente else nombre_insumo_real

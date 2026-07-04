@@ -52,17 +52,43 @@ AREA_ALIASES = {
 # Si el ítem no tiene NINGUNA tela asociada (ni ticket interno ni fila de
 # logística), no hay nada que esperar y se considera lista.
 def _tela_pendiente_para_item(cursor, item_id):
+    # FIX (julio 2026 - v2): cuando dos o más ítems de la misma venta usan
+    # la misma tela+proveedor (ej. sofá + silla con "Boucle #14"), la
+    # consolidación en routes_ventas.py NO crea una fila de logistica_externa
+    # por cada ítem — solo una, con item_id apuntando al primero que se
+    # procesó. Antes de este fix, el segundo/tercer ítem (ej. la silla)
+    # nunca encontraba su propia fila aquí y este semáforo devolvía "no hay
+    # tela pendiente" para ellos aunque la tela consolidada todavía no
+    # hubiera llegado — dejando avanzar tapicería/recojo de estructura sin
+    # esperar el material real. Ahora también se revisa item_ids_extra,
+    # donde la consolidación anota los item_id "invitados" a esa misma fila.
     cursor.execute("""
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'logistica_externa' AND column_name = 'item_ids_extra';
+    """)
+    tiene_item_ids_extra = cursor.fetchone() is not None
+
+    patron_item = f'%,{item_id},%'
+    condicion_extra = (
+        "OR (',' || COALESCE(item_ids_extra, '') || ',') LIKE %s"
+        if tiene_item_ids_extra else ""
+    )
+    params = [item_id, item_id]
+    if tiene_item_ids_extra:
+        params.append(patron_item)
+
+    cursor.execute(f"""
         SELECT EXISTS (
             SELECT 1 FROM tickets_produccion
             WHERE item_id = %s AND area_trabajo = 'CORTE_Y_CONTROL_TELAS'
               AND estado_ticket NOT IN ('Terminado', 'Listo para Recojo', 'Recogido')
         ) OR EXISTS (
             SELECT 1 FROM logistica_externa
-            WHERE item_id = %s AND categoria_insumo = 'TELA'
+            WHERE categoria_insumo = 'TELA'
               AND COALESCE(estado_distribucion, '') != 'Distribuido'
+              AND (item_id = %s {condicion_extra})
         );
-    """, (item_id, item_id))
+    """, params)
     return bool(cursor.fetchone()[0])
 
 
@@ -3058,20 +3084,34 @@ def registrar_pago_proveedor(id):
                 ADD COLUMN IF NOT EXISTS estado_distribucion VARCHAR(30) DEFAULT NULL;
         """)
 
-        # Leer el SKU de esta fila para detectar la categoría
-        cursor.execute("SELECT sku FROM logistica_externa WHERE id = %s", (id,))
+        # Leer el SKU y el estado_distribucion ACTUAL de esta fila.
+        # FIX (julio 2026 - v4): antes esta función siempre recalculaba
+        # estado_distribucion desde cero (p.ej. 'En espera' para TELA) y lo
+        # sobrescribía sin mirar el valor previo. Eso rompía el caso real de
+        # "proveedor de confianza": si el material ya se recogió con
+        # generar-orden(recoger_primero=True) — pasando por 'En Recojo' →
+        # 'Recogido' → incluso 'Distribuido' — y el pago (nota de pedido)
+        # recién se registra días después, este UPDATE retrocedía el estado
+        # a 'En espera' como si la tela nunca hubiera llegado. Eso podía
+        # reabrir el semáforo de _tela_pendiente_para_item() para un ítem
+        # que ya estaba resuelto, o hacer reaparecer en la cola de recojo
+        # algo que el chofer ya había entregado.
+        cursor.execute("SELECT sku, estado_distribucion FROM logistica_externa WHERE id = %s", (id,))
         row_sku = cursor.fetchone()
-        sku = (row_sku[0] or '').strip() if row_sku else ''
+        if not row_sku:
+            return jsonify({'error': 'Registro de logística no encontrado'}), 404
+        sku = (row_sku[0] or '').strip()
+        estado_distribucion_previo = row_sku[1]
 
         # Detectar categoría cruzando con tablas maestro
         categoria_insumo   = 'OTRO'
-        estado_distribucion = None
+        estado_recien_pagado = None
 
         if sku:
             cursor.execute("SELECT 1 FROM maestro_telas WHERE sku = %s LIMIT 1", (sku,))
             if cursor.fetchone():
-                categoria_insumo    = 'TELA'
-                estado_distribucion = 'En espera'   # el operario decide cuándo está listo
+                categoria_insumo     = 'TELA'
+                estado_recien_pagado = 'En espera'   # el operario decide cuándo está listo
             else:
                 cursor.execute("""
                     SELECT 1 FROM (
@@ -3087,8 +3127,18 @@ def registrar_pago_proveedor(id):
                     ) t LIMIT 1
                 """, (sku, sku, sku, sku, sku))
                 if cursor.fetchone():
-                    categoria_insumo    = 'ESTRUCTURAL'
-                    estado_distribucion = 'Listo para Recojo'   # va directo a cola
+                    categoria_insumo     = 'ESTRUCTURAL'
+                    estado_recien_pagado = 'Listo para Recojo'   # va directo a cola
+
+        # Si el material YA avanzó más allá de "recién pagado" (porque se
+        # recogió de confianza antes de pagar), no retrocedemos su estado —
+        # solo se registra el pago. Si todavía no tenía avance (NULL o
+        # 'En espera'), sí aplicamos el valor recién calculado.
+        ESTADOS_AVANZADOS = ('En Recojo', 'Recogido', 'Distribuido')
+        if estado_distribucion_previo in ESTADOS_AVANZADOS:
+            estado_distribucion = estado_distribucion_previo
+        else:
+            estado_distribucion = estado_recien_pagado
 
         cursor.execute("""
             UPDATE logistica_externa
