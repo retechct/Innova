@@ -481,11 +481,27 @@ def guardar_venta():
                         nombre_insumo_silla = res_silla[1] or sku
                         prov_id_silla = res_silla[3]
                         if any(w in mat for w in ['metal', 'acero', 'fierro', 'aluminio']) or res_silla[2] == 'Externo':
+                            # FIX (julio 2026): antes no se guardaba cuántas sillas
+                            # lleva el comedor — la columna cantidad quedaba NULL y
+                            # la vista de Logística Externa mostraba siempre "1"
+                            # sin importar si eran 6, 8 o 10 sillas. El frontend
+                            # ahora manda componentes.cantidad_silla; se valida y,
+                            # si por lo que sea no llega, se asume 1 (nunca 0/None).
+                            try:
+                                cantidad_silla = int(componentes.get('cantidad_silla') or 1)
+                                if cantidad_silla < 1:
+                                    cantidad_silla = 1
+                            except (TypeError, ValueError):
+                                cantidad_silla = 1
+
+                            cursor.execute(
+                                "ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS cantidad INTEGER;"
+                            )
                             cursor.execute(
                                 """INSERT INTO logistica_externa
-                                       (venta_id, item_id, insumo_nombre, sku, estado, tipo_gestion, proveedor_id)
-                                   VALUES (%s, %s, %s, %s, 'Pendiente', 'Externo', %s)""",
-                                (venta_id, item_id, nombre_insumo_silla, sku, prov_id_silla)
+                                       (venta_id, item_id, insumo_nombre, sku, estado, tipo_gestion, proveedor_id, cantidad)
+                                   VALUES (%s, %s, %s, %s, 'Pendiente', 'Externo', %s, %s)""",
+                                (venta_id, item_id, nombre_insumo_silla, sku, prov_id_silla, cantidad_silla)
                             )
                             continue
 

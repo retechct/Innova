@@ -1031,7 +1031,13 @@ async function confirmarComedor() {
         tablero: skuTablero,
         'base-mesa': skuBaseMesa,
         silla: skuSilla,
-        'tela-silla': skuTelaSilla
+        'tela-silla': skuTelaSilla,
+        // FIX (julio 2026): antes no se enviaba la cantidad de sillas del
+        // comedor, así que el requerimiento de logística externa (cuando
+        // la sillería es de origen Externo/metal) siempre quedaba con
+        // cantidad NULL → el backend lo mostraba como "1" sin importar
+        // si el comedor era de 6, 8 o 10 sillas.
+        cantidad_silla: parseInt(cantidadSillas, 10) || 1
     };
 
     const imagenFinal = await subirFotosReferencia('comedor-fotos', imagenUrl);
