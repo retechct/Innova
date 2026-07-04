@@ -446,9 +446,9 @@ def guardar_venta():
                         if any(w in mat for w in ['metal', 'acero', 'fierro', 'aluminio']) or res_silla[2] == 'Externo':
                             cursor.execute(
                                 """INSERT INTO logistica_externa
-                                       (venta_id, insumo_nombre, sku, estado, tipo_gestion, proveedor_id)
-                                   VALUES (%s, %s, %s, 'Pendiente', 'Externo', %s)""",
-                                (venta_id, nombre_insumo_silla, sku, prov_id_silla)
+                                       (venta_id, item_id, insumo_nombre, sku, estado, tipo_gestion, proveedor_id)
+                                   VALUES (%s, %s, %s, %s, 'Pendiente', 'Externo', %s)""",
+                                (venta_id, item_id, nombre_insumo_silla, sku, prov_id_silla)
                             )
                             continue
 
@@ -512,9 +512,9 @@ def guardar_venta():
                     # (el jefe puede cambiarlo a Informal desde la interfaz)
                     cursor.execute(
                         """INSERT INTO logistica_externa
-                               (venta_id, insumo_nombre, sku, estado, proveedor_id, tipo_gestion)
-                           VALUES (%s, %s, %s, 'Pendiente', %s, 'Externo')""",
-                        (venta_id, nombre_insumo_real, sku, prov_id_logistica)
+                               (venta_id, item_id, insumo_nombre, sku, estado, proveedor_id, tipo_gestion)
+                           VALUES (%s, %s, %s, %s, 'Pendiente', %s, 'Externo')""",
+                        (venta_id, item_id, nombre_insumo_real, sku, prov_id_logistica)
                     )
 
             # Ticket de Despacho

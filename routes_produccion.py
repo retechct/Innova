@@ -1195,6 +1195,23 @@ def obtener_logistica():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+
+        # Migración perezosa y segura: el ALTER (que sí toma un lock DDL)
+        # solo corre la primera vez que falta la columna. En cada request
+        # posterior esto es un SELECT liviano sobre information_schema,
+        # no un ALTER — no repetimos el problema de performance que tenía
+        # /api/catalogo (ALTER TABLE incondicional en cada GET).
+        cursor.execute("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'logistica_externa' AND column_name = 'item_id';
+        """)
+        if cursor.fetchone() is None:
+            cursor.execute("""
+                ALTER TABLE logistica_externa
+                    ADD COLUMN item_id INTEGER REFERENCES items_venta(id);
+            """)
+            conexion.commit()
+
         cursor.execute("""
             SELECT l.id, v.codigo_venta, l.insumo_nombre, l.sku,
                    COALESCE(p.nombre, 'Sin asignar') AS proveedor,
@@ -1207,7 +1224,9 @@ def obtener_logistica():
                    l.proveedor_id,
                    COALESCE(l.proveedor_informal, '') AS proveedor_informal,
                    l.url_cotizacion_adjunta,
-                   -- Foto del insumo desde los maestros por SKU
+                   -- Foto 1: la del insumo del maestro, encontrada por SKU
+                   -- (la que sale del buscador inteligente al elegir la
+                   -- parte del catálogo al armar el pedido).
                    COALESCE(
                        (SELECT foto_url FROM maestro_telas        WHERE sku = l.sku LIMIT 1),
                        (SELECT foto_url FROM maestro_tableros      WHERE sku = l.sku LIMIT 1),
@@ -1215,10 +1234,18 @@ def obtener_logistica():
                        (SELECT foto_url FROM maestro_bases_comedor WHERE sku = l.sku LIMIT 1),
                        (SELECT foto_url FROM maestro_sillas        WHERE sku = l.sku LIMIT 1),
                        (SELECT foto_url FROM maestro_butacas       WHERE sku = l.sku LIMIT 1),
-                       (SELECT foto_url FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1),
-                       -- FALLBACK: foto del primer ítem de la venta que generó este requerimiento
-                       (SELECT i2.foto_url FROM items_venta i2 WHERE i2.venta_id = l.venta_id LIMIT 1)
-                   ) AS foto_url,
+                       (SELECT foto_url FROM maestro_disenos_cojin WHERE sku = l.sku LIMIT 1)
+                   ) AS foto_maestro,
+                   -- Foto 2: la foto propia del ítem de venta que generó este
+                   -- requerimiento (la que el vendedor sube aparte). Se
+                   -- empareja por item_id cuando existe; si el registro es
+                   -- viejo (de antes de este fix) y no tiene item_id, cae al
+                   -- fallback anterior (primer ítem de la venta) solo para
+                   -- no perder la foto que ya se venía mostrando.
+                   COALESCE(
+                       (SELECT i2.foto_url FROM items_venta i2 WHERE i2.id = l.item_id LIMIT 1),
+                       (SELECT i2.foto_url FROM items_venta i2 WHERE i2.venta_id = l.venta_id AND l.item_id IS NULL LIMIT 1)
+                   ) AS foto_item,
                    -- Detalles descriptivos del insumo según su tipo
                    COALESCE(
                        (SELECT CONCAT(coleccion, ' · ', color) FROM maestro_telas WHERE sku = l.sku LIMIT 1),
@@ -1237,26 +1264,40 @@ def obtener_logistica():
             LEFT JOIN proveedores p ON l.proveedor_id = p.id
             ORDER BY l.estado ASC, l.id DESC;
         """)
-        items = [{
-            "id": r[0], "codigo_venta": r[1], "insumo": r[2], "sku": r[3],
-            "proveedor": r[4], "correo_proveedor": r[5],
-            "precio_cotizado": float(r[6]) if r[6] else None,
-            "fecha_entrega_proveedor": r[7].strftime('%d/%m/%Y') if r[7] else None,
-            "estado": r[8],
-            "token_usado": r[9], "notas_proveedor": r[10],
-            "url_comprobante_pago":    r[11],
-            "cantidad":                float(r[12]) if r[12] else 1,
-            "unidad":                  r[13],
-            "tipo_gestion":            r[14],
-            "proveedor_id":            r[15],
-            "proveedor_informal":      r[16] or "",
-            "foto_url":                limpiar_foto(r[17]) if r[17] else "",
-            "detalle_insumo":          r[18] or "",
-            "url_cotizacion_adjunta":  r[19] if len(r) > 19 else None,
-            "categoria_insumo":        r[20] if len(r) > 20 else 'OTRO',
-            "estado_distribucion":     r[21] if len(r) > 21 else None,
-            "telefono_proveedor":      r[22] if len(r) > 22 else "",
-        } for r in cursor.fetchall()]
+        items = []
+        for r in cursor.fetchall():
+            foto_maestro = limpiar_foto(r[17]) if r[17] else ""
+            foto_item    = limpiar_foto(r[18]) if r[18] else ""
+            # Lista de fotos sin duplicar (si ambas apuntan a la misma URL,
+            # el frontend debe mostrar una sola, no un carrusel de 2 iguales)
+            fotos = [f for f in [foto_maestro, foto_item] if f]
+            if len(fotos) == 2 and fotos[0] == fotos[1]:
+                fotos = fotos[:1]
+            items.append({
+                "id": r[0], "codigo_venta": r[1], "insumo": r[2], "sku": r[3],
+                "proveedor": r[4], "correo_proveedor": r[5],
+                "precio_cotizado": float(r[6]) if r[6] else None,
+                "fecha_entrega_proveedor": r[7].strftime('%d/%m/%Y') if r[7] else None,
+                "estado": r[8],
+                "token_usado": r[9], "notas_proveedor": r[10],
+                "url_comprobante_pago":    r[11],
+                "cantidad":                float(r[12]) if r[12] else 1,
+                "unidad":                  r[13],
+                "tipo_gestion":            r[14],
+                "proveedor_id":            r[15],
+                "proveedor_informal":      r[16] or "",
+                "foto_maestro":            foto_maestro,
+                "foto_item":               foto_item,
+                "fotos":                   fotos,
+                # Se mantiene foto_url por compatibilidad con cualquier otro
+                # lugar del frontend que aún lo lea como foto única.
+                "foto_url":                fotos[0] if fotos else "",
+                "detalle_insumo":          r[19] or "",
+                "url_cotizacion_adjunta":  r[20] if len(r) > 20 else None,
+                "categoria_insumo":        r[21] if len(r) > 21 else 'OTRO',
+                "estado_distribucion":     r[22] if len(r) > 22 else None,
+                "telefono_proveedor":      r[23] if len(r) > 23 else "",
+            })
         return jsonify(items), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

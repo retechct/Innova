@@ -417,6 +417,74 @@ function _normalizarTelWA(raw) {
     return '51' + tel;
 }
 
+// ── Foto(s) del insumo en Logística Externa ───────────────────────────────
+// Un requerimiento puede tener hasta 2 fotos: la del insumo del maestro
+// (la que sale del buscador inteligente al elegir la parte del catálogo)
+// y la foto propia del ítem de venta (la que se sube aparte). Si el backend
+// manda las dos y son distintas, se muestra un mini-carrusel; si solo hay
+// una, se muestra esa; si no hay ninguna, el ícono de "sin foto" de siempre.
+const _logCarouselIdx = {};
+
+function _logFotosArray(item) {
+    if (Array.isArray(item.fotos) && item.fotos.length) return item.fotos;
+    // Compatibilidad con datos antiguos que solo traían foto_url
+    return item.foto_url ? [item.foto_url] : [];
+}
+
+window._logCarouselNav = function(idBase, fotos, dir) {
+    if (!fotos || fotos.length < 2) return;
+    _logCarouselIdx[idBase] = ((_logCarouselIdx[idBase] || 0) + dir + fotos.length) % fotos.length;
+    const idx = _logCarouselIdx[idBase];
+    const img = document.getElementById(`${idBase}-img`);
+    const dot = document.getElementById(`${idBase}-dot`);
+    if (img) img.src = fotos[idx];
+    if (dot) dot.textContent = `${idx + 1}/${fotos.length}`;
+};
+
+function _logFotoHTML(item, size, idPrefix) {
+    const fotos  = _logFotosArray(item);
+    const idBase = `${idPrefix}-${item.id}`;
+    const titulo = (item.insumo || '').replace(/'/g, "\\'");
+
+    if (fotos.length === 0) {
+        return `<div style="width:${size}px;height:${size}px;border-radius:6px;background:#f1f5f9;
+                      display:flex;align-items:center;justify-content:center;color:#94a3b8;
+                      flex-shrink:0;font-size:${Math.round(size * 0.38)}px;border:1px solid #e2e8f0;">
+                      <i class="fa-solid fa-image"></i></div>`;
+    }
+
+    if (fotos.length === 1) {
+        return `<img id="${idBase}-img" src="${fotos[0]}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
+                   onclick="event.stopPropagation();_invLightbox(this.src,'${titulo}')"
+                   title="Ver foto en grande"
+                   style="width:${size}px;height:${size}px;object-fit:cover;border-radius:6px;cursor:zoom-in;
+                          border:1px solid #e2e8f0;flex-shrink:0;">`;
+    }
+
+    // 2+ fotos → mini carrusel (maestro + foto del ítem)
+    const fotosJSON = JSON.stringify(fotos).replace(/"/g, '&quot;');
+    const btn = Math.max(15, Math.round(size * 0.36));
+    return `<div id="${idBase}" style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;
+                  border-radius:6px;overflow:hidden;border:1px solid #e2e8f0;">
+        <img id="${idBase}-img" src="${fotos[0]}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
+             onclick="event.stopPropagation();_invLightbox(this.src,'${titulo}')"
+             title="Ver foto en grande"
+             style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;">
+        <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, -1)"
+            style="position:absolute;left:1px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);
+                   color:white;border:none;border-radius:50%;width:${btn}px;height:${btn}px;cursor:pointer;
+                   font-size:${Math.round(btn * 0.6)}px;line-height:1;padding:0;
+                   display:flex;align-items:center;justify-content:center;">‹</button>
+        <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, 1)"
+            style="position:absolute;right:1px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);
+                   color:white;border:none;border-radius:50%;width:${btn}px;height:${btn}px;cursor:pointer;
+                   font-size:${Math.round(btn * 0.6)}px;line-height:1;padding:0;
+                   display:flex;align-items:center;justify-content:center;">›</button>
+        <span id="${idBase}-dot" style="position:absolute;bottom:1px;left:50%;transform:translateX(-50%);
+              background:rgba(0,0,0,0.55);color:white;font-size:8px;border-radius:6px;padding:0 3px;line-height:1.4;">1/${fotos.length}</span>
+    </div>`;
+}
+
 async function cargarLogisticaExterna() {
     const tabla = document.getElementById('tabla-logistica-externa');
     if (!tabla) return;
@@ -467,15 +535,7 @@ async function cargarLogisticaExterna() {
         const _renderFilaDesktop = (item, idx, proveedores, esAdmin, coloresEstado, bgAlt) => {
             const c  = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
             const bg = idx % 2 === 0 ? bgAlt : '#fafbfc';
-            const fotoHTML = item.foto_url
-                ? `<img src="${item.foto_url}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-                       onclick="event.stopPropagation();_invLightbox('${item.foto_url}','${(item.insumo||'').replace(/'/g,"\\'")}')"
-                       title="Ver foto en grande"
-                       style="width:42px;height:42px;object-fit:cover;border-radius:6px;cursor:zoom-in;
-                              border:1px solid #e2e8f0;flex-shrink:0;">`
-                : `<div style="width:42px;height:42px;border-radius:6px;background:#f1f5f9;
-                          display:flex;align-items:center;justify-content:center;color:#94a3b8;
-                          flex-shrink:0;font-size:16px;border:1px solid #e2e8f0;"><i class="fa-solid fa-image"></i></div>`;
+            const fotoHTML = _logFotoHTML(item, 42, 'logd');
             return `
             <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
                 onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
@@ -537,13 +597,7 @@ async function cargarLogisticaExterna() {
 
         const _renderCardMobile = (item, proveedores, esAdmin, coloresEstado) => {
             const c = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
-            const fotoHTML = item.foto_url
-                ? `<img src="${item.foto_url}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-                       onclick="event.stopPropagation();_invLightbox('${item.foto_url}','${(item.insumo||'').replace(/'/g,"\\'")}')"
-                       title="Ver foto en grande"
-                       style="width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid #e2e8f0;flex-shrink:0;">`
-                : `<div style="width:56px;height:56px;border-radius:8px;background:#f1f5f9;display:flex;color:#94a3b8;
-                          align-items:center;justify-content:center;flex-shrink:0;font-size:20px;border:1px solid #e2e8f0;"><i class="fa-solid fa-image"></i></div>`;
+            const fotoHTML = _logFotoHTML(item, 56, 'logm');
             return `
             <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
                 <div style="display:flex;gap:12px;margin-bottom:10px;">
@@ -834,13 +888,7 @@ async function _abrirEditarLogistica(item, proveedores) {
         ).join('');
 
         // Bloque de foto + detalles del insumo desde el maestro
-        const fotoHTML = item.foto_url
-            ? `<img src="${item.foto_url}" onerror="this.style.display='none'"
-                   onclick="event.stopPropagation();_invLightbox('${item.foto_url}','${(item.insumo||'').replace(/'/g,"\\'")}')"
-                   title="Ver foto en grande"
-                   style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid #e2e8f0;flex-shrink:0;">`
-            : `<div style="width:72px;height:72px;border-radius:8px;background:#f1f5f9;display:flex;color:#94a3b8;
-                   align-items:center;justify-content:center;flex-shrink:0;font-size:26px;"><i class="fa-solid fa-image"></i></div>`;
+        const fotoHTML = _logFotoHTML(item, 72, 'loge');
 
         const { value: datos, isConfirmed } = await Swal.fire({
             title: `✏️ Editar insumo`,
