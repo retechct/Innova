@@ -985,7 +985,26 @@ def eliminar_venta_completa(venta_id):
             WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s);
         """, (venta_id,))
         cursor.execute("DELETE FROM pagos WHERE venta_id = %s;", (venta_id,))
+
+        # FIX: logistica_externa tiene tablas hijas (ordenes_compra_seq vía
+        # logistica_id, cotizacion_lote_items vía logistica_externa_id) con FK
+        # SIN ON DELETE CASCADE. Si esta venta generó una cotización de tela
+        # externa u orden de compra, borrar logistica_externa directamente
+        # violaba esa FK y Postgres abortaba toda la transacción con un 500
+        # genérico. Hay que borrar esas tablas hijas primero.
+        cursor.execute("SELECT id FROM logistica_externa WHERE venta_id = %s;", (venta_id,))
+        logistica_ids = [r[0] for r in cursor.fetchall()]
+        if logistica_ids:
+            cursor.execute(
+                "DELETE FROM cotizacion_lote_items WHERE logistica_externa_id = ANY(%s);",
+                (logistica_ids,)
+            )
+            cursor.execute(
+                "DELETE FROM ordenes_compra_seq WHERE logistica_id = ANY(%s);",
+                (logistica_ids,)
+            )
         cursor.execute("DELETE FROM logistica_externa WHERE venta_id = %s;", (venta_id,))
+
         cursor.execute("DELETE FROM historial_precios WHERE venta_id = %s;", (venta_id,))
         cursor.execute("DELETE FROM items_venta WHERE venta_id = %s;", (venta_id,))
         cursor.execute("DELETE FROM ventas WHERE id = %s;", (venta_id,))

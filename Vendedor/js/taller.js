@@ -3601,6 +3601,12 @@ async function cargarOrdenesProduccion(contenedor) {
                             <div style="width:${orden.progreso}%; height:100%; background:${progresoColor}; border-radius:6px; transition:0.5s;"></div>
                         </div>
                     </div>
+                    <!-- Ícono para ver/descargar el PDF del pedido (fotos + descripciones) -->
+                    <button onclick="abrirDetallePedido('${orden.codigo}')"
+                            title="Ver / Descargar PDF del pedido"
+                            style="background:#0f172a; color:#d4af37; border:none; width:34px; height:34px; border-radius:8px; cursor:pointer; font-size:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center;">
+                        <i class="fa-solid fa-file-pdf"></i>
+                    </button>
                 </div>
                 <!-- Ítems de la orden -->
                 <div style="padding:12px 18px;">
