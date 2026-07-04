@@ -536,7 +536,7 @@ async function verMisCreaciones() {
         container.innerHTML = creaciones.map(item => `
             <div class="card card-template" style="position: relative;">
                 <div class="badge-template"><i class="fa-solid fa-star"></i> PLANTILLA</div>
-                <img src="${API_URL}/uploads/${item.foto_url}" onerror="this.src='imagenes/sin_foto.jpg'">
+                <img src="${item.foto_url && item.foto_url.startsWith('http') ? item.foto_url : `${API_URL}/uploads/${item.foto_url}`}" onerror="this.src='imagenes/sin_foto.jpg'">
                 <div class="card-info">
                     <span class="status-badge status-template">${item.categoria.toUpperCase()}</span>
                     <h4>${item.nombre}</h4>
@@ -593,7 +593,9 @@ async function editarPlantilla(id) {
                 actualizarVistaComedor();
             }
         } else {
-            const fotoResucitada = `${API_URL}/uploads/${plantilla.foto_url}`;
+            const fotoResucitada = (plantilla.foto_url && plantilla.foto_url.startsWith('http'))
+                ? plantilla.foto_url
+                : `${API_URL}/uploads/${plantilla.foto_url}`;
             openConfig(plantilla.nombre, fotoResucitada);
             if (adn['sofa-modelo']) {
                 document.getElementById('sofa-modelo').value = adn['sofa-modelo'];
@@ -667,7 +669,9 @@ async function cargarPlantilla(id) {
 
         // 4. Si el vendedor puso el precio y aceptó, lo mandamos de frente al carrito
         if (precioFinal) {
-            const fotoParaCarrito = `${API_URL}/uploads/${plantilla.foto_url}`;
+            const fotoParaCarrito = (plantilla.foto_url && plantilla.foto_url.startsWith('http'))
+                ? plantilla.foto_url
+                : `${API_URL}/uploads/${plantilla.foto_url}`;
             
             // Usamos tu misma función universal del carrito
             addToCart(plantilla.nombre, parseFloat(precioFinal), fotoParaCarrito, especificaciones);
