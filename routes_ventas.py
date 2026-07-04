@@ -380,12 +380,28 @@ def guardar_venta():
             # categoria viene del catálogo (Sofá, Butaca, Silla, Sillón, etc.)
             categoria_lower = (m.get('categoria') or '').lower()
             area_estructura = None
-            if any(p in nombre_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'multi', 'curvado', 'plantilla']) \
+            # FIX (julio 2026): "Curvo", "En U" y "Juego de Sala (3-2-1)" — 3 de
+            # los 7 modelos base del sistema — no contenían NINGUNA de estas
+            # palabras clave en su nombre. Para esos 3 modelos, la detección
+            # dependía al 100% de que 'categoria' llegara como 'Sofá' desde el
+            # frontend, sin ninguna red de seguridad si por lo que sea no
+            # llegaba (JS cacheado viejo, deploy a medias, etc.). Se agregan
+            # 'curvo', 'juego de sala' y 'en u' como keywords adicionales.
+            if any(p in nombre_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'multi', 'curvado', 'curvo', 'plantilla', 'juego de sala', 'en u']) \
                or any(p in categoria_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'sillón', 'sillon']):
                 area_estructura = 'ESTRUCTURAS_MUEBLES'
             elif any(p in nombre_lower for p in ['silla', 'butaca', 'sitial', 'puff']) \
                  or any(p in categoria_lower for p in ['silla', 'butaca', 'sitial', 'puff']):
                 area_estructura = 'ESTRUCTURAS_SILLAS'
+
+            # FIX (julio 2026): log de diagnóstico. Si un mueble vuelve a
+            # quedarse sin ticket de Estructura/Tapicería, este print en los
+            # logs de Render muestra exactamente qué texto llegó como 'tipo'
+            # y 'categoria' para ese mueble puntual — así no hay que adivinar
+            # si el problema fue el nombre del modelo o que 'categoria' llegó
+            # vacía desde el frontend.
+            print(f"[DEBUG ÁREA ESTRUCTURA] mueble[{idx_m}] tipo={m.get('tipo')!r} "
+                  f"categoria={m.get('categoria')!r} -> area_estructura={area_estructura!r}")
 
             # Verificar si el componente principal (silla/butaca) es externo ANTES de crear tickets
             # Si es externo va solo a logística, no al taller
