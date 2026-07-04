@@ -431,18 +431,42 @@ function _logFotosArray(item) {
     return item.foto_url ? [item.foto_url] : [];
 }
 
-window._logCarouselNav = function(idBase, fotos, dir) {
+// Etiquetas para cada foto del array de _logFotosArray, en el MISMO orden
+// en que el backend arma "fotos" (ver obtener_logistica en routes_produccion.py:
+// primero foto_maestro, luego foto_item; si son iguales, se deduplica a 1 sola).
+// Sin esto, dos fotos en el carrusel no dicen cuál es la tela/insumo y cuál
+// es el mueble al que pertenece — que es justamente lo que se confunde
+// cuando varias líneas de "Requerimientos" usan la misma tela.
+function _logFotoLabels(item) {
+    const hayMaestro = !!item.foto_maestro;
+    const hayItem     = !!item.foto_item;
+    const sonIguales   = hayMaestro && hayItem && item.foto_maestro === item.foto_item;
+
+    if (hayMaestro && hayItem && !sonIguales) {
+        return ['Insumo', item.producto_item ? `Mueble: ${item.producto_item}` : 'Mueble'];
+    }
+    if (hayMaestro || sonIguales) {
+        return ['Insumo'];
+    }
+    if (hayItem) {
+        return [item.producto_item ? `Mueble: ${item.producto_item}` : 'Mueble'];
+    }
+    return [];
+}
+
+window._logCarouselNav = function(idBase, fotos, labels, dir) {
     if (!fotos || fotos.length < 2) return;
     _logCarouselIdx[idBase] = ((_logCarouselIdx[idBase] || 0) + dir + fotos.length) % fotos.length;
     const idx = _logCarouselIdx[idBase];
     const img = document.getElementById(`${idBase}-img`);
     const dot = document.getElementById(`${idBase}-dot`);
     if (img) img.src = fotos[idx];
-    if (dot) dot.textContent = `${idx + 1}/${fotos.length}`;
+    if (dot) dot.textContent = `${(labels && labels[idx]) || ''} · ${idx + 1}/${fotos.length}`;
 };
 
 function _logFotoHTML(item, size, idPrefix) {
     const fotos  = _logFotosArray(item);
+    const labels = _logFotoLabels(item);
     const idBase = `${idPrefix}-${item.id}`;
     const titulo = (item.insumo || '').replace(/'/g, "\\'");
 
@@ -454,15 +478,23 @@ function _logFotoHTML(item, size, idPrefix) {
     }
 
     if (fotos.length === 1) {
-        return `<img id="${idBase}-img" src="${fotos[0]}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-                   onclick="event.stopPropagation();_invLightbox(this.src,'${titulo}')"
-                   title="Ver foto en grande"
-                   style="width:${size}px;height:${size}px;object-fit:cover;border-radius:6px;cursor:zoom-in;
-                          border:1px solid #e2e8f0;flex-shrink:0;">`;
+        const etiqueta = labels[0] || '';
+        return `<div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;">
+            <img id="${idBase}-img" src="${fotos[0]}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
+               onclick="event.stopPropagation();_invLightbox(this.src,'${titulo}')"
+               title="${etiqueta ? etiqueta + ' — ' : ''}Ver foto en grande"
+               style="width:100%;height:100%;object-fit:cover;border-radius:6px;cursor:zoom-in;
+                      border:1px solid #e2e8f0;">
+            ${etiqueta ? `<span style="position:absolute;bottom:1px;left:1px;right:1px;background:rgba(0,0,0,0.55);
+                  color:white;font-size:7px;font-weight:700;text-align:center;border-radius:0 0 5px 5px;
+                  padding:1px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${etiqueta}</span>` : ''}
+        </div>`;
     }
 
-    // 2+ fotos → mini carrusel (maestro + foto del ítem)
-    const fotosJSON = JSON.stringify(fotos).replace(/"/g, '&quot;');
+    // 2+ fotos → mini carrusel (insumo + foto del mueble), con etiqueta
+    // debajo indicando cuál de las dos se está viendo.
+    const fotosJSON  = JSON.stringify(fotos).replace(/"/g, '&quot;');
+    const labelsJSON = JSON.stringify(labels).replace(/"/g, '&quot;');
     const btn = Math.max(15, Math.round(size * 0.36));
     return `<div id="${idBase}" style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;
                   border-radius:6px;overflow:hidden;border:1px solid #e2e8f0;">
@@ -470,18 +502,19 @@ function _logFotoHTML(item, size, idPrefix) {
              onclick="event.stopPropagation();_invLightbox(this.src,'${titulo}')"
              title="Ver foto en grande"
              style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;">
-        <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, -1)"
+        <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, ${labelsJSON}, -1)"
             style="position:absolute;left:1px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);
                    color:white;border:none;border-radius:50%;width:${btn}px;height:${btn}px;cursor:pointer;
                    font-size:${Math.round(btn * 0.6)}px;line-height:1;padding:0;
                    display:flex;align-items:center;justify-content:center;">‹</button>
-        <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, 1)"
+        <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, ${labelsJSON}, 1)"
             style="position:absolute;right:1px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);
                    color:white;border:none;border-radius:50%;width:${btn}px;height:${btn}px;cursor:pointer;
                    font-size:${Math.round(btn * 0.6)}px;line-height:1;padding:0;
                    display:flex;align-items:center;justify-content:center;">›</button>
-        <span id="${idBase}-dot" style="position:absolute;bottom:1px;left:50%;transform:translateX(-50%);
-              background:rgba(0,0,0,0.55);color:white;font-size:8px;border-radius:6px;padding:0 3px;line-height:1.4;">1/${fotos.length}</span>
+        <span id="${idBase}-dot" style="position:absolute;bottom:1px;left:1px;right:1px;
+              background:rgba(0,0,0,0.55);color:white;font-size:7px;font-weight:700;text-align:center;
+              border-radius:0 0 5px 5px;padding:1px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${labels[0] || ''} · 1/${fotos.length}</span>
     </div>`;
 }
 
@@ -549,6 +582,7 @@ async function cargarLogisticaExterna() {
                             <div style="font-weight:700;line-height:1.3;">${item.insumo}</div>
                             <div style="font-size:11px;color:#94a3b8;">${item.sku || '—'}</div>
                             ${item.detalle_insumo ? `<div style="font-size:10px;color:#64748b;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">${item.detalle_insumo}</div>` : ''}
+                            ${item.producto_item ? `<div style="font-size:10px;color:#0369a1;margin-top:1px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;"><i class="fa-solid fa-couch" style="font-size:9px;"></i> ${item.producto_item}</div>` : ''}
                             ${item.cantidad ? `<div style="font-size:11px;color:#64748b;margin-top:1px;">${item.cantidad} ${item.unidad || ''}</div>` : ''}
                         </div>
                     </div>
@@ -606,6 +640,7 @@ async function cargarLogisticaExterna() {
                         <div style="font-weight:900;font-size:14px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.insumo}</div>
                         ${item.sku ? `<div style="font-size:11px;color:#94a3b8;margin-top:1px;">${item.sku}</div>` : ''}
                         ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.detalle_insumo}</div>` : ''}
+                        ${item.producto_item ? `<div style="font-size:11px;color:#0369a1;margin-top:2px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><i class="fa-solid fa-couch" style="font-size:10px;"></i> ${item.producto_item}</div>` : ''}
                         <div style="margin-top:4px;">
                             <span style="background:${c.bg};color:${c.color};padding:3px 9px;border-radius:20px;font-weight:800;font-size:10px;">${item.estado}</span>
                         </div>
@@ -670,10 +705,11 @@ async function cargarLogisticaExterna() {
                 const matchEstado  = _filtroEstado === 'Todos' || i.estado === _filtroEstado;
                 const q = _filtroBusqueda.toLowerCase();
                 const matchTexto   = !q ||
-                    (i.codigo_venta || '').toLowerCase().includes(q) ||
-                    (i.insumo       || '').toLowerCase().includes(q) ||
-                    (i.proveedor    || '').toLowerCase().includes(q) ||
-                    (i.sku          || '').toLowerCase().includes(q);
+                    (i.codigo_venta   || '').toLowerCase().includes(q) ||
+                    (i.insumo         || '').toLowerCase().includes(q) ||
+                    (i.proveedor      || '').toLowerCase().includes(q) ||
+                    (i.sku            || '').toLowerCase().includes(q) ||
+                    (i.producto_item  || '').toLowerCase().includes(q);
                 return matchEstado && matchTexto;
             });
 
@@ -736,7 +772,7 @@ async function cargarLogisticaExterna() {
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
             ${pillsHTML}
-            <input oninput="_logFiltrarTexto(this.value)" placeholder="🔍 Pedido, insumo o proveedor…"
+            <input oninput="_logFiltrarTexto(this.value)" placeholder="🔍 Pedido, insumo, mueble o proveedor…"
                 style="margin-left:auto;border:1.5px solid #e2e8f0;border-radius:20px;
                        padding:5px 14px;font-size:12px;outline:none;min-width:200px;max-width:260px;"
                 onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
@@ -905,6 +941,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                                 <span style="color:#94a3b8;font-size:11px;font-weight:400;">${item.sku || ''}</span>
                             </div>
                             ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;margin-top:3px;">${item.detalle_insumo}</div>` : ''}
+                            ${item.producto_item ? `<div style="font-size:11px;color:#0369a1;margin-top:2px;font-weight:700;"><i class="fa-solid fa-couch" style="font-size:10px;"></i> ${item.producto_item}</div>` : ''}
                             <div style="font-size:11px;color:#64748b;margin-top:2px;">Pedido: <b style="color:#d97706;">#${item.codigo_venta}</b></div>
                         </div>
                     </div>
@@ -1126,6 +1163,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                             <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:2px;">Insumo</div>
                             <div style="font-weight:800;">${item.insumo}</div>
                             ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;">${item.detalle_insumo}</div>` : ''}
+                            ${item.producto_item ? `<div style="font-size:11px;color:#0369a1;font-weight:700;">🛋️ ${item.producto_item}</div>` : ''}
                         </div>
                         <div>
                             <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:2px;">Pedido</div>
@@ -1486,6 +1524,7 @@ async function _registrarRespuestaProveedor(item) {
                     <div>
                         <div style="font-weight:800;font-size:14px;">${item.insumo}</div>
                         ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;">${item.detalle_insumo}</div>` : ''}
+                        ${item.producto_item ? `<div style="font-size:11px;color:#0369a1;font-weight:700;">🛋️ ${item.producto_item}</div>` : ''}
                         <div style="font-size:11px;color:#d97706;font-weight:700;">Proveedor: ${item.proveedor}</div>
                     </div>
                 </div>

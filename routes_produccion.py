@@ -1355,6 +1355,16 @@ def obtener_logistica():
                        (SELECT i2.foto_url FROM items_venta i2 WHERE i2.id = l.item_id LIMIT 1),
                        (SELECT i2.foto_url FROM items_venta i2 WHERE i2.venta_id = l.venta_id AND l.item_id IS NULL LIMIT 1)
                    ) AS foto_item,
+                   -- Nombre del mueble al que pertenece este requerimiento (ej.
+                   -- "Silla Comedor Luna", "Sofá Curvo 3 Cuerpos"). Mismo
+                   -- emparejamiento por item_id que foto_item, con el mismo
+                   -- fallback para registros viejos sin item_id. Sin esto, la
+                   -- tarjeta de "Requerimientos" mostraba la foto del mueble
+                   -- pero nunca decía a cuál mueble pertenecía.
+                   COALESCE(
+                       (SELECT i2.producto FROM items_venta i2 WHERE i2.id = l.item_id LIMIT 1),
+                       (SELECT i2.producto FROM items_venta i2 WHERE i2.venta_id = l.venta_id AND l.item_id IS NULL LIMIT 1)
+                   ) AS producto_item,
                    -- Detalles descriptivos del insumo según su tipo
                    COALESCE(
                        (SELECT CONCAT(coleccion, ' · ', color) FROM maestro_telas WHERE sku = l.sku LIMIT 1),
@@ -1375,8 +1385,11 @@ def obtener_logistica():
         """)
         items = []
         for r in cursor.fetchall():
-            foto_maestro = limpiar_foto(r[17]) if r[17] else ""
-            foto_item    = limpiar_foto(r[18]) if r[18] else ""
+            # NOTA: se insertó producto_item entre foto_item y detalle_insumo
+            # en el SELECT de arriba, por eso los índices desde foto_maestro
+            # en adelante se corrieron una posición respecto a antes.
+            foto_maestro = limpiar_foto(r[18]) if r[18] else ""
+            foto_item    = limpiar_foto(r[19]) if r[19] else ""
             # Lista de fotos sin duplicar (si ambas apuntan a la misma URL,
             # el frontend debe mostrar una sola, no un carrusel de 2 iguales)
             fotos = [f for f in [foto_maestro, foto_item] if f]
@@ -1401,11 +1414,12 @@ def obtener_logistica():
                 # Se mantiene foto_url por compatibilidad con cualquier otro
                 # lugar del frontend que aún lo lea como foto única.
                 "foto_url":                fotos[0] if fotos else "",
-                "detalle_insumo":          r[19] or "",
-                "url_cotizacion_adjunta":  r[20] if len(r) > 20 else None,
-                "categoria_insumo":        r[21] if len(r) > 21 else 'OTRO',
-                "estado_distribucion":     r[22] if len(r) > 22 else None,
-                "telefono_proveedor":      r[23] if len(r) > 23 else "",
+                "producto_item":           r[20] or "",
+                "detalle_insumo":          r[21] or "",
+                "url_cotizacion_adjunta":  r[17] if len(r) > 17 else None,
+                "categoria_insumo":        r[22] if len(r) > 22 else 'OTRO',
+                "estado_distribucion":     r[23] if len(r) > 23 else None,
+                "telefono_proveedor":      r[24] if len(r) > 24 else "",
             })
         return jsonify(items), 200
     except Exception as e:
