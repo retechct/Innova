@@ -8,7 +8,8 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from psycopg2 import pool as pg_pool
-from psycopg2 import OperationalError, InterfaceError
+from psycopg2 import Error as Psycopg2Error
+from psycopg2.extensions import TRANSACTION_STATUS_IDLE
 
 BACKEND_URL = os.getenv("BACKEND_URL", "https://innova-4cnn.onrender.com")
 
@@ -63,6 +64,17 @@ def get_db_connection():
     (SELECT 1). Si falla, se descarta esa conexión rota (closed=True para
     que el pool no la vuelva a prestar) y se pide otra al pool — hasta
     3 intentos por si hay varias conexiones muertas encoladas.
+
+    FIX 2 (julio 2026): el except original solo cubría OperationalError e
+    InterfaceError (conexión caída físicamente). Pero una conexión también
+    puede estar "viva" a nivel de red y aun así ser inservible si quedó en
+    estado de TRANSACCIÓN ABORTADA — por ejemplo, si otra ruta tuvo un
+    error a mitad de un INSERT/UPDATE y no hizo rollback antes de devolver
+    la conexión al pool. En ese estado, hasta un SELECT 1 falla con
+    "current transaction is aborted, commands ignored until end of
+    transaction block", que psycopg2 reporta como InternalError, no como
+    OperationalError. Por eso ahora se captura la clase base psycopg2.Error
+    (cubre todos los casos) en vez de solo esas dos subclases.
     """
     intentos_restantes = 3
     ultima_excepcion = None
@@ -73,9 +85,9 @@ def get_db_connection():
             with conexion.cursor() as cur:
                 cur.execute("SELECT 1;")
             return conexion
-        except (OperationalError, InterfaceError) as e:
+        except Psycopg2Error as e:
             ultima_excepcion = e
-            print(f"⚠️ Conexión muerta detectada en el pool, descartando: {e}")
+            print(f"⚠️ Conexión inservible detectada en el pool, descartando: {e}")
             try:
                 _db_pool.putconn(conexion, close=True)
             except Exception:
@@ -88,9 +100,41 @@ def get_db_connection():
 
 
 def release_db_connection(conn):
-    """Devuelve la conexión al pool para que otro request la reutilice."""
-    if conn:
+    """
+    Devuelve la conexión al pool para que otro request la reutilice.
+
+    FIX (julio 2026): antes esto era un putconn() directo, confiando en que
+    la ruta que usó la conexión ya hubiera hecho rollback() si algo falló
+    a mitad de un INSERT/UPDATE. En la práctica, con más de 20 endpoints
+    distintos escribiendo en la base, basta que UNA ruta se olvide del
+    rollback en su except para que esa conexión vuelva al pool en estado
+    de "transacción abortada" — y el PRÓXIMO request que la agarre (aunque
+    sea un simple SELECT en un endpoint sin relación alguna) revienta con
+    500, porque Postgres rechaza cualquier comando hasta que alguien haga
+    ROLLBACK explícito.
+
+    Ahora esta función es la única responsable de dejar la conexión limpia
+    antes de devolverla al pool: si quedó una transacción a medias (sea por
+    error o simplemente porque el que llamó no hizo commit), se hace
+    rollback aquí mismo. Si la conexión ya está inservible (cerrada,
+    conexión perdida), se descarta en vez de devolverla al pool.
+    """
+    if not conn:
+        return
+    try:
+        if conn.closed:
+            return  # ya está cerrada, nada que devolver al pool
+        if conn.get_transaction_status() != TRANSACTION_STATUS_IDLE:
+            conn.rollback()
         _db_pool.putconn(conn)
+    except Exception as e:
+        # La conexión no se pudo dejar limpia (probablemente ya rota) —
+        # mejor descartarla que arriesgarse a envenenar el pool.
+        print(f"⚠️ No se pudo devolver la conexión limpiamente, descartando: {e}")
+        try:
+            _db_pool.putconn(conn, close=True)
+        except Exception:
+            pass
 
 
 # ─── Paginación genérica (server-side) ───────────────────────────────────────
