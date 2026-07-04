@@ -1270,6 +1270,8 @@ function openConfigButaca() {
     document.querySelectorAll('#modal-config-butaca input').forEach(inp => inp.value = '');
     document.getElementById('butaca-cantidad').value = '1';
     document.getElementById('butaca-notas').value = '';
+    const butacaNombreLibreEl = document.getElementById('butaca-nombre-libre');
+    if (butacaNombreLibreEl) butacaNombreLibreEl.value = '';
     
     ['estructura-butaca', 'tela-butaca'].forEach(tipo => {
         const imgEl = document.getElementById(`img-preview-${tipo}`);
@@ -1304,12 +1306,27 @@ function actualizarVistaButaca() {
     };
     
     imgPreview.onerror = null; 
-    imgPreview.src = imgMap[tipo];
+    imgPreview.src = imgMap[tipo] || 'imagenes/sin_foto.jpg';
     
     imgPreview.onerror = function() {
         this.onerror = null; 
         this.src = 'imagenes/sin_foto.jpg';
     };
+
+    // FIX (julio 2026): "Estructura / Modelo Base" busca en un maestro distinto
+    // según el tipo de asiento (butacas vs sillas — ver _tipoDataDesdeInput en
+    // materiales.js). Si el usuario ya había elegido una estructura y luego
+    // cambia el tipo, esa selección queda de la categoría equivocada, así que
+    // la limpiamos para evitar guardar un SKU de butaca en un pedido de silla
+    // (o viceversa).
+    const searchEl = document.getElementById('search-estructura-butaca');
+    const skuEl     = document.getElementById('sku-estructura-butaca');
+    const imgEl     = document.getElementById('img-preview-estructura-butaca');
+    if (searchEl) searchEl.value = '';
+    if (skuEl)    skuEl.value = '';
+    if (imgEl)    imgEl.style.display = 'none';
+    const listEl = document.getElementById('list-estructura-butaca');
+    if (listEl) listEl.classList.remove('show');
 }
 
 async function confirmarButaca() {
@@ -1326,9 +1343,10 @@ async function confirmarButaca() {
     const nombreTela = document.getElementById('search-tela-butaca').value || "Sin tapiz específico";
     const notas = await procesarNotasConFotos(['estructura-butaca', 'tela-butaca']);
     const notasTexto = document.getElementById('butaca-notas').value;
+    const nombreLibreButaca = (document.getElementById('butaca-nombre-libre')?.value || '').trim();
 
     const specs = `
-        <b>PRODUCTO:</b> ${cantidad} Und(s) de ${tipo}<br>
+        ${nombreLibreButaca ? `<b style="color:var(--accent);">📋 ${nombreLibreButaca}</b><br>` : ''}<b>PRODUCTO:</b> ${cantidad} Und(s) de ${tipo}<br>
         <b>ESTRUCTURA/MODELO:</b> [SKU: ${skuEstructura}] ${nombreEstructura}${notas['estructura-butaca']}<br>
         <b>TAPIZ:</b> ${skuTela ? `[SKU: ${skuTela}] ${nombreTela}` : nombreTela}${notas['tela-butaca']}<br>
         ${notasTexto ? `<b style="color:var(--accent);">NOTAS:</b> ${notasTexto}` : ''}
@@ -1360,6 +1378,68 @@ async function confirmarButaca() {
 }
 // NOTA: El manejo de 'gestor-aprobacion' en changeView se hace en app.js,
 // donde changeView ya está definida. No hacerlo aquí para evitar ReferenceError.
+
+/* ================================================================= */
+/* --- HELPER: SINCRONIZAR Y PREVISUALIZAR FOTOS DE REFERENCIA    --- */
+/* ================================================================= */
+// FIX (julio 2026): sincronizarFotos() se llamaba desde el HTML (onchange)
+// en los 4 modales de plantilla (sofa/comedor/centro/butaca) pero nunca
+// existió en ningún archivo JS — por eso al elegir fotos no pasaba nada
+// visible. Además, subirFotosReferencia() solo lee el input "-fotos"
+// (Seleccionar), así que las fotos tomadas con "Tomar foto" (input
+// "-fotos-cam") jamás se llegaban a subir. Esta función:
+//   1. Si la foto viene de la cámara, la fusiona dentro del input de
+//      galería (que es el único que de verdad se sube al backend).
+//   2. Pinta miniaturas de todas las fotos listas para subir, con opción
+//      de quitar alguna antes de confirmar el pedido.
+function sincronizarFotos(inputEl, tipo) {
+    const galEl = document.getElementById(`${tipo}-fotos`);
+    if (!galEl) return;
+
+    if (inputEl !== galEl && inputEl.files && inputEl.files.length > 0) {
+        const dt = new DataTransfer();
+        if (galEl.files) {
+            for (const f of galEl.files) dt.items.add(f);
+        }
+        for (const f of inputEl.files) dt.items.add(f);
+        galEl.files = dt.files;
+    }
+
+    _mostrarPreviewMultiplesFotos(galEl, tipo);
+}
+
+function _mostrarPreviewMultiplesFotos(inputEl, tipo) {
+    const cont = document.getElementById(`preview-multiples-${tipo}`);
+    if (!cont) return;
+
+    const files = inputEl?.files;
+    if (!files || files.length === 0) { cont.innerHTML = ''; return; }
+
+    const contador = `<div style="width:100%;font-size:11px;font-weight:700;color:#64748b;">
+        📎 ${files.length} foto${files.length !== 1 ? 's' : ''} lista${files.length !== 1 ? 's' : ''} para subir
+    </div>`;
+
+    const miniaturas = Array.from(files).map((f, i) => `
+        <div style="position:relative;">
+            <img src="${URL.createObjectURL(f)}" alt="${f.name}"
+                 style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:2px solid #e2e8f0;display:block;">
+            <button type="button" onclick="_quitarFotoMultiple('${tipo}', ${i})" title="Quitar foto"
+                    style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;
+                           border-radius:50%;width:18px;height:18px;font-size:11px;line-height:1;cursor:pointer;
+                           display:flex;align-items:center;justify-content:center;padding:0;">×</button>
+        </div>`).join('');
+
+    cont.innerHTML = contador + miniaturas;
+}
+
+function _quitarFotoMultiple(tipo, index) {
+    const galEl = document.getElementById(`${tipo}-fotos`);
+    if (!galEl || !galEl.files) return;
+    const dt = new DataTransfer();
+    Array.from(galEl.files).forEach((f, i) => { if (i !== index) dt.items.add(f); });
+    galEl.files = dt.files;
+    _mostrarPreviewMultiplesFotos(galEl, tipo);
+}
 
 /* ================================================================= */
 /* --- HELPER: SUBIR FOTOS DE REFERENCIA AL SERVIDOR             --- */
@@ -1453,7 +1533,7 @@ async function procesarNotasConFotos(tipos) {
 let _cartaPagina = 1;
 const _cartaItemsPorPagina = 12;
 let _cartaFiltroCategoria = '';
-const CATEGORIAS_CARTA = ['Sofá', 'Sillón', 'Butaca', 'Silla', 'Mesa', 'Cama', 'Esquinero', 'Florero', 'Manta', 'Otro'];
+const CATEGORIAS_CARTA = ['Sofá', 'Sillón', 'Butaca', 'Silla', 'Puff', 'Mesa', 'Cama', 'Esquinero', 'Florero', 'Manta', 'Otro'];
 
 function renderCarta(grid) {
     grid.style.display = 'block';

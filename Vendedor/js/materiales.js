@@ -25,7 +25,18 @@ function _tipoDataDesdeInput(tipoInput) {
     if (['tablero', 'tablero-centro', 'tablero-inv'].includes(tipoInput)) return 'tableros';
     if (['base-mesa', 'base-centro', 'base-comedor-inv'].includes(tipoInput)) return 'bases_comedor';
     if (['silla', 'silla-inv'].includes(tipoInput)) return 'sillas';
-    if (['estructura-butaca', 'butaca-inv'].includes(tipoInput)) return 'butacas';
+    if (tipoInput === 'estructura-butaca') {
+        // FIX (julio 2026): el buscador inteligente de "Estructura / Modelo Base"
+        // buscaba SIEMPRE en el maestro de butacas, sin importar el "Tipo de
+        // Asiento" elegido arriba (Butaca / Silla Suelta / Sitial / Puff-Banqueta).
+        // Por eso al elegir "Silla Suelta" no aparecía nada: se estaba filtrando
+        // sillas dentro del catálogo de butacas. Ahora el tipo de dato depende
+        // del select #butaca-tipo.
+        const tipoAsiento = document.getElementById('butaca-tipo')?.value || '';
+        if (tipoAsiento === 'Silla Suelta') return 'sillas';
+        return 'butacas';
+    }
+    if (tipoInput === 'butaca-inv') return 'butacas';
     return '';
 }
 
