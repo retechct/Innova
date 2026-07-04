@@ -559,10 +559,19 @@ def guardar_venta():
                             nombre_insumo_silla_ctx = (
                                 f"{nombre_insumo_silla} ({rol_silla})" if rol_silla else nombre_insumo_silla
                             )
+                            # FIX (julio 2026 - v3): mismo fix que el resto de
+                            # componentes — clasificar categoria_insumo desde
+                            # la creación (aquí siempre 'ESTRUCTURAL', las
+                            # sillas nunca llegan por esta rama como tela).
+                            cursor.execute(
+                                "ALTER TABLE logistica_externa "
+                                "ADD COLUMN IF NOT EXISTS categoria_insumo VARCHAR(30) DEFAULT 'OTRO';"
+                            )
                             cursor.execute(
                                 """INSERT INTO logistica_externa
-                                       (venta_id, item_id, insumo_nombre, sku, estado, tipo_gestion, proveedor_id, cantidad)
-                                   VALUES (%s, %s, %s, %s, 'Pendiente', 'Externo', %s, %s)""",
+                                       (venta_id, item_id, insumo_nombre, sku, estado, tipo_gestion,
+                                        proveedor_id, cantidad, categoria_insumo)
+                                   VALUES (%s, %s, %s, %s, 'Pendiente', 'Externo', %s, %s, 'ESTRUCTURAL')""",
                                 (venta_id, item_id, nombre_insumo_silla_ctx, sku, prov_id_silla, cantidad_silla)
                             )
                             continue
@@ -673,11 +682,26 @@ def guardar_venta():
                     nombre_insumo_con_rol = (
                         f"{nombre_insumo_real} ({rol_componente})" if rol_componente else nombre_insumo_real
                     )
+
+                    # FIX (julio 2026 - v3): antes categoria_insumo se quedaba
+                    # NULL/'OTRO' hasta que alguien subía el comprobante de pago
+                    # (ver registrar_pago_proveedor en routes_produccion.py).
+                    # Mientras tanto, la cola de Corte y Tela, el semáforo de
+                    # "estructura lista para recojo" y el progreso de Orden de
+                    # Pedido no podían saber que esta fila era tela. Ahora se
+                    # clasifica de una vez según la tabla maestro de origen.
+                    categoria_insumo_ins = 'TELA' if tabla == 'maestro_telas' else 'ESTRUCTURAL'
+
+                    cursor.execute(
+                        "ALTER TABLE logistica_externa "
+                        "ADD COLUMN IF NOT EXISTS categoria_insumo VARCHAR(30) DEFAULT 'OTRO';"
+                    )
                     cursor.execute(
                         """INSERT INTO logistica_externa
-                               (venta_id, item_id, insumo_nombre, sku, estado, proveedor_id, tipo_gestion)
-                           VALUES (%s, %s, %s, %s, 'Pendiente', %s, 'Externo')""",
-                        (venta_id, item_id, nombre_insumo_con_rol, sku, prov_id_logistica)
+                               (venta_id, item_id, insumo_nombre, sku, estado, proveedor_id,
+                                tipo_gestion, categoria_insumo)
+                           VALUES (%s, %s, %s, %s, 'Pendiente', %s, 'Externo', %s)""",
+                        (venta_id, item_id, nombre_insumo_con_rol, sku, prov_id_logistica, categoria_insumo_ins)
                     )
 
             # Ticket de Despacho

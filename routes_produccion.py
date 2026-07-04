@@ -37,6 +37,35 @@ AREA_ALIASES = {
 }
 
 
+# FIX (julio 2026): helper compartido para saber si la TELA de un ítem
+# específico (no de toda la venta) ya está lista para que tapicería/cojines
+# puedan trabajar. Antes esta lógica solo existía como indicador visual en
+# obtener_cola_recojo (JOIN por venta_id, no por item_id) y taller.js se
+# limitaba a deshabilitar el botón en el navegador — el endpoint real de
+# confirmar recojo no validaba nada de esto en el servidor.
+#
+# "Tela pendiente" = true si:
+#   a) el ítem tiene un ticket interno de CORTE_Y_CONTROL_TELAS que aún no
+#      terminó (tela producida internamente), o
+#   b) el ítem tiene una fila de logistica_externa de categoria_insumo='TELA'
+#      que aún no fue distribuida al tapicero/cojinero.
+# Si el ítem no tiene NINGUNA tela asociada (ni ticket interno ni fila de
+# logística), no hay nada que esperar y se considera lista.
+def _tela_pendiente_para_item(cursor, item_id):
+    cursor.execute("""
+        SELECT EXISTS (
+            SELECT 1 FROM tickets_produccion
+            WHERE item_id = %s AND area_trabajo = 'CORTE_Y_CONTROL_TELAS'
+              AND estado_ticket NOT IN ('Terminado', 'Listo para Recojo', 'Recogido')
+        ) OR EXISTS (
+            SELECT 1 FROM logistica_externa
+            WHERE item_id = %s AND categoria_insumo = 'TELA'
+              AND COALESCE(estado_distribucion, '') != 'Distribuido'
+        );
+    """, (item_id, item_id))
+    return bool(cursor.fetchone()[0])
+
+
 # ==========================================
 # 8. TALLER Y KANBAN
 # ==========================================
@@ -175,22 +204,7 @@ def obtener_cola_recojo():
                    COALESCE(i.foto_url, '') AS foto_url,
                    COALESCE(t.ticket_details_override, i.color_tela, '') AS especificaciones,
                    t.foto_evidencia, v.direccion_cliente, v.fecha_entrega, t.item_id,
-                   COALESCE(ut.nombre, 'Sin asignar') AS tapicero_nombre,
-                   CASE
-                       WHEN tela.id IS NOT NULL
-                            AND tela.estado_ticket NOT IN ('Terminado', 'Listo para Recojo', 'Recogido')
-                       THEN true
-                       ELSE false
-                   END AS bloqueado_por_telas,
-                   CASE
-                       -- Sin tela asociada por ninguna vía → verde (no bloquea)
-                       WHEN tela.id IS NULL AND log_tela.id IS NULL THEN true
-                       -- Ticket de corte terminado → verde
-                       WHEN tela.estado_ticket = 'Terminado' THEN true
-                       -- Logística externa de tela distribuida al tapicero → verde
-                       WHEN log_tela.estado_distribucion = 'Distribuido' THEN true
-                       ELSE false
-                   END AS tela_distribuida
+                   COALESCE(ut.nombre, 'Sin asignar') AS tapicero_nombre
             FROM tickets_produccion t
             JOIN items_venta i    ON t.item_id  = i.id
             JOIN ventas v         ON i.venta_id = v.id
@@ -199,30 +213,60 @@ def obtener_cola_recojo():
                 ON tap.item_id = t.item_id
                AND tap.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS')
             LEFT JOIN usuarios ut ON tap.trabajador_asignado_id = ut.id
-            LEFT JOIN tickets_produccion tela
-                ON tela.item_id = t.item_id
-               AND tela.area_trabajo = 'CORTE_Y_CONTROL_TELAS'
-            LEFT JOIN logistica_externa log_tela
-                ON log_tela.venta_id = v.id
-               AND log_tela.categoria_insumo = 'TELA'
             WHERE t.area_trabajo IN ('ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS')
               AND t.estado_ticket = 'Listo para Recojo'
             ORDER BY t.fecha_fin DESC;
         """)
-        estructuras = [{
-            "ticket_id": r[0], "area": r[1], "producto": r[2], "codigo_venta": r[3],
-            "cliente": r[4], "operario": r[5],
-            "fecha_fin": r[6].strftime('%d/%m/%Y %H:%M') if r[6] else 'S/F',
-            "foto_url": "|".join([limpiar_foto(p) for p in r[7].split('|')]) if r[7] and "|" in r[7] else limpiar_foto(r[7]),
-            "especificaciones": r[8] or '',
-            "foto_evidencia": r[9] if r[9] else '', "direccion": r[10] or '',
-            "fecha_entrega": r[11].strftime('%d/%m/%Y') if r[11] else 'S/F',
-            "item_id": r[12], "tapicero": r[13],
-            "bloqueado_por_telas": bool(r[14]),
-            "tela_distribuida": bool(r[15]),
-        } for r in cursor.fetchall()]
+        raw_estructuras = cursor.fetchall()
+
+        # FIX (julio 2026): antes esto se calculaba en el mismo SELECT con un
+        # LEFT JOIN a logistica_externa filtrado por venta_id — eso podía (a)
+        # mezclar la tela de OTRA pieza del mismo contrato (venta_id, no
+        # item_id) y (b) duplicar la fila del ticket si el item tenía más de
+        # una tela asociada (ej. tela principal + tela de cojín). Se calcula
+        # ahora por item_id con el mismo helper que usa el gate real de
+        # confirmar-recojo, para que el semáforo nunca mienta respecto a lo
+        # que el backend realmente va a permitir.
+        estructuras = []
+        for r in raw_estructuras:
+            item_id_r = r[12]
+            tela_pendiente = _tela_pendiente_para_item(cursor, item_id_r)
+            estructuras.append({
+                "ticket_id": r[0], "area": r[1], "producto": r[2], "codigo_venta": r[3],
+                "cliente": r[4], "operario": r[5],
+                "fecha_fin": r[6].strftime('%d/%m/%Y %H:%M') if r[6] else 'S/F',
+                "foto_url": "|".join([limpiar_foto(p) for p in r[7].split('|')]) if r[7] and "|" in r[7] else limpiar_foto(r[7]),
+                "especificaciones": r[8] or '',
+                "foto_evidencia": r[9] if r[9] else '', "direccion": r[10] or '',
+                "fecha_entrega": r[11].strftime('%d/%m/%Y') if r[11] else 'S/F',
+                "item_id": item_id_r, "tapicero": r[13],
+                "bloqueado_por_telas": tela_pendiente,
+                "tela_distribuida": not tela_pendiente,
+            })
 
         # 2. Compras externas (Logística)
+        #
+        # FIX (julio 2026): existían DOS caminos distintos para marcar un
+        # insumo comprado como "listo para que el chofer lo recoja", y este
+        # filtro solo reconocía uno de los dos:
+        #
+        #   a) Manual: el Jefe elige "Listo para Recojo" en el selector de
+        #      estado del modal de Logística Externa (ver app.js,
+        #      estadosPosibles) → escribe l.estado = 'Listo para Recojo'.
+        #      Este es el que el filtro original SÍ cubría.
+        #
+        #   b) Automático: al subir el comprobante de pago
+        #      (registrar_pago_proveedor) y detectar que el insumo es
+        #      ESTRUCTURAL (base/tablero/silla/butaca), el sistema deja
+        #      l.estado = 'Pagado' y guarda el "listo" en la columna
+        #      l.estado_distribucion, no en l.estado. Ese camino NUNCA
+        #      hacía match con este filtro — bases, tableros, sillas
+        #      metálicas y butacas/puffs externos pagados por esta vía
+        #      jamás llegaban a la cola del chofer.
+        #
+        # Se cubren ambos caminos. Se excluye TELA porque esa categoría
+        # tiene su propia cola (Corte y Control de Telas, ver más abajo y
+        # obtener_tickets_taller), no la del chofer de estructuras/compras.
         cursor.execute("""
             SELECT l.id, v.codigo_venta, v.nombre_cliente, l.insumo_nombre, l.sku,
                    COALESCE(p.nombre, l.proveedor_informal, 'Sin proveedor') AS proveedor,
@@ -232,7 +276,11 @@ def obtener_cola_recojo():
             FROM logistica_externa l
             JOIN ventas v ON l.venta_id = v.id
             LEFT JOIN proveedores p ON l.proveedor_id = p.id
-            WHERE l.estado = 'Listo para Recojo'
+            WHERE (
+                    l.estado = 'Listo para Recojo'
+                    OR (l.estado = 'Pagado' AND l.estado_distribucion = 'Listo para Recojo')
+                  )
+              AND COALESCE(l.categoria_insumo, 'OTRO') != 'TELA'
             ORDER BY l.id DESC;
         """)
         compras_externas = [{
@@ -259,6 +307,28 @@ def confirmar_recojo_estructura(id):
         conexion = get_db_connection()
         conexion.autocommit = False
         cursor   = conexion.cursor()
+
+        # FIX (julio 2026): antes se hacía el UPDATE a 'Recogido' primero y
+        # recién después se intentaba desbloquear tapicería si correspondía
+        # — pero nada impedía el recojo en sí si la tela no estaba lista.
+        # Ahora se valida ANTES de tocar el ticket. El chequeo se hace por
+        # item_id (esta pieza puntual del contrato), no por venta completa,
+        # para no bloquear el sofá por una tela que en realidad es de la
+        # butaca de al lado en el mismo contrato.
+        cursor.execute("""
+            SELECT item_id FROM tickets_produccion
+            WHERE id = %s AND estado_ticket = 'Listo para Recojo';
+        """, (id,))
+        row_check = cursor.fetchone()
+        if not row_check:
+            return jsonify({'error': 'Ticket no encontrado o no está en estado "Listo para Recojo"'}), 400
+
+        item_id_check = row_check[0]
+        if _tela_pendiente_para_item(cursor, item_id_check):
+            return jsonify({
+                'error': 'No se puede confirmar el recojo: la tela de esta pieza todavía no fue '
+                         'distribuida por el operario de telas.'
+            }), 409
 
         cursor.execute("""
             UPDATE tickets_produccion
@@ -359,11 +429,21 @@ def confirmar_recojo_externo(logistica_id):
         cursor = conexion.cursor()
 
         # Leer estado anterior para evitar doble ejecución
-        cursor.execute("SELECT estado, venta_id FROM logistica_externa WHERE id = %s", (logistica_id,))
+        # FIX (julio 2026): antes solo se leía venta_id y el desbloqueo de
+        # ahí para abajo se hacía sobre TODOS los tickets 'Bloqueado' de la
+        # venta completa — un insumo suelto (ej. la base de UNA butaca)
+        # podía desbloquear ARMADO_COJINES o incluso, si por algún motivo
+        # estaba en 'Bloqueado', el DESPACHO_CENTRAL de OTRO ítem del mismo
+        # contrato que no tenía nada que ver. Ahora se acota por item_id
+        # (la pieza puntual de este insumo) y se excluye explícitamente
+        # DESPACHO_CENTRAL: ese ticket solo lo debe mover el propio flujo de
+        # producción/despacho (asignar_chofer_despacho ya valida todo lo
+        # necesario), nunca la llegada suelta de un insumo.
+        cursor.execute("SELECT estado, venta_id, item_id FROM logistica_externa WHERE id = %s", (logistica_id,))
         row = cursor.fetchone()
         if not row:
             return jsonify({'error': 'Ítem de logística no encontrado'}), 404
-        estado_anterior, venta_id = row
+        estado_anterior, venta_id, item_id_logistica = row
 
         if estado_anterior != 'Recibido':
             cursor.execute("""
@@ -373,13 +453,13 @@ def confirmar_recojo_externo(logistica_id):
             """, (logistica_id,))
 
         desbloqueados = 0
-        if venta_id and estado_anterior != 'Recibido':
+        if item_id_logistica and estado_anterior != 'Recibido':
             cursor.execute("""
                 SELECT t.id, t.area_trabajo, t.item_id
                 FROM tickets_produccion t
-                JOIN items_venta i ON t.item_id = i.id
-                WHERE i.venta_id = %s AND t.estado_ticket = 'Bloqueado'
-            """, (venta_id,))
+                WHERE t.item_id = %s AND t.estado_ticket = 'Bloqueado'
+                  AND t.area_trabajo != 'DESPACHO_CENTRAL'
+            """, (item_id_logistica,))
             tickets_bloqueados = cursor.fetchall()
 
             for tb_id, tb_area, tb_item_id in tickets_bloqueados:
@@ -397,7 +477,9 @@ def confirmar_recojo_externo(logistica_id):
                         WHERE item_id = %s AND area_trabajo IN ({placeholders_req})
                     """, (tb_item_id, *areas_req))
                     total_req = cursor.fetchone()[0]
-                    if total_req > 0 and terminados_req >= total_req:
+                    # También exige que la tela (si la hay) esté distribuida,
+                    # no solo que los tickets internos de estructura existan.
+                    if total_req > 0 and terminados_req >= total_req and not _tela_pendiente_para_item(cursor, tb_item_id):
                         cursor.execute("UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP WHERE id = %s", (tb_id,))
                         desbloqueados += cursor.rowcount
                 else:
@@ -1934,6 +2016,25 @@ def asignar_chofer_despacho():
         pendientes = cursor.fetchone()[0]
         if pendientes > 0:
             return jsonify({'error': f'Aún hay {pendientes} área(s) sin terminar. No se puede despachar.'}), 409
+
+        # FIX (julio 2026): un componente 100% externo (butaca/puff comprado
+        # afuera, tablero, silla metálica, etc.) NUNCA tiene fila en
+        # tickets_produccion — solo vive en logistica_externa. El chequeo de
+        # arriba por sí solo daba 0 pendientes aunque ese insumo externo
+        # todavía no hubiera llegado, permitiendo asignar chofer y despachar
+        # sin la pieza completa. Se suma el chequeo de logística externa de
+        # este mismo item_id.
+        cursor.execute("""
+            SELECT COUNT(*) FROM logistica_externa
+            WHERE item_id = %s AND estado NOT IN ('Recibido', 'Cancelado')
+        """, (item_id,))
+        pendientes_logistica = cursor.fetchone()[0]
+        if pendientes_logistica > 0:
+            return jsonify({
+                'error': f'Aún hay {pendientes_logistica} insumo(s) de logística externa sin recibir. '
+                         f'No se puede despachar.'
+            }), 409
+
         cursor.execute("""
             UPDATE tickets_produccion
             SET trabajador_asignado_id = %s, estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
@@ -2922,7 +3023,7 @@ def registrar_pago_proveedor(id):
                 """, (sku, sku, sku, sku, sku))
                 if cursor.fetchone():
                     categoria_insumo    = 'ESTRUCTURAL'
-                    estado_distribucion = 'Listo para recojo'   # va directo a cola
+                    estado_distribucion = 'Listo para Recojo'   # va directo a cola
 
         cursor.execute("""
             UPDATE logistica_externa
