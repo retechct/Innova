@@ -7,10 +7,28 @@ async function abrirDetallePedido(codigo) {
 
         if(data.error) return Swal.fire('Error', data.error, 'error');
 
-        let itemsHTML = data.items.map(item => `
-            <div style="text-align:left; background:#f8fafc; padding:8px 12px; margin-bottom:5px; border-radius:5px; border-left: 3px solid #d4af37; font-size:12px; color: #1e293b;">
-                <i class="fa-solid fa-couch"></i> <b>${item.producto}</b>
-            </div>`).join('');
+        const totalPedido = (data.items || []).reduce((s, it) => s + (it.precio || 0), 0);
+
+        let itemsHTML = data.items.map(item => {
+            const foto = item.foto || 'imagenes/sin_foto.jpg';
+            return `
+            <div style="display:flex; align-items:center; gap:10px; text-align:left; background:#f8fafc; padding:8px 10px; margin-bottom:6px; border-radius:8px; border-left: 3px solid #d4af37;">
+                <img src="${foto}" onerror="this.src='imagenes/sin_foto.jpg'"
+                     onclick="_invLightbox && _invLightbox('${foto}', '${(item.producto||'').replace(/'/g,"\\'")}')"
+                     style="width:46px; height:46px; object-fit:cover; border-radius:6px; flex-shrink:0; cursor:zoom-in; border:1px solid #e2e8f0;">
+                <div style="flex:1; min-width:0; font-size:12px; color:#1e293b;">
+                    <div><i class="fa-solid fa-couch"></i> <b>${item.producto}</b></div>
+                    <div style="color:#64748b; font-size:11px; margin-top:2px;">${item.detalles || 'Sin tela registrada'}</div>
+                </div>
+                <div style="font-weight:800; color:#065f46; font-size:12px; white-space:nowrap;">S/ ${(item.precio || 0).toFixed(2)}</div>
+            </div>`;
+        }).join('');
+
+        itemsHTML += `
+            <div style="display:flex; justify-content:space-between; padding:10px 12px; margin-top:4px; border-top:2px solid #e2e8f0; font-size:13px;">
+                <b style="color:#0f172a;">TOTAL DEL PEDIDO</b>
+                <b style="color:#0f172a;">S/ ${totalPedido.toFixed(2)}</b>
+            </div>`;
 
         // Comprobantes de pago subidos al finalizar la venta
         const pagos = data.pagos || [];

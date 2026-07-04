@@ -943,6 +943,10 @@ async function cargarLogistica() {
         const totalPagado  = movimientos.filter(m => m.estado === 'Pagado').reduce((s, m) => s + m.subtotal, 0);
         const totalGeneral = movimientos.reduce((s, m) => s + m.subtotal, 0);
 
+        // Cache para que el botón del "ojo" pueda recuperar el movimiento completo sin re-pedirlo
+        window._egMovCache = {};
+        movimientos.forEach(m => { window._egMovCache[m.id] = m; });
+
         cont.innerHTML = `
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
             <div style="${_egCardStyle('#0369a1')}">
@@ -969,6 +973,7 @@ async function cargarLogistica() {
                     <th style="${_egTh('right')}">Subtotal</th>
                     <th style="${_egTh('center')}">Estado</th>
                     <th style="${_egTh('center')}">Voucher</th>
+                    <th style="${_egTh('center')}">Ver</th>
                 </tr>
             </thead>
             <tbody>
@@ -996,12 +1001,18 @@ async function cargarLogistica() {
                                 ? `<span style="color:#16a34a;font-size:16px;"><i class="fa-solid fa-receipt"></i></span>`
                                 : `<span style="color:#cbd5e1;font-size:12px;">—</span>`}
                         </td>
+                        <td style="padding:9px;text-align:center;">
+                            <button onclick="_egVerDetalle(${m.id})" title="Ver detalle completo"
+                                    style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:13px;">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </td>
                     </tr>`;
                 }).join('')}
                 <tr style="background:#f8fafc;border-top:2px solid #e2e8f0;">
                     <td colspan="7" style="padding:12px;font-weight:800;color:#0f172a;">TOTAL</td>
                     <td style="padding:12px;text-align:right;font-weight:800;font-size:15px;color:#0f172a;">S/ ${totalGeneral.toFixed(2)}</td>
-                    <td colspan="2"></td>
+                    <td colspan="3"></td>
                 </tr>
             </tbody>
         </table>
@@ -1009,6 +1020,46 @@ async function cargarLogistica() {
     } catch(e) {
         cont.innerHTML = _egError('Error de conexión: ' + e.message);
     }
+}
+
+/**
+ * Ojo de Egresos: muestra el movimiento completo (insumo, venta, proveedor,
+ * fechas, montos y el comprobante de pago si existe) sin necesitar la
+ * columna estrecha de la tabla ni forzar a imprimir para verlo.
+ */
+function _egVerDetalle(id) {
+    const m = (window._egMovCache || {})[id];
+    if (!m) return;
+
+    const comprobanteHTML = m.comprobante_url
+        ? `<img src="${m.comprobante_url}" onerror="this.src='imagenes/sin_foto.jpg'"
+                style="width:100%; max-height:260px; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0; margin-top:6px; cursor:zoom-in;"
+                onclick="window.open('${m.comprobante_url}', '_blank')">`
+        : `<div style="text-align:center; color:#94a3b8; font-size:12px; padding:14px; background:#f8fafc; border-radius:8px; margin-top:6px;">Sin comprobante subido</div>`;
+
+    Swal.fire({
+        title: m.insumo || 'Detalle del movimiento',
+        html: `
+            <div style="text-align:left; font-size:13px; color:#334155; line-height:1.7;">
+                ${m.sku ? `<div><b>SKU:</b> ${m.sku}</div>` : ''}
+                <div><b>Venta relacionada:</b> ${m.codigo_venta || '—'}</div>
+                <div><b>Proveedor:</b> ${m.proveedor || '—'}</div>
+                <div><b>Categoría:</b> ${m.categoria || '—'}</div>
+                <div><b>Tipo de gestión:</b> ${m.tipo_gestion || '—'}</div>
+                <div><b>Cantidad:</b> ${m.cantidad || 1} ${m.unidad || ''}</div>
+                <div><b>Precio unitario:</b> S/ ${(m.precio_unit || 0).toFixed(2)}</div>
+                <div><b>Subtotal:</b> S/ ${(m.subtotal || 0).toFixed(2)}</div>
+                <div><b>Estado de pago:</b> ${m.estado || '—'}</div>
+                <div><b>Fecha de pago:</b> ${m.fecha_pago || '—'}</div>
+                <div><b>Fecha de recojo:</b> ${m.fecha_recojo || '—'}</div>
+                <div style="margin-top:10px;"><b>Comprobante:</b></div>
+                ${comprobanteHTML}
+            </div>
+        `,
+        confirmButtonText: 'Cerrar',
+        confirmButtonColor: '#0f172a',
+        width: 420,
+    });
 }
 
 // ════════════════════════════════════════════════════════════════════════════

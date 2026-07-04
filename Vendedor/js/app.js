@@ -2281,17 +2281,98 @@ async function verHistorialPrecios(codigo) {
 }
 
 // ==========================================
-// MÓDULO: CAMBIO DE PRECIO
+// MÓDULO: CAMBIO DE PRECIO / MATERIAL / PRODUCTO NUEVO
 // ==========================================
-let _cambioPrecioActual = null; // { codigo, precioActual }
+// Flujo:
+//   Paso 1 → se listan los productos del contrato (o "Agregar producto nuevo")
+//   Paso 2 → según lo elegido, se pide precio, tela/material, o nombre+precio
+// _cambioPrecioActual guarda todo el contexto necesario para armar el POST.
+let _cambioPrecioActual = null; // { codigo, item: {id, producto, precio_unitario} | null }
 
-function abrirModalCambioPrecio(codigo, precioActual) {
-    _cambioPrecioActual = { codigo, precioActual };
+async function abrirModalCambioPrecio(codigo) {
+    _cambioPrecioActual = { codigo, item: null, tipo: null };
     document.getElementById('cambio-precio-codigo-label').textContent = `Contrato #${codigo}`;
-    document.getElementById('cambio-precio-actual-label').textContent = `S/ ${parseFloat(precioActual).toFixed(2)}`;
-    document.getElementById('input-precio-nuevo').value = '';
-    document.getElementById('input-motivo-precio').value = '';
+    document.getElementById('cp-paso-1').style.display = 'block';
+    document.getElementById('cp-paso-2').style.display = 'none';
     document.getElementById('modal-cambio-precio').style.display = 'flex';
+
+    const lista = document.getElementById('cp-lista-productos');
+    lista.innerHTML = '<p style="text-align:center; color:#94a3b8; font-size:12px;">Cargando productos...</p>';
+
+    try {
+        const res  = await apiFetch(`${API_URL}/api/ventas/${codigo}/items-editables`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el contrato');
+
+        _cambioPrecioActual.items = data.items || [];
+
+        if (_cambioPrecioActual.items.length === 0) {
+            lista.innerHTML = '<p style="text-align:center; color:#94a3b8; font-size:12px;">Este contrato no tiene productos registrados.</p>';
+            return;
+        }
+
+        lista.innerHTML = _cambioPrecioActual.items.map((it, idx) => `
+            <div onclick="cpSeleccionarProducto(${idx})" style="display:flex; align-items:center; gap:10px; background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:10px; padding:8px 10px; cursor:pointer; transition:0.15s;">
+                <img src="${it.foto}" onerror="this.src='imagenes/sin_foto.jpg'" style="width:42px; height:42px; object-fit:cover; border-radius:6px; flex-shrink:0;">
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:800; color:#0f172a; font-size:13px;">${it.producto}</div>
+                    <div style="font-size:11px; color:#64748b;">${it.detalles || 'Sin tela registrada'}</div>
+                </div>
+                <div style="font-weight:800; color:#065f46; font-size:13px; white-space:nowrap;">S/ ${it.precio_unitario.toFixed(2)}</div>
+            </div>
+        `).join('');
+    } catch (e) {
+        lista.innerHTML = `<p style="color:#ef4444; font-size:12px;">Error: ${e.message}</p>`;
+    }
+}
+
+function cpSeleccionarProducto(idx) {
+    // idx === null → el usuario eligió "Agregar producto nuevo al contrato"
+    _cambioPrecioActual.item = (idx === null) ? null : _cambioPrecioActual.items[idx];
+
+    document.getElementById('cp-paso-1').style.display = 'none';
+    document.getElementById('cp-paso-2').style.display = 'block';
+
+    const box = document.getElementById('cp-producto-actual-box');
+    const selectorTipo   = document.getElementById('cp-selector-tipo');
+    const campoNombre    = document.getElementById('cp-campo-nombre-nuevo');
+
+    document.getElementById('input-precio-nuevo').value    = '';
+    document.getElementById('input-material-nuevo').value  = '';
+    document.getElementById('input-precio-material').value = '';
+    document.getElementById('input-nombre-producto-nuevo').value = '';
+    document.getElementById('input-motivo-precio').value   = '';
+
+    if (_cambioPrecioActual.item) {
+        box.innerHTML = `<strong>${_cambioPrecioActual.item.producto}</strong><br>Precio actual: <strong style="color:#d97706;">S/ ${_cambioPrecioActual.item.precio_unitario.toFixed(2)}</strong>`;
+        selectorTipo.style.display = 'flex';
+        campoNombre.style.display  = 'none';
+        cpElegirTipo('precio');
+    } else {
+        box.innerHTML = `<strong>Producto nuevo</strong> — se agregará como un ítem adicional al contrato.`;
+        selectorTipo.style.display = 'none';
+        campoNombre.style.display  = 'block';
+        document.getElementById('cp-campo-precio').style.display    = 'block';
+        document.getElementById('cp-campo-material').style.display  = 'none';
+        _cambioPrecioActual.tipo = 'nuevo_producto';
+    }
+}
+
+function cpVolverPaso1() {
+    document.getElementById('cp-paso-1').style.display = 'block';
+    document.getElementById('cp-paso-2').style.display = 'none';
+}
+
+function cpElegirTipo(tipo) {
+    _cambioPrecioActual.tipo = tipo;
+    document.querySelectorAll('.cp-tipo-btn').forEach(btn => {
+        const activo = btn.dataset.tipo === tipo;
+        btn.style.background  = activo ? '#fef3c7' : 'white';
+        btn.style.borderColor = activo ? '#d97706' : '#e2e8f0';
+        btn.style.color       = activo ? '#92400e' : '#475569';
+    });
+    document.getElementById('cp-campo-precio').style.display   = (tipo === 'precio') ? 'block' : 'none';
+    document.getElementById('cp-campo-material').style.display = (tipo === 'material') ? 'block' : 'none';
 }
 
 function cerrarModalCambioPrecio() {
@@ -2300,30 +2381,55 @@ function cerrarModalCambioPrecio() {
 }
 
 async function enviarCambioPrecio() {
-    if (!_cambioPrecioActual) return;
-    const precioNuevo = parseFloat(document.getElementById('input-precio-nuevo').value);
-    const motivo      = document.getElementById('input-motivo-precio').value.trim();
+    if (!_cambioPrecioActual || !_cambioPrecioActual.tipo) return;
+    const { codigo, item, tipo } = _cambioPrecioActual;
+    const motivo = document.getElementById('input-motivo-precio').value.trim();
 
-    if (!precioNuevo || precioNuevo <= 0) {
-        return Swal.fire('Campo requerido', 'Ingresa el nuevo precio.', 'warning');
-    }
     if (!motivo) {
         return Swal.fire('Campo requerido', 'Debes ingresar el motivo del cambio.', 'warning');
     }
-    if (precioNuevo === _cambioPrecioActual.precioActual) {
-        return Swal.fire('Sin cambio', 'El precio nuevo es igual al actual.', 'info');
+
+    const payload = {
+        tipo_cambio:     tipo,
+        motivo:          motivo,
+        vendedor_id:     usuarioActivo?.id,
+        vendedor_nombre: usuarioActivo?.nombre
+    };
+
+    if (tipo === 'precio') {
+        const precioNuevo = parseFloat(document.getElementById('input-precio-nuevo').value);
+        if (!precioNuevo || precioNuevo <= 0) {
+            return Swal.fire('Campo requerido', 'Ingresa el nuevo precio.', 'warning');
+        }
+        payload.item_id      = item.id;
+        payload.precio_nuevo = precioNuevo;
+    } else if (tipo === 'material') {
+        const materialNuevo = document.getElementById('input-material-nuevo').value.trim();
+        const precioMaterial = document.getElementById('input-precio-material').value;
+        if (!materialNuevo) {
+            return Swal.fire('Campo requerido', 'Describe la tela o material nuevo.', 'warning');
+        }
+        payload.item_id       = item.id;
+        payload.detalle_nuevo = materialNuevo;
+        if (precioMaterial) payload.precio_nuevo = parseFloat(precioMaterial);
+    } else if (tipo === 'nuevo_producto') {
+        const nombreNuevo = document.getElementById('input-nombre-producto-nuevo').value.trim();
+        const precioNuevo = parseFloat(document.getElementById('input-precio-nuevo').value);
+        if (!nombreNuevo) {
+            return Swal.fire('Campo requerido', 'Ingresa el nombre del producto nuevo.', 'warning');
+        }
+        if (!precioNuevo || precioNuevo <= 0) {
+            return Swal.fire('Campo requerido', 'Ingresa el precio del producto nuevo.', 'warning');
+        }
+        payload.producto_nombre = nombreNuevo;
+        payload.precio_nuevo    = precioNuevo;
     }
 
     try {
-        const res = await apiFetch(`${API_URL}/api/ventas/${_cambioPrecioActual.codigo}/proponer-cambio-precio`, {
+        const res = await apiFetch(`${API_URL}/api/ventas/${codigo}/proponer-cambio-precio`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                precio_nuevo:    precioNuevo,
-                motivo:          motivo,
-                vendedor_id:     usuarioActivo?.id,
-                vendedor_nombre: usuarioActivo?.nombre
-            })
+            body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error desconocido');
@@ -2358,27 +2464,43 @@ async function cargarCambiosPrecioPendientes() {
         badge.textContent     = `${data.length} pendiente${data.length > 1 ? 's' : ''}`;
         badge.style.display   = 'inline-block';
 
+        const ETIQUETA_TIPO = {
+            precio:         { texto: 'Cambio de precio',   color: '#1d4ed8', bg: '#eff6ff' },
+            material:       { texto: 'Tela / Material',    color: '#7c3aed', bg: '#f5f3ff' },
+            nuevo_producto: { texto: 'Producto nuevo',     color: '#0f766e', bg: '#f0fdfa' },
+        };
+
         contenedor.innerHTML = data.map(c => {
             const diff      = c.precio_nuevo - c.precio_original;
             const esSube    = diff > 0;
             const diffLabel = `${esSube ? '▲' : '▼'} S/ ${Math.abs(diff).toFixed(2)}`;
             const diffColor = esSube ? '#ef4444' : '#10b981';
+            const tipoInfo  = ETIQUETA_TIPO[c.tipo_cambio] || ETIQUETA_TIPO.precio;
+            const mostrarDiff = c.tipo_cambio !== 'nuevo_producto';
             return `
             <div style="background:white; border:1px solid #fde68a; border-radius:12px; padding:16px; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
                     <div>
                         <span style="font-weight:900; color:#d97706; font-size:14px;">#${c.codigo_venta}</span>
                         <span style="font-size:12px; color:#64748b; margin-left:8px;">${c.cliente}</span>
                     </div>
-                    <span style="font-size:11px; font-weight:700; color:${diffColor}; background:${esSube?'#fef2f2':'#f0fdf4'}; padding:2px 8px; border-radius:20px;">${diffLabel}</span>
+                    ${mostrarDiff ? `<span style="font-size:11px; font-weight:700; color:${diffColor}; background:${esSube?'#fef2f2':'#f0fdf4'}; padding:2px 8px; border-radius:20px;">${diffLabel}</span>` : ''}
                 </div>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                    <span style="font-size:10px; font-weight:800; color:${tipoInfo.color}; background:${tipoInfo.bg}; padding:2px 8px; border-radius:20px; text-transform:uppercase;">${tipoInfo.texto}</span>
+                    <span style="font-size:12px; font-weight:700; color:#334155;"><i class="fa-solid fa-couch"></i> ${c.producto}</span>
+                </div>
+                ${c.tipo_cambio === 'material' ? `
+                <div style="background:#f5f3ff; border-radius:8px; padding:8px 10px; margin-bottom:10px; font-size:12px; color:#5b21b6;">
+                    <strong>Tela/material nuevo:</strong> ${c.detalle_nuevo || '—'}
+                </div>` : ''}
                 <div style="display:flex; gap:10px; margin-bottom:10px; font-size:13px;">
                     <div style="flex:1; text-align:center; background:#f8fafc; border-radius:8px; padding:8px;">
-                        <div style="font-size:10px; color:#64748b; font-weight:700;">ACTUAL</div>
+                        <div style="font-size:10px; color:#64748b; font-weight:700;">${c.tipo_cambio === 'nuevo_producto' ? 'ANTES' : 'ACTUAL'}</div>
                         <div style="font-weight:900; color:#0f172a;">S/ ${c.precio_original.toFixed(2)}</div>
                     </div>
                     <div style="flex:1; text-align:center; background:#fffbeb; border-radius:8px; padding:8px;">
-                        <div style="font-size:10px; color:#92400e; font-weight:700;">PROPUESTO</div>
+                        <div style="font-size:10px; color:#92400e; font-weight:700;">${c.tipo_cambio === 'nuevo_producto' ? 'PRECIO NUEVO ITEM' : 'PROPUESTO'}</div>
                         <div style="font-weight:900; color:#d97706;">S/ ${c.precio_nuevo.toFixed(2)}</div>
                     </div>
                 </div>

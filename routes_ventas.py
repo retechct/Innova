@@ -89,6 +89,30 @@ def _crear_tabla_historial_precios(cursor):
             fecha_resolucion TIMESTAMP
         );
     """)
+    # Migración lazy: cada solicitud ahora apunta a UN producto específico
+    # del contrato (item_id) y trae un tipo_cambio para saber qué hacer al
+    # aprobar: cambiar el precio de ese item, cambiar su tela/material, o
+    # agregar un producto nuevo al contrato (con su propio precio).
+    cursor.execute("""
+        ALTER TABLE historial_precios
+            ADD COLUMN IF NOT EXISTS item_id         INTEGER,
+            ADD COLUMN IF NOT EXISTS producto_nombre  VARCHAR(200),
+            ADD COLUMN IF NOT EXISTS tipo_cambio      VARCHAR(30) DEFAULT 'precio',
+            ADD COLUMN IF NOT EXISTS detalle_nuevo    TEXT;
+    """)
+
+
+def _recalcular_total_venta(cursor, venta_id):
+    """Suma precio_unitario de todos los items del contrato y actualiza
+    ventas.monto_total. Se llama siempre que se agrega/edita un item para
+    que el total nunca quede desincronizado."""
+    cursor.execute(
+        "SELECT COALESCE(SUM(precio_unitario), 0) FROM items_venta WHERE venta_id = %s;",
+        (venta_id,)
+    )
+    nuevo_total = cursor.fetchone()[0]
+    cursor.execute("UPDATE ventas SET monto_total = %s WHERE id = %s;", (nuevo_total, venta_id))
+    return float(nuevo_total)
 
 
 # ─── Helper: puente con el inventario real ───────────────────────────────────
@@ -931,8 +955,15 @@ def obtener_detalle_pedido(codigo):
         venta = cursor.fetchone()
         if not venta:
             return jsonify({"error": "Pedido no encontrado"}), 404
-        cursor.execute("SELECT producto, color_tela, foto_url FROM items_venta WHERE venta_id = %s;", (venta[0],))
-        items = [{"producto": i[0], "detalles": i[1], "foto": i[2].split('|')[0] if i[2] else ""} for i in cursor.fetchall()]
+        cursor.execute(
+            "SELECT producto, color_tela, foto_url, COALESCE(precio_unitario, 0) FROM items_venta WHERE venta_id = %s;",
+            (venta[0],)
+        )
+        items = [{
+            "producto": i[0], "detalles": i[1],
+            "foto": i[2].split('|')[0] if i[2] else "",
+            "precio": float(i[3] or 0),
+        } for i in cursor.fetchall()]
 
         # Comprobantes de pago subidos al finalizar la venta (uno por cada
         # pago registrado en el checkout: efectivo, POS, transferencia, etc.)
@@ -970,19 +1001,82 @@ def obtener_detalle_pedido(codigo):
 # CAMBIO DE PRECIO CON HISTORIAL
 # ==========================================
 
+@ventas_bp.route('/api/ventas/<codigo>/items-editables', methods=['GET'])
+@requiere_login
+def items_editables_venta(codigo):
+    """
+    Lista los productos de un contrato para que el vendedor elija a cuál
+    le quiere pedir un cambio (precio, tela/material, o agregar uno nuevo).
+    Usado por el paso 1 del modal 'Cambiar precio' en el frontend.
+    """
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("SELECT id, monto_total, estado_general FROM ventas WHERE codigo_venta = %s;", (codigo,))
+        venta = cursor.fetchone()
+        if not venta:
+            return jsonify({'error': 'Venta no encontrada'}), 404
+        venta_id, monto_total, estado = venta
+
+        cursor.execute("""
+            SELECT id, producto, color_tela, foto_url, COALESCE(precio_unitario, 0)
+            FROM items_venta WHERE venta_id = %s ORDER BY id;
+        """, (venta_id,))
+        items = [{
+            'id':             r[0],
+            'producto':       r[1],
+            'detalles':       r[2] or '',
+            'foto':           limpiar_foto(r[3]).split('|')[0] if r[3] else 'imagenes/sin_foto.jpg',
+            'precio_unitario': float(r[4] or 0),
+        } for r in cursor.fetchall()]
+
+        return jsonify({
+            'codigo_venta':   codigo,
+            'estado_venta':   estado,
+            'monto_total':    float(monto_total or 0),
+            'items':          items,
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
 @ventas_bp.route('/api/ventas/<codigo>/proponer-cambio-precio', methods=['POST'])
 @requiere_login
 def proponer_cambio_precio(codigo):
-    data = request.json
+    """
+    tipo_cambio puede ser:
+      'precio'          -> cambia el precio_unitario de item_id
+      'material'        -> cambia la tela/material (detalle_nuevo) de item_id,
+                            opcionalmente tambien el precio si sube el costo
+      'nuevo_producto'  -> agrega un producto adicional al contrato
+                            (producto_nombre + precio_nuevo), item_id no aplica
+    """
+    data            = request.json or {}
+    tipo_cambio     = data.get('tipo_cambio', 'precio')
+    item_id         = data.get('item_id')
+    producto_nombre = (data.get('producto_nombre') or '').strip()
     precio_nuevo    = data.get('precio_nuevo')
-    motivo          = data.get('motivo', '').strip()
+    detalle_nuevo   = (data.get('detalle_nuevo') or '').strip()
+    motivo          = (data.get('motivo') or '').strip()
     vendedor_id     = data.get('vendedor_id')
     vendedor_nombre = data.get('vendedor_nombre', '')
 
-    if not precio_nuevo or not motivo:
-        return jsonify({'error': 'precio_nuevo y motivo son obligatorios'}), 400
-    if float(precio_nuevo) <= 0:
-        return jsonify({'error': 'El precio nuevo debe ser mayor a 0'}), 400
+    if tipo_cambio not in ('precio', 'material', 'nuevo_producto'):
+        return jsonify({'error': 'tipo_cambio invalido'}), 400
+    if not motivo:
+        return jsonify({'error': 'El motivo del cambio es obligatorio'}), 400
+    if tipo_cambio == 'nuevo_producto' and not producto_nombre:
+        return jsonify({'error': 'Debes indicar el nombre del producto nuevo'}), 400
+    if tipo_cambio in ('precio', 'material') and not item_id:
+        return jsonify({'error': 'Debes elegir a que producto del contrato aplica el cambio'}), 400
+    if tipo_cambio == 'material' and not detalle_nuevo:
+        return jsonify({'error': 'Describe la tela/material nueva'}), 400
+    if tipo_cambio in ('precio', 'nuevo_producto'):
+        if precio_nuevo is None or float(precio_nuevo) <= 0:
+            return jsonify({'error': 'Ingresa un precio valido'}), 400
 
     try:
         conexion = get_db_connection()
@@ -993,25 +1087,39 @@ def proponer_cambio_precio(codigo):
         venta = cursor.fetchone()
         if not venta:
             return jsonify({'error': 'Venta no encontrada'}), 404
-        venta_id, precio_original, estado = venta
+        venta_id, monto_total_actual, estado = venta
         if estado in ('Entregado', 'Cancelado'):
             return jsonify({'error': f'No se puede modificar una venta en estado {estado}'}), 400
+
+        precio_original = 0.0
+        if tipo_cambio in ('precio', 'material'):
+            cursor.execute("SELECT producto, precio_unitario FROM items_venta WHERE id = %s AND venta_id = %s;",
+                            (item_id, venta_id))
+            item_row = cursor.fetchone()
+            if not item_row:
+                return jsonify({'error': 'El producto seleccionado no pertenece a este contrato'}), 400
+            producto_nombre = producto_nombre or item_row[0]
+            precio_original = float(item_row[1] or 0)
+            if tipo_cambio == 'material' and precio_nuevo is None:
+                precio_nuevo = precio_original
 
         cursor.execute(
             "SELECT id FROM historial_precios WHERE venta_id = %s AND estado = 'Pendiente';",
             (venta_id,)
         )
         if cursor.fetchone():
-            return jsonify({'error': 'Ya existe una solicitud de cambio de precio pendiente para esta venta'}), 400
+            return jsonify({'error': 'Ya existe una solicitud pendiente para esta venta. Espera su resolucion antes de enviar otra.'}), 400
 
         cursor.execute("""
             INSERT INTO historial_precios
                 (venta_id, codigo_venta, precio_original, precio_nuevo,
-                 motivo, vendedor_id, vendedor_nombre, estado)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pendiente')
+                 motivo, vendedor_id, vendedor_nombre, estado,
+                 item_id, producto_nombre, tipo_cambio, detalle_nuevo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pendiente', %s, %s, %s, %s)
             RETURNING id;
-        """, (venta_id, codigo, float(precio_original), float(precio_nuevo),
-              motivo, vendedor_id, vendedor_nombre))
+        """, (venta_id, codigo, precio_original, float(precio_nuevo or 0),
+              motivo, vendedor_id, vendedor_nombre,
+              item_id, producto_nombre, tipo_cambio, detalle_nuevo or None))
         nuevo_id = cursor.fetchone()[0]
         conexion.commit()
         return jsonify({'exito': True, 'id': nuevo_id, 'mensaje': 'Solicitud enviada al administrador'}), 201
@@ -1034,7 +1142,8 @@ def listar_cambios_precio_pendientes():
         cursor.execute("""
             SELECT hp.id, hp.codigo_venta, hp.precio_original, hp.precio_nuevo,
                    hp.motivo, hp.vendedor_nombre, hp.fecha_solicitud,
-                   v.nombre_cliente, COALESCE(v.estado_general, 'En Producción') AS estado_venta
+                   v.nombre_cliente, COALESCE(v.estado_general, 'En Producción') AS estado_venta,
+                   hp.producto_nombre, COALESCE(hp.tipo_cambio, 'precio'), hp.detalle_nuevo
             FROM historial_precios hp
             JOIN ventas v ON hp.venta_id = v.id
             WHERE hp.estado = 'Pendiente'
@@ -1046,6 +1155,7 @@ def listar_cambios_precio_pendientes():
             'motivo': f[4], 'vendedor': f[5],
             'fecha_solicitud': f[6].strftime('%d/%m/%Y %H:%M') if f[6] else '',
             'cliente': f[7], 'estado_venta': f[8],
+            'producto': f[9] or '—', 'tipo_cambio': f[10], 'detalle_nuevo': f[11] or '',
         } for f in cursor.fetchall()]
         return jsonify(resultado), 200
     except Exception as e:
@@ -1065,22 +1175,45 @@ def aprobar_cambio_precio(cambio_id):
         conexion = get_db_connection()
         conexion.autocommit = False
         cursor   = conexion.cursor()
-        cursor.execute(
-            "SELECT venta_id, precio_nuevo FROM historial_precios WHERE id = %s AND estado = 'Pendiente';",
-            (cambio_id,)
-        )
+        cursor.execute("""
+            SELECT venta_id, precio_nuevo, item_id, producto_nombre,
+                   COALESCE(tipo_cambio, 'precio'), detalle_nuevo, codigo_venta
+            FROM historial_precios WHERE id = %s AND estado = 'Pendiente';
+        """, (cambio_id,))
         row = cursor.fetchone()
         if not row:
             return jsonify({'error': 'Solicitud no encontrada o ya resuelta'}), 404
-        venta_id, precio_nuevo = row
-        cursor.execute("UPDATE ventas SET monto_total = %s WHERE id = %s;", (precio_nuevo, venta_id))
+        venta_id, precio_nuevo, item_id, producto_nombre, tipo_cambio, detalle_nuevo, codigo_venta = row
+
+        if tipo_cambio == 'precio':
+            cursor.execute("UPDATE items_venta SET precio_unitario = %s WHERE id = %s AND venta_id = %s;",
+                            (precio_nuevo, item_id, venta_id))
+        elif tipo_cambio == 'material':
+            if detalle_nuevo:
+                cursor.execute("UPDATE items_venta SET color_tela = %s WHERE id = %s AND venta_id = %s;",
+                                (detalle_nuevo, item_id, venta_id))
+            if precio_nuevo is not None:
+                cursor.execute("UPDATE items_venta SET precio_unitario = %s WHERE id = %s AND venta_id = %s;",
+                                (precio_nuevo, item_id, venta_id))
+        elif tipo_cambio == 'nuevo_producto':
+            cursor.execute("""
+                INSERT INTO items_venta (venta_id, producto, precio_unitario, es_stock)
+                VALUES (%s, %s, %s, FALSE);
+            """, (venta_id, producto_nombre, precio_nuevo))
+
+        nuevo_total = _recalcular_total_venta(cursor, venta_id)
+
         cursor.execute("""
             UPDATE historial_precios
             SET estado = 'Aprobado', admin_id = %s, admin_nombre = %s, fecha_resolucion = NOW()
             WHERE id = %s;
         """, (admin_id, admin_nombre, cambio_id))
         conexion.commit()
-        return jsonify({'exito': True, 'mensaje': 'Precio actualizado con éxito'}), 200
+        return jsonify({
+            'exito': True,
+            'mensaje': f'Cambio aplicado. Nuevo total del contrato: S/ {nuevo_total:.2f}',
+            'monto_total': nuevo_total,
+        }), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
@@ -1126,7 +1259,8 @@ def historial_precios_venta(codigo):
         _crear_tabla_historial_precios(cursor)
         cursor.execute("""
             SELECT precio_original, precio_nuevo, motivo, vendedor_nombre,
-                   admin_nombre, estado, notas_admin, fecha_solicitud, fecha_resolucion
+                   admin_nombre, estado, notas_admin, fecha_solicitud, fecha_resolucion,
+                   producto_nombre, COALESCE(tipo_cambio, 'precio'), detalle_nuevo
             FROM historial_precios WHERE codigo_venta = %s ORDER BY fecha_solicitud DESC;
         """, (codigo,))
         resultado = [{
@@ -1135,6 +1269,7 @@ def historial_precios_venta(codigo):
             'notas_admin': f[6],
             'fecha_solicitud':  f[7].strftime('%d/%m/%Y %H:%M') if f[7] else '',
             'fecha_resolucion': f[8].strftime('%d/%m/%Y %H:%M') if f[8] else '',
+            'producto': f[9] or '—', 'tipo_cambio': f[10], 'detalle_nuevo': f[11] or '',
         } for f in cursor.fetchall()]
         return jsonify(resultado), 200
     except Exception as e:

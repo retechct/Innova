@@ -2970,6 +2970,7 @@ def resumen_logistica():
                 'fecha_recojo':    r[13] or '',
                 'tipo_gestion':    r[14] or 'Externo',
                 'tiene_comprobante': bool(r[15]),
+                'comprobante_url': r[15] or '',
             })
 
         # ── Estadísticas agregadas ─────────────────────────────────────────────
