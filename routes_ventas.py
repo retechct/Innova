@@ -377,6 +377,7 @@ def guardar_venta():
             # Verificar si el componente principal (silla/butaca) es externo ANTES de crear tickets
             # Si es externo va solo a logística, no al taller
             componente_principal_externo = False
+            sku_silla = None  # queda disponible más abajo (ej. para el ticket de Corte y Tela)
             if area_estructura == 'ESTRUCTURAS_SILLAS':
                 sku_silla = componentes.get('silla') or componentes.get('butaca')
                 if sku_silla:
@@ -393,20 +394,31 @@ def guardar_venta():
                         except Exception:
                             pass
 
+            # SKU de la tela principal (si el mueble lleva tela) — se usa para
+            # que el ticket de Tapicería y el de Corte de Telas muestren la
+            # foto de la tela en la Ficha Técnica (galería de /fichatecnica-skus).
+            sku_tela_principal = (
+                componentes.get('tela') or componentes.get('tela-silla') or componentes.get('tela-butaca')
+            )
+
             if area_estructura and not componente_principal_externo:
                 _paso_actual = f"mueble[{idx_m}] INSERT ticket {area_estructura}"
                 print(f"[PASO 4.{idx_m+1}.a] Ticket area_estructura={area_estructura}")
+                # Si es una silla/butaca armada internamente, dejamos su SKU en el
+                # ticket para que el área de Estructuras vea también la foto de la silla.
+                override_estructura = f"SKU: {sku_silla}" if (area_estructura == 'ESTRUCTURAS_SILLAS' and sku_silla) else None
                 cursor.execute("""
-                    INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa)
-                    VALUES (%s, %s, 'Pendiente', 1)
-                """, (item_id, area_estructura))
+                    INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa, ticket_details_override)
+                    VALUES (%s, %s, 'Pendiente', 1, %s)
+                """, (item_id, area_estructura, override_estructura))
                 areas_internas_creadas.add(area_estructura)
 
                 area_tap = 'TAPICERIA_SOFAS' if area_estructura == 'ESTRUCTURAS_MUEBLES' else 'TAPICERIA_SILLAS'
+                override_tap = f"SKU: {sku_tela_principal}" if sku_tela_principal else None
                 cursor.execute("""
-                    INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa)
-                    VALUES (%s, %s, 'Bloqueado', 2)
-                """, (item_id, area_tap))
+                    INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa, ticket_details_override)
+                    VALUES (%s, %s, 'Bloqueado', 2, %s)
+                """, (item_id, area_tap, override_tap))
                 areas_internas_creadas.add(area_tap)
 
             # ── Acumular detalle de cojines para ticket_details_override ─────
@@ -485,21 +497,55 @@ def guardar_venta():
 
                 if res and res[0] == 'Interno':
                     if area_destino not in areas_internas_creadas:
-                        # Determinar detalle a guardar en el ticket
-                        override_texto = None
+                        # Determinar detalle a guardar en el ticket.
+                        # IMPORTANTE: todas las líneas "SKU: XXXX" que agreguemos aquí
+                        # son las que luego /api/taller/fichatecnica-skus usa para
+                        # traer la foto del material y mostrarla en la Ficha Técnica
+                        # del ticket (galería por área) — ver taller.js:verFichaTaller.
+                        partes_override = []
                         if area_destino == 'ARMADO_COJINES' and detalle_cojines_armado:
-                            override_texto = "COJINERÍA:\n" + "\n".join(detalle_cojines_armado)
-                        elif area_destino == 'CORTE_Y_CONTROL_TELAS' and detalle_cojines_corte:
-                            # Agregar detalle de cojines al ticket de corte (junto al tipo de tela general)
-                            tela_general = componentes.get('tela') or componentes.get('tela-silla') or componentes.get('tela-butaca') or ''
-                            override_texto = ("TELA PRINCIPAL: " + tela_general + "\n" if tela_general else "")
-                            override_texto += "COJINES:\n" + "\n".join(detalle_cojines_corte)
+                            partes_override.append("COJINERÍA:\n" + "\n".join(detalle_cojines_armado))
+                        elif area_destino == 'CORTE_Y_CONTROL_TELAS':
+                            if sku_tela_principal:
+                                partes_override.append(f"SKU: {sku_tela_principal}")
+                            # Si el mueble es una silla/butaca armada internamente, se
+                            # incluye también su SKU para que quien corta la tela vea
+                            # de una vez la silla + la tela (y calcule cuánta tela usar).
+                            if area_estructura == 'ESTRUCTURAS_SILLAS' and sku_silla:
+                                partes_override.append(f"SKU: {sku_silla}")
+                            if detalle_cojines_corte:
+                                partes_override.append("COJINES:\n" + "\n".join(detalle_cojines_corte))
+                        else:
+                            partes_override.append(f"SKU: {sku}")
+
+                        override_texto = "\n".join(partes_override) if partes_override else None
 
                         cursor.execute("""
                             INSERT INTO tickets_produccion (item_id, area_trabajo, estado_ticket, etapa, ticket_details_override)
                             VALUES (%s, %s, 'Pendiente', 1, %s)
                         """, (item_id, area_destino, override_texto))
                         areas_internas_creadas.add(area_destino)
+                    else:
+                        # Ya existe un ticket para esta área (ej: 'tablero' y 'base-mesa'
+                        # ambos van a TABLEROS_Y_PIEDRAS) — no duplicamos el ticket,
+                        # solo le sumamos el SKU de este componente para que también
+                        # aparezca su foto en la Ficha Técnica.
+                        try:
+                            cursor.execute(
+                                "SELECT id, ticket_details_override FROM tickets_produccion "
+                                "WHERE item_id = %s AND area_trabajo = %s LIMIT 1",
+                                (item_id, area_destino)
+                            )
+                            row_tk = cursor.fetchone()
+                            if row_tk:
+                                texto_previo = row_tk[1] or ''
+                                nuevo_texto = (texto_previo + "\n" if texto_previo else "") + f"SKU: {sku}"
+                                cursor.execute(
+                                    "UPDATE tickets_produccion SET ticket_details_override = %s WHERE id = %s",
+                                    (nuevo_texto, row_tk[0])
+                                )
+                        except Exception:
+                            pass
                 elif res is None or res[0] == 'Externo':
                     # Obtener nombre real del insumo desde la tabla correspondiente
                     try:
