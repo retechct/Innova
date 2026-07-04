@@ -84,6 +84,19 @@ def get_db_connection():
         try:
             with conexion.cursor() as cur:
                 cur.execute("SELECT 1;")
+            # FIX (julio 2026): el SELECT 1 de arriba abre una transacción
+            # (psycopg2 no usa autocommit por defecto). Sin este rollback,
+            # la conexión se entregaba en estado "transacción activa" —
+            # inofensiva para un simple SELECT posterior, pero cualquier
+            # ruta que hiciera `conexion.autocommit = True/False` (hay
+            # varias: eliminar venta completa, migraciones con ALTER TABLE,
+            # etc.) reventaba con "ProgrammingError: set_session cannot be
+            # used inside a transaction", porque psycopg2 exige que la
+            # conexión esté IDLE para cambiar el modo autocommit.
+            # Este rollback no deshace nada real: el SELECT 1 no modificó
+            # datos, solo cierra esa transacción de prueba y deja la
+            # conexión limpia (IDLE) antes de prestarla.
+            conexion.rollback()
             return conexion
         except Psycopg2Error as e:
             ultima_excepcion = e
