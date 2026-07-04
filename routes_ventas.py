@@ -1016,7 +1016,25 @@ def eliminar_venta_completa(venta_id):
         }), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
-        return jsonify({'error': str(e)}), 500
+        # DEBUG TEMPORAL (julio 2026): el 500 no mostraba el error real,
+        # ni en los logs de Render (que solo registran el access log de
+        # gunicorn) ni en el popup del frontend (str(e) a veces viene vacío
+        # según el tipo de excepción de psycopg2). Con esto:
+        #   1. El traceback completo queda impreso en stdout → aparece en
+        #      Render → Logs, buscándolo como "ELIMINAR-COMPLETO ERROR".
+        #   2. El JSON de respuesta incluye tipo + mensaje + pgcode/pgerror
+        #      si es un error de Postgres, para verlo directo en el SweetAlert.
+        print(f"\n{'='*70}\nELIMINAR-COMPLETO ERROR (venta_id={venta_id})\n{'='*70}")
+        traceback.print_exc()
+        print(f"{'='*70}\n")
+
+        detalle = f"{type(e).__name__}: {e}"
+        pgcode  = getattr(e, 'pgcode', None)
+        pgerror = getattr(e, 'pgerror', None)
+        if pgcode or pgerror:
+            detalle += f" | pgcode={pgcode} | pgerror={pgerror}"
+
+        return jsonify({'error': detalle}), 500
     finally:
         if 'conexion' in locals() and conexion:
             if 'cursor' in locals() and cursor: cursor.close()
