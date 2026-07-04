@@ -597,14 +597,31 @@ def obtener_tickets_taller():
             
         # Inyectar elementos de Logística Externa para la cola de Telas
         if not area_filtro or area_filtro in ('TELAS', 'CORTE_Y_CONTROL_TELAS'):
+            # FIX (julio 2026): antes este WHERE solo aceptaba
+            # estado_distribucion IN ('En Recojo','Recogido','Distribuido').
+            # Eso dejaba fuera 'En espera' — el estado que registrar_pago_
+            # proveedor() asigna automáticamente a una TELA recién pagada
+            # cuando se detecta por SKU en maestro_telas. Como 'En espera'
+            # no aparecía aquí, esa tela nunca llegaba a esta bandeja y
+            # tampoco existía ningún otro botón en el frontend para
+            # moverla — se quedaba pagada pero invisible indefinidamente.
+            # Al incluirla, vuelve a pasar por el flujo normal: el jefe la
+            # ve con el badge "Pagado, en espera" y puede asignarle un
+            # operario (asignar_operario_logistica ya la mueve a
+            # 'En Recojo' automáticamente, sin tocar ese endpoint).
             log_query = """
                 SELECT l.id, v.codigo_venta, l.insumo_nombre, l.sku, l.estado_distribucion, v.id,
-                       l.operario_id, COALESCE(u.nombre, 'Sin asignar')
+                       l.operario_id, COALESCE(u.nombre, 'Sin asignar'),
+                       COALESCE(l.cantidad, 1)                                   AS cantidad,
+                       COALESCE(l.unidad, '')                                    AS unidad,
+                       COALESCE(p.nombre, l.proveedor_informal, 'Sin proveedor') AS proveedor,
+                       v.nombre_cliente, v.fecha_entrega
                 FROM logistica_externa l
                 JOIN ventas v ON l.venta_id = v.id
                 LEFT JOIN usuarios u ON l.operario_id = u.id
+                LEFT JOIN proveedores p ON l.proveedor_id = p.id
                 WHERE (l.categoria_insumo = 'TELA' OR LOWER(l.insumo_nombre) LIKE '%%tela%%' OR LOWER(l.unidad) = 'mts')
-                  AND l.estado_distribucion IN ('En Recojo', 'Recogido', 'Distribuido')
+                  AND l.estado_distribucion IN ('En espera', 'En Recojo', 'Recogido', 'Distribuido')
             """
             log_params = []
             if operario_id:
@@ -651,6 +668,16 @@ def obtener_tickets_taller():
                     "es_logistica": True,
                     "tapicero_destino": destino.get('tapicero'),
                     "cojinero_destino": destino.get('cojinero'),
+                    # Campos nuevos para agrupar por contrato en el frontend
+                    # (taller.js: tarjeta de contrato con desglose por línea).
+                    "venta_id":       r[5],
+                    "codigo_venta":   r[1],
+                    "sku":            r[3] or '',
+                    "cantidad":       float(r[8]) if r[8] is not None else 1,
+                    "unidad":         r[9] or '',
+                    "proveedor":      r[10],
+                    "cliente":        r[11] or '',
+                    "fecha_entrega":  r[12].strftime('%d/%m/%Y') if r[12] else None,
                 })
                 
         return jsonify(tickets), 200

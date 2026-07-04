@@ -1738,98 +1738,28 @@ async function cargarTicketsTaller() {
                 <h3 style="margin-top:0; color:#0f172a; font-size:15px; border-bottom:3px solid ${colorCab}; padding-bottom:10px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
                     <span style="color:${colorCab === '#22c55e' ? '#166534' : '#0f172a'};">${cfg.icono} ${cfg.nombre}</span>
                     <span style="background:#1e293b; color:white; padding:3px 10px; border-radius:20px; font-size:11px;">${listaTickets.length}</span>
-                </h3>
-                <div class="tickets-area-grid">`;
+                </h3>`;
 
-            listaTickets.forEach(t => {
-                const isBloqueado       = t.estado === 'Bloqueado';
-                const isTerminado       = t.estado === 'Terminado';
-                const isEnProceso       = t.estado === 'En Proceso';
-                const isPendiente       = t.estado === 'Pendiente';
-                const isListoParaRecojo = t.estado === 'Listo para Recojo';
-                const isRecogido        = t.estado === 'Recogido';
+            // ── AGRUPAR POR CONTRATO solo para Corte y Control de Telas ──
+            // Las filas que vienen de logistica_externa (t.es_logistica) se
+            // agrupan por venta_id en una tarjeta de contrato; los tickets
+            // internos reales de esta área (si existen) siguen pintándose
+            // igual que siempre, en el grid de tarjetas normal.
+            const esAreaTelasVista = (areaId === 'CORTE_Y_CONTROL_TELAS' || areaId === 'TELAS');
+            const ticketsInternos  = esAreaTelasVista ? listaTickets.filter(t => !t.es_logistica) : listaTickets;
+            const ticketsLogistica = esAreaTelasVista ? listaTickets.filter(t =>  t.es_logistica) : [];
 
-                const specsB64   = btoa(unescape(encodeURIComponent(t.especificaciones || '')));
-                let colorBorde   = isBloqueado       ? '#94a3b8'
-                                 : isTerminado        ? '#22c55e'
-                                 : isEnProceso        ? '#3b82f6'
-                                 : isListoParaRecojo  ? '#dc2626'
-                                 : isRecogido         ? '#22c55e'
-                                 : '#f59e0b';
-                let bgCard       = isBloqueado       ? '#f1f5f9'
-                                 : isListoParaRecojo  ? '#fff5f5'
-                                 : '#ffffff';
-                let opacidad     = isBloqueado ? '0.55' : '1';
+            if (ticketsInternos.length > 0) {
+                html += `<div class="tickets-area-grid">`;
+                ticketsInternos.forEach(t => { html += renderTicketCardHTML(t, esAdmin); });
+                html += `</div>`;
+            }
 
-                let badgeBg  = isBloqueado       ? '#e2e8f0'
-                             : isTerminado        ? '#dcfce7'
-                             : isEnProceso        ? '#dbeafe'
-                             : isListoParaRecojo  ? '#fee2e2'
-                             : isRecogido         ? '#dcfce7'
-                             : '#fef3c7';
-                let badgeCol = isBloqueado       ? '#64748b'
-                             : isTerminado        ? '#166534'
-                             : isEnProceso        ? '#1e40af'
-                             : isListoParaRecojo  ? '#991b1b'
-                             : isRecogido         ? '#166534'
-                             : '#b45309';
-                let badgeTxt = isBloqueado       ? '🔒 BLOQUEADO'
-                             : isTerminado        ? '✅ TERMINADO'
-                             : isEnProceso        ? '🔵 EN PROCESO'
-                             : isListoParaRecojo  ? '🔴 LISTO PARA RECOJO'
-                             : isRecogido         ? '✅ RECOGIDO'
-                             : '🟡 PENDIENTE';
+            if (ticketsLogistica.length > 0) {
+                html += renderContratosTelaHTML(ticketsLogistica, esAdmin);
+            }
 
-                if (t.es_logistica) {
-                    if (t.estado === 'En Recojo') { badgeBg = '#fef9c3'; badgeCol = '#854d0e'; badgeTxt = '🟡 EN RECOJO'; }
-                    else if (t.estado === 'Recogido') { badgeBg = '#dcfce7'; badgeCol = '#166534'; badgeTxt = '✅ RECOGIDO (POR DISTRIBUIR)'; }
-                    else if (t.estado === 'Distribuido') { badgeBg = '#dcfce7'; badgeCol = '#166534'; badgeTxt = '✅ DISTRIBUIDO'; }
-                }
-
-                // Asignado a quién
-                const asignadoA = t.trabajador_nombre && t.trabajador_nombre !== 'Sin asignar'
-                    ? `<p style="font-size:10px; color:#64748b; margin:4px 0 12px 0;"><i class="fa-solid fa-user"></i> ${t.trabajador_nombre}</p>`
-                    : `<p style="font-size:10px; color:#f59e0b; margin:4px 0 12px 0;"><i class="fa-solid fa-user-clock"></i> Sin asignar</p>`;
-
-                // Escapar producto para evitar romper HTML con comillas/apóstrofes
-                const productoSafe = (t.producto || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-                const fotoBtoa    = (t.foto||'').replace(/"/g,'&quot;');
-
-                // Foto del mueble — mostrar siempre la foto del modelo base (la primera)
-                const _fotosCard = t.foto ? t.foto.split('|').filter(f => f.trim()) : [];
-                const fotoCardSrc = _fotosCard.length > 0 && !_fotosCard[0].includes('sin_foto') ? _fotosCard[0] : null;
-                const fotoCardHTML = fotoCardSrc
-                    ? `<div style="margin:-15px -15px 12px -15px; border-radius:8px 8px 0 0; overflow:hidden; height:160px; background:#f1f5f9;">
-                           <img src="${fotoCardSrc}" alt="${productoSafe}"
-                               style="width:100%; height:160px; object-fit:cover; display:block; cursor:pointer;"
-                               onclick="ampliarImagen('${fotoCardSrc}')"
-                               onerror="this.parentElement.style.display='none'">
-                       </div>`
-                    : '';
-
-                html += `
-                <div style="background:${bgCard}; border-left:5px solid ${colorBorde}; border-radius:8px; padding:15px; opacity:${opacidad}; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:0.2s; overflow:hidden;">
-                    ${fotoCardHTML}
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <span style="font-size:10px; font-weight:900; padding:4px 8px; border-radius:4px; background:${badgeBg}; color:${badgeCol};">${badgeTxt}</span>
-                        <span style="font-size:10px; font-weight:bold; color:#94a3b8;">#${t.id}</span>
-                    </div>
-                    <h4 style="margin:0 0 2px 0; font-size:13px; color:${isBloqueado ? '#94a3b8' : '#0f172a'}; font-weight:800;">${productoSafe}</h4>
-                    ${asignadoA}
-                    <button class="btn-ver-ficha"
-                        data-producto="${productoSafe}"
-                        data-specs="${specsB64}"
-                        data-foto="${fotoBtoa}"
-                        data-ticket-id="${t.id}" data-area="${t.area}"
-                        style="width:100%; background:#e0f2fe; color:#0369a1; border:none; padding:7px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-bottom:8px;">
-                        <i class="fa-solid fa-eye"></i> Ver Ficha Técnica Completa
-                    </button>
-                    ${renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin)}
-                    <div id="sug-est-${t.id}"></div>
-                </div>`;
-            });
-
-            html += `</div></div>`;
+            html += `</div>`;
         }
 
         contenedor.innerHTML = html;
@@ -1898,6 +1828,235 @@ async function cargarTicketsTaller() {
         console.error('Error cargando taller:', err);
         contenedor.innerHTML = '<p style="color:red; text-align:center;">❌ Error al conectar con el servidor.</p>';
     }
+}
+
+/* ================================================================= */
+/* --- TARJETA DE TICKET INDIVIDUAL (extraída de cargarTicketsTaller,
+       sin cambios de HTML/lógica — solo convertida en función para
+       poder reusarla dentro de las tarjetas de contrato de Telas) --- */
+/* ================================================================= */
+function renderTicketCardHTML(t, esAdmin) {
+    const isBloqueado       = t.estado === 'Bloqueado';
+    const isTerminado       = t.estado === 'Terminado';
+    const isEnProceso       = t.estado === 'En Proceso';
+    const isListoParaRecojo = t.estado === 'Listo para Recojo';
+    const isRecogido        = t.estado === 'Recogido';
+
+    const specsB64   = btoa(unescape(encodeURIComponent(t.especificaciones || '')));
+    let colorBorde   = isBloqueado       ? '#94a3b8'
+                     : isTerminado        ? '#22c55e'
+                     : isEnProceso        ? '#3b82f6'
+                     : isListoParaRecojo  ? '#dc2626'
+                     : isRecogido         ? '#22c55e'
+                     : '#f59e0b';
+    let bgCard       = isBloqueado       ? '#f1f5f9'
+                     : isListoParaRecojo  ? '#fff5f5'
+                     : '#ffffff';
+    let opacidad     = isBloqueado ? '0.55' : '1';
+
+    let badgeBg  = isBloqueado       ? '#e2e8f0'
+                 : isTerminado        ? '#dcfce7'
+                 : isEnProceso        ? '#dbeafe'
+                 : isListoParaRecojo  ? '#fee2e2'
+                 : isRecogido         ? '#dcfce7'
+                 : '#fef3c7';
+    let badgeCol = isBloqueado       ? '#64748b'
+                 : isTerminado        ? '#166534'
+                 : isEnProceso        ? '#1e40af'
+                 : isListoParaRecojo  ? '#991b1b'
+                 : isRecogido         ? '#166534'
+                 : '#b45309';
+    let badgeTxt = isBloqueado       ? '🔒 BLOQUEADO'
+                 : isTerminado        ? '✅ TERMINADO'
+                 : isEnProceso        ? '🔵 EN PROCESO'
+                 : isListoParaRecojo  ? '🔴 LISTO PARA RECOJO'
+                 : isRecogido         ? '✅ RECOGIDO'
+                 : '🟡 PENDIENTE';
+
+    if (t.es_logistica) {
+        const b = _badgeLogisticaTela(t.estado);
+        badgeBg = b.bg; badgeCol = b.col; badgeTxt = b.txt;
+    }
+
+    // Asignado a quién
+    const asignadoA = t.trabajador_nombre && t.trabajador_nombre !== 'Sin asignar'
+        ? `<p style="font-size:10px; color:#64748b; margin:4px 0 12px 0;"><i class="fa-solid fa-user"></i> ${t.trabajador_nombre}</p>`
+        : `<p style="font-size:10px; color:#f59e0b; margin:4px 0 12px 0;"><i class="fa-solid fa-user-clock"></i> Sin asignar</p>`;
+
+    // Escapar producto para evitar romper HTML con comillas/apóstrofes
+    const productoSafe = (t.producto || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const fotoBtoa    = (t.foto||'').replace(/"/g,'&quot;');
+
+    // Foto del mueble — mostrar siempre la foto del modelo base (la primera)
+    const _fotosCard = t.foto ? t.foto.split('|').filter(f => f.trim()) : [];
+    const fotoCardSrc = _fotosCard.length > 0 && !_fotosCard[0].includes('sin_foto') ? _fotosCard[0] : null;
+    const fotoCardHTML = fotoCardSrc
+        ? `<div style="margin:-15px -15px 12px -15px; border-radius:8px 8px 0 0; overflow:hidden; height:160px; background:#f1f5f9;">
+               <img src="${fotoCardSrc}" alt="${productoSafe}"
+                   style="width:100%; height:160px; object-fit:cover; display:block; cursor:pointer;"
+                   onclick="ampliarImagen('${fotoCardSrc}')"
+                   onerror="this.parentElement.style.display='none'">
+           </div>`
+        : '';
+
+    return `
+    <div style="background:${bgCard}; border-left:5px solid ${colorBorde}; border-radius:8px; padding:15px; opacity:${opacidad}; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:0.2s; overflow:hidden;">
+        ${fotoCardHTML}
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:10px; font-weight:900; padding:4px 8px; border-radius:4px; background:${badgeBg}; color:${badgeCol};">${badgeTxt}</span>
+            <span style="font-size:10px; font-weight:bold; color:#94a3b8;">#${t.id}</span>
+        </div>
+        <h4 style="margin:0 0 2px 0; font-size:13px; color:${isBloqueado ? '#94a3b8' : '#0f172a'}; font-weight:800;">${productoSafe}</h4>
+        ${asignadoA}
+        <button class="btn-ver-ficha"
+            data-producto="${productoSafe}"
+            data-specs="${specsB64}"
+            data-foto="${fotoBtoa}"
+            data-ticket-id="${t.id}" data-area="${t.area}"
+            style="width:100%; background:#e0f2fe; color:#0369a1; border:none; padding:7px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-bottom:8px;">
+            <i class="fa-solid fa-eye"></i> Ver Ficha Técnica Completa
+        </button>
+        ${renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin)}
+        <div id="sug-est-${t.id}"></div>
+    </div>`;
+}
+
+/* Badge de estado para una línea de logística de tela (incluye 'En espera',
+   que antes no se pintaba en ningún lado porque ni siquiera llegaba a esta
+   bandeja — ver el fix en obtener_tickets_taller, backend). */
+function _badgeLogisticaTela(estado) {
+    if (estado === 'En espera')   return { bg:'#fef3c7', col:'#92400e', txt:'🟡 PAGADO — ESPERANDO OPERARIO' };
+    if (estado === 'En Recojo')   return { bg:'#fef9c3', col:'#854d0e', txt:'🟡 EN RECOJO' };
+    if (estado === 'Recogido')    return { bg:'#dcfce7', col:'#166534', txt:'✅ RECOGIDO (POR DISTRIBUIR)' };
+    if (estado === 'Distribuido') return { bg:'#dcfce7', col:'#166534', txt:'✅ DISTRIBUIDO' };
+    return { bg:'#fef3c7', col:'#92400e', txt: estado || '—' };
+}
+
+/* ================================================================= */
+/* --- TARJETAS DE CONTRATO (Corte y Control de Telas)             ---
+   Agrupa las líneas de logistica_externa (t.es_logistica) por
+   venta_id: un header por contrato (código, cliente, entrega,
+   tapicero/cojinero destino) + total consolidado + una fila por
+   línea con su propio botón de acción (mismo renderBotonTicket de
+   siempre — no se toca el flujo de asignar/pagar/distribuir). */
+/* ================================================================= */
+function renderContratosTelaHTML(ticketsLogistica, esAdmin) {
+    // Agrupar por venta_id (con fallback a item_id por compatibilidad
+    // con cachés viejos que no tengan el campo nuevo todavía)
+    const contratos = {};
+    ticketsLogistica.forEach(t => {
+        const key = t.venta_id ?? t.item_id;
+        if (!contratos[key]) contratos[key] = [];
+        contratos[key].push(t);
+    });
+
+    let out = `<div style="display:flex; flex-direction:column; gap:14px; margin-top:${Object.keys(contratos).length ? '4px' : '0'};">`;
+
+    for (const lineas of Object.values(contratos)) {
+        const cab = lineas[0];
+        const codigo   = cab.codigo_venta || '—';
+        const cliente  = cab.cliente || '';
+        const entrega  = cab.fecha_entrega ? `Entrega: <b>${cab.fecha_entrega}</b>` : '';
+        const tapicero = (cab.tapicero_destino && cab.tapicero_destino !== 'Sin asignar')
+            ? `<span title="Tapicero/Cojinero destino"><i class="fa-solid fa-arrow-right"></i> ${cab.tapicero_destino}</span>` : '';
+        const cojinero = (cab.cojinero_destino && cab.cojinero_destino !== 'Sin asignar')
+            ? `<span title="Cojinero destino"><i class="fa-solid fa-arrow-right"></i> ${cab.cojinero_destino}</span>` : '';
+
+        // Total consolidado: solo se suma entre líneas con la MISMA unidad
+        // (no se puede sumar 18 mts + 2 cojines en un solo número honesto).
+        const totalesPorUnidad = {};
+        lineas.forEach(l => {
+            const u = (l.unidad || '').trim().toLowerCase() || 'unid.';
+            totalesPorUnidad[u] = (totalesPorUnidad[u] || 0) + (Number(l.cantidad) || 0);
+        });
+        const totalHTML = Object.entries(totalesPorUnidad)
+            .map(([u, cant]) => `<b>${cant % 1 === 0 ? cant : cant.toFixed(2)} ${u}</b>`)
+            .join(' &nbsp;+&nbsp; ');
+
+        // Botón de lote: solo tiene sentido para quien distribuye (no admin),
+        // y solo si hay al menos una línea ya 'Recogido' esperando entrega.
+        const idsRecogidos = lineas.filter(l => l.estado === 'Recogido').map(l => l.id);
+        const botonLoteHTML = (!esAdmin && idsRecogidos.length > 1)
+            ? `<button onclick='confirmarDistribucionLote(${JSON.stringify(idsRecogidos)})'
+                   style="width:100%; background:#16a34a; color:white; border:none; padding:9px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-top:10px;">
+                   <i class="fa-solid fa-people-carry-box"></i> Distribuir las ${idsRecogidos.length} líneas ya recogidas de este contrato
+               </button>`
+            : '';
+
+        out += `
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:14px; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px; border-bottom:1px dashed #e2e8f0; padding-bottom:10px; margin-bottom:10px;">
+                <div>
+                    <div style="font-size:13px; font-weight:900; color:#0f172a;"><i class="fa-solid fa-file-contract"></i> ${codigo} <span style="font-weight:600; color:#64748b;">— ${cliente}</span></div>
+                    <div style="font-size:10px; color:#64748b; margin-top:3px; display:flex; gap:10px; flex-wrap:wrap;">
+                        ${entrega} ${tapicero} ${cojinero}
+                    </div>
+                </div>
+                ${totalHTML ? `<div style="font-size:11px; color:#0f172a; background:#f1f5f9; padding:6px 10px; border-radius:8px; white-space:nowrap;">Total: ${totalHTML}</div>` : ''}
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                ${lineas.map(l => renderLineaTelaHTML(l, esAdmin)).join('')}
+            </div>
+            ${botonLoteHTML}
+        </div>`;
+    }
+
+    out += `</div>`;
+    return out;
+}
+
+/* Fila compacta de una línea de tela dentro de una tarjeta de contrato. */
+function renderLineaTelaHTML(t, esAdmin) {
+    const b = _badgeLogisticaTela(t.estado);
+    const nombreInsumo = (t.producto || '').replace(/^TELA EXTERNA:\s*/, '');
+    const insumoSafe = nombreInsumo.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const cantidadTxt = (Number(t.cantidad) || 0) % 1 === 0 ? Number(t.cantidad) : Number(t.cantidad).toFixed(2);
+
+    return `
+    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+            <span style="font-size:12px; font-weight:800; color:#0f172a;">${insumoSafe}</span>
+            <span style="font-size:9px; font-weight:900; padding:3px 7px; border-radius:4px; background:${b.bg}; color:${b.col}; white-space:nowrap;">${b.txt}</span>
+        </div>
+        <div style="font-size:10px; color:#64748b; margin-bottom:8px;">
+            SKU: ${t.sku || 'N/A'} &nbsp;·&nbsp; Cant.: <b>${cantidadTxt} ${t.unidad || ''}</b> &nbsp;·&nbsp; Proveedor: ${t.proveedor || 'Sin proveedor'}
+        </div>
+        ${renderBotonTicket(t, false, false, false, esAdmin)}
+    </div>`;
+}
+
+/* Distribuye en lote todas las líneas de un contrato que ya estén en
+   estado 'Recogido' — no toca las que aún no llegaron. Reusa el mismo
+   endpoint que el botón individual, una llamada por línea. */
+async function confirmarDistribucionLote(ids) {
+    const conf = await Swal.fire({
+        title: `¿Distribuir ${ids.length} líneas de este contrato?`,
+        text: 'Esto desbloqueará los tickets de tapicería/cojines que dependan de estas telas.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, distribuir todas'
+    });
+    if (!conf.isConfirmed) return;
+
+    Swal.fire({ title: 'Distribuyendo...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    let okCount = 0, desbloqueadosTotal = 0, errores = [];
+    for (const id of ids) {
+        try {
+            const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-distribucion`, { method: 'POST' });
+            const d = await res.json();
+            if (d.exito) { okCount++; desbloqueadosTotal += (d.desbloqueados || 0); }
+            else { errores.push(`#${id}: ${d.error || 'error'}`); }
+        } catch (e) {
+            errores.push(`#${id}: error de conexión`);
+        }
+    }
+
+    if (errores.length === 0) {
+        Swal.fire('¡Distribuidas!', `${okCount} línea(s) entregadas. ${desbloqueadosTotal} ticket(s) desbloqueado(s).`, 'success');
+    } else {
+        Swal.fire('Parcialmente completado', `${okCount} OK. Fallaron: ${errores.join(', ')}`, 'warning');
+    }
+    cargarTicketsTaller();
 }
 
 /* --- HELPER: Scroll para el carrusel de la ficha técnica --- */
