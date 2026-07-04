@@ -18,6 +18,7 @@ dentro de cada elemento del array muebles.
 """
 
 import io
+import json
 import traceback
 import openpyxl
 from datetime import datetime
@@ -821,6 +822,133 @@ def anular_venta_completa(venta_id):
 
         conexion.commit()
         return jsonify({'exito': True, 'mensaje': 'Venta y procesos de taller anulados con éxito.'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
+
+
+def _crear_tabla_ventas_eliminadas_log(cursor):
+    """
+    Auditoría de borrados definitivos. La venta y todo lo que cuelga de
+    ella (items, tickets, pagos, logística, historial de precios) se
+    borra de verdad — pero acá queda una fotografía de qué se borró,
+    quién lo hizo y por qué, para siempre. Sin esto, un borrado en
+    cascada es imposible de investigar después.
+    """
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ventas_eliminadas_log (
+            id                      SERIAL PRIMARY KEY,
+            venta_id                INTEGER,
+            codigo_venta            VARCHAR(50),
+            nombre_cliente          VARCHAR(150),
+            monto_total             NUMERIC(10,2),
+            vendedor_nombre         VARCHAR(100),
+            fecha_emision_original  TIMESTAMP,
+            snapshot_items          JSONB,
+            motivo                  TEXT NOT NULL,
+            eliminado_por_id        INTEGER,
+            eliminado_por_nombre    VARCHAR(100),
+            fecha_eliminacion       TIMESTAMP DEFAULT NOW()
+        );
+    """)
+
+
+@ventas_bp.route('/api/ventas/<int:venta_id>/eliminar-completo', methods=['POST'])
+@requiere_rol('Admin')
+def eliminar_venta_completa(venta_id):
+    """
+    Borra la venta y TODO lo relacionado a ella como si nunca hubiera
+    existido: items, tickets de taller, pagos, logística externa y
+    solicitudes de cambio de precio. A diferencia de /anular (que solo
+    cambia el estado a 'Cancelado' y conserva el registro), esto ejecuta
+    DELETE real sobre las filas.
+
+    Requiere 'motivo' — se guarda en ventas_eliminadas_log ANTES de borrar
+    nada, junto con una foto de los items del contrato, para dejar rastro
+    de qué se eliminó y por qué (dato irrecuperable después de esto).
+
+    Solo Admin puede ejecutarlo por ser una acción irreversible.
+    """
+    data         = request.json or {}
+    motivo       = (data.get('motivo') or '').strip()
+    admin_id     = data.get('admin_id')
+    admin_nombre = data.get('admin_nombre', 'Admin')
+
+    if not motivo:
+        return jsonify({'error': 'Debes indicar el motivo de la eliminación'}), 400
+
+    try:
+        conexion = get_db_connection()
+        conexion.autocommit = False
+        cursor   = conexion.cursor()
+
+        cursor.execute("""
+            SELECT codigo_venta, nombre_cliente, monto_total, vendedor_nombre, fecha_emision
+            FROM ventas WHERE id = %s;
+        """, (venta_id,))
+        venta = cursor.fetchone()
+        if not venta:
+            return jsonify({'error': 'Venta no encontrada'}), 404
+        codigo_venta, nombre_cliente, monto_total, vendedor_nombre, fecha_emision = venta
+
+        cursor.execute("""
+            SELECT producto, color_tela, precio_unitario FROM items_venta WHERE venta_id = %s;
+        """, (venta_id,))
+        items_snapshot = [
+            {'producto': r[0], 'detalles': r[1], 'precio_unitario': float(r[2] or 0)}
+            for r in cursor.fetchall()
+        ]
+
+        # 1. Dejar rastro ANTES de borrar nada
+        _crear_tabla_ventas_eliminadas_log(cursor)
+        cursor.execute("""
+            INSERT INTO ventas_eliminadas_log
+                (venta_id, codigo_venta, nombre_cliente, monto_total, vendedor_nombre,
+                 fecha_emision_original, snapshot_items, motivo,
+                 eliminado_por_id, eliminado_por_nombre)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s);
+        """, (venta_id, codigo_venta, nombre_cliente, monto_total, vendedor_nombre,
+              fecha_emision, json.dumps(items_snapshot, default=str), motivo,
+              admin_id, admin_nombre))
+
+        # 2. Devolver al inventario cualquier unidad física reservada,
+        #    igual que en la anulación — eliminar la venta no debe dejar
+        #    muebles "perdidos" marcados como Reservado para siempre.
+        _liberar_unidades(cursor, venta_id, 'Disponible', 'Eliminacion definitiva')
+
+        # 3. Devolver stock genérico del catálogo (mismo criterio que /anular)
+        cursor.execute("""
+            SELECT cp.id FROM catalogo_productos cp
+            JOIN items_venta iv ON cp.nombre_modelo = iv.producto
+            WHERE iv.venta_id = %s
+        """, (venta_id,))
+        for p in cursor.fetchall():
+            cursor.execute("""
+                UPDATE catalogo_productos SET stock_cantidad = stock_cantidad + 1, en_stock = true
+                WHERE id = %s
+            """, (p[0],))
+
+        # 4. Borrar en cascada — hijos primero, padre al final
+        cursor.execute("DELETE FROM historial_inventario WHERE venta_id = %s;", (venta_id,))
+        cursor.execute("""
+            DELETE FROM tickets_produccion
+            WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s);
+        """, (venta_id,))
+        cursor.execute("DELETE FROM pagos WHERE venta_id = %s;", (venta_id,))
+        cursor.execute("DELETE FROM logistica_externa WHERE venta_id = %s;", (venta_id,))
+        cursor.execute("DELETE FROM historial_precios WHERE venta_id = %s;", (venta_id,))
+        cursor.execute("DELETE FROM items_venta WHERE venta_id = %s;", (venta_id,))
+        cursor.execute("DELETE FROM ventas WHERE id = %s;", (venta_id,))
+
+        conexion.commit()
+        return jsonify({
+            'exito': True,
+            'mensaje': f'La venta #{codigo_venta} fue eliminada por completo del sistema.'
+        }), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500

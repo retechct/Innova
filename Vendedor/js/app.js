@@ -2643,7 +2643,8 @@ async function gestionarEstadoVenta(ventaId, estadoActual) {
                 'Entregado': 'Marcar como Entregado'
             },
             'Peligro': {
-                'ANULAR': '❌ ANULAR VENTA COMPLETA'
+                'ANULAR': '❌ ANULAR VENTA (cancela, conserva el registro)',
+                'ELIMINAR': '🗑️ ELIMINAR POR COMPLETO ESTA VENTA (borra todo)'
             }
         },
         inputPlaceholder: 'Selecciona una acción',
@@ -2652,6 +2653,10 @@ async function gestionarEstadoVenta(ventaId, estadoActual) {
     });
 
     if (!accion) return;
+
+    if (accion === 'ELIMINAR') {
+        return _eliminarVentaCompleta(ventaId);
+    }
 
     try {
         let url, body;
@@ -2672,6 +2677,66 @@ async function gestionarEstadoVenta(ventaId, estadoActual) {
             Swal.fire('Éxito', data.mensaje, 'success');
             loadContratos();
         } else throw new Error(data.error);
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+/**
+ * Elimina una venta POR COMPLETO (DELETE real en cascada: items, tickets
+ * de taller, pagos, logística y cambios de precio) — a diferencia de
+ * "Anular", que solo cambia el estado y conserva el registro.
+ * Exige un motivo, porque la acción es irreversible y queda auditada
+ * en el backend (ventas_eliminadas_log) junto con quién la ejecutó.
+ */
+async function _eliminarVentaCompleta(ventaId) {
+    const { value: motivo, isConfirmed: pasoMotivo } = await Swal.fire({
+        title: '🗑️ Eliminar venta por completo',
+        html: `
+            <p style="text-align:left; font-size:13px; color:#7f1d1d; background:#fef2f2; border-left:4px solid #dc2626; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
+                Esta acción <b>borra la venta y todo lo relacionado</b> (productos, tickets de taller, pagos, logística
+                y cambios de precio) <b>como si nunca hubiera existido</b>. No se puede deshacer.
+            </p>
+        `,
+        input: 'textarea',
+        inputLabel: 'Motivo de la eliminación (obligatorio)',
+        inputPlaceholder: 'Ej: Venta duplicada por error, pedido de prueba, cliente nunca pagó y se registró por error...',
+        showCancelButton: true,
+        confirmButtonText: 'Continuar',
+        confirmButtonColor: '#7f1d1d',
+        inputValidator: (value) => {
+            if (!value || !value.trim()) return 'Debes indicar el motivo para poder continuar.';
+        }
+    });
+    if (!pasoMotivo || !motivo) return;
+
+    const { isConfirmed: confirmoFinal } = await Swal.fire({
+        title: '¿Confirmas la eliminación definitiva?',
+        text: 'Se borrará todo rastro operativo de esta venta. Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar para siempre',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#7f1d1d',
+    });
+    if (!confirmoFinal) return;
+
+    try {
+        Swal.fire({ title: 'Eliminando...', didOpen: () => Swal.showLoading() });
+        const res = await apiFetch(`${API_URL}/api/ventas/${ventaId}/eliminar-completo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                motivo:       motivo.trim(),
+                admin_id:     usuarioActivo?.id,
+                admin_nombre: usuarioActivo?.nombre
+            })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.exito) throw new Error(data.error || 'No se pudo eliminar la venta');
+
+        Swal.fire('Eliminada', data.mensaje, 'success');
+        loadContratos();
     } catch (e) {
         Swal.fire('Error', e.message, 'error');
     }
