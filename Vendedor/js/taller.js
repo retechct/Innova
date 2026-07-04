@@ -100,8 +100,7 @@ function imprimirOrdenTaller(data) {
     const nomEmpresa = typeof usuarioActivo !== 'undefined' && usuarioActivo ? usuarioActivo.empresa : 'INNOVA MOBILI';
     const rucEmpresa = typeof usuarioActivo !== 'undefined' && usuarioActivo ? usuarioActivo.ruc : '---';
     
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
+    const htmlOrden = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -211,9 +210,32 @@ function imprimirOrdenTaller(data) {
         </div>
     </body>
     </html>
-    `);
-    printWindow.document.close();
-    printWindow.onload = () => { setTimeout(() => { printWindow.print(); }, 500); };
+    `;
+
+    // ── Blob URL en vez de window.open('','_blank') + document.write ──
+    // document.write() sobre una ventana recién abierta es poco confiable en
+    // Chrome cuando window.open() se llama desde un callback asíncrono (como
+    // el .then() de un SweetAlert): la pestaña se abre, pero el contenido
+    // escrito con document.write a veces "llega tarde" y la pestaña queda en
+    // blanco para siempre. Generando un Blob con el HTML completo y abriendo
+    // esa URL directamente, el navegador la carga como cualquier página
+    // normal — sin ninguna carrera de tiempos.
+    const blob = new Blob([htmlOrden], { type: 'text/html' });
+    const blobUrl = URL.createObjectURL(blob);
+    const printWindow = window.open(blobUrl, '_blank');
+
+    if (!printWindow) {
+        Swal.fire('Ventana bloqueada', 'El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes para este sitio y vuelve a intentar.', 'warning');
+        URL.revokeObjectURL(blobUrl);
+        return;
+    }
+
+    printWindow.onload = () => {
+        setTimeout(() => {
+            printWindow.print();
+            URL.revokeObjectURL(blobUrl);
+        }, 500);
+    };
 }
 
 /* ─────────────────────────────────────────────────────────────────
