@@ -12,6 +12,36 @@ async function abrirDetallePedido(codigo) {
                 <i class="fa-solid fa-couch"></i> <b>${item.producto}</b>
             </div>`).join('');
 
+        // Comprobantes de pago subidos al finalizar la venta
+        const pagos = data.pagos || [];
+        let pagosHTML = '';
+        if (pagos.length > 0) {
+            pagosHTML = `
+                <div style="text-align:left; margin-top:14px; margin-bottom:10px;">
+                    <p style="margin:0 0 6px; font-size:12px; font-weight:800; color:#475569; text-transform:uppercase;">
+                        <i class="fa-solid fa-receipt"></i> Comprobantes de pago
+                    </p>
+                    ${pagos.map((p, i) => `
+                        <div style="display:flex; align-items:center; gap:10px; background:#f8fafc; border:1px solid #e2e8f0;
+                                    border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+                            ${p.comprobante
+                                ? `<img src="${p.comprobante}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
+                                       onclick="_invLightbox('${p.comprobante}','Comprobante · ${(p.entidad||'').replace(/'/g,"\\'")}')"
+                                       title="Ver comprobante en grande"
+                                       style="width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:zoom-in;
+                                              border:1px solid #e2e8f0;flex-shrink:0;">`
+                                : `<div style="width:44px;height:44px;border-radius:6px;background:#f1f5f9;display:flex;
+                                          align-items:center;justify-content:center;color:#cbd5e1;flex-shrink:0;font-size:16px;">
+                                       <i class="fa-solid fa-file-circle-xmark"></i></div>`}
+                            <div style="text-align:left; min-width:0; font-size:11px; color:#475569;">
+                                <div style="font-weight:800; color:#0f172a;">${p.tipo}${p.entidad && p.entidad !== '—' ? ' · ' + p.entidad : ''}</div>
+                                <div>S/ ${p.monto.toFixed(2)} — ${p.fecha}</div>
+                                ${!p.comprobante ? '<div style="color:#cbd5e1;">Sin comprobante subido</div>' : ''}
+                            </div>
+                        </div>`).join('')}
+                </div>`;
+        }
+
         Swal.fire({
             title: `Pedido #${data.codigo}`,
             html: `
@@ -20,6 +50,7 @@ async function abrirDetallePedido(codigo) {
                     <p style="margin:0; font-size: 13px; color: #475569;"><b>Entrega:</b> <span style="background: #fef08a; padding: 2px 5px; color: #1a1a1a; font-weight: bold; border-radius: 3px;">${data.entrega}</span></p>
                 </div>
                 ${itemsHTML}
+                ${pagosHTML}
             `,
             showCancelButton: true,
             confirmButtonText: '<i class="fa-solid fa-print"></i> IMPRIMIR ORDEN TALLER',

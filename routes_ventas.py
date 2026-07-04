@@ -933,10 +933,31 @@ def obtener_detalle_pedido(codigo):
             return jsonify({"error": "Pedido no encontrado"}), 404
         cursor.execute("SELECT producto, color_tela, foto_url FROM items_venta WHERE venta_id = %s;", (venta[0],))
         items = [{"producto": i[0], "detalles": i[1], "foto": i[2].split('|')[0] if i[2] else ""} for i in cursor.fetchall()]
+
+        # Comprobantes de pago subidos al finalizar la venta (uno por cada
+        # pago registrado en el checkout: efectivo, POS, transferencia, etc.)
+        pagos = []
+        try:
+            cursor.execute("""
+                SELECT tipo_pago, entidad, monto_bruto, comprobante_url,
+                       TO_CHAR(fecha_pago, 'DD/MM/YYYY')
+                FROM pagos WHERE venta_id = %s ORDER BY id;
+            """, (venta[0],))
+            pagos = [{
+                "tipo":        r[0] or "—",
+                "entidad":     r[1] or "—",
+                "monto":       float(r[2] or 0),
+                "comprobante": r[3] if r[3] and r[3] != 'Sin imagen' else None,
+                "fecha":       r[4] or "—",
+            } for r in cursor.fetchall()]
+        except Exception:
+            conexion.rollback()
+
         return jsonify({
             "codigo":  venta[1], "cliente": venta[2],
             "entrega": venta[3].strftime('%d/%m/%Y') if venta[3] else "S/F",
-            "items":   items
+            "items":   items,
+            "pagos":   pagos,
         }), 200
     except Exception as ex:
         return jsonify({"error": str(ex)}), 500
