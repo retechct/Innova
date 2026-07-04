@@ -118,13 +118,44 @@ def _recalcular_total_venta(cursor, venta_id):
 
 # ─── Helper: puente con el inventario real ───────────────────────────────────
 
+class UnidadNoDisponibleError(Exception):
+    """
+    Se lanza cuando la unidad física elegida para un ítem de venta ya no
+    está 'Disponible' (otra venta ya la reservó/vendió). A propósito NO se
+    captura dentro de _reservar_unidad — debe subir hasta guardar_venta()
+    y abortar TODA la venta (rollback), en vez de guardar un contrato con
+    una pieza fantasma sin unidad física real detrás.
+    """
+    pass
+
+
 def _reservar_unidad(cursor, venta_id, codigo_venta,
                      stock_prod_id, stock_piez_id,
                      usuario_id, usuario_nombre, item_id):
     """
     Marca una unidad física como 'Reservado' y deja huella en
     historial_inventario. Vincula el id al ítem de venta.
-    Usa SAVEPOINT para no abortar la transacción padre si algo falla.
+
+    FIX (julio 2026 - doble venta): esta función tenía 3 problemas reales:
+      1) El SELECT no bloqueaba la fila (sin FOR UPDATE) — dos ventas
+         concurrentes podían leer el mismo estado 'Disponible' antes de que
+         cualquiera de las dos confirmara, y ambas terminaban marcando la
+         MISMA unidad física como reservada para dos contratos distintos.
+      2) El estado leído nunca se validaba — si la unidad YA estaba
+         'Reservado' o 'Vendido' (por otra venta, incluso sin condición de
+         carrera), igual se volvía a marcar 'Reservado' y se vinculaba a
+         este nuevo ítem, pisando silenciosamente la reserva/venta anterior.
+      3) Si algo fallaba, el error se tragaba (SAVEPOINT + continuar) y la
+         venta se guardaba igual, con un ítem sin ninguna unidad física
+         real detrás — nadie se enteraba hasta que alguien iba a entregar
+         un mueble que ya no existía en stock.
+
+    Ahora: 'FOR UPDATE' bloquea la fila hasta que esta transacción termine
+    (la segunda venta concurrente espera y luego ve el estado ya
+    actualizado), y se valida que el estado sea 'Disponible' antes de
+    reservar. Si la unidad ya no está disponible, se lanza
+    UnidadNoDisponibleError — NO se captura aquí, sube hasta guardar_venta()
+    y aborta toda la venta con un mensaje claro para el vendedor.
     """
     if stock_prod_id:
         tabla, col, tipo = 'stock_productos', 'stock_producto_id', 'producto'
@@ -135,11 +166,11 @@ def _reservar_unidad(cursor, venta_id, codigo_venta,
     else:
         return
 
-    try:
-        cursor.execute("SAVEPOINT reservar_unidad")
+    cursor.execute("SAVEPOINT reservar_unidad")
 
+    try:
         cursor.execute(
-            f"SELECT estado, sede_id, codigo_barra FROM {tabla} WHERE id = %s",
+            f"SELECT estado, sede_id, codigo_barra FROM {tabla} WHERE id = %s FOR UPDATE",
             (reg_id,)
         )
         fila = cursor.fetchone()
@@ -148,6 +179,16 @@ def _reservar_unidad(cursor, venta_id, codigo_venta,
             return  # La unidad ya no existe; continuar sin romper la transacción
 
         estado_ant, sede_id, barcode = fila
+
+        if estado_ant != 'Disponible':
+            cursor.execute("ROLLBACK TO SAVEPOINT reservar_unidad")
+            cursor.execute("RELEASE SAVEPOINT reservar_unidad")
+            raise UnidadNoDisponibleError(
+                f"La unidad {barcode or reg_id} ya no está disponible "
+                f"(estado actual: {estado_ant}). Es posible que otra venta "
+                f"la haya tomado justo ahora — elige otra unidad de stock "
+                f"para este ítem y vuelve a intentar."
+            )
 
         # Cambiar a Reservado
         cursor.execute(
@@ -171,8 +212,13 @@ def _reservar_unidad(cursor, venta_id, codigo_venta,
 
         cursor.execute("RELEASE SAVEPOINT reservar_unidad")
 
+    except UnidadNoDisponibleError:
+        raise  # Error de negocio: debe abortar toda la venta, no tragárselo
+
     except Exception as e:
-        print(f"⚠️  _reservar_unidad ERROR — tabla={tabla if 'tabla' in dir() else '?'} reg_id={reg_id if 'reg_id' in dir() else '?'}")
+        # Errores técnicos inesperados (no de negocio) — igual que antes,
+        # no rompen la transacción padre por sí solos.
+        print(f"⚠️  _reservar_unidad ERROR — tabla={tabla} reg_id={reg_id}")
         print(f"⚠️  Excepción: {type(e).__name__}: {e}")
         print(f"⚠️  Traceback:\n{traceback.format_exc()}")
         cursor.execute("ROLLBACK TO SAVEPOINT reservar_unidad")
@@ -802,6 +848,18 @@ def guardar_venta():
 
         print(f"[VENTA] ✅ Venta registrada exitosamente — venta_id={venta_id}\n")
         return jsonify({"mensaje": "Venta procesada exitosamente", "id": venta_id}), 201
+
+    except UnidadNoDisponibleError as ex_stock:
+        # FIX (julio 2026 - doble venta): antes _reservar_unidad se tragaba
+        # este caso en silencio y la venta se guardaba igual con un ítem
+        # sin unidad física real. Ahora aborta toda la venta (ya se hizo
+        # rollback dentro de _reservar_unidad vía SAVEPOINT, pero
+        # confirmamos aquí el rollback de la transacción completa) y le
+        # devuelve al vendedor un mensaje claro y accionable, no un 500
+        # genérico con traceback técnico.
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        print(f"\n[VENTA] ⚠️ Unidad no disponible — venta abortada: {ex_stock}\n")
+        return jsonify({"error": str(ex_stock)}), 409
 
     except Exception as ex:
         if 'conexion' in locals() and conexion: conexion.rollback()
