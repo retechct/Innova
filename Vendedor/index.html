@@ -550,9 +550,37 @@
             <h2 style="font-family: var(--font-ui); font-weight: 800; color: var(--primary); margin:0; letter-spacing: -1px;">
                 <i class="fa-solid fa-industry" style="color: var(--accent); margin-right: 10px;"></i> CONTROL DE PRODUCCIÓN
             </h2>
-            <!-- Badge de stats: se puebla vía cargarStatsTaller() -->
-            <div id="stats-taller" style="font-size: 11px; font-weight: 900; color: var(--text-muted); background: var(--bg); padding: 8px 16px; border-radius: 50px; text-transform: uppercase; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--text-muted);"></i> Sincronizando...
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <button id="btn-toggle-orden-pedido" onclick="toggleBuscadorOrdenPedido()"
+                        style="background:#0f172a; color:#d4af37; border:none; padding:9px 16px; border-radius:8px;
+                               font-weight:800; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                    <i class="fa-solid fa-file-pdf"></i> Orden de Pedido
+                </button>
+                <!-- Badge de stats: se puebla vía cargarStatsTaller() -->
+                <div id="stats-taller" style="font-size: 11px; font-weight: 900; color: var(--text-muted); background: var(--bg); padding: 8px 16px; border-radius: 50px; text-transform: uppercase; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <i class="fa-solid fa-circle-notch fa-spin" style="color:var(--text-muted);"></i> Sincronizando...
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel: buscar pedido y descargar PDF con fotos/nombres/descripciones -->
+        <div id="panel-orden-pedido" style="display:none; margin-bottom:24px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                <h3 style="margin:0; font-size:15px; color:#0f172a;">
+                    <i class="fa-solid fa-magnifying-glass" style="color:#d4af37;"></i> Buscar pedido para descargar Orden de Pedido (PDF)
+                </h3>
+                <button onclick="toggleBuscadorOrdenPedido()" style="background:none; border:none; color:#64748b; cursor:pointer; font-size:13px; font-weight:700;">
+                    <i class="fa-solid fa-xmark"></i> Cerrar
+                </button>
+            </div>
+            <input id="input-buscar-orden-pedido" oninput="_filtrarOrdenPedido(this.value)"
+                   placeholder="Buscar por código, cliente o producto…"
+                   style="width:100%; border:1.5px solid #e2e8f0; border-radius:8px; padding:10px 14px;
+                          font-size:13px; outline:none; margin-bottom:12px;">
+            <div id="resultados-orden-pedido" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%,320px),1fr)); gap:10px; max-height:420px; overflow-y:auto;">
+                <div style="text-align:center; padding:20px; color:#94a3b8; grid-column:1/-1;">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> Cargando pedidos...
+                </div>
             </div>
         </div>
 

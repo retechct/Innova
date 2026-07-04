@@ -469,11 +469,13 @@ async function cargarLogisticaExterna() {
             const bg = idx % 2 === 0 ? bgAlt : '#fafbfc';
             const fotoHTML = item.foto_url
                 ? `<img src="${item.foto_url}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-                       style="width:42px;height:42px;object-fit:cover;border-radius:6px;
+                       onclick="event.stopPropagation();_invLightbox('${item.foto_url}','${(item.insumo||'').replace(/'/g,"\\'")}')"
+                       title="Ver foto en grande"
+                       style="width:42px;height:42px;object-fit:cover;border-radius:6px;cursor:zoom-in;
                               border:1px solid #e2e8f0;flex-shrink:0;">`
                 : `<div style="width:42px;height:42px;border-radius:6px;background:#f1f5f9;
-                          display:flex;align-items:center;justify-content:center;
-                          flex-shrink:0;font-size:18px;border:1px solid #e2e8f0;">🪵</div>`;
+                          display:flex;align-items:center;justify-content:center;color:#94a3b8;
+                          flex-shrink:0;font-size:16px;border:1px solid #e2e8f0;"><i class="fa-solid fa-image"></i></div>`;
             return `
             <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
                 onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='${bg}'">
@@ -537,9 +539,11 @@ async function cargarLogisticaExterna() {
             const c = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
             const fotoHTML = item.foto_url
                 ? `<img src="${item.foto_url}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-                       style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;flex-shrink:0;">`
-                : `<div style="width:56px;height:56px;border-radius:8px;background:#f1f5f9;display:flex;
-                          align-items:center;justify-content:center;flex-shrink:0;font-size:22px;border:1px solid #e2e8f0;">🪵</div>`;
+                       onclick="event.stopPropagation();_invLightbox('${item.foto_url}','${(item.insumo||'').replace(/'/g,"\\'")}')"
+                       title="Ver foto en grande"
+                       style="width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid #e2e8f0;flex-shrink:0;">`
+                : `<div style="width:56px;height:56px;border-radius:8px;background:#f1f5f9;display:flex;color:#94a3b8;
+                          align-items:center;justify-content:center;flex-shrink:0;font-size:20px;border:1px solid #e2e8f0;"><i class="fa-solid fa-image"></i></div>`;
             return `
             <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
                 <div style="display:flex;gap:12px;margin-bottom:10px;">
@@ -832,9 +836,11 @@ async function _abrirEditarLogistica(item, proveedores) {
         // Bloque de foto + detalles del insumo desde el maestro
         const fotoHTML = item.foto_url
             ? `<img src="${item.foto_url}" onerror="this.style.display='none'"
-                   style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;flex-shrink:0;">`
-            : `<div style="width:72px;height:72px;border-radius:8px;background:#f1f5f9;display:flex;
-                   align-items:center;justify-content:center;flex-shrink:0;font-size:22px;">📦</div>`;
+                   onclick="event.stopPropagation();_invLightbox('${item.foto_url}','${(item.insumo||'').replace(/'/g,"\\'")}')"
+                   title="Ver foto en grande"
+                   style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:zoom-in;border:1px solid #e2e8f0;flex-shrink:0;">`
+            : `<div style="width:72px;height:72px;border-radius:8px;background:#f1f5f9;display:flex;color:#94a3b8;
+                   align-items:center;justify-content:center;flex-shrink:0;font-size:26px;"><i class="fa-solid fa-image"></i></div>`;
 
         const { value: datos, isConfirmed } = await Swal.fire({
             title: `✏️ Editar insumo`,
