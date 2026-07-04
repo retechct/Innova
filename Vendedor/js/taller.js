@@ -10,7 +10,19 @@ async function abrirDetallePedido(codigo) {
         const totalPedido = (data.items || []).reduce((s, it) => s + (it.precio || 0), 0);
 
         let itemsHTML = data.items.map(item => {
-            const foto = item.foto || 'imagenes/sin_foto.jpg';
+            // FIX (julio 2026): item.fotos trae TODAS las imágenes que el
+            // vendedor eligió del catálogo para esta pieza (antes solo
+            // llegaba una). Con fallback a item.foto por si es un pedido
+            // viejo guardado antes de este cambio.
+            const fotosItem = (item.fotos && item.fotos.length) ? item.fotos : (item.foto ? [item.foto] : []);
+            const foto = fotosItem[0] || 'imagenes/sin_foto.jpg';
+            const miniaturas = fotosItem.length > 1
+                ? `<div style="display:flex; gap:4px; margin-top:4px; flex-wrap:wrap;">
+                    ${fotosItem.map(f => `<img src="${f}" onerror="this.style.display='none'"
+                         onclick="_invLightbox && _invLightbox('${f}', '${(item.producto||'').replace(/'/g,"\\'")}')"
+                         style="width:24px; height:24px; object-fit:cover; border-radius:4px; cursor:zoom-in; border:1px solid #e2e8f0;">`).join('')}
+                   </div>`
+                : '';
             return `
             <div style="display:flex; align-items:center; gap:10px; text-align:left; background:#f8fafc; padding:8px 10px; margin-bottom:6px; border-radius:8px; border-left: 3px solid #d4af37;">
                 <img src="${foto}" onerror="this.src='imagenes/sin_foto.jpg'"
@@ -19,6 +31,7 @@ async function abrirDetallePedido(codigo) {
                 <div style="flex:1; min-width:0; font-size:12px; color:#1e293b;">
                     <div><i class="fa-solid fa-couch"></i> <b>${item.producto}</b></div>
                     <div style="color:#64748b; font-size:11px; margin-top:2px;">${item.detalles || 'Sin tela registrada'}</div>
+                    ${miniaturas}
                 </div>
                 <div style="font-weight:800; color:#065f46; font-size:12px; white-space:nowrap;">S/ ${(item.precio || 0).toFixed(2)}</div>
             </div>`;
@@ -112,9 +125,14 @@ function _construirHTMLOrdenTaller(data, paraCanvas = false) {
     data.items.forEach((item, index) => {
         // Leemos el HTML exacto de la BD
         let detalleHTML = item.detalles || "Especificaciones estándar de fabricación.";
-        const fotoItem = item.foto || '';
-        const fotoCelda = fotoItem
-            ? `<img src="${fotoItem}" crossorigin="anonymous" style="width:90px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #cbd5e1;display:block;" onerror="this.parentElement.innerHTML='<div style=&quot;width:90px;height:90px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;text-align:center;&quot;>Sin foto</div>'">`
+        // FIX (julio 2026): item.fotos trae TODAS las fotos que el vendedor
+        // eligió del catálogo para esta pieza (antes solo se imprimía una,
+        // aunque el pedido tuviera varias imágenes de referencia guardadas).
+        const fotosItem = (item.fotos && item.fotos.length) ? item.fotos : (item.foto ? [item.foto] : []);
+        const fotoCelda = fotosItem.length
+            ? `<div style="display:flex; flex-wrap:wrap; gap:4px; width:100px;">
+                ${fotosItem.map(f => `<img src="${f}" crossorigin="anonymous" style="width:${fotosItem.length > 1 ? '42px' : '90px'};height:${fotosItem.length > 1 ? '42px' : '90px'};object-fit:cover;border-radius:6px;border:1px solid #cbd5e1;display:block;" onerror="this.style.display='none'">`).join('')}
+               </div>`
             : `<div style="width:90px;height:90px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;text-align:center;">Sin foto</div>`;
 
         filasItems += `

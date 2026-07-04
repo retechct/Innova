@@ -236,9 +236,15 @@ function _renderStockUI(grid) {
         html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px;">`;
         paginaActualItems.forEach(item => {
             const isProd = item.tipoElemento === 'Producto';
+            // FIX (julio 2026): antes solo se pasaba item.foto (la primera
+            // imagen). Ahora se pasan TODAS las fotos del producto/pieza
+            // unidas con '|' para que no se pierdan al llegar a la venta
+            // (ver addStockItemToCart más abajo, que las guarda tal cual
+            // en cartItem.img).
+            const fotosStock = (item.fotos && item.fotos.length ? item.fotos : (item.foto ? [item.foto] : [])).join('|');
             const actionArgs = isProd 
-                ? `${item.catalogo_id || 'null'}, '${item.nombre.replace(/'/g,"\\'")}', 0, '${item.foto || ''}', false`
-                : `'${item.sku}', '${item.nombre.replace(/'/g,"\\'")}', 0, '${item.foto || ''}', true`;
+                ? `${item.catalogo_id || 'null'}, '${item.nombre.replace(/'/g,"\\'")}', 0, '${fotosStock}', false`
+                : `'${item.sku}', '${item.nombre.replace(/'/g,"\\'")}', 0, '${fotosStock}', true`;
 
             html += `
             <div class="card" style="position:relative; margin:0; border:1px solid #e2e8f0; box-shadow:none; transition: transform 0.2s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
@@ -1563,7 +1569,14 @@ window._cartaSeleccionarModelo = function(productoId) {
     const p = allProducts.find(x => x.id === productoId);
     if (!p) return;
     const nombre = p.nombre || p.nombre_modelo || '';
-    const foto = (p.fotos && p.fotos[0]) || p.foto || '';
+    // FIX (julio 2026): antes se tomaba solo p.fotos[0] y el resto de fotos
+    // del catálogo (las que se ven en el carrusel de "La Carta") se perdían
+    // — nunca llegaban a guardarse con la venta, así que no salían en el
+    // PDF de Orden de Pedido. Ahora se llevan TODAS, unidas con '|' (mismo
+    // formato que ya usa el sistema en catalogo_productos.fotos_urls), y
+    // se separan de nuevo más adelante para mostrarlas todas en el PDF.
+    const fotos = (p.fotos && p.fotos.length > 0) ? p.fotos : (p.foto ? [p.foto] : []);
+    const foto = fotos.join('|');
     const precio = p.precio || 0;
     const categoria = p.categoria || '';
 

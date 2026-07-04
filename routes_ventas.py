@@ -1133,11 +1133,21 @@ def obtener_detalle_pedido(codigo):
             "SELECT producto, color_tela, foto_url, COALESCE(precio_unitario, 0) FROM items_venta WHERE venta_id = %s;",
             (venta[0],)
         )
-        items = [{
-            "producto": i[0], "detalles": i[1],
-            "foto": i[2].split('|')[0] if i[2] else "",
-            "precio": float(i[3] or 0),
-        } for i in cursor.fetchall()]
+        items = []
+        for i in cursor.fetchall():
+            # FIX (julio 2026): foto_url puede traer varias fotos separadas
+            # por '|' (las que el vendedor eligió del catálogo/carta al
+            # armar el pedido — antes solo se guardaba/mostraba la primera
+            # y el resto se perdía). Ahora se devuelven TODAS en `fotos`,
+            # y se deja `foto` (la primera) para no romper nada que ya
+            # dependa de ese campo como único.
+            fotos_item = [f.strip() for f in (i[2] or '').split('|') if f.strip()]
+            items.append({
+                "producto": i[0], "detalles": i[1],
+                "foto":  fotos_item[0] if fotos_item else "",
+                "fotos": fotos_item,
+                "precio": float(i[3] or 0),
+            })
 
         # Comprobantes de pago subidos al finalizar la venta (uno por cada
         # pago registrado en el checkout: efectivo, POS, transferencia, etc.)
