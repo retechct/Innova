@@ -374,76 +374,13 @@ async function descargarPDFOrdenTaller(data) {
     }
 }
 
-/* ─────────────────────────────────────────────────────────────────
-   BUSCADOR "ORDEN DE PEDIDO" — Control de Producción
-   Permite ubicar cualquier pedido (por código, cliente o producto)
-   y descargar/imprimir su Orden de Producción en PDF, con foto,
-   nombre y descripción de cada parte del pedido.
-   ───────────────────────────────────────────────────────────────── */
-let _ventasOrdenPedidoCache = null;
-
-async function toggleBuscadorOrdenPedido() {
-    const panel = document.getElementById('panel-orden-pedido');
-    if (!panel) return;
-
-    const abrir = panel.style.display === 'none';
-    panel.style.display = abrir ? 'block' : 'none';
-    if (!abrir) return;
-
-    document.getElementById('input-buscar-orden-pedido').value = '';
-    await _cargarVentasOrdenPedido();
-    _filtrarOrdenPedido('');
-    document.getElementById('input-buscar-orden-pedido').focus();
-}
-
-async function _cargarVentasOrdenPedido(forzar = false) {
-    if (_ventasOrdenPedidoCache && !forzar) return _ventasOrdenPedidoCache;
-    try {
-        const res  = await apiFetch(`${API_URL}/api/ventas`);
-        const data = await res.json();
-        _ventasOrdenPedidoCache = Array.isArray(data) ? data : [];
-    } catch (e) {
-        _ventasOrdenPedidoCache = [];
-    }
-    return _ventasOrdenPedidoCache;
-}
-
-function _filtrarOrdenPedido(q) {
-    const cont = document.getElementById('resultados-orden-pedido');
-    if (!cont) return;
-    const ventas = _ventasOrdenPedidoCache || [];
-    const query  = (q || '').trim().toLowerCase();
-
-    const filtradas = !query ? ventas.slice(0, 30) : ventas.filter(v =>
-        (v.codigo || '').toLowerCase().includes(query) ||
-        (v.cliente || '').toLowerCase().includes(query) ||
-        (v.productos || '').toLowerCase().includes(query)
-    ).slice(0, 30);
-
-    if (filtradas.length === 0) {
-        cont.innerHTML = `<div style="text-align:center;padding:24px;color:#94a3b8;grid-column:1/-1;">
-            <i class="fa-solid fa-magnifying-glass"></i> Sin resultados para "${q}"
-        </div>`;
-        return;
-    }
-
-    cont.innerHTML = filtradas.map(v => `
-        <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-                <div style="min-width:0;">
-                    <div style="font-weight:900;color:#d97706;font-size:13px;">#${v.codigo}</div>
-                    <div style="font-weight:700;font-size:13px;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v.cliente}</div>
-                    <div style="font-size:11px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${v.productos || '—'}</div>
-                </div>
-                <span style="background:#f1f5f9;color:#475569;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:800;white-space:nowrap;">${v.estado || '—'}</span>
-            </div>
-            <button onclick="abrirDetallePedido('${v.codigo}')"
-                    style="width:100%;margin-top:10px;background:#0f172a;color:#d4af37;border:none;
-                           padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:800;">
-                <i class="fa-solid fa-file-pdf"></i> Ver / Descargar PDF
-            </button>
-        </div>`).join('');
-}
+/* NOTA (julio 2026): se eliminó el buscador standalone "Orden de Pedido"
+   (toggleBuscadorOrdenPedido / _cargarVentasOrdenPedido / _filtrarOrdenPedido)
+   junto con su botón y panel en index.html — era 100% redundante con el
+   buscador + el ícono de PDF que ya tiene cada tarjeta en la pestaña
+   "Órdenes por Pedido" (ver abrirDetallePedido(), llamado también desde la
+   tarjeta de cada pedido al costado de su barra de progreso, más abajo en
+   este archivo). */
 
 /* ── HELPER: Botón de acción correcto según rol, estado y área ── */
 function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {

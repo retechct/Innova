@@ -394,6 +394,19 @@ def guardar_venta():
                  or any(p in categoria_lower for p in ['silla', 'butaca', 'sitial', 'puff']):
                 area_estructura = 'ESTRUCTURAS_SILLAS'
 
+            # FIX (julio 2026 - v2): último respaldo para modelos de Sofá
+            # personalizados (creados con la "tuerquita ⚙️ Gestionar" del
+            # configurador). Si el mueble trae un componente bajo la clave
+            # 'tela' (a diferencia de 'tela-silla' / 'tela-butaca', esta
+            # clave la usa ÚNICAMENTE el configurador de Sofá — ver
+            # confirmarPersonalizadoSofa en catalogo.js), es un sofá con
+            # certeza, sin importar si el nombre es libre ("Cuervo partido
+            # en 2", etc.) o si 'categoria' no llegó bien desde el frontend
+            # (caché de JS viejo, deploy a medias). Evita que un mueble se
+            # quede sin ticket de Estructura/Tapicería.
+            if not area_estructura and componentes.get('tela'):
+                area_estructura = 'ESTRUCTURAS_MUEBLES'
+
             # FIX (julio 2026): log de diagnóstico. Si un mueble vuelve a
             # quedarse sin ticket de Estructura/Tapicería, este print en los
             # logs de Render muestra exactamente qué texto llegó como 'tipo'
@@ -408,7 +421,17 @@ def guardar_venta():
             componente_principal_externo = False
             sku_silla = None  # queda disponible más abajo (ej. para el ticket de Corte y Tela)
             if area_estructura == 'ESTRUCTURAS_SILLAS':
-                sku_silla = componentes.get('silla') or componentes.get('butaca')
+                # FIX (julio 2026): el configurador de Butaca Personalizada
+                # (confirmarButaca() en catalogo.js) manda el SKU de la
+                # estructura bajo la clave 'estructura-butaca' (igual que
+                # mapeo_erp más abajo), NO bajo 'butaca' — esa clave nunca
+                # existió en ningún payload del frontend. Con el nombre
+                # equivocado, sku_silla siempre salía None para butacas
+                # personalizadas, este chequeo de "¿es externa?" se saltaba
+                # por completo, y el sistema creaba de todos modos los
+                # tickets de ESTRUCTURAS_SILLAS/TAPICERIA_SILLAS aunque el
+                # maestro dijera origen_produccion = 'Externo'.
+                sku_silla = componentes.get('silla') or componentes.get('estructura-butaca')
                 if sku_silla:
                     for tabla_ext in ('maestro_sillas', 'maestro_butacas'):
                         try:

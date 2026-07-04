@@ -1327,6 +1327,21 @@ def actualizar_logistica():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
+        # FIX (julio 2026): antes, marcar tipo_gestion = 'Interno' en este
+        # modal solo actualizaba esa columna — el registro se quedaba
+        # "Pendiente" para siempre esperando una cotización o un recojo que
+        # nunca iban a llegar (porque el taller lo fabrica/consigue por su
+        # cuenta). La UI ya prometía esto (texto del modal en app.js:
+        # "Marca como Recibido cuando esté listo... los tickets se
+        # desbloquearán automáticamente") pero el backend nunca lo hacía.
+        #
+        # El desbloqueo debe dispararse cuando el insumo QUEDA en
+        # tipo_gestion='Interno' Y estado='Recibido' — no apenas se elige
+        # "Interno" (todavía no está listo en ese momento). Por eso se lee
+        # el resultado YA aplicado el COALESCE (RETURNING), para que
+        # funcione tanto si ambos campos llegan juntos en un solo POST,
+        # como si "Interno" se eligió antes y "Recibido" se marca después
+        # desde el selector de etapa final (que solo manda `estado`).
         cursor.execute("""
             UPDATE logistica_externa
             SET proveedor_id             = COALESCE(%s, proveedor_id),
@@ -1339,15 +1354,70 @@ def actualizar_logistica():
                 notas_proveedor          = COALESCE(%s, notas_proveedor),
                 url_cotizacion_adjunta   = COALESCE(%s, url_cotizacion_adjunta),
                 estado                   = COALESCE(%s, estado)
-            WHERE id = %s;
+            WHERE id = %s
+            RETURNING venta_id, tipo_gestion, estado;
         """, (proveedor_id, precio_cotizado, fecha_entrega_proveedor,
               tipo_gestion, cantidad, unidad, proveedor_informal,
               notas_proveedor, url_cotizacion_adjunta,
               estado,
               logistica_id))
 
+        row = cursor.fetchone()
+        if not row:
+            conexion.rollback()
+            return jsonify({'error': 'Ítem de logística no encontrado'}), 404
+        venta_id, tipo_gestion_final, estado_final = row
+
+        marcar_interno = (tipo_gestion_final == 'Interno' and estado_final == 'Recibido')
+        if marcar_interno:
+            cursor.execute("""
+                UPDATE logistica_externa
+                SET estado_distribucion = 'Distribuido'
+                WHERE id = %s
+            """, (logistica_id,))
+
+        # Si quedó Interno + Recibido, desbloquear Tapicería/Cojines de esa
+        # venta que estuvieran esperando esta tela — misma lógica que ya
+        # usa /api/logistica/<id>/confirmar-distribucion.
+        desbloqueados = 0
+        if marcar_interno and venta_id:
+            cursor.execute("""
+                SELECT t.id, t.area_trabajo, t.item_id
+                FROM tickets_produccion t
+                JOIN items_venta i ON t.item_id = i.id
+                WHERE i.venta_id = %s AND t.estado_ticket = 'Bloqueado'
+                  AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS', 'ARMADO_COJINES')
+            """, (venta_id,))
+            tickets_bloqueados = cursor.fetchall()
+
+            for tb_id, tb_area, tb_item_id in tickets_bloqueados:
+                if tb_area in ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'):
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM tickets_produccion
+                        WHERE item_id = %s AND area_trabajo IN ('ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS')
+                          AND estado_ticket NOT IN ('Terminado', 'Listo para Recojo', 'Recogido')
+                    """, (tb_item_id,))
+                    pendientes = cursor.fetchone()[0]
+                    if pendientes == 0:
+                        cursor.execute("""
+                            UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
+                            WHERE id = %s
+                        """, (tb_id,))
+                        desbloqueados += cursor.rowcount
+                elif tb_area == 'ARMADO_COJINES':
+                    cursor.execute("""
+                        UPDATE tickets_produccion SET estado_ticket = 'En Proceso', fecha_inicio = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                    """, (tb_id,))
+                    desbloqueados += cursor.rowcount
+
         conexion.commit()
-        return jsonify({'exito': True}), 200
+
+        mensaje = 'Guardado correctamente'
+        if marcar_interno:
+            mensaje = (f'Insumo de producción interna marcado como recibido. '
+                       f'{desbloqueados} ticket(s) de Tapicería/Cojines desbloqueado(s).')
+        return jsonify({'exito': True, 'mensaje': mensaje, 'desbloqueados': desbloqueados}), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': str(e)}), 500
