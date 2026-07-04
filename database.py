@@ -8,6 +8,7 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from psycopg2 import pool as pg_pool
+from psycopg2 import OperationalError, InterfaceError
 
 BACKEND_URL = os.getenv("BACKEND_URL", "https://innova-4cnn.onrender.com")
 
@@ -34,12 +35,56 @@ _db_pool = pg_pool.ThreadedConnectionPool(
     database = os.getenv("DB_NAME"),
     user     = os.getenv("DB_USER"),
     password = os.getenv("DB_PASSWORD"),
+    # Julio 2026 — FIX conexiones muertas (ver get_db_connection más abajo).
+    # Neon cierra del lado del servidor las conexiones inactivas del pooler
+    # tras un rato sin uso. TCP no se entera de inmediato de ese cierre, así
+    # que sin estos parámetros el sistema operativo puede tardar minutos en
+    # notar que el socket ya no sirve. Con keepalives agresivos, el propio
+    # SO detecta la caída en segundos en vez de esperar al primer intento
+    # fallido de la app.
+    keepalives         = 1,
+    keepalives_idle     = 30,   # empezar a sondear tras 30s de inactividad
+    keepalives_interval = 10,   # reintentar sondeo cada 10s
+    keepalives_count    = 3,    # 3 sondeos fallidos → dar la conexión por muerta
 )
 
 
 def get_db_connection():
-    """Obtiene una conexión del pool (no abre una TCP nueva cada vez)."""
-    return _db_pool.getconn()
+    """
+    Obtiene una conexión del pool (no abre una TCP nueva cada vez).
+
+    FIX (julio 2026): antes esta función devolvía lo que fuera que el pool
+    tuviera guardado, sin comprobar si Neon ya la había cerrado del otro
+    lado (pasa seguido tras un rato de inactividad — el error típico es
+    "SSL connection has been closed unexpectedly"). El primer query de la
+    request reventaba con 500 aunque el código de la ruta estuviera bien.
+
+    Ahora, antes de entregar la conexión, se hace una prueba barata
+    (SELECT 1). Si falla, se descarta esa conexión rota (closed=True para
+    que el pool no la vuelva a prestar) y se pide otra al pool — hasta
+    3 intentos por si hay varias conexiones muertas encoladas.
+    """
+    intentos_restantes = 3
+    ultima_excepcion = None
+
+    while intentos_restantes > 0:
+        conexion = _db_pool.getconn()
+        try:
+            with conexion.cursor() as cur:
+                cur.execute("SELECT 1;")
+            return conexion
+        except (OperationalError, InterfaceError) as e:
+            ultima_excepcion = e
+            print(f"⚠️ Conexión muerta detectada en el pool, descartando: {e}")
+            try:
+                _db_pool.putconn(conexion, close=True)
+            except Exception:
+                pass
+            intentos_restantes -= 1
+
+    # Si tras 3 intentos seguimos sin una conexión sana, dejamos que el
+    # error real suba — algo más grave está pasando (Neon caído, etc.)
+    raise ultima_excepcion
 
 
 def release_db_connection(conn):

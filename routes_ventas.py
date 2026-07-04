@@ -1769,7 +1769,14 @@ def obtener_comisiones_vendedores():
 
             total_ventas   = vdata['total_ventas']
             comision       = round(total_ventas * TASA_COMISION, 2)
-            vendio_algo    = total_ventas > 0
+            # FIX (julio 2026): antes esto era `total_ventas > 0`, es decir,
+            # el sueldo base dependía de la SUMA EN SOLES de sus contratos.
+            # Eso dejaba sin sueldo a vendedores que sí registraron pedidos
+            # pero con monto_total en 0 (producto de stock entregado sin
+            # precio cargado, contrato aún pendiente de cotización, etc.).
+            # Ahora se basa en si hizo o no pedidos (contratos), que es la
+            # regla real: "si hace pedidos se le paga, si no hace ninguno no".
+            vendio_algo    = vdata['contratos'] > 0
 
             # Si no vendió nada → no cobra sueldo base ni comisión esta semana
             sueldo_efectivo = SUELDO_BASE_VENDEDOR if vendio_algo else 0.0
@@ -1958,15 +1965,23 @@ def cerrar_semana_vendedor():
         nombre = row[0]
 
         cursor.execute("""
-            SELECT COALESCE(SUM(monto_total), 0)
+            SELECT COUNT(*), COALESCE(SUM(monto_total), 0)
             FROM ventas
             WHERE LOWER(TRIM(vendedor_nombre)) = LOWER(TRIM(%s))
               AND fecha_emision::date BETWEEN %s AND %s;
         """, (nombre, semana_inicio, semana_fin))
-        total_ventas = float(cursor.fetchone()[0])
-        comision     = round(total_ventas * TASA_COMISION, 2)
-        vendio       = total_ventas > 0
-        sueldo_ef    = SUELDO_BASE_VENDEDOR if vendio else 0.0
+        total_contratos, total_ventas = cursor.fetchone()
+        total_contratos = int(total_contratos)
+        total_ventas    = float(total_ventas)
+        comision        = round(total_ventas * TASA_COMISION, 2)
+        # FIX (julio 2026): mismo criterio que en /api/vendedores/comisiones —
+        # el sueldo base se paga si el vendedor HIZO PEDIDOS (contratos),
+        # no si la suma de esos pedidos en soles fue mayor a 0. Antes un
+        # contrato con monto_total en 0 (stock entregado sin precio cargado,
+        # contrato pendiente de cotización, etc.) dejaba al vendedor sin
+        # sueldo aunque sí hubiera trabajo/pedido real registrado.
+        vendio          = total_contratos > 0
+        sueldo_ef       = SUELDO_BASE_VENDEDOR if vendio else 0.0
 
         # Ajustes del período
         cursor.execute("""

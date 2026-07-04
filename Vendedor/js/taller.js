@@ -60,6 +60,10 @@ async function abrirDetallePedido(codigo) {
                 </div>`;
         }
 
+        // Guardamos el detalle para que los botones de abajo (que viven en HTML
+        // de SweetAlert, sin closure sobre `data`) puedan volver a leerlo.
+        _ultimoPedidoDetalle = data;
+
         Swal.fire({
             title: `Pedido #${data.codigo}`,
             html: `
@@ -69,29 +73,48 @@ async function abrirDetallePedido(codigo) {
                 </div>
                 ${itemsHTML}
                 ${pagosHTML}
+                <div style="display:flex; gap:8px; margin-top:16px;">
+                    <button onclick="descargarPDFOrdenTaller(_ultimoPedidoDetalle)"
+                            style="flex:1; background:#0f172a; color:#d4af37; border:none; padding:11px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:800;">
+                        <i class="fa-solid fa-download"></i> Descargar PDF
+                    </button>
+                    <button onclick="imprimirOrdenTaller(_ultimoPedidoDetalle)"
+                            style="flex:1; background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; padding:11px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:800;">
+                        <i class="fa-solid fa-print"></i> Imprimir
+                    </button>
+                </div>
             `,
+            showConfirmButton: false,
             showCancelButton: true,
-            confirmButtonText: '<i class="fa-solid fa-print"></i> IMPRIMIR ORDEN TALLER',
-            cancelButtonText: 'Cerrar',
-            confirmButtonColor: '#0f172a'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                imprimirOrdenTaller(data);
-            }
+            cancelButtonText: 'Cerrar'
         });
     } catch (error) {
         Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
     }
 }
 
-function imprimirOrdenTaller(data) {
+// Guarda el último detalle de pedido cargado, para que los botones
+// "Descargar PDF" / "Imprimir" del modal (HTML plano, sin closure) lo lean.
+let _ultimoPedidoDetalle = null;
+
+/**
+ * Arma el HTML del documento "Orden de Producción" (mismo diseño para
+ * impresión y para exportar a PDF). Se separó de imprimirOrdenTaller()
+ * para no duplicar el maquetado en dos lugares.
+ *
+ * `paraCanvas`: si es true, deja el <div class="page"> suelto (sin
+ * <html>/<head>/<body>) para insertarlo directo en el DOM y capturarlo
+ * con html2canvas. Si es false, devuelve el documento completo para
+ * abrir en una ventana nueva e imprimir.
+ */
+function _construirHTMLOrdenTaller(data, paraCanvas = false) {
     let filasItems = '';
     data.items.forEach((item, index) => {
         // Leemos el HTML exacto de la BD
         let detalleHTML = item.detalles || "Especificaciones estándar de fabricación.";
         const fotoItem = item.foto || '';
         const fotoCelda = fotoItem
-            ? `<img src="${fotoItem}" style="width:90px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #cbd5e1;display:block;" onerror="this.parentElement.innerHTML='<div style=&quot;width:90px;height:90px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;text-align:center;&quot;>Sin foto</div>'">`
+            ? `<img src="${fotoItem}" crossorigin="anonymous" style="width:90px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #cbd5e1;display:block;" onerror="this.parentElement.innerHTML='<div style=&quot;width:90px;height:90px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;text-align:center;&quot;>Sin foto</div>'">`
             : `<div style="width:90px;height:90px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;text-align:center;">Sin foto</div>`;
 
         filasItems += `
@@ -115,19 +138,12 @@ function imprimirOrdenTaller(data) {
             </tr>`;
     });
 
-    const nomEmpresa = typeof usuarioActivo !== 'undefined' && usuarioActivo ? usuarioActivo.empresa : 'INNOVA MOBILI';
-    const rucEmpresa = typeof usuarioActivo !== 'undefined' && usuarioActivo ? usuarioActivo.ruc : '---';
-    
-    const htmlOrden = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Orden Taller #${data.codigo}</title>
+    const estilos = `
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@300;400;600;800;900&display=swap');
             
             body { font-family: 'Plus Jakarta Sans', sans-serif; color: #333; margin: 0; padding: 0; background-color: #fff; }
-            .page { width: 210mm; min-height: 297mm; padding: 15mm; margin: auto; position: relative; box-sizing: border-box; overflow: hidden; }
+            .page { width: 210mm; min-height: 297mm; padding: 15mm; margin: auto; position: relative; box-sizing: border-box; overflow: hidden; background: #fff; }
             
             /* DECORACIÓN GEOMÉTRICA (Estilo Carey) */
             .corner-top { position: absolute; top: -50px; right: -50px; width: 250px; height: 250px; background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%); transform: rotate(45deg); z-index: 0; opacity: 0.9; }
@@ -164,16 +180,16 @@ function imprimirOrdenTaller(data) {
                 body { -webkit-print-color-adjust: exact; }
                 .page { margin: 0; border: none; }
             }
-        </style>
-    </head>
-    <body>
+        </style>`;
+
+    const cuerpoPage = `
         <div class="page">
             <div class="corner-top"></div>
             <div class="corner-top-inner"></div>
             
             <div class="content">
                 <div class="header">
-                    <img src="imagenes/Logo3.png" class="logo">
+                    <img src="imagenes/Logo3.png" class="logo" crossorigin="anonymous">
                     <div class="contract-title">
                         <h1>ORDEN DE PRODUCCIÓN</h1>
                         
@@ -225,10 +241,30 @@ function imprimirOrdenTaller(data) {
             
             <div class="corner-bottom"></div>
             <div class="corner-bottom-accent"></div>
-        </div>
+        </div>`;
+
+    if (paraCanvas) {
+        // Sin <html>/<head>: esto se inyecta directo en un <div> ya montado
+        // en el documento actual, así que los estilos van en un <style> normal.
+        return estilos + cuerpoPage;
+    }
+
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Orden Taller #${data.codigo}</title>
+        ${estilos}
+    </head>
+    <body>
+        ${cuerpoPage}
     </body>
     </html>
     `;
+}
+
+function imprimirOrdenTaller(data) {
+    const htmlOrden = _construirHTMLOrdenTaller(data, false);
 
     // ── Blob URL en vez de window.open('','_blank') + document.write ──
     // document.write() sobre una ventana recién abierta es poco confiable en
@@ -254,6 +290,70 @@ function imprimirOrdenTaller(data) {
             URL.revokeObjectURL(blobUrl);
         }, 500);
     };
+}
+
+/**
+ * Descarga directa del PDF de la Orden de Producción (fotos + descripciones
+ * de cada pieza del pedido), sin pasar por el diálogo de impresión del
+ * navegador. Usa html2canvas para "fotografiar" el documento ya maquetado
+ * y jsPDF para partirlo en páginas A4 y guardarlo como archivo.
+ */
+async function descargarPDFOrdenTaller(data) {
+    if (!data) { Swal.fire('Error', 'No hay datos del pedido para generar el PDF.', 'error'); return; }
+    if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+        Swal.fire('Error', 'No se pudo cargar el generador de PDF. Revisa tu conexión e intenta de nuevo.', 'error');
+        return;
+    }
+
+    Swal.fire({ title: 'Generando PDF...', text: 'Esto puede tardar unos segundos si hay muchas fotos.', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+    // Montamos el documento fuera de la vista (no dentro del modal de SweetAlert,
+    // que está recortado/con scroll) para que html2canvas lo capture completo.
+    const contenedor = document.createElement('div');
+    contenedor.style.position = 'fixed';
+    contenedor.style.left = '-99999px';
+    contenedor.style.top = '0';
+    contenedor.style.width = '794px'; // ancho A4 aprox. a 96dpi
+    contenedor.innerHTML = _construirHTMLOrdenTaller(data, true);
+    document.body.appendChild(contenedor);
+
+    try {
+        // Esperar a que carguen las imágenes (fotos de Cloudinary) antes de
+        // capturar; si no, el canvas sale con huecos en blanco.
+        const imgs = Array.from(contenedor.querySelectorAll('img'));
+        await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => {
+            img.onload = res; img.onerror = res;
+        })));
+
+        const canvas = await html2canvas(contenedor, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff' });
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const anchoPagina = 210, altoPagina = 297;
+        const anchoImg = anchoPagina;
+        const altoImg  = canvas.height * anchoImg / canvas.width;
+        const imgData  = canvas.toDataURL('image/jpeg', 0.92);
+
+        let alturaRestante = altoImg;
+        let posicion = 0;
+        pdf.addImage(imgData, 'JPEG', 0, posicion, anchoImg, altoImg);
+        alturaRestante -= altoPagina;
+
+        while (alturaRestante > 0) {
+            posicion = alturaRestante - altoImg;
+            pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', 0, posicion, anchoImg, altoImg);
+            alturaRestante -= altoPagina;
+        }
+
+        pdf.save(`Orden_Pedido_${data.codigo}.pdf`);
+        Swal.close();
+    } catch (e) {
+        console.error('Error generando PDF de orden de pedido:', e);
+        Swal.fire('Error', 'No se pudo generar el PDF: ' + e.message, 'error');
+    } finally {
+        contenedor.remove();
+    }
 }
 
 /* ─────────────────────────────────────────────────────────────────
