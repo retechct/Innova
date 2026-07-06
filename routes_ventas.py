@@ -1952,7 +1952,20 @@ def obtener_comisiones_vendedores():
         """, params_usu)
         vendedores_db = cursor.fetchall()   # [(id, nombre, area), ...]
 
-        # ── 2. Ventas del período por vendedor_nombre ──────────────────────
+        # ── 2. Ventas del período por vendedor ──────────────────────────────
+        # FIX (julio 2026): antes se agrupaba por LOWER(TRIM(vendedor_nombre))
+        # y se cruzaba contra usuarios.nombre. Eso fallaba (mostrando "0
+        # contratos" para vendedores que SÍ tenían pedidos) apenas había una
+        # diferencia mínima entre el nombre guardado en la venta y el nombre
+        # actual en `usuarios`: una tilde, mayúscula/minúscula, un espacio de
+        # más, o simplemente que un admin editó el nombre del vendedor después
+        # de que ya tuviera ventas registradas.
+        #
+        # `ventas.vendedor_id` se guarda siempre al crear el pedido (viene de
+        # usuarioActivo.id en carrito.js) y es un ID numérico que nunca
+        # cambia ni tiene errores de tipeo, así que ahora cruzamos por ahí.
+        # Se conserva un mapa auxiliar por nombre solo como respaldo para
+        # ventas antiguas que pudieran no tener vendedor_id guardado (NULL).
         cond_v  = []
         params_v = []
         if desde:
@@ -1965,15 +1978,32 @@ def obtener_comisiones_vendedores():
 
         cursor.execute(f"""
             SELECT
+                vendedor_id,
                 LOWER(TRIM(vendedor_nombre))        AS vnom,
                 COUNT(DISTINCT id)                  AS contratos,
                 COALESCE(SUM(monto_total), 0)       AS total_ventas
             FROM ventas
             {where_v}
-            GROUP BY LOWER(TRIM(vendedor_nombre));
+            GROUP BY vendedor_id, LOWER(TRIM(vendedor_nombre));
         """, params_v)
-        ventas_map = {r[0]: {'contratos': int(r[1]), 'total_ventas': float(r[2])}
-                      for r in cursor.fetchall()}
+        ventas_map_por_id     = {}   # {vendedor_id: {...}}   ← fuente principal
+        ventas_map_por_nombre = {}   # {nombre normalizado: {...}}  ← respaldo
+        for vid, vnom, contratos, total in cursor.fetchall():
+            dato = {'contratos': int(contratos), 'total_ventas': float(total)}
+            if vid is not None:
+                # Si ya había datos para ese id (no debería pasar, pero por
+                # si acaso), sumamos en vez de pisar.
+                acumulado = ventas_map_por_id.get(vid, {'contratos': 0, 'total_ventas': 0.0})
+                ventas_map_por_id[vid] = {
+                    'contratos':    acumulado['contratos'] + dato['contratos'],
+                    'total_ventas': acumulado['total_ventas'] + dato['total_ventas'],
+                }
+            elif vnom:
+                acumulado = ventas_map_por_nombre.get(vnom, {'contratos': 0, 'total_ventas': 0.0})
+                ventas_map_por_nombre[vnom] = {
+                    'contratos':    acumulado['contratos'] + dato['contratos'],
+                    'total_ventas': acumulado['total_ventas'] + dato['total_ventas'],
+                }
 
         # ── 3. Ajustes pendientes (descuentos/aumentos no aplicados) ───────
         cond_a  = ["aplicado = FALSE"]
@@ -2023,8 +2053,12 @@ def obtener_comisiones_vendedores():
         # ── 5. Armar resultado ─────────────────────────────────────────────
         resultado = []
         for uid, nombre, area in vendedores_db:
-            vk          = nombre.lower().strip()
-            vdata       = ventas_map.get(vk, {'contratos': 0, 'total_ventas': 0.0})
+            vk    = nombre.lower().strip()
+            # Cruce principal por vendedor_id; si ese vendedor no tiene ventas
+            # con vendedor_id (por ejemplo, ventas viejas previas a que ese
+            # campo se guardara), se busca por nombre normalizado como respaldo.
+            vdata = ventas_map_por_id.get(uid) or ventas_map_por_nombre.get(vk) \
+                    or {'contratos': 0, 'total_ventas': 0.0}
             ajuste      = ajustes_map.get(uid, {'descuento': 0.0, 'aumento': 0.0})
             saldo_acum  = max(0.0, saldo_map.get(uid, 0.0))
 
@@ -2225,12 +2259,23 @@ def cerrar_semana_vendedor():
             return jsonify({'error': 'Vendedor no encontrado'}), 404
         nombre = row[0]
 
+        # FIX (julio 2026): mismo cruce que en /api/vendedores/comisiones —
+        # antes se buscaba solo por LOWER(TRIM(vendedor_nombre)) = nombre
+        # actual en `usuarios`, lo cual fallaba (0 contratos) si el nombre
+        # del vendedor cambió o tiene una diferencia mínima de tildes/mayús-
+        # culas/espacios frente al valor guardado al momento de la venta.
+        # Ahora se cruza por vendedor_id (fuente principal) y se suma,
+        # como respaldo, cualquier venta vieja sin vendedor_id que sí
+        # coincida por nombre.
         cursor.execute("""
             SELECT COUNT(*), COALESCE(SUM(monto_total), 0)
             FROM ventas
-            WHERE LOWER(TRIM(vendedor_nombre)) = LOWER(TRIM(%s))
-              AND fecha_emision::date BETWEEN %s AND %s;
-        """, (nombre, semana_inicio, semana_fin))
+            WHERE fecha_emision::date BETWEEN %s AND %s
+              AND (
+                    vendedor_id = %s
+                    OR (vendedor_id IS NULL AND LOWER(TRIM(vendedor_nombre)) = LOWER(TRIM(%s)))
+              );
+        """, (semana_inicio, semana_fin, usuario_id, nombre))
         total_contratos, total_ventas = cursor.fetchone()
         total_contratos = int(total_contratos)
         total_ventas    = float(total_ventas)
