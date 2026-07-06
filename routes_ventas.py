@@ -1741,6 +1741,7 @@ def exportar_ventas_excel():
                    v.fecha_emision, v.fecha_entrega, v.monto_total,
                    COALESCE(itm.productos, '') AS productos, v.direccion_cliente,
                    COALESCE(pg.metodos, 'Sin pago') AS metodo_pago,
+                   COALESCE(pg.operaciones, '') AS numero_operacion,
                    COALESCE(pg.total_pagado, 0) AS monto_adelanto,
                    COALESCE(pg.empresas, '---') AS empresa_pago,
                    v.fecha_emision AS fecha_registro, v.celular_cliente,
@@ -1749,7 +1750,8 @@ def exportar_ventas_excel():
             LEFT JOIN (
                 SELECT venta_id, SUM(monto_bruto) AS total_pagado,
                        STRING_AGG(tipo_pago || ' (' || COALESCE(entidad, '') || ')', ' | ') AS metodos,
-                       STRING_AGG(DISTINCT empresa_destino, ' / ') AS empresas
+                       STRING_AGG(DISTINCT empresa_destino, ' / ') AS empresas,
+                       STRING_AGG(NULLIF(numero_operacion, ''), ' | ') AS operaciones
                 FROM pagos GROUP BY venta_id
             ) pg ON pg.venta_id = v.id
             LEFT JOIN (
@@ -1774,14 +1776,14 @@ def exportar_ventas_excel():
                 "Cód. Venta", "Cliente", "Comprobante", "RUC/DNI/CE",
                 "F. Emisión", "F. Entrega", "Monto Total",
                 "Producto(s)", "Dirección", "Métodos Pago (Múltiples)",
-                "Adelanto Cobrado", "Empresa Receptora",
+                "N° Operación", "Adelanto Cobrado", "Empresa Receptora",
                 "Fecha Registro", "Teléfono", "Moneda", "Vendedor"
             ]
             for col, h in enumerate(headers, 1):
                 cell = ws.cell(row=1, column=col, value=h)
                 cell.font = header_font; cell.fill = header_fill
                 cell.alignment = center; cell.border = border
-            anchos = [12, 25, 12, 14, 14, 14, 12, 40, 30, 30, 15, 30, 14, 14, 10, 20]
+            anchos = [12, 25, 12, 14, 14, 14, 12, 40, 30, 30, 18, 15, 30, 14, 14, 10, 20]
             for col, ancho in enumerate(anchos, 1):
                 ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = ancho
             fill_par   = PatternFill("solid", fgColor="F8FAFC")
@@ -1794,10 +1796,11 @@ def exportar_ventas_excel():
                     f[5].strftime('%d/%m/%Y') if f[5] else '',
                     float(f[6]) if f[6] else 0,
                     f[7], f[8], f[9],
-                    float(f[10]) if f[10] else 0,
-                    f[11],
-                    f[12].strftime('%d/%m/%Y') if f[12] else '',
-                    f[13], f[14], f[15]
+                    f[10],
+                    float(f[11]) if f[11] else 0,
+                    f[12],
+                    f[13].strftime('%d/%m/%Y') if f[13] else '',
+                    f[14], f[15], f[16]
                 ]
                 for col, val in enumerate(valores, 1):
                     cell = ws.cell(row=row_num, column=col, value=val)
