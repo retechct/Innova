@@ -28,7 +28,7 @@ import cloudinary.uploader
 from flask import Blueprint, jsonify, request, send_file
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-from database import get_db_connection, release_db_connection, enviar_notificacion_venta
+from database import get_db_connection, release_db_connection, enviar_notificacion_venta, limpiar_foto
 from auth_middleware import requiere_login, requiere_rol
 
 ventas_bp = Blueprint('ventas', __name__)
