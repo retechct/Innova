@@ -997,23 +997,12 @@ def obtener_ordenes_produccion():
 
         # 1) Ventas: activas (tope 150) + últimas 30 entregadas
         cursor.execute("""
-            (
-                SELECT v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega,
-                       v.vendedor_nombre, v.sede, v.estado_general
-                FROM ventas v
-                WHERE v.estado_general NOT IN ('Entregado', 'Cancelado')
-                ORDER BY v.fecha_entrega ASC NULLS LAST
-                LIMIT 150
-            )
-            UNION ALL
-            (
-                SELECT v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega,
-                       v.vendedor_nombre, v.sede, v.estado_general
-                FROM ventas v
-                WHERE v.estado_general = 'Entregado'
-                ORDER BY v.fecha_entrega DESC NULLS LAST
-                LIMIT 30
-            )
+            SELECT v.id, v.codigo_venta, v.nombre_cliente, v.fecha_entrega,
+                   v.vendedor_nombre, v.sede, v.estado_general
+            FROM ventas v
+            WHERE v.estado_general NOT IN ('Entregado', 'Cancelado')
+            ORDER BY v.fecha_entrega ASC NULLS LAST
+            LIMIT 150
         """)
         ventas = cursor.fetchall()
 
@@ -2719,6 +2708,75 @@ def responder_cotizacion(token):
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
 
+@produccion_bp.route('/api/despacho/cola-general', methods=['GET'])
+@requiere_rol('Admin', 'Jefe_Taller', 'Chofer')
+def obtener_cola_despacho_general():
+    """
+    Devuelve todos los tickets de DESPACHO_CENTRAL que están 'Pendiente'
+    (listos para entregar) pero aún no tienen un chofer asignado.
+    Usado por la nueva vista "Cola de Despacho" del chofer.
+    """
+    try:
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            SELECT
+                t.id,
+                v.codigo_venta,
+                v.nombre_cliente,
+                v.direccion_cliente,
+                v.celular_cliente,
+                v.fecha_entrega,
+                i.producto,
+                i.foto_url
+            FROM tickets_produccion t
+            JOIN items_venta i ON t.item_id = i.id
+            JOIN ventas v      ON i.venta_id = v.id
+            WHERE t.area_trabajo = 'DESPACHO_CENTRAL'
+              AND t.estado_ticket = 'Pendiente'
+              AND t.trabajador_asignado_id IS NULL
+            ORDER BY v.fecha_entrega ASC NULLS LAST, v.id ASC;
+        """)
+        return jsonify([{
+            'ticket_id':   r[0], 'codigo_venta': r[1], 'cliente': r[2],
+            'direccion':   r[3], 'telefono': r[4],
+            'fecha_entrega': r[5].strftime('%d/%m/%Y') if r[5] else 'S/F',
+            'producto':    r[6], 'foto_url': limpiar_foto(r[7]),
+        } for r in cursor.fetchall()]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@produccion_bp.route('/api/despacho/auto-asignar/<int:ticket_id>', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller', 'Chofer')
+def auto_asignar_despacho(ticket_id):
+    """
+    Permite a un chofer (o admin) asignarse a sí mismo un ticket de despacho
+    de la cola general, moviéndolo a su bandeja de "Mis Entregas".
+    """
+    from auth_middleware import get_usuario_actual
+    try:
+        usuario   = get_usuario_actual()
+        chofer_id = usuario.get('id')
+
+        conexion = get_db_connection()
+        cursor   = conexion.cursor()
+        cursor.execute("""
+            UPDATE tickets_produccion
+            SET trabajador_asignado_id = %s, estado_ticket = 'En Proceso', fecha_inicio = NOW()
+            WHERE id = %s AND area_trabajo = 'DESPACHO_CENTRAL' AND estado_ticket = 'Pendiente';
+        """, (chofer_id, ticket_id))
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': 'Te has asignado la entrega. Ahora aparecerá en "Mis Entregas".'}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
 
 @produccion_bp.route('/api/logistica/<int:id>/generar-orden', methods=['POST'])
 @requiere_rol('Admin', 'Jefe_Taller')

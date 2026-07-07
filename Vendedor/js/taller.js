@@ -1521,6 +1521,10 @@ async function cargarTicketsTaller() {
         const filtroChofer = (typeof filtroAdminTaller !== 'undefined' && filtroAdminTaller === 'entregados_chofer')
             ? 'entregados_chofer'
             : (filtroAdminTaller === 'cola_recojo_chofer' ? 'cola_recojo_chofer' : 'activas');
+        
+        // AÑADIR ESTA LÍNEA
+        const filtroActivo = (filtroAdminTaller === 'cola_despacho') ? 'cola_despacho' : filtroChofer;
+
         tabsHeader.innerHTML = `
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; width:100%;">
                 <button onclick="filtroAdminTaller='cola_recojo_chofer'; cargarTicketsTaller()"
@@ -1529,6 +1533,13 @@ async function cargarTicketsTaller() {
                     color:${filtroChofer==='cola_recojo_chofer' ? 'white' : '#991b1b'};
                     border:2px solid #fca5a5;">
                     🔴 COLA DE RECOJO
+                </button>
+                <button onclick="filtroAdminTaller='cola_despacho'; cargarTicketsTaller()"
+                    style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
+                    background:${filtroActivo==='cola_despacho' ? '#f97316' : '#fff7ed'};
+                    color:${filtroActivo==='cola_despacho' ? 'white' : '#9a3412'};
+                    border:2px solid #fb923c;">
+                    <i class="fa-solid fa-boxes-packing"></i> COLA DE DESPACHO
                 </button>
                 <button onclick="filtroAdminTaller='activas'; cargarTicketsTaller()"
                     style="flex:1; min-width:140px; padding:12px 16px; border-radius:10px; border:none; font-size:12px; font-weight:800; cursor:pointer;
@@ -1556,6 +1567,15 @@ async function cargarTicketsTaller() {
             contenedor.style.gridTemplateColumns = '';
             contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:30px;">Cargando cola de recojo...</p>';
             await cargarVistaColaRecojoChofer(contenedor);
+            return;
+        }
+
+        // ── Tab "Cola de Despacho" del chofer ────────────────────────────────
+        if (filtroActivo === 'cola_despacho') {
+            contenedor.style.display = 'block';
+            contenedor.style.gridTemplateColumns = '';
+            contenedor.innerHTML = '<p style="color:gray; font-size:13px; text-align:center; padding:30px;">Cargando despachos pendientes...</p>';
+            await cargarColaDespacho(contenedor);
             return;
         }
 
@@ -3807,6 +3827,92 @@ async function abrirNotaOrden(ticketId) {
         }
     } catch (e) {
         Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
+    }
+}
+
+/* ================================================================= */
+/* --- VISTA COLA DE DESPACHO GENERAL (para Choferes)            --- */
+/* ================================================================= */
+
+async function cargarColaDespacho(contenedor) {
+    try {
+        const res  = await apiFetch(`${API_URL}/api/despacho/cola-general`);
+        const data = await res.json();
+
+        if (!Array.isArray(data) || data.length === 0) {
+            contenedor.innerHTML = `
+                <div style="text-align:center; padding:60px 20px; color:#94a3b8;">
+                    <i class="fa-solid fa-circle-check" style="font-size:3rem; color:#22c55e; display:block; margin-bottom:15px;"></i>
+                    <p style="font-weight:800; font-size:16px; color:#475569;">Sin despachos pendientes</p>
+                    <p style="font-size:13px;">Cuando un pedido esté listo para entregar, aparecerá aquí.</p>
+                </div>`;
+            return;
+        }
+
+        let html = `
+            <div style="margin-bottom:16px; padding:14px 18px; background:linear-gradient(135deg,#fff7ed,#ffedd5); border-radius:12px; border:2px solid #fb923c;">
+                <h3 style="margin:0 0 4px; color:#9a3412; font-size:15px; font-weight:900;">
+                    <i class="fa-solid fa-boxes-packing"></i> ${data.length} pedido${data.length>1?'s':''} listo${data.length>1?'s':''} para despachar
+                </h3>
+                <p style="margin:0; font-size:12px; color:#64748b;">Estos pedidos están terminados y esperando un chofer para la entrega final.</p>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:16px;">`;
+
+        data.forEach(d => {
+            html += `
+            <div style="background:white; border-radius:14px; border:1px solid #e2e8f0; box-shadow:0 4px 12px rgba(0,0,0,0.06); overflow:hidden;">
+                <div style="padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <img src="${d.foto_url}" onerror="this.src='imagenes/sin_foto.jpg'"
+                             style="width:60px; height:60px; object-fit:cover; border-radius:8px; border:1px solid #e2e8f0; flex-shrink:0;">
+                        <div>
+                            <span style="font-size:10px; font-weight:900; color:#f97316; text-transform:uppercase; letter-spacing:1px;">PEDIDO #${d.codigo_venta}</span>
+                            <h4 style="margin:2px 0; font-size:14px; font-weight:900; color:#0f172a;">${d.producto}</h4>
+                            <p style="margin:0; font-size:12px; color:#475569;">
+                                <i class="fa-solid fa-user"></i> <b>Cliente:</b> ${d.cliente}<br>
+                                <i class="fa-solid fa-location-dot"></i> <b>Dirección:</b> ${d.direccion || 'No especificada'}<br>
+                                <i class="fa-solid fa-calendar-check"></i> <b>Entrega:</b> ${d.fecha_entrega}
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="autoAsignarDespacho(${d.ticket_id}, '${d.codigo_venta}')"
+                        style="background:#f97316; color:white; border:none; padding:10px 18px; border-radius:8px; font-size:12px; font-weight:800; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px;">
+                        <i class="fa-solid fa-truck-fast"></i> Asignarme y Despachar
+                    </button>
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+        contenedor.innerHTML = html;
+    } catch(e) {
+        console.error('Error cargando cola de despacho:', e);
+        contenedor.innerHTML = `<p style="color:red; text-align:center;">Error al cargar. Intenta de nuevo.</p>`;
+    }
+}
+
+async function autoAsignarDespacho(ticketId, codigoVenta) {
+    const conf = await Swal.fire({
+        icon: 'question',
+        title: '¿Asignarte esta entrega?',
+        html: `<p style="font-size:14px;color:#374151;">Se te asignará el despacho del pedido <b>#${codigoVenta}</b> y se moverá a tu bandeja "Mis Entregas".</p>`,
+        showCancelButton: true,
+        confirmButtonColor: '#f97316',
+        confirmButtonText: 'Sí, asignarme',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!conf.isConfirmed) return;
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/despacho/auto-asignar/${ticketId}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.exito) {
+            Swal.fire({ icon: 'success', title: '¡Entrega Asignada!', text: data.mensaje, timer: 2500, showConfirmButton: false });
+            cargarTicketsTaller(); // Recargar la vista de taller para que el item desaparezca de la cola
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: data.error || 'No se pudo asignar la entrega.' });
+        }
+    } catch(e) {
+        Swal.fire({ icon: 'error', title: 'Sin conexión', text: 'Intenta de nuevo.' });
     }
 }
 

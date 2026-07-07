@@ -261,6 +261,39 @@ def _liberar_unidades(cursor, venta_id, estado_destino, evento_nombre):
                   venta_id, f"Cambio automático — {evento_nombre}"))
 
 
+def _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado_venta):
+    """
+    Cuando el Admin cambia manualmente el estado general de la venta
+    (botón "Gestionar Venta" en Reportes/Ventas), los tickets de producción
+    de cada pieza (taller, cojines, estructuras, despacho, etc.) NO se
+    actualizan solos. Esta función los cierra para mantener coherencia.
+    """
+    mapa_estados = {
+        'Listo':      'Terminado',
+        'Despachado': 'Terminado',
+        'Entregado':  'Terminado',
+    }
+    ticket_destino = mapa_estados.get(nuevo_estado_venta)
+    if not ticket_destino:
+        return
+
+    # Áreas normales de producción (corte, tapicería, estructuras, cojines...)
+    cursor.execute("""
+        UPDATE tickets_produccion
+        SET estado_ticket = %s,
+            fecha_fin = COALESCE(fecha_fin, CURRENT_TIMESTAMP)
+        WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
+          AND area_trabajo != 'DESPACHO_CENTRAL'
+          AND estado_ticket NOT IN ('Terminado', 'Cancelado', 'Recogido', 'Listo para Recojo')
+    """, (ticket_destino, venta_id))
+
+    # Si el pedido ya se Despachó/Entregó, el material externo se marca como recibido.
+    cursor.execute("""
+        UPDATE logistica_externa
+        SET estado = 'Recibido'
+        WHERE venta_id = %s AND estado NOT IN ('Recibido', 'Cancelado', 'Rechazado')
+    """, (venta_id,))
+
 # ==========================================
 # VENTAS — REGISTRO Y LISTADO
 # ==========================================
@@ -931,73 +964,6 @@ def listar_ventas():
 # GESTIÓN MANUAL DE ESTADOS Y ANULACIÓN
 # ==========================================
 
-def _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado_venta):
-    """
-    Cuando el Admin cambia manualmente el estado general de la venta
-    (botón "Gestionar Venta" en Reportes/Ventas), los tickets de producción
-    de cada pieza (taller, cojines, estructuras, despacho, etc.) NO se
-    actualizan solos — quedan "abiertos" en sus áreas de trabajo aunque
-    la venta ya esté Lista/Despachada/Entregada.
-
-    Esta función cierra esos tickets para que dejen de aparecer como
-    pendientes en las pantallas de cada área, manteniendo coherencia
-    entre el estado general de la venta y el detalle por pieza.
-    """
-    mapa_estados = {
-        'Listo':      'Terminado',
-        'Despachado': 'Terminado',
-        'Entregado':  'Terminado',
-    }
-    ticket_destino = mapa_estados.get(nuevo_estado_venta)
-    if not ticket_destino:
-        # 'Pendiente' / 'En producción' no fuerzan retroceso de tickets
-        # ya avanzados — solo afecta el estado general visible al cliente.
-        return
-
-    # Áreas normales de producción (corte, tapicería, estructuras, cojines...)
-    cursor.execute("""
-        UPDATE tickets_produccion
-        SET estado_ticket = %s,
-            fecha_fin = COALESCE(fecha_fin, CURRENT_TIMESTAMP)
-        WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
-          AND area_trabajo != 'DESPACHO_CENTRAL'
-          AND estado_ticket NOT IN ('Terminado', 'Cancelado', 'Recogido', 'Listo para Recojo')
-    """, (ticket_destino, venta_id))
-
-    # Despacho central: al marcar Entregado (incluso si venía de Pendiente
-    # después de haber estado Entregado antes), el ticket pasa a 'Terminado'
-    # para que aparezca en despacho/entregados.
-    # No se excluye 'Recogido': en el flujo Entregado→Pendiente→Entregado
-    # el ticket queda en 'Recogido' y jamás avanzaba a 'Terminado'.
-    if nuevo_estado_venta == 'Entregado':
-        cursor.execute("""
-            UPDATE tickets_produccion
-            SET estado_ticket = 'Terminado',
-                fecha_fin = COALESCE(fecha_fin, CURRENT_TIMESTAMP)
-            WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
-              AND area_trabajo = 'DESPACHO_CENTRAL'
-              AND estado_ticket != 'Cancelado'
-        """, (venta_id,))
-
-    # ── PUENTE LOGÍSTICA EXTERNA ──────────────────────────────────────────
-    # Si el pedido ya se Despachó/Entregó, el material que se pidió a
-    # proveedores externos (tela, madera, etc.) para ESE pedido ya tuvo
-    # que haber sido recibido y usado — de lo contrario el mueble no se
-    # podría haber fabricado. Sin este cierre, la fila se queda "colgada"
-    # en estados intermedios (Pendiente, Cotizado, Pagado, Orden Enviada...)
-    # aunque el producto físico ya salió del taller.
-    # No se tocan filas ya 'Cancelado' o 'Rechazado'.
-    cursor.execute("""
-        UPDATE logistica_externa
-        SET estado = 'Recibido',
-            estado_distribucion = COALESCE(estado_distribucion, 'Distribuido'),
-            fecha_recojo_fisico = COALESCE(fecha_recojo_fisico, CURRENT_TIMESTAMP)
-        WHERE venta_id = %s
-          AND estado NOT IN ('Recibido', 'Cancelado', 'Rechazado')
-    """, (venta_id,))
-    # ───────────────────────────────────────────────────────────────────────
-
-
 @ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])
 @requiere_login
 def cambiar_estado_venta(venta_id):
@@ -1012,11 +978,11 @@ def cambiar_estado_venta(venta_id):
 
         cursor.execute("UPDATE ventas SET estado_general = %s WHERE id = %s", (nuevo_estado, venta_id))
 
-        # ── PUENTE TALLER: sincroniza los tickets de cada pieza con el
-        #    nuevo estado general (para que ya no aparezcan en sus áreas) ──
+        # Sincronizar tickets y logística con el nuevo estado de la venta.
         _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado)
 
-        # ── PUENTE INVENTARIO: Entregado → marcar unidades como Vendido ──────
+        # Si la venta se marca como Entregada, las unidades de stock físico
+        # que estaban 'Reservado' pasan a 'Vendido'.
         if nuevo_estado == 'Entregado':
             _liberar_unidades(cursor, venta_id, 'Vendido', 'Venta')
         # ─────────────────────────────────────────────────────────────────────
