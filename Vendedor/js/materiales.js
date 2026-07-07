@@ -1,5 +1,8 @@
 // === MÓDULO: Materiales, buscadores e insumos ===
 
+// A11: Estado para paginación de buscadores inteligentes
+let _smartSearchState = {};
+
 /**
  * mostrarUltimasMaterial — se llama en el onfocus del input de búsqueda.
  * Si el campo está vacío, muestra las últimas 10 telas/materiales ingresados

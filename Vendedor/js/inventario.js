@@ -15,6 +15,9 @@ let _invFiltroSede = '';
 let _maestroInv = { tableros: [], bases_comedor: [], sillas: [], butacas: [], cojines: [], catalogo: [], cargado: false };
 let _invSedesList = []; // [{id, nombre}] — usado para armar el panel de stock por tienda en "Editar Producto"
 
+// A11: Estado para paginación del buscador inteligente de catálogo
+let _invSmartSearchState = {};
+
 const CATEGORIAS_PRODUCTO = [
     'Sofa','Butaca','Silla','Espejo','Cuadro','Cojin','Mesa Centro','Consola',
     'Esquinero', 'Florero', 'Manta', 'Puff'
@@ -121,6 +124,12 @@ function _htmlEsqueleto() {
         <input id="inv-filtro-q" type="text" class="form-input"
                placeholder="Buscar modelo..." 
                style="max-width:240px;padding:10px 12px;font-size:13px;" />
+        <button onclick="_invLimpiarFiltros()"
+                style="background:transparent;border:none;color:var(--text-muted);
+                       cursor:pointer;font-size:12px;font-weight:700;
+                       display:flex;align-items:center;gap:5px;">
+            <i class="fas fa-times-circle"></i> Limpiar
+        </button>
     </div>
 
     <!-- CONTENIDO PRINCIPAL -->
@@ -1381,13 +1390,12 @@ function _formProducto() {
 
 // ─── Buscador inteligente de productos del catálogo ──────────────────────────
 
-// Tope duro al "Ver todas" — mismo criterio que _MATERIAL_TOPE_VER_TODAS en
-// materiales.js, para no pintar de golpe cientos de productos del catálogo.
-const _INV_CATALOGO_TOPE_VER_TODAS = 200;
-
 function _invMostrarCatalogoBuscador() {
     const searchEl = document.getElementById('search-inv-prod');
     if (!searchEl || searchEl.value.trim() !== '') return;
+
+    // A11: Resetear estado del buscador
+    _invSmartSearchState['catalogo'] = { offset: 10 };
 
     const cat = document.getElementById('nf-cat')?.value || '';
     const lista = _invGetCatalogoPorCat(cat);
@@ -1403,10 +1411,12 @@ function _invMostrarCatalogoBuscador() {
 
     // "Ver todas" solo aparece si de verdad hay más de 10 (igual que en
     // el buscador de materiales — mismo patrón, mismo texto).
+    // A11: Cambiado a "Ver más"
+    const restantes = total - 10;
     const htmlVerMas = total > 10
-        ? `<div class="custom-option-item" style="justify-content:center; color:#2563eb; font-weight:700; font-size:12px; cursor:pointer;"
-                 onclick="_invMostrarTodasCatalogoBuscador()">
-               + Ver todas (${total}) →
+        ? `<div class="custom-option-item" id="ver-mas-inv-catalogo" style="justify-content:center; color:#2563eb; font-weight:700; font-size:12px; cursor:pointer;"
+                 onclick="_invMostrarMasCatalogo()">
+               + Ver más (${restantes} restantes) →
            </div>`
         : '';
 
@@ -1415,27 +1425,41 @@ function _invMostrarCatalogoBuscador() {
 }
 
 /**
- * _invMostrarTodasCatalogoBuscador — se dispara al hacer click en "Ver todas (N)".
- * Pinta el catálogo completo de la categoría actual (con tope de seguridad),
- * sin pasar por el backend: _maestroInv.catalogo ya está cargado en memoria.
+ * A11: Carga y añade un lote de 30 productos más a la lista del buscador.
+ * Reemplaza a `_invMostrarTodasCatalogoBuscador` que tenía un tope fijo.
  */
-function _invMostrarTodasCatalogoBuscador() {
+function _invMostrarMasCatalogo() {
     const cat = document.getElementById('nf-cat')?.value || '';
     const lista = _invGetCatalogoPorCat(cat);
 
     const listContainer = document.getElementById('list-inv-prod');
     if (!listContainer) return;
 
-    const total  = lista.length;
-    const todas  = lista.slice(0, _INV_CATALOGO_TOPE_VER_TODAS);
-    const excede = total > _INV_CATALOGO_TOPE_VER_TODAS;
+    const state = _invSmartSearchState['catalogo'] || { offset: 10 };
+    const BATCH_SIZE = 30;
+    const newOffset = state.offset + BATCH_SIZE;
 
-    const header = `<div style="padding:6px 12px;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f1f5f9;">
-        📋 ${excede ? `Mostrando ${_INV_CATALOGO_TOPE_VER_TODAS} de ${total}` : `Todas (${total})`} — escribe para filtrar
-    </div>`;
+    const nuevosItems = lista.slice(state.offset, newOffset);
+    const htmlNuevos = nuevosItems.map(p => _invHtmlItemCatalogo(p)).join('');
 
-    listContainer.innerHTML = header + todas.map(p => _invHtmlItemCatalogo(p)).join('');
-    listContainer.classList.add('show');
+    const verMasBoton = document.getElementById('ver-mas-inv-catalogo');
+    if (verMasBoton) {
+        verMasBoton.insertAdjacentHTML('beforebegin', htmlNuevos);
+    } else {
+        listContainer.insertAdjacentHTML('beforeend', htmlNuevos);
+    }
+
+    state.offset = newOffset;
+    _invSmartSearchState['catalogo'] = state;
+
+    if (verMasBoton) {
+        const restantes = lista.length - newOffset;
+        if (restantes > 0) {
+            verMasBoton.innerHTML = `+ Ver más (${restantes} restantes) →`;
+        } else {
+            verMasBoton.remove();
+        }
+    }
 }
 
 function _invFiltrarCatalogoBuscador() {
@@ -2271,6 +2295,23 @@ function _bindInvEventos() {
             await _cargarDatosTab();
         }, 350);
     });
+}
+
+/* ─── Limpiar filtros de búsqueda ──────────────────────────── */
+function _invLimpiarFiltros() {
+    _invFiltroCat = '';
+    _invFiltroSede = '';
+    _invFiltroQ = '';
+
+    const selCat = document.getElementById('inv-filtro-cat');
+    const selSede = document.getElementById('inv-filtro-sede');
+    const inputQ = document.getElementById('inv-filtro-q');
+
+    if (selCat) selCat.value = '';
+    if (selSede) selSede.value = '';
+    if (inputQ) inputQ.value = '';
+
+    _cargarDatosTab();
 }
 
 /* ─── Imprimir Etiqueta de Código de Barras ─────────────────── */

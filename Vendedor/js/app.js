@@ -865,6 +865,35 @@ async function cargarLogisticaExterna() {
                     }).join('')}
                 </div>`;
             } else {
+            // La vista de completados ahora también usa tarjetas, pero más compactas
+            html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr));gap:12px;opacity:.8;">
+                ${gruposArray.map((grupo, idx) => {
+                    const provs = [...grupo.proveedor_resumen];
+                    const provLabel = provs.length > 1 ? 'Múltiples' : provs[0] || 'N/A';
+                    const estadoLabel = grupo.todos_recibidos ? 'Recibido' : 'Parcial';
+                    const c = coloresEstado[estadoLabel] || coloresEstado['Recibido'];
+                    const subId = `log-comp-mob-${idx}`;
+                    return `
+                    <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                            <div style="font-weight:900;font-size:14px;color:#d97706;">#${grupo.codigo_venta}</div>
+                            <span style="background:${c.bg};color:${c.color};padding:3px 9px;border-radius:20px;font-weight:800;font-size:10px;">${estadoLabel}</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:10px;">
+                            <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;"><div style="font-size:10px;color:#94a3b8;font-weight:700;">PROVEEDOR</div><div style="font-weight:600;">${provLabel}</div></div>
+                            <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;"><div style="font-size:10px;color:#94a3b8;font-weight:700;">TOTAL</div><div style="font-weight:900;color:#166534;">S/ ${grupo.precio_total.toFixed(2)}</div></div>
+                        </div>
+                        <button onclick="document.getElementById('${subId}').style.display = document.getElementById('${subId}').style.display === 'none' ? 'block' : 'none';"
+                                style="width:100%;background:#f1f5f9;color:#475569;border:none;padding:8px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;">
+                            Ver ${grupo.items.length} insumos <i class="fa-solid fa-chevron-down" style="font-size:9px;"></i>
+                        </button>
+                        <div id="${subId}" style="display:none;margin-top:10px;font-size:11px;border-top:1px solid #f1f5f9;padding-top:8px;">
+                            ${grupo.items.map(i => `<div style="display:flex;justify-content:space-between;padding:4px 0;"><span>${i.insumo}</span><span style="font-weight:600;">S/ ${(i.precio_cotizado||0).toFixed(2)}</span></div>`).join('')}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>`;
+            /*
                 html += `<div style="overflow-x:auto;opacity:.85;">
                     <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px;">
                         <thead><tr style="background:#f1f5f9;color:#475569;font-size:11px;font-weight:900;text-transform:uppercase;">
@@ -895,7 +924,9 @@ async function cargarLogisticaExterna() {
                     </table>
                 </div>`;
             }
+                </div>`;*/
             html += `</div></div>`;
+        }
         }
 
         html += `
@@ -911,6 +942,16 @@ async function cargarLogisticaExterna() {
         </div>`;
     }
 }
+
+window._logCarouselNav = function(idBase, fotos, labels, dir) {
+    if (!fotos || !fotos.length) return;
+    _logCarouselIdx[idBase] = ((_logCarouselIdx[idBase] || 0) + dir + fotos.length) % fotos.length;
+    const idx = _logCarouselIdx[idBase];
+    const img = document.getElementById(`${idBase}-img`);
+    const dot = document.getElementById(`${idBase}-dot`);
+    if (img) img.src = fotos[idx];
+    if (dot) dot.textContent = `${(labels && labels[idx]) ? labels[idx] + ' · ' : ''}${idx + 1}/${fotos.length}`;
+};
 
 async function _abrirEditarLogistica(item, proveedores) {
     // ── Determinar etapa del flujo para mostrar acciones correctas ──
