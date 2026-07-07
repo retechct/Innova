@@ -1351,7 +1351,21 @@ def obtener_logistica():
                    -- Foto 1: la del insumo del maestro, encontrada por SKU
                    -- (la que sale del buscador inteligente al elegir la
                    -- parte del catálogo al armar el pedido).
+                   --
+                   -- FIX (julio 2026): piezas "✨ PINTEREST" del configurador
+                   -- (materiales.js → abrirModalPinterest) usan un SKU temporal
+                   -- REQ-PIN-{id} mientras la sugerencia espera aprobación del
+                   -- Admin. Ese SKU nunca existe en las tablas maestro_*, así
+                   -- que antes esta tarjeta salía sin foto aunque el vendedor
+                   -- sí hubiera subido la imagen de referencia — esa foto vive
+                   -- en sugerencias_insumos.foto_ref. Se agrega como primera
+                   -- opción del COALESCE para recuperarla por el id embebido
+                   -- en el SKU (REQ-PIN-<id>).
                    COALESCE(
+                       (SELECT foto_ref FROM sugerencias_insumos
+                          WHERE l.sku LIKE 'REQ-PIN-%'
+                            AND id::text = split_part(l.sku, '-', 3)
+                          LIMIT 1),
                        (SELECT foto_url FROM maestro_telas        WHERE sku = l.sku LIMIT 1),
                        (SELECT foto_url FROM maestro_tableros      WHERE sku = l.sku LIMIT 1),
                        (SELECT foto_url FROM maestro_bases         WHERE sku = l.sku LIMIT 1),
