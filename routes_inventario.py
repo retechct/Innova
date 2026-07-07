@@ -1470,13 +1470,14 @@ def ajustar_cantidad_stock():
 
             for _ in range(diferencia):
                 barcode = _generar_codigo(cur, prefijo, 'stock_productos')
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO stock_productos
                         (catalogo_id, nombre_modelo, categoria, codigo_barra,
                          observaciones, foto_url, fotos_adicionales, sede_id, estado, creado_por)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Disponible', %s)
                     RETURNING id;
-                """, (
+                    """, (
                     data.get('catalogo_id'),
                     data['nombre_modelo'],
                     data['categoria'],
