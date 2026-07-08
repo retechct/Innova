@@ -999,6 +999,72 @@ def listar_ventas():
 # GESTIÓN MANUAL DE ESTADOS Y ANULACIÓN
 # ==========================================
 
+@ventas_bp.route('/api/ventas/rapidas', methods=['GET'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def reporte_ventas_rapidas():
+    """Reporte operativo de items vendidos por el flujo de Venta Rapida."""
+    desde = (request.args.get('desde') or '').strip()
+    hasta = (request.args.get('hasta') or '').strip()
+    try:
+        limit = min(max(int(request.args.get('limit', 200)), 1), 1000)
+    except (TypeError, ValueError):
+        limit = 200
+
+    condiciones = ["iv.color_tela ILIKE %s"]
+    params = ["%VENTA RAPIDA%"]
+    if desde:
+        condiciones.append("v.fecha_emision >= %s")
+        params.append(desde)
+    if hasta:
+        condiciones.append("v.fecha_emision <= %s")
+        params.append(hasta)
+
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        cursor.execute(f"""
+            SELECT v.codigo_venta,
+                   v.nombre_cliente,
+                   COALESCE(v.vendedor_nombre, 'Sin asignar') AS vendedor,
+                   COALESCE(v.sede, '') AS sede_venta,
+                   v.fecha_emision,
+                   COALESCE(v.estado_general, 'Pendiente') AS estado,
+                   iv.producto,
+                   COALESCE(iv.precio_unitario, 0) AS precio,
+                   COALESCE(iv.foto_url, '') AS foto_url,
+                   COALESCE(iv.color_tela, '') AS detalles
+            FROM items_venta iv
+            JOIN ventas v ON v.id = iv.venta_id
+            WHERE {' AND '.join(condiciones)}
+            ORDER BY v.fecha_emision DESC, v.id DESC, iv.id DESC
+            LIMIT %s
+        """, params + [limit])
+        rows = cursor.fetchall()
+        items = [{
+            'codigo': r[0],
+            'cliente': r[1],
+            'vendedor': r[2],
+            'sede': r[3],
+            'fecha_emision': r[4].strftime('%Y-%m-%d') if r[4] else '',
+            'estado': r[5],
+            'producto': r[6],
+            'precio': float(r[7] or 0),
+            'foto_url': limpiar_foto(r[8]),
+            'detalles': r[9],
+        } for r in rows]
+        return jsonify({
+            'items': items,
+            'total_items': len(items),
+            'total_monto': round(sum(i['precio'] for i in items), 2),
+            'limit': limit,
+        }), 200
+    except Exception as ex:
+        return jsonify({'error': str(ex)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
 @ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])
 @requiere_login
 def cambiar_estado_venta(venta_id):

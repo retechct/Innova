@@ -656,6 +656,67 @@ async function gestionarEstadoVenta(ventaId, estadoActual) {
     }
 }
 
+function _limpiarHtmlReporteRapido(html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html || '';
+    return (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim();
+}
+
+async function abrirReporteVentasRapidas() {
+    const desde = document.getElementById('contratos-desde')?.value || '';
+    const hasta = document.getElementById('contratos-hasta')?.value || '';
+    const params = new URLSearchParams({ limit: 300 });
+    if (desde) params.set('desde', desde);
+    if (hasta) params.set('hasta', hasta);
+
+    try {
+        Swal.fire({ title: 'Cargando ventas rapidas...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res = await apiFetch(`${API_URL}/api/ventas/rapidas?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'No se pudo cargar el reporte');
+
+        const items = data.items || [];
+        const resumen = `
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px;">
+                <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px;">
+                    <div style="font-size:10px;font-weight:900;color:#9a3412;">ITEMS</div>
+                    <div style="font-size:22px;font-weight:900;color:#9a3412;">${data.total_items || 0}</div>
+                </div>
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;">
+                    <div style="font-size:10px;font-weight:900;color:#166534;">MONTO</div>
+                    <div style="font-size:22px;font-weight:900;color:#166534;">S/ ${parseFloat(data.total_monto || 0).toFixed(2)}</div>
+                </div>
+            </div>
+        `;
+
+        const lista = items.length
+            ? items.map(it => `
+                <div style="display:grid;grid-template-columns:58px 1fr auto;gap:10px;align-items:start;border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin-bottom:8px;background:white;text-align:left;">
+                    <img src="${it.foto_url || 'imagenes/sin_foto.jpg'}" onerror="this.src='imagenes/sin_foto.jpg'"
+                         style="width:58px;height:58px;object-fit:cover;border-radius:6px;background:#f8fafc;">
+                    <div>
+                        <div style="font-size:12px;font-weight:900;color:#0f172a;">${it.producto || 'Venta rapida'}</div>
+                        <div style="font-size:11px;color:#64748b;">#${it.codigo} · ${it.cliente || ''}</div>
+                        <div style="font-size:11px;color:#64748b;">${it.sede || 'Sin sede'} · ${it.vendedor || 'Sin vendedor'} · ${it.fecha_emision || ''}</div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:3px;">${_limpiarHtmlReporteRapido(it.detalles).slice(0, 180)}</div>
+                    </div>
+                    <div style="font-size:12px;font-weight:900;color:#166534;white-space:nowrap;">S/ ${parseFloat(it.precio || 0).toFixed(2)}</div>
+                </div>
+            `).join('')
+            : '<p style="text-align:center;color:#94a3b8;padding:24px;">No hay ventas rapidas para este rango.</p>';
+
+        Swal.fire({
+            title: '<i class="fa-solid fa-bolt" style="color:#d97706;"></i> Ventas rapidas',
+            html: `<div style="max-height:65vh;overflow:auto;">${resumen}${lista}</div>`,
+            width: '760px',
+            confirmButtonText: 'Cerrar',
+            confirmButtonColor: '#0f172a'
+        });
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
 /**
  * Elimina una venta POR COMPLETO (DELETE real en cascada: items, tickets
  * de taller, pagos, logística y cambios de precio) — a diferencia de
