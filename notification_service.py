@@ -10,6 +10,8 @@ telefono para una futura integracion con WhatsApp.
 """
 
 import os
+import smtplib
+from email.mime.text import MIMEText
 
 from database import notificar_usuario
 
@@ -332,3 +334,68 @@ def enviar_correo_prueba(cursor=None):
         "Correo de prueba enviado desde el ERP Innova. Si recibiste esto, SMTP esta funcionando.",
     )
     return {"destinatarios": len(recipients), "notificaciones": result}
+
+
+def diagnosticar_correo_prueba():
+    destinatarios = _env_emails()
+    remitente = os.getenv("EMAIL_USER")
+    password = os.getenv("EMAIL_PASS")
+    smtp_server = os.getenv("EMAIL_SMTP", "smtp.gmail.com")
+    smtp_port_raw = os.getenv("EMAIL_PORT", "587")
+
+    diagnostico = {
+        "email_user_configurado": bool(remitente),
+        "email_pass_configurado": bool(password),
+        "smtp": smtp_server,
+        "port": smtp_port_raw,
+        "destinatarios": len(destinatarios),
+        "resultados": [],
+    }
+
+    if not destinatarios:
+        diagnostico["error"] = "ALERT_EMAILS no tiene destinatarios."
+        return diagnostico
+    if not remitente:
+        diagnostico["error"] = "EMAIL_USER no esta configurado."
+        return diagnostico
+    if not password:
+        diagnostico["error"] = "EMAIL_PASS no esta configurado."
+        return diagnostico
+
+    try:
+        smtp_port = int(smtp_port_raw)
+    except (TypeError, ValueError):
+        diagnostico["error"] = "EMAIL_PORT debe ser numerico."
+        return diagnostico
+
+    for email in destinatarios:
+        try:
+            msg = MIMEText(
+                "Correo de prueba enviado desde el ERP Innova. SMTP esta funcionando."
+            )
+            msg["Subject"] = "[Innova] Prueba de correo"
+            msg["From"] = remitente
+            msg["To"] = email
+
+            with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+                server.starttls()
+                server.login(remitente, password)
+                server.send_message(msg)
+
+            diagnostico["resultados"].append({
+                "email": email,
+                "enviado": True,
+                "error_tipo": None,
+                "error": None,
+            })
+        except Exception as ex:
+            diagnostico["resultados"].append({
+                "email": email,
+                "enviado": False,
+                "error_tipo": type(ex).__name__,
+                "error": str(ex),
+            })
+
+    diagnostico["enviados"] = sum(1 for r in diagnostico["resultados"] if r["enviado"])
+    diagnostico["omitidos"] = len(diagnostico["resultados"]) - diagnostico["enviados"]
+    return diagnostico

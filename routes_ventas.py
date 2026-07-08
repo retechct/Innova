@@ -31,6 +31,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from database import get_db_connection, release_db_connection, limpiar_foto
 from auth_middleware import requiere_login, requiere_rol
 from notification_service import (
+    diagnosticar_correo_prueba,
     enviar_resumen_operativo,
     enviar_correo_prueba,
     notificar_contrato_creado,
@@ -1124,7 +1125,7 @@ def notificaciones_ping():
 def notificaciones_probar_correo():
     """Envia un correo simple para validar SMTP en Render."""
     try:
-        data = enviar_correo_prueba()
+        data = diagnosticar_correo_prueba()
         return jsonify(data), 200
     except Exception as ex:
         return jsonify({'error': str(ex)}), 500
