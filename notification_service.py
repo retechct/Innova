@@ -17,6 +17,13 @@ from database import notificar_usuario
 ADMIN_ROLES = ("Admin", "Jefe_Taller")
 
 
+def asegurar_esquema_notificaciones(cursor):
+    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);")
+    cursor.execute(
+        "ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS estado_distribucion VARCHAR(50);"
+    )
+
+
 def _env_emails():
     raw = ",".join(
         value for value in (
@@ -45,6 +52,7 @@ def _fmt(value):
 
 
 def _fetch_admins(cursor):
+    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);")
     recipients = {}
 
     for email in _env_emails():
@@ -79,6 +87,7 @@ def _fetch_admins(cursor):
 def _fetch_usuario(cursor, usuario_id):
     if not usuario_id:
         return None
+    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);")
     cursor.execute(
         """
         SELECT nombre, email, telefono, rol
@@ -234,9 +243,7 @@ def notificar_estado_contrato(cursor, venta_id, nuevo_estado):
 
 def resumen_operativo(cursor):
     """Devuelve contadores de pendientes para correo o futuras alertas."""
-    cursor.execute(
-        "ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS estado_distribucion VARCHAR(50);"
-    )
+    asegurar_esquema_notificaciones(cursor)
 
     cursor.execute(
         """
@@ -304,3 +311,14 @@ def enviar_resumen_operativo(cursor):
         message,
     )
     return {**data, "notificaciones": result}
+
+
+def enviar_correo_prueba(cursor):
+    asegurar_esquema_notificaciones(cursor)
+    recipients = _fetch_admins(cursor)
+    result = _send_many(
+        recipients,
+        "[Innova] Prueba de correo",
+        "Correo de prueba enviado desde el ERP Innova. Si recibiste esto, SMTP esta funcionando.",
+    )
+    return {"destinatarios": len(recipients), "notificaciones": result}

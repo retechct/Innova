@@ -32,6 +32,7 @@ from database import get_db_connection, release_db_connection, limpiar_foto
 from auth_middleware import requiere_login, requiere_rol
 from notification_service import (
     enviar_resumen_operativo,
+    enviar_correo_prueba,
     notificar_contrato_creado,
     notificar_estado_contrato,
     resumen_operativo,
@@ -1086,6 +1087,27 @@ def notificaciones_resumen_operativo():
         conexion = get_db_connection()
         cursor = conexion.cursor()
         data = enviar_resumen_operativo(cursor) if enviar else resumen_operativo(cursor)
+        conexion.commit()
+        return jsonify(data), 200
+    except Exception as ex:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(ex)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            release_db_connection(conexion)
+
+
+@ventas_bp.route('/api/notificaciones/probar-correo', methods=['POST'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def notificaciones_probar_correo():
+    """Envia un correo simple para validar SMTP en Render."""
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        data = enviar_correo_prueba(cursor)
         conexion.commit()
         return jsonify(data), 200
     except Exception as ex:
