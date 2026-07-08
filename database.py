@@ -6,6 +6,10 @@ Importar en cualquier módulo con:
 
 import os
 import smtplib
+import json
+import urllib.error
+import urllib.request
+from html import escape
 from email.mime.text import MIMEText
 from psycopg2 import pool as pg_pool
 from psycopg2 import Error as Psycopg2Error
@@ -349,6 +353,47 @@ Innova Möbili — Área de Compras
 
 
 # ─── Notificaciones internas a usuarios del ERP (operarios, choferes, etc.) ──
+def _enviar_email_resend(destinatario_email, asunto, mensaje):
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        return None
+
+    remitente = os.getenv("EMAIL_FROM", "Innova Mobili <onboarding@resend.dev>")
+    html = (
+        "<div style=\"font-family:Arial,sans-serif;line-height:1.45;color:#1f2937;\">"
+        f"<pre style=\"white-space:pre-wrap;font-family:Arial,sans-serif;\">{escape(mensaje)}</pre>"
+        "</div>"
+    )
+    payload = {
+        "from": remitente,
+        "to": [destinatario_email],
+        "subject": asunto,
+        "html": html,
+    }
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            body = response.read().decode("utf-8", errors="replace")
+            return {
+                "ok": 200 <= response.status < 300,
+                "status": response.status,
+                "body": body,
+            }
+    except urllib.error.HTTPError as ex:
+        body = ex.read().decode("utf-8", errors="replace")
+        return {"ok": False, "status": ex.code, "body": body}
+    except Exception as ex:
+        return {"ok": False, "status": None, "body": str(ex)}
+
+
 def notificar_usuario(destinatario_email, nombre_destinatario, asunto, mensaje, telefono=None):
     """
     Capa de abstracción para notificar a un usuario del ERP (operario,
@@ -377,6 +422,17 @@ def notificar_usuario(destinatario_email, nombre_destinatario, asunto, mensaje, 
         return False
 
     try:
+        resend_result = _enviar_email_resend(destinatario_email, asunto, mensaje)
+        if resend_result is not None:
+            if resend_result.get("ok"):
+                print(f"Notificacion Resend enviada a {nombre_destinatario} ({destinatario_email})")
+                return True
+            print(
+                f"Error Resend al notificar a {nombre_destinatario}: "
+                f"status={resend_result.get('status')} body={resend_result.get('body')}"
+            )
+            return False
+
         remitente   = os.getenv("EMAIL_USER")
         password    = os.getenv("EMAIL_PASS")
         smtp_server = os.getenv("EMAIL_SMTP", "smtp.gmail.com")

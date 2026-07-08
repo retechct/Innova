@@ -338,12 +338,17 @@ def enviar_correo_prueba(cursor=None):
 
 def diagnosticar_correo_prueba():
     destinatarios = _env_emails()
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    email_from = os.getenv("EMAIL_FROM", "Innova Mobili <onboarding@resend.dev>")
     remitente = os.getenv("EMAIL_USER")
     password = os.getenv("EMAIL_PASS")
     smtp_server = os.getenv("EMAIL_SMTP", "smtp.gmail.com")
     smtp_port_raw = os.getenv("EMAIL_PORT", "587")
 
     diagnostico = {
+        "canal": "resend" if resend_api_key else "smtp",
+        "resend_api_key_configurado": bool(resend_api_key),
+        "email_from": email_from if resend_api_key else None,
         "email_user_configurado": bool(remitente),
         "email_pass_configurado": bool(password),
         "smtp": smtp_server,
@@ -354,6 +359,21 @@ def diagnosticar_correo_prueba():
 
     if not destinatarios:
         diagnostico["error"] = "ALERT_EMAILS no tiene destinatarios."
+        return diagnostico
+    if resend_api_key:
+        result = _send_many(
+            [{"email": email, "nombre": "Administracion", "telefono": None} for email in destinatarios],
+            "[Innova] Prueba de correo",
+            "Correo de prueba enviado desde el ERP Innova usando Resend.",
+        )
+        diagnostico["enviados"] = result["enviados"]
+        diagnostico["omitidos"] = result["omitidos"]
+        diagnostico["resultados"] = [{
+            "email": email,
+            "enviado": result["enviados"] > 0,
+            "error_tipo": None if result["enviados"] > 0 else "Ver logs de Render",
+            "error": None if result["enviados"] > 0 else "Resend rechazo el envio o EMAIL_FROM no esta verificado.",
+        } for email in destinatarios]
         return diagnostico
     if not remitente:
         diagnostico["error"] = "EMAIL_USER no esta configurado."
