@@ -162,10 +162,11 @@ def agregar_plantilla_catalogo():
             cursor.close(); release_db_connection(conexion)
 
 
+@catalogo_bp.route('/api/catalogo/modelo/<int:producto_id>', methods=['PUT'])
 @catalogo_bp.route('/api/catalogo/plantilla/<int:producto_id>', methods=['PUT'])
 @requiere_rol('Admin')
 def editar_plantilla_catalogo(producto_id):
-    """Edita una plantilla de la carta sin cambiar su ID ni las ventas existentes."""
+    """Edita un modelo publicado sin cambiar su ID ni las ventas existentes."""
     try:
         nombre = request.form.get('nombre', '').strip()
         categoria = request.form.get('categoria', 'Sofá').strip()
@@ -182,15 +183,13 @@ def editar_plantilla_catalogo(producto_id):
         _asegurar_columnas_catalogo(cursor)
 
         cursor.execute("""
-            SELECT foto_url, COALESCE(fotos_urls, ''), es_plantilla
+            SELECT foto_url, COALESCE(fotos_urls, ''), config_json
             FROM catalogo_productos
             WHERE id = %s
         """, (producto_id,))
         actual = cursor.fetchone()
         if not actual:
             return jsonify({'error': 'Producto no encontrado'}), 404
-        if not actual[2]:
-            return jsonify({'error': 'Solo se pueden editar plantillas de la carta'}), 400
 
         foto_principal = actual[0] or ''
         fotos_urls_str = actual[1] or ''
@@ -212,7 +211,17 @@ def editar_plantilla_catalogo(producto_id):
                 foto_principal = combinadas[0] if combinadas else ''
                 fotos_urls_str = '|'.join(combinadas[1:]) if len(combinadas) > 1 else ''
 
-        config_json = {'tipo_config': tipo_config} if tipo_config else None
+        config_json = actual[2] or {}
+        if isinstance(config_json, str):
+            try:
+                config_json = json.loads(config_json) if config_json else {}
+            except Exception:
+                config_json = {}
+        if tipo_config:
+            config_json['tipo_config'] = tipo_config
+        else:
+            config_json.pop('tipo_config', None)
+        config_json_final = json.dumps(config_json) if config_json else None
         cursor.execute("""
             UPDATE catalogo_productos
             SET nombre_modelo = %s,
@@ -222,11 +231,11 @@ def editar_plantilla_catalogo(producto_id):
                 categoria = %s,
                 observaciones = %s,
                 config_json = %s::jsonb
-            WHERE id = %s AND es_plantilla = TRUE
+            WHERE id = %s
         """, (
             nombre, precio, foto_principal, fotos_urls_str,
             categoria, observaciones,
-            json.dumps(config_json) if config_json else None,
+            config_json_final,
             producto_id
         ))
         conexion.commit()

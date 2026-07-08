@@ -227,7 +227,7 @@ def limpiar_foto(url):
     if url.startswith('http'):
         if 'res.cloudinary.com' in url and '/upload/' in url:
             # Solo inyectar si aún no tiene transformaciones aplicadas
-            if '/upload/f_' not in url and '/upload/q_' not in url and '/upload/w_' not in url:
+            if 'f_webp' not in url:
                 url = url.replace(
                     '/upload/',
                     '/upload/f_webp,q_auto:good,w_1200,c_limit/'

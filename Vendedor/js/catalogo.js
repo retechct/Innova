@@ -39,6 +39,9 @@ function renderGrid() {
 
     let html = `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px;">`;
     html += paginaActual.map(p => {
+        const tipoConfig = _cartaTipoConfig(p);
+        const textoBoton = tipoConfig ? 'CONFIGURAR' : 'AÑADIR AL CARRO';
+        const esAdmin = window.usuarioActivo && String(window.usuarioActivo.rol || '').toLowerCase() === 'admin';
         return `
         <div class="card" style="position:relative;">
             <img src="${p.foto}" onerror="this.src='imagenes/sin_foto.jpg'">
@@ -49,9 +52,13 @@ function renderGrid() {
                 <h4>${p.nombre}</h4>
                 <span class="price-tag">${p.precio > 0 ? 'S/ ' + p.precio.toFixed(2) : 'A Cotizar'}</span>
                 <button class="btn-action btn-primary"
-                        onclick="addToCart('${p.nombre.replace(/'/g,"\\'")}', ${p.precio}, '${p.foto}', 'Venta Estándar')">
-                    <i class="fa-solid fa-plus"></i> AÑADIR AL CARRO
+                        onclick="_cartaSeleccionarModelo(${p.id})">
+                    <i class="fa-solid ${tipoConfig ? 'fa-sliders' : 'fa-plus'}"></i> ${textoBoton}
                 </button>
+                ${esAdmin ? `<button class="btn-action btn-ghost" style="margin-top:6px; padding:8px; font-size:11px;"
+                        onclick="_cartaEditarPlantilla(${p.id})">
+                    <i class="fa-solid fa-pen"></i> EDITAR
+                </button>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -1746,6 +1753,74 @@ function _cartaCombinarFotos(fotosBase, fotosConfiguracion) {
         .join('|');
 }
 
+function _cartaConfigModelo(p) {
+    const cfg = p?.config_json || {};
+    if (typeof cfg === 'string') {
+        try { return JSON.parse(cfg) || {}; } catch(e) { return {}; }
+    }
+    return cfg || {};
+}
+
+function _cartaAplicarReceta(p, tipoConfig) {
+    const receta = _cartaConfigModelo(p);
+    if (!receta || Object.keys(receta).length === 0) return;
+
+    const aplicarValores = () => {
+        if (tipoConfig === 'sofa' && receta['sofa-modelo']) {
+            const el = document.getElementById('sofa-modelo');
+            if (el) {
+                el.value = receta['sofa-modelo'];
+                if (typeof actualizarVistaSofa === 'function') actualizarVistaSofa();
+            }
+        }
+        if (tipoConfig === 'comedor' && receta['comedor-formato']) {
+            const el = document.getElementById('comedor-formato');
+            if (el) {
+                el.value = receta['comedor-formato'];
+                if (typeof actualizarVistaComedor === 'function') actualizarVistaComedor();
+            }
+        }
+        if (tipoConfig === 'centro' && receta['centro-tipo']) {
+            const el = document.getElementById('centro-tipo');
+            if (el) {
+                el.value = receta['centro-tipo'];
+                if (typeof actualizarVistaCentro === 'function') actualizarVistaCentro();
+            }
+        }
+        if (tipoConfig === 'butaca' && receta['butaca-tipo']) {
+            const el = document.getElementById('butaca-tipo');
+            if (el) {
+                el.value = receta['butaca-tipo'];
+                if (typeof actualizarVistaButaca === 'function') actualizarVistaButaca();
+            }
+        }
+
+        Object.entries(receta).forEach(([id, valor]) => {
+            if (id === 'tipo_config') return;
+            if (['conf-precio', 'conf-precio-comedor', 'conf-precio-centro', 'conf-precio-butaca'].includes(id)) return;
+            const el = document.getElementById(id);
+            if (!el || el.type === 'file') return;
+            if (el.type === 'checkbox') {
+                el.checked = Boolean(valor);
+                if (typeof el.onchange === 'function') el.onchange();
+                return;
+            }
+            el.value = valor ?? '';
+        });
+
+        if (tipoConfig === 'sofa') {
+            if (typeof toggleBanqueta === 'function') toggleBanqueta();
+            if (typeof actualizarVistaSofa === 'function') actualizarVistaSofa();
+        } else if (tipoConfig === 'comedor' && typeof actualizarVistaComedor === 'function') {
+            actualizarVistaComedor();
+        } else if (tipoConfig === 'centro' && typeof actualizarVistaCentro === 'function') {
+            actualizarVistaCentro();
+        }
+    };
+
+    setTimeout(aplicarValores, 120);
+}
+
 function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
     const nombre = p.nombre || p.nombre_modelo || '';
     _cartaPlantillaActiva = {
@@ -1754,6 +1829,7 @@ function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
         precio: p.precio || 0,
         categoria: p.categoria || '',
         tipoConfig,
+        receta: _cartaConfigModelo(p),
         fotos: _cartaFotosModelo(p)
     };
 
@@ -1764,6 +1840,7 @@ function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
         const nombreEl = document.getElementById('sofa-nombre-libre');
         if (precioEl && p.precio > 0) precioEl.value = p.precio;
         if (nombreEl) nombreEl.value = nombre;
+        _cartaAplicarReceta(p, tipoConfig);
         _cartaAbriendoPlantilla = false;
         return;
     }
@@ -1771,6 +1848,7 @@ function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
         openConfigComedor();
         const precioEl = document.getElementById('conf-precio-comedor');
         if (precioEl && p.precio > 0) precioEl.value = p.precio;
+        _cartaAplicarReceta(p, tipoConfig);
         _cartaAbriendoPlantilla = false;
         return;
     }
@@ -1778,6 +1856,7 @@ function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
         openConfigCentro();
         const precioEl = document.getElementById('conf-precio-centro');
         if (precioEl && p.precio > 0) precioEl.value = p.precio;
+        _cartaAplicarReceta(p, tipoConfig);
         _cartaAbriendoPlantilla = false;
         return;
     }
@@ -1787,6 +1866,7 @@ function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
         const nombreEl = document.getElementById('butaca-nombre-libre');
         if (precioEl && p.precio > 0) precioEl.value = p.precio;
         if (nombreEl) nombreEl.value = nombre;
+        _cartaAplicarReceta(p, tipoConfig);
     }
     _cartaAbriendoPlantilla = false;
 }
@@ -1920,11 +2000,7 @@ window._npPreviewFotos = function(input) {
 };
 
 function _cartaTipoConfig(p) {
-    const cfg = p?.config_json || {};
-    if (typeof cfg === 'string') {
-        try { return (JSON.parse(cfg).tipo_config || ''); } catch(e) { return ''; }
-    }
-    return cfg.tipo_config || '';
+    return _cartaConfigModelo(p).tipo_config || '';
 }
 
 window._cartaEditarPlantilla = function(id) {
@@ -2006,7 +2082,7 @@ window._cartaEditarPlantilla = function(id) {
 
             try {
                 Swal.showLoading();
-                const res = await apiFetch(`${API_URL}/api/catalogo/plantilla/${id}`, { method: 'PUT', body: fd });
+                const res = await apiFetch(`${API_URL}/api/catalogo/modelo/${id}`, { method: 'PUT', body: fd });
                 const data = await res.json();
                 if (data.error) { Swal.showValidationMessage(data.error); return false; }
                 return data;

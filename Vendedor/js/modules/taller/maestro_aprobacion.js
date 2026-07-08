@@ -1,6 +1,7 @@
 // Taller - inventario maestro y aprobaciones
 const _maestroRenderState = {};
 const _MAESTRO_BATCH = 40;
+let _gestorSugerenciasPorId = {};
 
 function _setMaestroSeccion(id, items, tipoResolver, key) {
     _maestroRenderState[key] = {
@@ -368,6 +369,8 @@ async function cargarGestorAprobacion() {
         const mueblesPendientes = creaciones.filter(c => c.estado === 'Pendiente');
         const insumosPendientes = sugerenciasInsumos.filter(i => i.estado === 'Pendiente');
         const disenosPendientes = Array.isArray(disenosReferencia) ? disenosReferencia : [];
+        _gestorSugerenciasPorId = {};
+        insumosPendientes.forEach(i => { _gestorSugerenciasPorId[i.id] = i; });
 
         if (mueblesPendientes.length === 0 && insumosPendientes.length === 0 && disenosPendientes.length === 0) {
             contenedor.innerHTML = `
@@ -408,6 +411,11 @@ async function cargarGestorAprobacion() {
                     <button style="flex:1; font-size:11px; padding:10px; border-radius:8px; background:#dc2626; border:none; color:white; font-weight:bold; cursor:pointer;"
                             onclick="rechazarMueble(${item.id}, '${item.nombre.replace(/'/g, "\\'")}')">
                         <i class="fa-solid fa-xmark"></i> RECHAZAR
+                    </button>
+                    <button style="flex:0 0 42px; font-size:11px; padding:10px; border-radius:8px; background:#f8fafc; border:1px solid #fecaca; color:#b91c1c; font-weight:bold; cursor:pointer;"
+                            title="Eliminar pendiente"
+                            onclick="eliminarMueblePendiente(${item.id}, '${item.nombre.replace(/'/g, "\\'")}')">
+                        <i class="fa-solid fa-trash"></i>
                     </button>
                 </div>
             </div>`;
@@ -577,6 +585,20 @@ async function rechazarDiseno(id, nombre) {
 
 // Ventana de evaluación contable/operativa de insumos para el Admin
 async function procesarAprobacionInsumo(id, nombre, tipo) {
+    const sugerencia = _gestorSugerenciasPorId[id] || {};
+    let datos = {};
+    try {
+        datos = typeof sugerencia.datos_json === 'string' ? JSON.parse(sugerencia.datos_json) : (sugerencia.datos_json || {});
+    } catch(e) {}
+    const sugerido = {
+        tela: [datos.coleccion, datos.color],
+        cojin: [datos.nombre_diseno, datos.tipo_tela],
+        base: [datos.modelo, datos.material || datos.color],
+        tablero: [datos.nombre_modelo, datos.material_base],
+        'base-comedor': [datos.modelo, datos.material || datos.color],
+        silla: [datos.modelo, datos.material || datos.color_estructura],
+        butaca: [datos.modelo, datos.material || datos.color_estructura],
+    }[tipo] || ['', ''];
     let camposExtra = '';
     if (tipo === 'tela') {
         camposExtra = `
@@ -618,8 +640,14 @@ async function procesarAprobacionInsumo(id, nombre, tipo) {
         `,
         showCancelButton: true,
         confirmButtonText: 'Oficializar Insumo',
-        cancelButtonText: 'Rechazar',
+        cancelButtonText: 'Cancelar',
         confirmButtonColor: '#d97706',
+        didOpen: () => {
+            const campo1 = document.getElementById('swal-campo1');
+            const campo2 = document.getElementById('swal-campo2');
+            if (campo1 && sugerido[0]) campo1.value = sugerido[0];
+            if (campo2 && sugerido[1]) campo2.value = sugerido[1];
+        },
         preConfirm: () => {
             const campo1 = document.getElementById('swal-campo1') ? document.getElementById('swal-campo1').value.trim() : '';
             const campo2 = document.getElementById('swal-campo2') ? document.getElementById('swal-campo2').value.trim() : '';
@@ -741,6 +769,32 @@ async function ejecutarAprobacion(id, origen, precio_base) {
 }
 /* ================================================================= */
 // ─── Rechazar modelo de mueble (creación de vendedor) ────────────────────────
+async function eliminarMueblePendiente(id, nombre) {
+    const { isConfirmed } = await Swal.fire({
+        title: 'Eliminar modelo pendiente',
+        html: `<p style="color:#475569;font-size:13px;">Se eliminara <b>${nombre}</b> de la bandeja. Usa esta opcion solo para duplicados o cargas de prueba.</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Si, eliminar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc2626'
+    });
+    if (!isConfirmed) return;
+
+    try {
+        Swal.fire({ title: 'Eliminando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res = await apiFetch(`${API_URL}/api/creaciones/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok || !data.exito) {
+            return Swal.fire('Error', data.error || 'No se pudo eliminar.', 'error');
+        }
+        Swal.fire({ icon: 'success', title: 'Modelo eliminado', timer: 1300, showConfirmButton: false });
+        cargarGestorAprobacion();
+    } catch(e) {
+        Swal.fire('Error', 'Error de conexion con el servidor.', 'error');
+    }
+}
+
 async function rechazarMueble(id, nombre) {
     const { value: motivo } = await Swal.fire({
         title: 'Rechazar modelo de mueble',

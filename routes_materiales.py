@@ -16,12 +16,43 @@ MIGRACIÓN SQL REQUERIDA (solo una vez):
     ALTER TABLE maestro_bases_comedor ADD COLUMN IF NOT EXISTS acabado VARCHAR(50) DEFAULT '';
 """
 
+import json
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto, cloudinary_upload
 from auth_middleware import requiere_login, requiere_rol
 
 materiales_bp = Blueprint('materiales', __name__)
+
+
+def _tipo_config_desde_categoria(categoria):
+    texto = (categoria or '').lower()
+    if 'comedor' in texto:
+        return 'comedor'
+    if any(x in texto for x in ['centro', 'mesa', 'consola', 'lateral']):
+        return 'centro'
+    if any(x in texto for x in ['butaca', 'silla', 'sitial', 'puff', 'banqueta']):
+        return 'butaca'
+    if any(x in texto for x in ['sofa', 'sofá', 'sillon', 'sillón']):
+        return 'sofa'
+    return ''
+
+
+def _normalizar_config_creacion(config_json, categoria):
+    if not config_json:
+        config = {}
+    elif isinstance(config_json, dict):
+        config = dict(config_json)
+    else:
+        try:
+            config = json.loads(config_json)
+        except Exception:
+            config = {}
+    if not config.get('tipo_config'):
+        tipo_config = _tipo_config_desde_categoria(categoria)
+        if tipo_config:
+            config['tipo_config'] = tipo_config
+    return json.dumps(config) if config else None
 
 
 # ==========================================
@@ -505,9 +536,10 @@ def aprobar_creacion():
             return jsonify({'error': 'Creación no encontrada'}), 404
         
         nombre, config_json, categoria, fotos_array = creacion
+        config_catalogo = _normalizar_config_creacion(config_json, categoria)
         
         # Unir fotos en un string separado por |
-        fotos_urls = '|'.join(fotos_array) if fotos_array else ''
+        fotos_urls = '|'.join(fotos_array[1:]) if fotos_array and len(fotos_array) > 1 else ''
         foto_principal = fotos_array[0] if fotos_array and fotos_array[0] else ''
 
         # Asegurar que las columnas existen (auto-migración)
@@ -520,8 +552,8 @@ def aprobar_creacion():
 
         cursor.execute("""
             INSERT INTO catalogo_productos (nombre_modelo, precio_base, foto_url, fotos_urls, es_plantilla, en_stock, origen_produccion, categoria, config_json)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
-        """, (nombre, precio_base, foto_principal, fotos_urls, False, False, origen, categoria, config_json))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb);
+        """, (nombre, precio_base, foto_principal, fotos_urls, False, False, origen, categoria, config_catalogo))
         cursor.execute("UPDATE creaciones_vendedores SET estado = 'Aprobado' WHERE id = %s;", (creacion_id,))
         conexion.commit()
         return jsonify({'exito': True, 'mensaje': 'Modelo aprobado y enviado al catálogo principal.'}), 200
@@ -531,6 +563,33 @@ def aprobar_creacion():
     finally:
         if 'conexion' in locals() and conexion:
             if 'cursor' in locals() and cursor: cursor.close()
+            release_db_connection(conexion)
+
+
+@materiales_bp.route('/api/creaciones/<int:creacion_id>', methods=['DELETE'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def eliminar_creacion_pendiente(creacion_id):
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        cursor.execute("SELECT estado FROM creaciones_vendedores WHERE id = %s;", (creacion_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Creacion no encontrada'}), 404
+        if row[0] != 'Pendiente':
+            return jsonify({'error': 'Solo se pueden eliminar creaciones pendientes'}), 400
+        cursor.execute("DELETE FROM fotos_creaciones WHERE creacion_id = %s;", (creacion_id,))
+        cursor.execute("DELETE FROM creaciones_vendedores WHERE id = %s;", (creacion_id,))
+        conexion.commit()
+        return jsonify({'exito': True}), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            if 'cursor' in locals() and cursor:
+                cursor.close()
             release_db_connection(conexion)
 
 
@@ -597,6 +656,28 @@ def _actualizar_tabla(tabla: str, sku_columna: str, sku: str, campos_permitidos:
     except Exception as ex:
         if conexion: conexion.rollback()
         print(f"[PUT {tabla}] Error: {ex}")
+        return {"error": str(ex)}, 500
+    finally:
+        if conexion:
+            cursor.close()
+            release_db_connection(conexion)
+
+
+def _eliminar_material_tabla(tabla: str, sku_columna: str, sku: str) -> tuple:
+    conexion = None
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        cursor.execute(f"SELECT 1 FROM {tabla} WHERE {sku_columna} = %s;", (sku,))
+        if not cursor.fetchone():
+            return {"error": f"No se encontrÃ³ ningÃºn registro con SKU '{sku}'."}, 404
+        cursor.execute(f"DELETE FROM {tabla} WHERE {sku_columna} = %s;", (sku,))
+        conexion.commit()
+        return {"exito": True, "sku": sku}, 200
+    except Exception as ex:
+        if conexion:
+            conexion.rollback()
+        print(f"[DELETE {tabla}] Error: {ex}")
         return {"error": str(ex)}, 500
     finally:
         if conexion:
@@ -705,6 +786,32 @@ def editar_butaca(sku):
         tabla='maestro_butacas', sku_columna='sku', sku=sku,
         campos_permitidos=['material', 'modelo', 'color_estructura', 'foto_url', 'estado', 'origen_produccion', 'proveedor_id']
     )
+    return jsonify(resp), status
+
+
+@materiales_bp.route('/api/materiales/telas/<string:sku>', methods=['DELETE'])
+@materiales_bp.route('/api/materiales/cojines/<string:sku>', methods=['DELETE'])
+@materiales_bp.route('/api/materiales/bases/<string:sku>', methods=['DELETE'])
+@materiales_bp.route('/api/materiales/bases-comedor/<string:sku>', methods=['DELETE'])
+@materiales_bp.route('/api/materiales/tableros/<string:sku>', methods=['DELETE'])
+@materiales_bp.route('/api/materiales/sillas/<string:sku>', methods=['DELETE'])
+@materiales_bp.route('/api/materiales/butacas/<string:sku>', methods=['DELETE'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def eliminar_material_por_sku(sku):
+    endpoint = request.path.rstrip('/').split('/')[-2]
+    tablas = {
+        'telas': ('maestro_telas', 'sku'),
+        'cojines': ('maestro_disenos_cojin', 'sku'),
+        'bases': ('maestro_bases', 'sku'),
+        'bases-comedor': ('maestro_bases_comedor', 'sku'),
+        'tableros': ('maestro_tableros', 'sku'),
+        'sillas': ('maestro_sillas', 'sku'),
+        'butacas': ('maestro_butacas', 'sku'),
+    }
+    tabla_cfg = tablas.get(endpoint)
+    if not tabla_cfg:
+        return jsonify({'error': 'Tipo de material no reconocido.'}), 400
+    resp, status = _eliminar_material_tabla(tabla_cfg[0], tabla_cfg[1], sku)
     return jsonify(resp), status
 
 # ══════════════════════════════════════════════════════════════════

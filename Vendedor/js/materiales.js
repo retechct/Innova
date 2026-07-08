@@ -457,14 +457,20 @@ async function enviarCreacionBD() {
     let notas = "";
     let inputFotos = null;
 
-    const modalSofa = document.getElementById('modal-config').style.display;
-    const modalComedor = document.getElementById('modal-config-comedor').style.display;
+    const modalSofa = document.getElementById('modal-config')?.style.display;
+    const modalComedor = document.getElementById('modal-config-comedor')?.style.display;
+    const modalCentro = document.getElementById('modal-config-centro')?.style.display;
+    const modalButaca = document.getElementById('modal-config-butaca')?.style.display;
+    let selectorContenedor = '#modal-config';
+    let tipoConfig = 'sofa';
 
     // ABSORBEMOS DATOS SEGÚN QUÉ MODAL ESTÉ ABIERTO
     if (modalSofa === 'flex' || modalSofa === 'block') {
         categoria_detectada = "Sofá";
         notas = document.getElementById('sofa-notas').value;
         inputFotos = document.getElementById('sofa-fotos');
+        selectorContenedor = '#modal-config';
+        tipoConfig = 'sofa';
         
         const modeloSofa = document.getElementById('sofa-modelo').options[document.getElementById('sofa-modelo').selectedIndex].text;
         const telaPrincipal = document.getElementById('search-tela').value || 'Sin definir';
@@ -474,10 +480,36 @@ async function enviarCreacionBD() {
         categoria_detectada = "Comedor";
         notas = document.getElementById('comedor-notas').value;
         inputFotos = document.getElementById('comedor-fotos');
+        selectorContenedor = '#modal-config-comedor';
+        tipoConfig = 'comedor';
         
         const formatoComedor = document.getElementById('comedor-formato').options[document.getElementById('comedor-formato').selectedIndex].text;
         const tablero = document.getElementById('search-tablero').value || 'Sin definir';
         detalles_extraidos = `Formato: ${formatoComedor}\nTablero: ${tablero}`;
+    }
+    else if (modalCentro === 'flex' || modalCentro === 'block') {
+        categoria_detectada = "Mesa";
+        notas = document.getElementById('centro-notas')?.value || '';
+        inputFotos = document.getElementById('centro-fotos');
+        selectorContenedor = '#modal-config-centro';
+        tipoConfig = 'centro';
+
+        const tipoCentro = document.getElementById('centro-tipo')?.value || 'Mesa de Centro';
+        const tablero = document.getElementById('search-tablero-centro')?.value || 'Sin definir';
+        const base = document.getElementById('search-base-centro')?.value || 'Sin definir';
+        detalles_extraidos = `Tipo: ${tipoCentro}\nTablero: ${tablero}\nBase: ${base}`;
+    }
+    else if (modalButaca === 'flex' || modalButaca === 'block') {
+        categoria_detectada = document.getElementById('butaca-tipo')?.value || "Butaca";
+        notas = document.getElementById('butaca-notas')?.value || '';
+        inputFotos = document.getElementById('butaca-fotos');
+        selectorContenedor = '#modal-config-butaca';
+        tipoConfig = 'butaca';
+
+        const tipoButaca = document.getElementById('butaca-tipo')?.value || 'Butaca';
+        const estructura = document.getElementById('search-estructura-butaca')?.value || 'Sin definir';
+        const tela = document.getElementById('search-tela-butaca')?.value || 'Sin definir';
+        detalles_extraidos = `Tipo: ${tipoButaca}\nEstructura: ${estructura}\nTela: ${tela}`;
     }
 
     const formData = new FormData();
@@ -492,8 +524,7 @@ async function enviarCreacionBD() {
     formData.append('notas_casqueria', notas);
 
     // CORRECCIÓN 2: Unificamos todo en un solo gran ADN
-    let adn = { ...tempItem }; // Tomamos la base (foto y nombre)
-    const selectorContenedor = categoria_detectada === "Comedor" ? '#modal-config-comedor' : '#modal-config';
+    let adn = { ...tempItem, tipo_config: tipoConfig }; // Tomamos la base (foto y nombre)
     
     // Escaneamos todos los campos del formulario y los sumamos al ADN
     document.querySelectorAll(`${selectorContenedor} input, ${selectorContenedor} select, ${selectorContenedor} textarea`).forEach(el => {
@@ -611,12 +642,27 @@ async function editarPlantilla(id) {
         // 1. Cerramos la vista de catálogo
         document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
 
+        const tipoConfig = adn.tipo_config || '';
+        const categoriaPlantilla = (plantilla.categoria || '').toLowerCase();
+
         // 2. Abrimos el modal y disparamos la vista base
-        if (plantilla.categoria.toLowerCase() === 'comedor') {
+        if (tipoConfig === 'comedor' || categoriaPlantilla === 'comedor') {
             openConfigComedor();
             if (adn['comedor-formato']) {
                 document.getElementById('comedor-formato').value = adn['comedor-formato'];
                 actualizarVistaComedor();
+            }
+        } else if (tipoConfig === 'centro' || categoriaPlantilla.includes('mesa') || categoriaPlantilla.includes('centro')) {
+            openConfigCentro();
+            if (adn['centro-tipo']) {
+                document.getElementById('centro-tipo').value = adn['centro-tipo'];
+                actualizarVistaCentro();
+            }
+        } else if (tipoConfig === 'butaca' || categoriaPlantilla.includes('butaca') || categoriaPlantilla.includes('silla') || categoriaPlantilla.includes('sitial')) {
+            openConfigButaca();
+            if (adn['butaca-tipo']) {
+                document.getElementById('butaca-tipo').value = adn['butaca-tipo'];
+                actualizarVistaButaca();
             }
         } else {
             const fotoResucitada = (plantilla.foto_url && plantilla.foto_url.startsWith('http'))
@@ -642,6 +688,9 @@ async function editarPlantilla(id) {
                     }
                 }
             }
+            if (tipoConfig === 'centro' && typeof actualizarVistaCentro === 'function') actualizarVistaCentro();
+            if (tipoConfig === 'comedor' && typeof actualizarVistaComedor === 'function') actualizarVistaComedor();
+            if (tipoConfig === 'sofa' && typeof actualizarVistaSofa === 'function') actualizarVistaSofa();
             
             Swal.close();
             const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
@@ -1618,6 +1667,18 @@ function dibujarTarjetaMaterial(item, tipo) {
             >
                 <i class="fa-solid fa-pen"></i> Editar
             </button>
+            <button
+                onclick="eliminarMaterialMaestro('${String(skuDisplay).replace(/'/g, "\\'")}', '${tipo}')"
+                style="
+                    width:100%; padding:8px;
+                    background:#fef2f2; color:#b91c1c;
+                    border:1px solid #fecaca; border-radius:6px;
+                    font-size:11px; font-weight:700; cursor:pointer;
+                    display:flex; align-items:center; justify-content:center; gap:6px;
+                "
+            >
+                <i class="fa-solid fa-trash"></i> Eliminar
+            </button>
         </div>
     </div>`;
 }
@@ -1965,6 +2026,46 @@ async function guardarCambiosMaterial() {
         }
     } catch {
         Swal.fire('Error', 'Fallo de conexión al intentar guardar.', 'error');
+    }
+}
+
+async function eliminarMaterialMaestro(sku, tipo) {
+    const tipoEndpoint = {
+        'tela':         'telas',
+        'cojin':        'cojines',
+        'base':         'bases',
+        'base-comedor': 'bases-comedor',
+        'tablero':      'tableros',
+        'silla':        'sillas',
+        'butaca':       'butacas',
+    };
+    const endpoint = tipoEndpoint[tipo];
+    if (!endpoint || !sku) {
+        return Swal.fire('Error', 'No se pudo identificar el insumo a eliminar.', 'error');
+    }
+
+    const { isConfirmed } = await Swal.fire({
+        title: 'Eliminar insumo',
+        html: `<p style="font-size:13px;color:#475569;">Se eliminará el SKU <b>${sku}</b> del maestro. Si ya está usado en pedidos, la base de datos puede bloquear el borrado.</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc2626'
+    });
+    if (!isConfirmed) return;
+
+    try {
+        Swal.fire({ title: 'Eliminando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res = await apiFetch(`${API_URL}/api/materiales/${endpoint}/${encodeURIComponent(sku)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok || !data.exito) {
+            return Swal.fire('No se pudo eliminar', data.error || 'El insumo puede estar relacionado a otros registros.', 'error');
+        }
+        await _refreshMaestro();
+        Swal.fire({ icon: 'success', title: 'Insumo eliminado', timer: 1400, showConfirmButton: false });
+    } catch (e) {
+        Swal.fire('Error', 'Fallo de conexión al eliminar.', 'error');
     }
 }
 
