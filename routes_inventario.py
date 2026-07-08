@@ -376,6 +376,7 @@ def resumen_piezas():
                     MAX(mb.foto_url),
                     MAX(mbu.foto_url)
                 ) AS foto_maestro,
+                MAX(sp.foto_url) AS foto_stock,
                 MAX(sp.fotos_adicionales) AS fotos_adicionales
             FROM stock_piezas sp
             JOIN sedes se ON sp.sede_id = se.id
@@ -401,11 +402,16 @@ def resumen_piezas():
             key = (r[1], r[5], r[6], r[7], r[8])  # sku+forma+medidas
             if key not in grupos:
                 foto_maestro      = r[13] or ""
-                fotos_adicionales = r[14] or ""
+                foto_stock        = r[14] or ""
+                fotos_adicionales = r[15] or ""
                 todas_fotos = []
-                for f in foto_maestro.split('|'):
+                for f in foto_stock.split('|'):
                     f = f.strip()
                     if f:
+                        todas_fotos.append(f)
+                for f in foto_maestro.split('|'):
+                    f = f.strip()
+                    if f and f not in todas_fotos:
                         todas_fotos.append(f)
                 for f in fotos_adicionales.split('|'):
                     f = f.strip()

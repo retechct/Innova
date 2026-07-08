@@ -717,6 +717,39 @@ async function abrirReporteVentasRapidas() {
     }
 }
 
+async function enviarResumenOperativo() {
+    try {
+        Swal.fire({
+            title: 'Enviando resumen operativo...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+        const res = await apiFetch(`${API_URL}/api/notificaciones/resumen-operativo`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'No se pudo enviar el resumen');
+
+        const notif = data.notificaciones || {};
+        Swal.fire({
+            title: 'Resumen enviado',
+            html: `
+                <div style="text-align:left;font-size:13px;line-height:1.55;">
+                    <p><b>Correos enviados:</b> ${notif.enviados || 0}</p>
+                    <p><b>Omitidos:</b> ${notif.omitidos || 0}</p>
+                    <hr style="border:none;border-top:1px solid #e2e8f0;margin:10px 0;">
+                    <p><b>Tickets pendientes:</b> ${data.tickets_pendientes || 0}</p>
+                    <p><b>Tickets bloqueados:</b> ${data.tickets_bloqueados || 0}</p>
+                    <p><b>Logistica externa pendiente:</b> ${data.logistica_externa_pendiente || 0}</p>
+                    <p><b>Cambios de precio pendientes:</b> ${data.cambios_precio_pendientes || 0}</p>
+                </div>
+            `,
+            icon: (notif.enviados || 0) > 0 ? 'success' : 'warning',
+            confirmButtonColor: '#0f172a'
+        });
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
 /**
  * Elimina una venta POR COMPLETO (DELETE real en cascada: items, tickets
  * de taller, pagos, logística y cambios de precio) — a diferencia de

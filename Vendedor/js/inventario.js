@@ -768,6 +768,7 @@ function _renderTablaPiezas() {
         const medida = _fmtMedida(p);
         const nombreConMedida = `${p.nombre_modelo} - ${medida.toUpperCase()}`;
         const pObj = { ...p, nombreConMedida };
+        const fotoPieza = (p.fotos && p.fotos.length) ? p.fotos[0] : (p.foto_url || 'imagenes/sin_foto.jpg');
 
         html += `
         <tr style="border-bottom:1px solid #f1f5f9;background:${bg};"
@@ -776,6 +777,10 @@ function _renderTablaPiezas() {
             <td style="padding:12px 16px;position:sticky;left:0;background:inherit;z-index:1;">
                 <div style="display:flex; gap:10px; align-items:flex-start;">
                     <input type="checkbox" class="chk-pieza" value="${encodeURIComponent(JSON.stringify(pObj))}" data-cant="${p.disponibles}" style="margin-top:2px;">
+                    <img src="${fotoPieza}" alt="${p.nombre_modelo || 'Pieza'}"
+                         onclick="_invLightbox('${fotoPieza}', '${(p.nombre_modelo || 'Pieza').replace(/'/g, "\\'")}')"
+                         onerror="this.src='imagenes/sin_foto.jpg'"
+                         style="width:46px;height:46px;object-fit:cover;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;cursor:zoom-in;flex-shrink:0;">
                     <div>
                         ${isNew ? `
                         <div style="font-weight:800;font-size:13px;">${p.nombre_modelo}</div>
