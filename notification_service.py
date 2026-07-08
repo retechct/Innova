@@ -13,7 +13,7 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 
-from database import notificar_usuario
+from database import _enviar_email_resend, notificar_usuario
 
 
 ADMIN_ROLES = ("Admin", "Jefe_Taller")
@@ -361,19 +361,23 @@ def diagnosticar_correo_prueba():
         diagnostico["error"] = "ALERT_EMAILS no tiene destinatarios."
         return diagnostico
     if resend_api_key:
-        result = _send_many(
-            [{"email": email, "nombre": "Administracion", "telefono": None} for email in destinatarios],
-            "[Innova] Prueba de correo",
-            "Correo de prueba enviado desde el ERP Innova usando Resend.",
-        )
-        diagnostico["enviados"] = result["enviados"]
-        diagnostico["omitidos"] = result["omitidos"]
-        diagnostico["resultados"] = [{
-            "email": email,
-            "enviado": result["enviados"] > 0,
-            "error_tipo": None if result["enviados"] > 0 else "Ver logs de Render",
-            "error": None if result["enviados"] > 0 else "Resend rechazo el envio o EMAIL_FROM no esta verificado.",
-        } for email in destinatarios]
+        resultados = []
+        for email in destinatarios:
+            resend_result = _enviar_email_resend(
+                email,
+                "[Innova] Prueba de correo",
+                "Correo de prueba enviado desde el ERP Innova usando Resend.",
+            )
+            ok = bool(resend_result and resend_result.get("ok"))
+            resultados.append({
+                "email": email,
+                "enviado": ok,
+                "status": resend_result.get("status") if resend_result else None,
+                "respuesta": resend_result.get("body") if resend_result else None,
+            })
+        diagnostico["enviados"] = sum(1 for r in resultados if r["enviado"])
+        diagnostico["omitidos"] = len(resultados) - diagnostico["enviados"]
+        diagnostico["resultados"] = resultados
         return diagnostico
     if not remitente:
         diagnostico["error"] = "EMAIL_USER no esta configurado."
