@@ -439,6 +439,7 @@ async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false)
 /* --- LÓGICA DEL NUEVO MODAL DE SOFÁS --- */
 /* --- REEMPLAZA TU FUNCIÓN openConfig COMPLETA --- */
 function openConfig(name, img) {
+    if (!_cartaAbriendoPlantilla) _cartaPlantillaActiva = null;
     tempItem = { name, img };
     const modal = document.getElementById('modal-config');
     document.getElementById('conf-title').innerText = `Personalizar: ${name}`;
@@ -972,8 +973,16 @@ async function confirmarPersonalizadoSofa() {
         base:                document.getElementById('sku-base').value
     };
 
+    const plantillaCarta = _cartaConsumirPlantillaActiva('sofa');
     const imagenUrl = document.getElementById('preview-sofa').src;
     const imagenFinal = await subirFotosReferencia('sofa-fotos', imagenUrl);    addToCart(modeloBase, precio, imagenFinal, specs, componentes, 'Sofá');
+    if (plantillaCarta && Array.isArray(window.cart) && window.cart.length) {
+        const ultimo = window.cart[window.cart.length - 1];
+        ultimo.name = plantillaCarta.nombre;
+        ultimo.img = _cartaCombinarFotos(plantillaCarta.fotos, imagenFinal);
+        ultimo.categoria = 'Sofá';
+        if (typeof updateCartUI === 'function') updateCartUI();
+    }
     closeModal();
 
     Swal.fire({
@@ -1082,7 +1091,10 @@ async function confirmarComedor() {
         .filter((url, idx, arr) => url && arr.indexOf(url) === idx)
         .join('|');
 
-    addToCart(nombreProducto, precio, todasLasFotos, specs, componentes);
+    const plantillaCarta = _cartaConsumirPlantillaActiva('comedor');
+    const nombreCarrito = plantillaCarta ? plantillaCarta.nombre : nombreProducto;
+    const fotosCarrito = plantillaCarta ? _cartaCombinarFotos(plantillaCarta.fotos, todasLasFotos) : todasLasFotos;
+    addToCart(nombreCarrito, precio, fotosCarrito, specs, componentes, plantillaCarta?.categoria || 'Mesa');
 
     document.getElementById('modal-config-comedor').style.display = 'none';
     
@@ -1106,6 +1118,7 @@ async function confirmarComedor() {
 
 /* --- 6. CARRITO Y STEPPER --- */
 function openConfigComedor() {
+    if (!_cartaAbriendoPlantilla) _cartaPlantillaActiva = null;
     document.querySelectorAll('#modal-config-comedor input[type="text"], #modal-config-comedor input[type="number"], #modal-config-comedor input[type="hidden"]').forEach(inp => inp.value = '');
     document.querySelectorAll('#modal-config-comedor select').forEach(sel => sel.selectedIndex = 0);
     
@@ -1181,6 +1194,7 @@ function actualizarVistaComedor() {
 /* --- 7. PYTHON GUARDAR --- */
 
 function openConfigCentro() {
+    if (!_cartaAbriendoPlantilla) _cartaPlantillaActiva = null;
     document.querySelectorAll('#modal-config-centro input').forEach(inp => inp.value = '');
     document.getElementById('centro-notas').value = '';
     
@@ -1273,7 +1287,10 @@ async function confirmarCentro() {
         .filter((url, idx, arr) => url && arr.indexOf(url) === idx)
         .join('|');
 
-    addToCart(tipo + " Personalizada", precio, todasLasFotosCentro, specs, componentes);
+    const plantillaCarta = _cartaConsumirPlantillaActiva('centro');
+    const nombreCarrito = plantillaCarta ? plantillaCarta.nombre : `${tipo} Personalizada`;
+    const fotosCarrito = plantillaCarta ? _cartaCombinarFotos(plantillaCarta.fotos, todasLasFotosCentro) : todasLasFotosCentro;
+    addToCart(nombreCarrito, precio, fotosCarrito, specs, componentes, plantillaCarta?.categoria || 'Mesa');
 
     document.getElementById('modal-config-centro').style.display = 'none';
     
@@ -1292,6 +1309,7 @@ async function confirmarCentro() {
 /* --- LÓGICA DE BUTACAS Y SILLERÍA SUELTA --- */
 /* ================================================================= */
 function openConfigButaca() {
+    if (!_cartaAbriendoPlantilla) _cartaPlantillaActiva = null;
     document.querySelectorAll('#modal-config-butaca input').forEach(inp => inp.value = '');
     document.getElementById('butaca-cantidad').value = '1';
     document.getElementById('butaca-notas').value = '';
@@ -1385,8 +1403,11 @@ async function confirmarButaca() {
         'tela-butaca': skuTela
     };
     
+    const plantillaCarta = _cartaConsumirPlantillaActiva('butaca');
     const imagenFinal = await subirFotosReferencia('butaca-fotos', imagenUrl);
-    addToCart(tituloCarrito, precio, imagenFinal, specs, componentes);
+    const nombreCarrito = plantillaCarta ? plantillaCarta.nombre : tituloCarrito;
+    const fotosCarrito = plantillaCarta ? _cartaCombinarFotos(plantillaCarta.fotos, imagenFinal) : imagenFinal;
+    addToCart(nombreCarrito, precio, fotosCarrito, specs, componentes, plantillaCarta?.categoria || tipo);
 
     document.getElementById('modal-config-butaca').style.display = 'none';
     
@@ -1679,6 +1700,8 @@ function renderCarta(grid) {
 
 // Índice actual por tarjeta de carousel
 const _carouselIdx = {};
+let _cartaPlantillaActiva = null;
+let _cartaAbriendoPlantilla = false;
 
 window._cartaCarouselPrev = function(idBase, fotos) {
     if (!fotos || !fotos.length) return;
@@ -1712,9 +1735,77 @@ window._cartaCambiarPagina = function(pag) {
 };
 
 // Al seleccionar un modelo de la carta, agrega al carrito con categoría incluida
+function _cartaFotosModelo(p) {
+    return (p?.fotos && p.fotos.length > 0) ? p.fotos : (p?.foto ? [p.foto] : []);
+}
+
+function _cartaCombinarFotos(fotosBase, fotosConfiguracion) {
+    return [...(fotosConfiguracion || '').split('|'), ...(fotosBase || [])]
+        .map(f => (f || '').trim())
+        .filter((url, idx, arr) => url && arr.indexOf(url) === idx)
+        .join('|');
+}
+
+function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
+    const nombre = p.nombre || p.nombre_modelo || '';
+    _cartaPlantillaActiva = {
+        id: p.id,
+        nombre,
+        precio: p.precio || 0,
+        categoria: p.categoria || '',
+        tipoConfig,
+        fotos: _cartaFotosModelo(p)
+    };
+
+    _cartaAbriendoPlantilla = true;
+    if (tipoConfig === 'sofa') {
+        openConfig(nombre, p.foto || '');
+        const precioEl = document.getElementById('conf-precio');
+        const nombreEl = document.getElementById('sofa-nombre-libre');
+        if (precioEl && p.precio > 0) precioEl.value = p.precio;
+        if (nombreEl) nombreEl.value = nombre;
+        _cartaAbriendoPlantilla = false;
+        return;
+    }
+    if (tipoConfig === 'comedor') {
+        openConfigComedor();
+        const precioEl = document.getElementById('conf-precio-comedor');
+        if (precioEl && p.precio > 0) precioEl.value = p.precio;
+        _cartaAbriendoPlantilla = false;
+        return;
+    }
+    if (tipoConfig === 'centro') {
+        openConfigCentro();
+        const precioEl = document.getElementById('conf-precio-centro');
+        if (precioEl && p.precio > 0) precioEl.value = p.precio;
+        _cartaAbriendoPlantilla = false;
+        return;
+    }
+    if (tipoConfig === 'butaca') {
+        openConfigButaca();
+        const precioEl = document.getElementById('conf-precio-butaca');
+        const nombreEl = document.getElementById('butaca-nombre-libre');
+        if (precioEl && p.precio > 0) precioEl.value = p.precio;
+        if (nombreEl) nombreEl.value = nombre;
+    }
+    _cartaAbriendoPlantilla = false;
+}
+
+function _cartaConsumirPlantillaActiva(tipoConfig) {
+    if (!_cartaPlantillaActiva || _cartaPlantillaActiva.tipoConfig !== tipoConfig) return null;
+    const p = _cartaPlantillaActiva;
+    _cartaPlantillaActiva = null;
+    return p;
+}
+
 window._cartaSeleccionarModelo = function(productoId) {
     const p = allProducts.find(x => x.id === productoId);
     if (!p) return;
+    const tipoConfig = _cartaTipoConfig(p);
+    if (tipoConfig) {
+        _cartaAbrirConfiguradorPlantilla(p, tipoConfig);
+        return;
+    }
     const nombre = p.nombre || p.nombre_modelo || '';
     // FIX (julio 2026): antes se tomaba solo p.fotos[0] y el resto de fotos
     // del catálogo (las que se ven en el carrusel de "La Carta") se perdían
@@ -1722,7 +1813,7 @@ window._cartaSeleccionarModelo = function(productoId) {
     // PDF de Orden de Pedido. Ahora se llevan TODAS, unidas con '|' (mismo
     // formato que ya usa el sistema en catalogo_productos.fotos_urls), y
     // se separan de nuevo más adelante para mostrarlas todas en el PDF.
-    const fotos = (p.fotos && p.fotos.length > 0) ? p.fotos : (p.foto ? [p.foto] : []);
+    const fotos = _cartaFotosModelo(p);
     const foto = fotos.join('|');
     const precio = p.precio || 0;
     const categoria = p.categoria || '';
