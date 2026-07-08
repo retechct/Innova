@@ -32,6 +32,20 @@ _schema_fotos_adicionales_listo = False
 # Roles autorizados para modificar stock
 ROLES_INVENTARIO = ('Admin', 'Jefe_Taller')
 
+
+def _arg_bool(nombre):
+    return str(request.args.get(nombre, '')).strip().lower() in ('1', 'true', 'si', 'yes')
+
+
+def _arg_limit(default=None, maximo=1000):
+    raw = request.args.get('limit')
+    if raw in (None, ''):
+        return default
+    try:
+        return min(max(int(raw), 1), maximo)
+    except (TypeError, ValueError):
+        return default
+
 # Prefijos por categoría para el código de barras
 PREFIJOS = {
     'Sofa':           'SOF',
@@ -170,12 +184,16 @@ def resumen_productos():
     categoria = request.args.get('categoria', '')
     q         = request.args.get('q', '').strip().lower()
     sede_id   = request.args.get('sede_id', '')
+    stock_only = _arg_bool('stock_only')
+    limit = _arg_limit()
 
     where, params = [], []
     if categoria:
         where.append("sp.categoria = %s"); params.append(categoria)
     if q:
         where.append("LOWER(sp.nombre_modelo) LIKE %s"); params.append(f"%{q}%")
+    if stock_only:
+        where.append("sp.estado = 'Disponible'")
     # FIX-SEDE-FILTRO: sede_id NO va en el WHERE de SQL. Si se filtra ahí,
     # las filas de las DEMÁS tiendas quedan completamente fuera de la
     # consulta desde antes del GROUP BY — y como la foto y el desglose
@@ -297,9 +315,16 @@ def resumen_productos():
                     if m["sede_stock"].get(sede_nombre_filtro, {}).get("total", 0) > 0
                 ]
 
+        total_modelos = len(modelos_lista)
+        if limit:
+            modelos_lista = modelos_lista[:limit]
+
         return jsonify({
             "sedes":   [s[1] for s in sedes],
-            "modelos": modelos_lista
+            "modelos": modelos_lista,
+            "total_modelos": total_modelos,
+            "limit": limit,
+            "truncated": bool(limit and total_modelos > limit)
         }), 200
 
     except Exception as e:
@@ -317,6 +342,8 @@ def resumen_productos():
 def resumen_piezas():
     categoria = request.args.get('categoria', '')
     q         = request.args.get('q', '').strip().lower()
+    stock_only = _arg_bool('stock_only')
+    limit = _arg_limit()
 
     where, params = [], []
     if categoria:
@@ -324,6 +351,8 @@ def resumen_piezas():
     if q:
         where.append("(LOWER(sp.nombre_modelo) LIKE %s OR LOWER(sp.material) LIKE %s)")
         params.extend([f"%{q}%", f"%{q}%"])
+    if stock_only:
+        where.append("sp.estado = 'Disponible'")
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     conn = None
@@ -402,9 +431,17 @@ def resumen_piezas():
             grupos[key]["total"]       += r[12]
             grupos[key]["sede_stock"][r[10]] = r[11]  # disponibles por sede
 
+        piezas_lista = list(grupos.values())
+        total_piezas = len(piezas_lista)
+        if limit:
+            piezas_lista = piezas_lista[:limit]
+
         return jsonify({
             "sedes":  [s[1] for s in sedes],
-            "piezas": list(grupos.values())
+            "piezas": piezas_lista,
+            "total_piezas": total_piezas,
+            "limit": limit,
+            "truncated": bool(limit and total_piezas > limit)
         }), 200
 
     except Exception as e:

@@ -1994,7 +1994,7 @@ async function _refreshMaestro() {
         }
     } catch { /* ignorar error de red — no re-lanzar */ }
 
-    // Re-renderizar si la función está disponible (taller.js)
+    // Re-renderizar si la función de Taller está disponible.
     if (typeof cargarInventarioTaller === 'function') {
         await cargarInventarioTaller();
     }

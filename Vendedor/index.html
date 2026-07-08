@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="css/landing.css">
     <link rel="stylesheet" href="css/erp.css">
     <link rel="stylesheet" href="css/seguimiento.css">
+    <link rel="stylesheet" href="css/egresos.css">
     
     <!-- ── COMPONENTES ── -->
     <link rel="stylesheet" href="css/modals.css">
@@ -441,7 +442,10 @@
         try {
             const res  = await apiFetch(`${API_URL}/api/catalogo`);
             const data = await res.json();
-            if (window.allProducts) window.allProducts = data; // sincronizar
+            if (Array.isArray(data)) {
+                allProducts = data;
+                window.allProducts = data;
+            }
             const plantillas = data.filter(p => p.es_plantilla === true);
 
             if (plantillas.length === 0) {
@@ -459,7 +463,7 @@
             function renderModelos() {
                 const lista = filtroActivo ? plantillas.filter(p => p.categoria === filtroActivo) : plantillas;
                 const rol = window.usuarioActivo?.rol?.toLowerCase() || '';
-                const esAdmin = (rol === 'admin' || rol === 'jefe_taller');
+                const esAdmin = (rol === 'admin');
 
                 let html = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
                     <span style="font-size:12px;color:#64748b;font-weight:700;">Filtrar:</span>
@@ -477,6 +481,7 @@
                         const fotos = (p.fotos && p.fotos.length) ? p.fotos : (p.foto ? [p.foto] : ['imagenes/sin_foto.jpg']);
                         const idBase = `cmodelo-${p.id}`;
                         const fotosAttr = fotos.map(f=>f.replace(/"/g,'&quot;')).join('||');
+                        const tipoConfig = (typeof _cartaTipoConfig === 'function') ? _cartaTipoConfig(p) : '';
 
                         const carouselHtml = fotos.length > 1
                             ? `<div style="position:relative;width:100%;aspect-ratio:4/3;overflow:hidden;background:#f1f5f9;border-radius:10px 10px 0 0;">
@@ -496,6 +501,7 @@
                             ${carouselHtml}
                             <div class="card-info" style="padding:12px;">
                                 <span style="font-size:10px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:1px;">${p.categoria||'Modelo'}</span>
+                                ${tipoConfig ? `<span style="margin-left:6px;font-size:9px;font-weight:800;color:#166534;background:#dcfce7;padding:2px 6px;border-radius:999px;text-transform:uppercase;">${tipoConfig}</span>` : ''}
                                 <h4 style="margin:4px 0 2px;font-size:15px;">${p.nombre||p.nombre_modelo}</h4>
                                 <span class="price-tag" style="font-size:14px;">${p.precio>0?'S/ '+parseFloat(p.precio).toFixed(2):'A Cotizar'}</span>
                                 <div style="display:flex;gap:6px;margin-top:10px;">
@@ -503,6 +509,10 @@
                                             onclick="_cartaSeleccionarModelo(${p.id})">
                                         <i class="fa-solid fa-cart-plus"></i> Seleccionar
                                     </button>
+                                    ${esAdmin ? `<button class="btn-action btn-ghost" title="Editar modelo" style="padding:6px 10px;font-size:12px;color:#0f172a;"
+                                            onclick="_cartaEditarPlantilla(${p.id})">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>` : ''}
                                     ${esAdmin ? `<button class="btn-action btn-ghost" style="padding:6px 10px;font-size:12px;color:#ef4444;"
                                             onclick="_cartaEliminarPlantilla(${p.id},'${(p.nombre||p.nombre_modelo||'').replace(/'/g,"\\'")}')">
                                         <i class="fa-solid fa-trash"></i>
@@ -558,7 +568,8 @@
                      Pedido" y su panel de búsqueda (#panel-orden-pedido) — eran
                      100% redundantes con el buscador + el ícono de PDF que ya
                      tiene cada tarjeta en la pestaña "Órdenes por Pedido"
-                     (ver abrirDetallePedido() en taller.js, al costado de la
+                     (ver abrirDetallePedido() en modules/taller/orden_pedido.js,
+                     al costado de la
                      barra de progreso de cada pedido). -->
                 <!-- Badge de stats: se puebla vía cargarStatsTaller() -->
                 <div id="stats-taller" style="font-size: 11px; font-weight: 900; color: var(--text-muted); background: var(--bg); padding: 8px 16px; border-radius: 50px; text-transform: uppercase; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -858,18 +869,18 @@
     <!-- ══════════════════════════════════════════════════════════
          VIEW: EGRESOS Y PAGOS DE PRODUCCIÓN
     ══════════════════════════════════════════════════════════ -->
-    <div id="view-egresos" class="view-section" style="display:none; padding: 20px;">
+    <div id="view-egresos" class="view-section eg-view" style="display:none;">
 
         <!-- HEADER -->
-        <div style="background:var(--primary);padding:20px;color:white;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div class="eg-hero">
             <div>
-                <h3 style="margin:0;"><i class="fa-solid fa-money-bill-transfer"></i> EGRESOS Y FINANZAS</h3>
-                <p style="margin:5px 0 0;font-size:13px;opacity:0.8;">Solo visible para Administrador</p>
+                <h3 class="eg-hero-title"><i class="fa-solid fa-money-bill-transfer"></i> EGRESOS Y FINANZAS</h3>
+                <p class="eg-hero-subtitle">Solo visible para Administrador</p>
             </div>
         </div>
 
         <!-- PESTAÑAS -->
-        <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+        <div class="eg-tabs">
             <button id="eg-tab-pagos-carpinteros" class="btn-primary"
                     onclick="egresosTab('pagos-carpinteros')" style="background:var(--primary);">
                 <i class="fa-solid fa-hammer"></i> Pagos de Estructuras
@@ -890,99 +901,99 @@
 
         <!-- ══ PANEL 1: PAGOS DE ESTRUCTURAS ══ -->
         <div id="eg-panel-pagos-carpinteros" style="display:block;">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
-                <select id="eg-pc-estado" class="form-input-sm" style="max-width:180px;"
+            <div class="eg-toolbar">
+                <select id="eg-pc-estado" class="form-input-sm eg-control--md"
                         onchange="cargarPagosCarpinteros()">
                     <option value="">Todos</option>
                     <option value="pendiente">Solo pendientes</option>
                     <option value="pagado">Solo pagados</option>
                 </select>
-                <select id="eg-pc-carpintero" class="form-input-sm" style="max-width:200px;"
+                <select id="eg-pc-carpintero" class="form-input-sm eg-control--lg"
                         onchange="cargarPagosCarpinteros()">
                     <option value="">Todos los carpinteros</option>
                 </select>
-                <input type="date" id="eg-pc-desde" class="form-input-sm" style="max-width:150px;"
+                <input type="date" id="eg-pc-desde" class="form-input-sm eg-control--xs"
                        title="Desde fecha" onchange="cargarPagosCarpinteros()">
-                <input type="date" id="eg-pc-hasta" class="form-input-sm" style="max-width:150px;"
+                <input type="date" id="eg-pc-hasta" class="form-input-sm eg-control--xs"
                        title="Hasta fecha" onchange="cargarPagosCarpinteros()">
-                <button class="btn-primary" onclick="cargarPagosCarpinteros()" style="background:#0f172a;">
+                <button class="btn-primary eg-btn-dark" onclick="cargarPagosCarpinteros()">
                     <i class="fa-solid fa-arrows-rotate"></i> Recargar
                 </button>
-                <button id="eg-btn-exportar-excel" class="btn-primary" onclick="descargarExcelEstructuras()" style="background:#15803d;">
+                <button id="eg-btn-exportar-excel" class="btn-primary eg-btn-excel" onclick="descargarExcelEstructuras()">
                     <i class="fa-solid fa-file-excel"></i> Descargar Excel
                 </button>
-                <button class="btn-primary" onclick="egAbrirPagarCarpintero()" style="background:#7c3aed;margin-left:auto;">
+                <button class="btn-primary eg-btn-pay" onclick="egAbrirPagarCarpintero()">
                     <i class="fa-solid fa-money-bill-wave"></i> Registrar pago
                 </button>
             </div>
             <div id="eg-tabla-carpinteros">
-                <div style="text-align:center;padding:40px;color:#94a3b8;">Cargando...</div>
+                <div class="eg-placeholder">Cargando...</div>
             </div>
         </div>
 
         <!-- ══ PANEL 2: HISTORIAL DE PAGOS ══ -->
         <div id="eg-panel-historial-pagos" style="display:none;">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
-                <input type="text" id="eg-hp-carpintero" class="form-input-sm"
-                       placeholder="Filtrar por carpintero" style="max-width:200px;">
-                <input type="date" id="eg-hp-semana" class="form-input-sm" style="max-width:160px;"
+            <div class="eg-toolbar">
+                <input type="text" id="eg-hp-carpintero" class="form-input-sm eg-control--lg"
+                       placeholder="Filtrar por carpintero">
+                <input type="date" id="eg-hp-semana" class="form-input-sm eg-control--sm"
                        title="Cualquier fecha dentro de la semana">
-                <button class="btn-primary" onclick="cargarHistorialPagos()" style="background:#0f172a;">
+                <button class="btn-primary eg-btn-dark" onclick="cargarHistorialPagos()">
                     <i class="fa-solid fa-filter"></i> Filtrar
                 </button>
             </div>
             <div id="eg-tabla-historial">
-                <div style="text-align:center;padding:40px;color:#94a3b8;">Cargando...</div>
+                <div class="eg-placeholder">Cargando...</div>
             </div>
         </div>
 
         <!-- ══ PANEL 3: COMISIONES DE VENDEDORES ══ -->
         <div id="eg-panel-vendedores" style="display:none;">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
-                <input type="date" id="eg-vd-desde" class="form-input-sm" style="max-width:160px;"
+            <div class="eg-toolbar">
+                <input type="date" id="eg-vd-desde" class="form-input-sm eg-control--sm"
                        title="Desde fecha" onchange="cargarComisionesVendedores()">
-                <input type="date" id="eg-vd-hasta" class="form-input-sm" style="max-width:160px;"
+                <input type="date" id="eg-vd-hasta" class="form-input-sm eg-control--sm"
                        title="Hasta fecha" onchange="cargarComisionesVendedores()">
-                <select id="eg-vd-vendedor" class="form-input-sm" style="max-width:200px;"
+                <select id="eg-vd-vendedor" class="form-input-sm eg-control--lg"
                         onchange="cargarComisionesVendedores()">
                     <option value="">Todos los vendedores</option>
                 </select>
-                <button class="btn-primary" onclick="cargarComisionesVendedores()" style="background:#0f172a;">
+                <button class="btn-primary eg-btn-dark" onclick="cargarComisionesVendedores()">
                     <i class="fa-solid fa-arrows-rotate"></i> Actualizar
                 </button>
             </div>
             <!-- Campo de descuento global -->
-            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <i class="fa-solid fa-tag" style="color:#d97706;font-size:16px;"></i>
-                <span style="font-weight:600;color:#92400e;font-size:13px;">DESCUENTO GLOBAL A APLICAR:</span>
+            <div class="eg-global-discount">
+                <i class="fa-solid fa-tag eg-global-discount__icon"></i>
+                <span class="eg-global-discount__label">DESCUENTO GLOBAL A APLICAR:</span>
                 <input type="number" id="eg-vd-descuento" min="0" step="0.01" placeholder="0.00"
-                       class="form-input-sm" style="max-width:130px;"
+                       class="form-input-sm eg-global-discount__input"
                        oninput="egRecalcularNetos()"
                        title="Descuento en soles a deducir del total de comisiones">
-                <span style="font-size:12px;color:#92400e;">S/ — se resta del total de comisiones al final</span>
+                <span class="eg-global-discount__hint">S/ — se resta del total de comisiones al final</span>
             </div>
             <div id="eg-tabla-vendedores">
-                <div style="text-align:center;padding:40px;color:#94a3b8;">Selecciona un período y actualiza</div>
+                <div class="eg-placeholder">Selecciona un período y actualiza</div>
             </div>
         </div>
 
         <!-- ══ PANEL 4: LOGÍSTICA / COMPRAS ══ -->
         <div id="eg-panel-logistica" style="display:none;">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
-                <input type="date" id="eg-log-desde" class="form-input-sm" style="max-width:160px;">
-                <input type="date" id="eg-log-hasta" class="form-input-sm" style="max-width:160px;">
-                <select id="eg-log-cat" class="form-input-sm" style="max-width:180px;">
+            <div class="eg-toolbar">
+                <input type="date" id="eg-log-desde" class="form-input-sm eg-control--sm">
+                <input type="date" id="eg-log-hasta" class="form-input-sm eg-control--sm">
+                <select id="eg-log-cat" class="form-input-sm eg-control--md">
                     <option value="">Todas las categorías</option>
                     <option value="TELA">Telas</option>
                     <option value="ESTRUCTURAL">Estructural</option>
                     <option value="OTRO">Otro</option>
                 </select>
-                <button class="btn-primary" onclick="cargarLogistica()" style="background:#0f172a;">
+                <button class="btn-primary eg-btn-dark" onclick="cargarLogistica()">
                     <i class="fa-solid fa-filter"></i> Filtrar
                 </button>
             </div>
             <div id="eg-tabla-logistica">
-                <div style="text-align:center;padding:40px;color:#94a3b8;">Selecciona un rango de fechas y filtra</div>
+                <div class="eg-placeholder">Selecciona un rango de fechas y filtra</div>
             </div>
         </div>
 
@@ -1073,6 +1084,13 @@
                         <label style="font-size:10px;color:#64748b;font-weight:600;">NOMBRE PARA EL CONTRATO <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
                         <input type="text" id="sofa-nombre-libre" class="form-input"
                                placeholder="Ej: Seccional esquinero beige para sala"
+                               style="font-size:12px;">
+                    </div>
+                    <div class="form-group" style="margin-top:6px;">
+                        <label style="font-size:10px;color:#64748b;font-weight:600;">ANCHO TOTAL DEL SOFÁ <span style="font-weight:400;color:#94a3b8;">(cm, opcional)</span></label>
+                        <input type="number" id="sofa-ancho-total" class="form-input"
+                               placeholder="Ej: 280"
+                               min="1"
                                style="font-size:12px;">
                     </div>
                     <div class="img-preview-container">
@@ -2606,7 +2624,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // la página (incluida la primera vez, sin sesión) disparaba un 401 que
   // mostraba "Sesión expirada" y no dejaba llegar a la pantalla de login.
   // Ahora solo se puebla aquí si ya hay un token guardado (sesión persistida
-  // al recargar); si no, se puebla justo después del login (ver app.js/landing.js).
+  // al recargar); si no, se puebla justo después del login (ver modules/app/session_ui.js y landing.js).
   if (localStorage.getItem('innova_token')) {
     await gmPopularSelect();
   }
@@ -2839,25 +2857,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     <!-- ── CORE ── -->
     <script src="js/config.js"></script>
     <script src="js/helpers.js"></script>
+    <script src="js/modules/app/api.js"></script>
 
     <!-- ── MÓDULOS ── -->
     <script src="js/landing.js"></script>
     <script src="js/catalogo.js"></script>
     <script src="js/carrito.js"></script>
     <script src="js/materiales.js"></script>
-    <script src="js/taller.js"></script>
+    <script src="js/modules/taller/orden_pedido.js"></script>
+    <script src="js/modules/taller/recojo.js"></script>
+    <script src="js/modules/taller/tickets.js"></script>
+    <script src="js/modules/taller/ficha_asignaciones.js"></script>
+    <script src="js/modules/taller/maestro_aprobacion.js"></script>
+    <script src="js/modules/taller/ordenes_despacho.js"></script>
+    <script src="js/modules/taller/stock_estructuras.js"></script>
+    <script src="js/modules/taller/pagos_carpinteros.js"></script>
+    <script src="js/modules/taller/gastos_logistica.js"></script>
+    <script src="js/modules/inventario/state.js"></script>
     <script src="js/inventario.js"></script>
+    <script src="js/modules/inventario/modals.js"></script>
+    <script src="js/modules/inventario/helpers.js"></script>
+    <script src="js/modules/inventario/fotos.js"></script>
+    <script src="js/modules/inventario/etiquetas.js"></script>
+    <script src="js/modules/inventario/scanner.js"></script>
     <script src="js/seguimiento.js"></script>
     <script src="js/gestores_modelos.js"></script>
 
-    <!-- ── APP (siempre al final) ── -->
-    <script src="js/egresos.js"></script>
-    <script src="js/app.js"></script>
+    <!-- ── EGRESOS ── -->
+    <script src="js/modules/egresos/state.js"></script>
+    <script src="js/modules/egresos/helpers.js"></script>
+    <script src="js/modules/egresos/estructuras.js"></script>
+    <script src="js/modules/egresos/historial.js"></script>
+    <script src="js/modules/egresos/vendedores.js"></script>
+    <script src="js/modules/egresos/logistica.js"></script>
+    <script src="js/modules/egresos/index.js"></script>
 
-    <!-- busqueda_filtros.js DEBE cargar después de app.js y taller.js: redefine
+    <!-- ── APP (siempre al final) ── -->
+    <script src="js/modules/app/session_ui.js"></script>
+    <script src="js/modules/app/pedidos.js"></script>
+    <script src="js/modules/app/logistica_externa.js"></script>
+    <script src="js/modules/app/navigation_auth.js"></script>
+    <script src="js/modules/app/contratos.js"></script>
+    <script src="js/modules/app/bootstrap.js"></script>
+
+    <!-- busqueda_filtros.js DEBE cargar después de los módulos App y Taller: redefine
          loadMisPedidos(), cargarVistaEntregados() y cargarOrdenesProduccion()
          a propósito para añadirles buscador/filtros. Si se mueve antes de
-         app.js, app.js vuelve a pisar esas funciones con sus versiones sin
+         modules/app, App vuelve a pisar esas funciones con sus versiones sin
          filtros (bug detectado en auditoría de julio 2026). -->
     <script src="js/busqueda_filtros.js"></script>
 </body>

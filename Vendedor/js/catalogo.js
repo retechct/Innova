@@ -93,23 +93,33 @@ let _stkFiltroSede = 'Todas';
 let _stkFiltroTipo = 'Todos';
 let _stkPagina = 1;
 const _stkItemsPorPagina = 16;
+let _stkCacheAt = 0;
+const _stkCacheMs = 60 * 1000;
+let _stkTruncado = false;
+let _stkTotalReal = 0;
 
 /**
  * Genera la vista de stock con filtros tipo catálogo (sedes/piezas) y paginación
  */
 async function renderStockTiendas(grid) {
+    if (_stkItemsAplanados.length && (Date.now() - _stkCacheAt) < _stkCacheMs) {
+        _renderStockUI(grid);
+        return;
+    }
     grid.style.display = 'block'; // Bloque porque adentro irá agrupado por sedes
     grid.innerHTML = '<div style="padding: 40px; text-align: center; color: #64748b;"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p>Cargando stock de tiendas...</p></div>';
 
     try {
         const [resProd, resPiez] = await Promise.all([
-            apiFetch(`${API_URL}/api/inventario/resumen`),
-            apiFetch(`${API_URL}/api/inventario/piezas/resumen`)
+            apiFetch(`${API_URL}/api/inventario/resumen?stock_only=1&limit=600`),
+            apiFetch(`${API_URL}/api/inventario/piezas/resumen?stock_only=1&limit=600`)
         ]);
         const dataProd = await resProd.json();
         const dataPiez = await resPiez.json();
 
         if (dataProd.error || dataPiez.error) throw new Error("Error obteniendo datos del servidor.");
+        _stkTruncado = Boolean(dataProd.truncated || dataPiez.truncated);
+        _stkTotalReal = (dataProd.total_modelos || 0) + (dataPiez.total_piezas || 0);
 
         const sedesSet = new Set([
             ...(dataProd.sedes || []),
@@ -188,6 +198,7 @@ async function renderStockTiendas(grid) {
         _stkFiltroSede = 'Todas';
         _stkFiltroTipo = 'Todos';
         _stkPagina = 1;
+        _stkCacheAt = Date.now();
 
         _renderStockUI(grid);
 
@@ -214,6 +225,11 @@ function _renderStockUI(grid) {
     const paginaActualItems = filtrados.slice(inicio, fin);
 
     let html = `
+    ${_stkTruncado ? `
+    <div style="background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; padding:10px 14px; border-radius:10px; margin-bottom:12px; font-size:12px; font-weight:700;">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Hay ${_stkTotalReal} grupos con stock disponible. Esta vista muestra los primeros resultados para mantener la carga rapida; usa inventario para busqueda completa.
+    </div>` : ''}
     <div style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
         <div style="margin-bottom: 12px;">
             <span style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-right: 10px; display: inline-block; margin-bottom: 5px;">TIENDA:</span>
@@ -328,6 +344,13 @@ window._cambiarPaginaStock = function(pag) {
         const y = grid.getBoundingClientRect().top + window.scrollY - 80;
         window.scrollTo({top: y, behavior: 'smooth'});
     }
+};
+
+window._invalidarCacheStockTiendas = function() {
+    _stkCacheAt = 0;
+    _stkItemsAplanados = [];
+    _stkTruncado = false;
+    _stkTotalReal = 0;
 };
 
 /**
@@ -922,9 +945,11 @@ async function confirmarPersonalizadoSofa() {
 
     // Nombre libre para contrato (Feature 4)
     const nombreLibre = (document.getElementById('sofa-nombre-libre')?.value || '').trim();
+    const anchoTotalSofa = (document.getElementById('sofa-ancho-total')?.value || '').trim();
+    const medidasResumenSofa = `${anchoTotalSofa ? `| Ancho total: ${anchoTotalSofa}cm ` : ''}${medidasText}`;
 
     const specs = `
-        ${nombreLibre ? `<b style="color:var(--accent);">📋 ${nombreLibre}</b><br>` : ''}<b>MOD:</b> ${modeloBase} ${medidasText}<br>
+        ${nombreLibre ? `<b style="color:var(--accent);">📋 ${nombreLibre}</b><br>` : ''}<b>MOD:</b> ${modeloBase} ${medidasResumenSofa}<br>
         <b>TELA PRINCIPAL:</b> [SKU: ${skuTela}] ${nombreTela}${provTela ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provTela}]</span>` : ''}${notas['tela']}<br>
         <b>INTERIOR/ESTRUCTURA:</b> ${respaldo} | Brazo: ${brazoEsEstandar ? brazo : brazo + 'cm'}${notas['espuma']}<br>
         <b style="color:#7c3aed;">COJINERÍA:</b><br>
@@ -1376,7 +1401,7 @@ async function confirmarButaca() {
         if (result.isConfirmed) toggleCart();
     });
 }
-// NOTA: El manejo de 'gestor-aprobacion' en changeView se hace en app.js,
+// NOTA: El manejo de 'gestor-aprobacion' en changeView se hace en modules/app/navigation_auth.js,
 // donde changeView ya está definida. No hacerlo aquí para evitar ReferenceError.
 
 /* ================================================================= */
@@ -1585,6 +1610,7 @@ function renderCarta(grid) {
         const fotos = (p.fotos && p.fotos.length > 0) ? p.fotos : (p.foto ? [p.foto] : []);
         const idBase = `carta-${p.id}`;
         const fotosJSON = JSON.stringify(fotos).replace(/"/g, '&quot;');
+        const tipoConfig = _cartaTipoConfig(p);
 
         const carouselFotos = fotos.length > 1
             ? `<div id="${idBase}-carousel" style="position:relative; width:100%; aspect-ratio:4/3; overflow:hidden; background:#f1f5f9; border-radius:10px 10px 0 0;">
@@ -1609,6 +1635,7 @@ function renderCarta(grid) {
                 <span style="font-size:10px; font-weight:700; color:#6366f1; text-transform:uppercase; letter-spacing:1px;">
                     ${p.categoria || 'Modelo'}
                 </span>
+                ${tipoConfig ? `<span style="margin-left:6px;font-size:9px;font-weight:800;color:#166534;background:#dcfce7;padding:2px 6px;border-radius:999px;text-transform:uppercase;">${tipoConfig}</span>` : ''}
                 <h4 style="margin:4px 0 2px; font-size:15px;">${p.nombre}</h4>
                 <span class="price-tag" style="font-size:14px;">${p.precio > 0 ? 'S/ ' + p.precio.toFixed(2) : 'A Cotizar'}</span>
                 <div style="display:flex; gap:6px; margin-top:10px;">
@@ -1616,6 +1643,10 @@ function renderCarta(grid) {
                             onclick="_cartaSeleccionarModelo(${p.id})">
                         <i class="fa-solid fa-cart-plus"></i> Seleccionar
                     </button>
+                    ${esAdmin ? `<button class="btn-action btn-ghost" title="Editar modelo" style="padding:6px 10px; font-size:12px; color:#0f172a;"
+                            onclick="_cartaEditarPlantilla(${p.id})">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>` : ''}
                     ${esAdmin ? `<button class="btn-action btn-ghost" style="padding:6px 10px; font-size:12px; color:#ef4444;"
                             onclick="_cartaEliminarPlantilla(${p.id}, '${p.nombre.replace(/'/g,"\\'")}')">
                         <i class="fa-solid fa-trash"></i>
@@ -1726,6 +1757,16 @@ window._abrirModalNuevaPlantilla = function() {
                 <input id="np-observaciones" class="swal2-input" placeholder="Ej: 60cm diámetro, mármol blanco" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
             </div>
             <div>
+                <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">Configurador base</label>
+                <select id="np-tipo-config" class="swal2-input" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+                    <option value="">Solo modelo de carta</option>
+                    <option value="sofa">Sofa configurable</option>
+                    <option value="comedor">Comedor configurable</option>
+                    <option value="centro">Mesa/centro configurable</option>
+                    <option value="butaca">Butaca/silla configurable</option>
+                </select>
+            </div>
+            <div>
                 <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">Fotos del Modelo * (puedes elegir varias)</label>
                 <input id="np-fotos" type="file" accept="image/*" multiple
                        style="margin:6px 0 0; width:100%; box-sizing:border-box; padding:8px; border:2px dashed #cbd5e1; border-radius:8px; font-size:13px; cursor:pointer;"
@@ -1744,6 +1785,7 @@ window._abrirModalNuevaPlantilla = function() {
             const precio  = parseFloat(document.getElementById('np-precio')?.value || 0);
             const files   = document.getElementById('np-fotos')?.files;
             const observaciones = document.getElementById('np-observaciones')?.value.trim() || '';
+            const tipoConfig = document.getElementById('np-tipo-config')?.value || '';
 
             if (!nombre) { Swal.showValidationMessage('El nombre es obligatorio'); return false; }
             if (!files || files.length === 0) { Swal.showValidationMessage('Debes subir al menos una foto'); return false; }
@@ -1755,6 +1797,7 @@ window._abrirModalNuevaPlantilla = function() {
                 fd.append('categoria', cat);
                 fd.append('precio', precio);
                 fd.append('observaciones', observaciones);
+                fd.append('tipo_config', tipoConfig);
                 for (let f of files) fd.append('fotos', f);
 
                 const res  = await apiFetch(`${API_URL}/api/catalogo/plantilla`, { method: 'POST', body: fd });
@@ -1785,6 +1828,115 @@ window._npPreviewFotos = function(input) {
     }
 };
 
+function _cartaTipoConfig(p) {
+    const cfg = p?.config_json || {};
+    if (typeof cfg === 'string') {
+        try { return (JSON.parse(cfg).tipo_config || ''); } catch(e) { return ''; }
+    }
+    return cfg.tipo_config || '';
+}
+
+window._cartaEditarPlantilla = function(id) {
+    const p = allProducts.find(x => x.id === id);
+    if (!p) return;
+
+    const catOpts = CATEGORIAS_CARTA.map(c =>
+        `<option value="${c}" ${c === (p.categoria || '') ? 'selected' : ''}>${c}</option>`
+    ).join('');
+    const tipoActual = _cartaTipoConfig(p);
+    const fotos = (p.fotos && p.fotos.length) ? p.fotos : (p.foto ? [p.foto] : []);
+    const fotosHtml = fotos.length
+        ? fotos.map(f => `<img src="${f}" style="width:58px;height:58px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;">`).join('')
+        : '<span style="font-size:12px;color:#94a3b8;">Sin fotos actuales</span>';
+
+    Swal.fire({
+        title: '<i class="fa-solid fa-pen" style="color:#0f172a;"></i> Editar modelo',
+        html: `
+        <div style="text-align:left; display:flex; flex-direction:column; gap:12px; padding:4px 0;">
+            <div>
+                <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Nombre *</label>
+                <input id="ep-nombre" class="swal2-input" value="${(p.nombre || '').replace(/"/g, '&quot;')}" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                    <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Categoria</label>
+                    <select id="ep-cat" class="swal2-input" style="margin:6px 0 0; width:100%; box-sizing:border-box;">${catOpts}</select>
+                </div>
+                <div>
+                    <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Precio base</label>
+                    <input id="ep-precio" type="number" step="0.01" class="swal2-input" value="${p.precio || 0}" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+                </div>
+            </div>
+            <div>
+                <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Descripcion / medida</label>
+                <input id="ep-observaciones" class="swal2-input" value="${(p.observaciones || '').replace(/"/g, '&quot;')}" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+            </div>
+            <div>
+                <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Configurador base</label>
+                <select id="ep-tipo-config" class="swal2-input" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+                    <option value="" ${!tipoActual ? 'selected' : ''}>Solo modelo de carta</option>
+                    <option value="sofa" ${tipoActual === 'sofa' ? 'selected' : ''}>Sofa configurable</option>
+                    <option value="comedor" ${tipoActual === 'comedor' ? 'selected' : ''}>Comedor configurable</option>
+                    <option value="centro" ${tipoActual === 'centro' ? 'selected' : ''}>Mesa/centro configurable</option>
+                    <option value="butaca" ${tipoActual === 'butaca' ? 'selected' : ''}>Butaca/silla configurable</option>
+                </select>
+            </div>
+            <div>
+                <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Fotos actuales</label>
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;">${fotosHtml}</div>
+            </div>
+            <div>
+                <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Agregar o reemplazar fotos</label>
+                <input id="ep-fotos" type="file" accept="image/*" multiple
+                       style="margin:6px 0 0; width:100%; box-sizing:border-box; padding:8px; border:2px dashed #cbd5e1; border-radius:8px; font-size:13px;">
+                <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#475569;">
+                    <input id="ep-reemplazar" type="checkbox"> Reemplazar carrusel completo
+                </label>
+            </div>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-save"></i> Guardar cambios',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0f172a',
+        width: '560px',
+        preConfirm: async () => {
+            const nombre = document.getElementById('ep-nombre')?.value.trim();
+            if (!nombre) { Swal.showValidationMessage('El nombre es obligatorio'); return false; }
+
+            const fd = new FormData();
+            fd.append('nombre', nombre);
+            fd.append('categoria', document.getElementById('ep-cat')?.value || '');
+            fd.append('precio', parseFloat(document.getElementById('ep-precio')?.value || 0));
+            fd.append('observaciones', document.getElementById('ep-observaciones')?.value.trim() || '');
+            fd.append('tipo_config', document.getElementById('ep-tipo-config')?.value || '');
+            fd.append('reemplazar_fotos', document.getElementById('ep-reemplazar')?.checked ? '1' : '0');
+            const files = document.getElementById('ep-fotos')?.files || [];
+            for (let f of files) fd.append('fotos', f);
+
+            try {
+                Swal.showLoading();
+                const res = await apiFetch(`${API_URL}/api/catalogo/plantilla/${id}`, { method: 'PUT', body: fd });
+                const data = await res.json();
+                if (data.error) { Swal.showValidationMessage(data.error); return false; }
+                return data;
+            } catch(e) {
+                Swal.showValidationMessage('Error de conexion: ' + e.message);
+                return false;
+            }
+        }
+    }).then(async result => {
+        if (result.isConfirmed && result.value?.exito) {
+            await _recargarCatalogo();
+            if (document.getElementById('carta-panel-modelos')?.style.display !== 'none' && typeof _cartaCargarModelos === 'function') {
+                await _cartaCargarModelos();
+            } else {
+                renderGrid();
+            }
+            Swal.fire({ icon: 'success', title: 'Modelo actualizado', timer: 1300, showConfirmButton: false });
+        }
+    });
+};
+
 window._cartaEliminarPlantilla = async function(id, nombre) {
     const { isConfirmed } = await Swal.fire({
         title: '¿Eliminar plantilla?',
@@ -1813,7 +1965,10 @@ async function _recargarCatalogo() {
     try {
         const res  = await apiFetch(`${API_URL}/api/catalogo`);
         const data = await res.json();
-        if (Array.isArray(data)) window.allProducts = data;
+        if (Array.isArray(data)) {
+            allProducts = data;
+            window.allProducts = data;
+        }
     } catch(e) { console.error('Error recargando catálogo', e); }
 }
 

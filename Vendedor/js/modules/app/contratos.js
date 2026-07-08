@@ -1,0 +1,792 @@
+// App - contratos, reportes y cambios de precio
+// ==========================================
+// MÓDULO: CONTRATOS / REPORTES Y VENTAS
+// ==========================================
+let _contratosData = [];
+let _contratosFiltroTimer = null;
+
+async function loadContratos() {
+    const tbody = document.getElementById('contratos-tbody');
+    const cards = document.getElementById('contratos-cards');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">
+        <i class="fa-solid fa-spinner fa-spin"></i> Cargando contratos...</td></tr>`;
+
+    try {
+        const params = new URLSearchParams({ limit: 500 });
+        const q      = (document.getElementById('contratos-search')?.value || '').trim();
+        const estado = document.getElementById('contratos-filtro-estado')?.value || '';
+        const desde  = document.getElementById('contratos-desde')?.value || '';
+        const hasta  = document.getElementById('contratos-hasta')?.value || '';
+        if (q)      params.set('q', q);
+        if (estado) params.set('estado', estado);
+        if (desde)  params.set('desde', desde);
+        if (hasta)  params.set('hasta', hasta);
+
+        const res = await apiFetch(`${API_URL}/api/ventas?${params.toString()}`);
+        _contratosData = await res.json();
+        if (_contratosData.error) throw new Error(_contratosData.error);
+        renderContratos(_contratosData);
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:#ef4444;">
+            Error al cargar: ${e.message}</td></tr>`;
+    }
+}
+
+function filtrarContratos() {
+    clearTimeout(_contratosFiltroTimer);
+    _contratosFiltroTimer = setTimeout(loadContratos, 300);
+}
+
+function _filtrarContratosLocal() {
+    const q      = (document.getElementById('contratos-search')?.value || '').toLowerCase();
+    const estado = document.getElementById('contratos-filtro-estado')?.value || '';
+    const desde  = document.getElementById('contratos-desde')?.value || '';
+    const hasta  = document.getElementById('contratos-hasta')?.value || '';
+
+    const filtrado = _contratosData.filter(v => {
+        const texto = `${v.codigo} ${v.cliente} ${v.productos || ''}`.toLowerCase();
+        const okQ      = !q      || texto.includes(q);
+        const okEstado = !estado || v.estado === estado;
+        const okDesde  = !desde  || v.fecha_emision >= desde;
+        const okHasta  = !hasta  || v.fecha_emision <= hasta;
+        return okQ && okEstado && okDesde && okHasta;
+    });
+
+    renderContratos(filtrado);
+}
+
+const ESTADO_COLORS = {
+    'Pendiente':      { bg:'#fef3c7', color:'#92400e' },
+    'En producción':  { bg:'#dbeafe', color:'#1e40af' },
+    'Listo':          { bg:'#d1fae5', color:'#065f46' },
+    'Entregado':      { bg:'#f1f5f9', color:'#475569' },
+    'Despachado':     { bg:'#e0f2fe', color:'#0369a1' },
+    'Cancelado':      { bg:'#fee2e2', color:'#b91c1c' },
+};
+
+function renderContratos(lista) {
+    const tbody  = document.getElementById('contratos-tbody');
+    const cards  = document.getElementById('contratos-cards');
+    const stats  = document.getElementById('contratos-stats');
+    const isMobile = window.innerWidth < 640;
+
+    // Mover el contenedor de estadísticas a la parte superior de la vista
+    const tableWrapper = document.getElementById('contratos-table-wrapper');
+    if (stats && tableWrapper && tableWrapper.parentElement) {
+        // Insertar stats antes del contenedor de la tabla para que aparezca arriba.
+        // Esto asegura que las estadísticas estén visibles justo debajo de los filtros.
+        tableWrapper.parentElement.insertBefore(stats, tableWrapper);
+    }
+
+    // Estadísticas rápidas
+    const totalVentas  = lista.reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
+    const totalSaldo   = lista.reduce((s, v) => s + (parseFloat(v.saldo)  || 0), 0);
+    stats.innerHTML = `
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 18px; flex:1; min-width:150px;">
+            <div style="font-size:11px; color:#64748b; font-weight:700;">CONTRATOS</div>
+            <div style="font-size:22px; font-weight:900; color:#0f172a;">${lista.length}</div>
+        </div>
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px 18px; flex:1; min-width:150px;">
+            <div style="font-size:11px; color:#166534; font-weight:700;">TOTAL VENTAS</div>
+            <div style="font-size:22px; font-weight:900; color:#166534;">S/ ${totalVentas.toFixed(2)}</div>
+        </div>
+        <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:12px 18px; flex:1; min-width:150px;">
+            <div style="font-size:11px; color:#9a3412; font-weight:700;">SALDO PENDIENTE</div>
+            <div style="font-size:22px; font-weight:900; color:#9a3412;">S/ ${totalSaldo.toFixed(2)}</div>
+        </div>`;
+
+    if (lista.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">No hay contratos para estos filtros.</td></tr>`;
+        cards.innerHTML = `<p style="text-align:center; color:#94a3b8; padding:40px;">No hay contratos para estos filtros.</p>`;
+        return;
+    }
+
+    // === Tabla (desktop) === CORREGIDO PARA INCLUIR SEDE Y BALANCEAR COLUMNAS
+document.getElementById('contratos-table-wrapper').style.display = isMobile ? 'none' : 'block';
+cards.style.display = isMobile ? 'block' : 'none';
+
+const ec = (v) => {
+    const e = ESTADO_COLORS[v.estado] || { bg:'#f1f5f9', color:'#475569' };
+    return `<span style="background:${e.bg}; color:${e.color}; font-size:10px; font-weight:800;
+                    padding:3px 8px; border-radius:20px; white-space:nowrap;">${v.estado || '—'}</span>`;
+};
+
+tbody.innerHTML = lista.map((v, i) => `
+    <tr style="border-bottom:1px solid #f1f5f9; background:${i%2===0?'white':'#fafafa'};"
+        onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='${i%2===0?'white':'#fafafa'}'">
+        <td style="padding:11px 14px; font-weight:800; color:#d4af37;">#${v.codigo}</td>
+        <td style="padding:11px 14px;">
+            <div style="font-weight:700; font-size:13px;">${v.cliente}</div>
+            <div style="font-size:11px; color:#94a3b8;">${v.vendedor || 'Sin asignar'}</div>
+        </td>
+        
+        <td style="padding:11px 14px; font-size:12px; color:#64748b;">
+            ${v.fecha_emision ? v.fecha_emision.split('-').reverse().join('/') : '—'}
+        </td>
+        
+        <td style="padding:11px 14px; font-weight:800; color:#10b981;">S/ ${parseFloat(v.total||0).toFixed(2)}</td>
+        <td style="padding:11px 14px; color:#0f172a;">S/ ${parseFloat(v.adelanto||0).toFixed(2)}</td>
+        <td style="padding:11px 14px; color:#ef4444; font-weight:700;">S/ ${parseFloat(v.saldo||0).toFixed(2)}</td>
+        <td style="padding:11px 14px;">${ec(v)}</td>
+        <td style="padding:11px 14px; font-size:12px; color:#64748b;">${v.fecha_entrega || '—'}</td>
+        <td style="padding:11px 14px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
+            <button onclick="verDetalleContrato('${v.codigo}')" title="Ver pedido"
+                    style="background:#0f172a; color:white; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
+                <i class="fa-solid fa-eye"></i>
+            </button>
+            <button onclick="verHistorialPrecios('${v.codigo}')" title="Historial de precios"
+                    style="background:#f1f5f9; color:#475569; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+            </button>
+            <button onclick="verSeguimientoVendedor('${v.codigo}')" title="Ver progreso y operarios"
+                    style="background:#3b82f6; color:white; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
+                <i class="fa-solid fa-list-check"></i>
+            </button>
+            ${(usuarioActivo?.rol === 'Admin') ? `
+            <button onclick="gestionarEstadoVenta(${v.id}, '${v.estado}')" title="Cambiar Estado / Anular"
+                    style="background:#fee2e2; color:#b91c1c; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
+                <i class="fa-solid fa-gear"></i>
+            </button>` : ''}
+            ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
+            <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
+                    title="Proponer cambio de precio"
+                    style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
+                <i class="fa-solid fa-tag"></i>
+            </button>` : ''}
+        </td>
+    </tr>`).join('');
+
+// === Cards (mobile) === CORREGIDO PARA MOSTRAR LA SEDE EN CELULARES
+cards.style.display = isMobile ? 'grid' : 'none';
+cards.style.gridTemplateColumns = 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))';
+cards.style.gap = '15px';
+cards.innerHTML = lista.map(v => `
+    <div style="background:white; border-radius:12px; border:1px solid #e2e8f0; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+            <span style="font-weight:900; font-size:15px; color:#d4af37;">#${v.codigo}</span>
+            ${ec(v)}
+        </div>
+        <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${v.cliente}</div>
+        
+        <div style="font-size:12px; color:#64748b; margin-bottom:10px; display:flex; align-items:center; gap:5px;">
+            <span>${v.vendedor || 'Vendedor'}</span> · 
+            <span>Emisión: <b>${v.fecha_emision ? v.fecha_emision.split('-').reverse().join('/') : '—'}</b></span>
+            · Entrega: <b>${v.fecha_entrega || '—'}</b>
+        </div>
+        
+        <div style="display:flex; gap:10px; font-size:13px; margin-bottom:12px;">
+            <div style="flex:1; background:#f0fdf4; border-radius:8px; padding:8px; text-align:center;">
+                <div style="font-size:10px; color:#166534; font-weight:700;">TOTAL</div>
+                <div style="font-weight:900; color:#166534;">S/ ${parseFloat(v.total||0).toFixed(2)}</div>
+            </div>
+            <div style="flex:1; background:#fff7ed; border-radius:8px; padding:8px; text-align:center;">
+                <div style="font-size:10px; color:#9a3412; font-weight:700;">SALDO</div>
+                <div style="font-weight:900; color:#9a3412;">S/ ${parseFloat(v.saldo||0).toFixed(2)}</div>
+            </div>
+        </div>
+        <button onclick="verDetalleContrato('${v.codigo}')"
+                style="width:100%; background:#0f172a; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; margin-bottom:${(usuarioActivo?.rol==='Vendedor'&&v.estado!=='Entregado'&&v.estado!=='Cancelado')?'8px':'0'};">
+            <i class="fa-solid fa-eye"></i> Ver contrato
+        </button>
+        <button onclick="verSeguimientoVendedor('${v.codigo}')"
+                style="width:100%; background:#3b82f6; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; margin-bottom:8px; margin-top:8px;">
+            <i class="fa-solid fa-list-check"></i> Ver progreso de fabricación
+        </button>
+        ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
+        <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
+                style="width:100%; background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">
+            <i class="fa-solid fa-tag"></i> Proponer cambio de precio
+        </button>` : ''}
+    </div>`).join('');
+}
+
+function verDetalleContrato(codigo) {
+    // Abre el modal de detalle de pedido que ya existe en el sistema
+    abrirDetallePedido(codigo);
+}
+
+async function verHistorialPrecios(codigo) {
+    try {
+        Swal.fire({ title: 'Cargando historial...', didOpen: () => Swal.showLoading() });
+        const res = await apiFetch(`${API_URL}/api/ventas/${codigo}/historial-precios`);
+        const data = await res.json();
+        Swal.close();
+
+        if (!data.length) return Swal.fire('Sin cambios', 'Este contrato mantiene su precio original.', 'info');
+
+        let html = `
+            <div style="text-align:left; max-height:400px; overflow-y:auto; padding:5px;">
+                ${data.map(h => {
+                    const colorEstado = h.estado === 'Aprobado' ? '#10b981' : (h.estado === 'Rechazado' ? '#ef4444' : '#f59e0b');
+                    return `
+                    <div style="border-bottom:1px solid #eee; padding:10px 0; font-size:12px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                            <span style="font-weight:900; color:${colorEstado}">${h.estado.toUpperCase()}</span>
+                            <span style="color:gray;">${h.fecha_solicitud}</span>
+                        </div>
+                        <div style="margin-bottom:5px;">
+                            De <b>S/ ${h.price_original?.toFixed(2) || h.precio_original?.toFixed(2)}</b> 
+                            a <b style="color:#d4af37">S/ ${h.price_nuevo?.toFixed(2) || h.precio_nuevo?.toFixed(2)}</b>
+                        </div>
+                        <div style="background:#f8fafc; padding:8px; border-radius:6px; margin-bottom:5px; color:#475569;">
+                            <b>Motivo:</b> ${h.motivo}
+                        </div>
+                        <div style="font-size:11px;">
+                            Solicitó: <b>${h.vendedor}</b><br>
+                            ${h.admin ? `Resuelto por: <b>${h.admin}</b>` : ''}
+                            ${h.notas_admin ? `<br><i style="color:gray;">"${h.notas_admin}"</i>` : ''}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>`;
+
+        Swal.fire({
+            title: `Historial de Precios #${codigo}`,
+            html: html,
+            confirmButtonText: 'Cerrar',
+            confirmButtonColor: '#0f172a',
+            width: '450px'
+        });
+    } catch (e) {
+        Swal.fire('Error', 'No se pudo cargar el historial.', 'error');
+    }
+}
+
+// ==========================================
+// MÓDULO: CAMBIO DE PRECIO / MATERIAL / PRODUCTO NUEVO
+// ==========================================
+// Flujo:
+//   Paso 1 → se listan los productos del contrato (o "Agregar producto nuevo")
+//   Paso 2 → según lo elegido, se pide precio, tela/material, o nombre+precio
+// _cambioPrecioActual guarda todo el contexto necesario para armar el POST.
+let _cambioPrecioActual = null; // { codigo, item: {id, producto, precio_unitario} | null }
+
+async function abrirModalCambioPrecio(codigo) {
+    _cambioPrecioActual = { codigo, item: null, tipo: null };
+    document.getElementById('cambio-precio-codigo-label').textContent = `Contrato #${codigo}`;
+    document.getElementById('cp-paso-1').style.display = 'block';
+    document.getElementById('cp-paso-2').style.display = 'none';
+    document.getElementById('modal-cambio-precio').style.display = 'flex';
+
+    const lista = document.getElementById('cp-lista-productos');
+    lista.innerHTML = '<p style="text-align:center; color:#94a3b8; font-size:12px;">Cargando productos...</p>';
+
+    try {
+        const res  = await apiFetch(`${API_URL}/api/ventas/${codigo}/items-editables`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el contrato');
+
+        _cambioPrecioActual.items = data.items || [];
+
+        if (_cambioPrecioActual.items.length === 0) {
+            lista.innerHTML = '<p style="text-align:center; color:#94a3b8; font-size:12px;">Este contrato no tiene productos registrados.</p>';
+            return;
+        }
+
+        lista.innerHTML = _cambioPrecioActual.items.map((it, idx) => `
+            <div onclick="cpSeleccionarProducto(${idx})" style="display:flex; align-items:center; gap:10px; background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:10px; padding:8px 10px; cursor:pointer; transition:0.15s;">
+                <img src="${it.foto}" onerror="this.src='imagenes/sin_foto.jpg'" style="width:42px; height:42px; object-fit:cover; border-radius:6px; flex-shrink:0;">
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:800; color:#0f172a; font-size:13px;">${it.producto}</div>
+                    <div style="font-size:11px; color:#64748b;">${it.detalles || 'Sin tela registrada'}</div>
+                </div>
+                <div style="font-weight:800; color:#065f46; font-size:13px; white-space:nowrap;">S/ ${it.precio_unitario.toFixed(2)}</div>
+            </div>
+        `).join('');
+    } catch (e) {
+        lista.innerHTML = `<p style="color:#ef4444; font-size:12px;">Error: ${e.message}</p>`;
+    }
+}
+
+function cpSeleccionarProducto(idx) {
+    // idx === null → el usuario eligió "Agregar producto nuevo al contrato"
+    _cambioPrecioActual.item = (idx === null) ? null : _cambioPrecioActual.items[idx];
+
+    document.getElementById('cp-paso-1').style.display = 'none';
+    document.getElementById('cp-paso-2').style.display = 'block';
+
+    const box = document.getElementById('cp-producto-actual-box');
+    const selectorTipo   = document.getElementById('cp-selector-tipo');
+    const campoNombre    = document.getElementById('cp-campo-nombre-nuevo');
+
+    document.getElementById('input-precio-nuevo').value    = '';
+    document.getElementById('input-material-nuevo').value  = '';
+    document.getElementById('input-precio-material').value = '';
+    document.getElementById('input-nombre-producto-nuevo').value = '';
+    document.getElementById('input-motivo-precio').value   = '';
+
+    if (_cambioPrecioActual.item) {
+        box.innerHTML = `<strong>${_cambioPrecioActual.item.producto}</strong><br>Precio actual: <strong style="color:#d97706;">S/ ${_cambioPrecioActual.item.precio_unitario.toFixed(2)}</strong>`;
+        selectorTipo.style.display = 'flex';
+        campoNombre.style.display  = 'none';
+        cpElegirTipo('precio');
+    } else {
+        box.innerHTML = `<strong>Producto nuevo</strong> — se agregará como un ítem adicional al contrato.`;
+        selectorTipo.style.display = 'none';
+        campoNombre.style.display  = 'block';
+        document.getElementById('cp-campo-precio').style.display    = 'block';
+        document.getElementById('cp-campo-material').style.display  = 'none';
+        _cambioPrecioActual.tipo = 'nuevo_producto';
+    }
+}
+
+function cpVolverPaso1() {
+    document.getElementById('cp-paso-1').style.display = 'block';
+    document.getElementById('cp-paso-2').style.display = 'none';
+}
+
+function cpElegirTipo(tipo) {
+    _cambioPrecioActual.tipo = tipo;
+    document.querySelectorAll('.cp-tipo-btn').forEach(btn => {
+        const activo = btn.dataset.tipo === tipo;
+        btn.style.background  = activo ? '#fef3c7' : 'white';
+        btn.style.borderColor = activo ? '#d97706' : '#e2e8f0';
+        btn.style.color       = activo ? '#92400e' : '#475569';
+    });
+    document.getElementById('cp-campo-precio').style.display   = (tipo === 'precio') ? 'block' : 'none';
+    document.getElementById('cp-campo-material').style.display = (tipo === 'material') ? 'block' : 'none';
+}
+
+function cerrarModalCambioPrecio() {
+    document.getElementById('modal-cambio-precio').style.display = 'none';
+    _cambioPrecioActual = null;
+}
+
+async function enviarCambioPrecio() {
+    if (!_cambioPrecioActual || !_cambioPrecioActual.tipo) return;
+    const { codigo, item, tipo } = _cambioPrecioActual;
+    const motivo = document.getElementById('input-motivo-precio').value.trim();
+
+    if (!motivo) {
+        return Swal.fire('Campo requerido', 'Debes ingresar el motivo del cambio.', 'warning');
+    }
+
+    const payload = {
+        tipo_cambio:     tipo,
+        motivo:          motivo,
+        vendedor_id:     usuarioActivo?.id,
+        vendedor_nombre: usuarioActivo?.nombre
+    };
+
+    if (tipo === 'precio') {
+        const precioNuevo = parseFloat(document.getElementById('input-precio-nuevo').value);
+        if (!precioNuevo || precioNuevo <= 0) {
+            return Swal.fire('Campo requerido', 'Ingresa el nuevo precio.', 'warning');
+        }
+        payload.item_id      = item.id;
+        payload.precio_nuevo = precioNuevo;
+    } else if (tipo === 'material') {
+        const materialNuevo = document.getElementById('input-material-nuevo').value.trim();
+        const precioMaterial = document.getElementById('input-precio-material').value;
+        if (!materialNuevo) {
+            return Swal.fire('Campo requerido', 'Describe la tela o material nuevo.', 'warning');
+        }
+        payload.item_id       = item.id;
+        payload.detalle_nuevo = materialNuevo;
+        if (precioMaterial) payload.precio_nuevo = parseFloat(precioMaterial);
+    } else if (tipo === 'nuevo_producto') {
+        const nombreNuevo = document.getElementById('input-nombre-producto-nuevo').value.trim();
+        const precioNuevo = parseFloat(document.getElementById('input-precio-nuevo').value);
+        if (!nombreNuevo) {
+            return Swal.fire('Campo requerido', 'Ingresa el nombre del producto nuevo.', 'warning');
+        }
+        if (!precioNuevo || precioNuevo <= 0) {
+            return Swal.fire('Campo requerido', 'Ingresa el precio del producto nuevo.', 'warning');
+        }
+        payload.producto_nombre = nombreNuevo;
+        payload.precio_nuevo    = precioNuevo;
+    }
+
+    try {
+        const res = await apiFetch(`${API_URL}/api/ventas/${codigo}/proponer-cambio-precio`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error desconocido');
+
+        cerrarModalCambioPrecio();
+        Swal.fire('✅ Enviado', 'Tu solicitud fue enviada al administrador para aprobación.', 'success');
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function cargarCambiosPrecioPendientes() {
+    const contenedor = document.getElementById('lista-cambios-precio');
+    const badge      = document.getElementById('badge-cambios-precio');
+    if (!contenedor) return;
+
+    contenedor.style.display = 'grid';
+    contenedor.style.gridTemplateColumns = 'repeat(auto-fill, minmax(min(100%, 350px), 1fr))';
+    contenedor.style.gap = '15px';
+
+    try {
+        const res  = await apiFetch(`${API_URL}/api/cambios-precio/pendientes`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        if (data.length === 0) {
+            contenedor.innerHTML = '<p style="color:#94a3b8; font-size:13px; grid-column:1/-1;">Sin solicitudes pendientes.</p>';
+            badge.style.display = 'none';
+            return;
+        }
+
+        badge.textContent     = `${data.length} pendiente${data.length > 1 ? 's' : ''}`;
+        badge.style.display   = 'inline-block';
+
+        const ETIQUETA_TIPO = {
+            precio:         { texto: 'Cambio de precio',   color: '#1d4ed8', bg: '#eff6ff' },
+            material:       { texto: 'Tela / Material',    color: '#7c3aed', bg: '#f5f3ff' },
+            nuevo_producto: { texto: 'Producto nuevo',     color: '#0f766e', bg: '#f0fdfa' },
+        };
+
+        contenedor.innerHTML = data.map(c => {
+            const diff      = c.precio_nuevo - c.precio_original;
+            const esSube    = diff > 0;
+            const diffLabel = `${esSube ? '▲' : '▼'} S/ ${Math.abs(diff).toFixed(2)}`;
+            const diffColor = esSube ? '#ef4444' : '#10b981';
+            const tipoInfo  = ETIQUETA_TIPO[c.tipo_cambio] || ETIQUETA_TIPO.precio;
+            const mostrarDiff = c.tipo_cambio !== 'nuevo_producto';
+            return `
+            <div style="background:white; border:1px solid #fde68a; border-radius:12px; padding:16px; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+                    <div>
+                        <span style="font-weight:900; color:#d97706; font-size:14px;">#${c.codigo_venta}</span>
+                        <span style="font-size:12px; color:#64748b; margin-left:8px;">${c.cliente}</span>
+                    </div>
+                    ${mostrarDiff ? `<span style="font-size:11px; font-weight:700; color:${diffColor}; background:${esSube?'#fef2f2':'#f0fdf4'}; padding:2px 8px; border-radius:20px;">${diffLabel}</span>` : ''}
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                    <span style="font-size:10px; font-weight:800; color:${tipoInfo.color}; background:${tipoInfo.bg}; padding:2px 8px; border-radius:20px; text-transform:uppercase;">${tipoInfo.texto}</span>
+                    <span style="font-size:12px; font-weight:700; color:#334155;"><i class="fa-solid fa-couch"></i> ${c.producto}</span>
+                </div>
+                ${c.tipo_cambio === 'material' ? `
+                <div style="background:#f5f3ff; border-radius:8px; padding:8px 10px; margin-bottom:10px; font-size:12px; color:#5b21b6;">
+                    <strong>Tela/material nuevo:</strong> ${c.detalle_nuevo || '—'}
+                </div>` : ''}
+                <div style="display:flex; gap:10px; margin-bottom:10px; font-size:13px;">
+                    <div style="flex:1; text-align:center; background:#f8fafc; border-radius:8px; padding:8px;">
+                        <div style="font-size:10px; color:#64748b; font-weight:700;">${c.tipo_cambio === 'nuevo_producto' ? 'ANTES' : 'ACTUAL'}</div>
+                        <div style="font-weight:900; color:#0f172a;">S/ ${c.precio_original.toFixed(2)}</div>
+                    </div>
+                    <div style="flex:1; text-align:center; background:#fffbeb; border-radius:8px; padding:8px;">
+                        <div style="font-size:10px; color:#92400e; font-weight:700;">${c.tipo_cambio === 'nuevo_producto' ? 'PRECIO NUEVO ITEM' : 'PROPUESTO'}</div>
+                        <div style="font-weight:900; color:#d97706;">S/ ${c.precio_nuevo.toFixed(2)}</div>
+                    </div>
+                </div>
+                <div style="background:#f8fafc; border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px; color:#475569;">
+                    <strong>Motivo:</strong> ${c.motivo}
+                </div>
+                <div style="font-size:11px; color:#94a3b8; margin-bottom:12px;">
+                    Solicitado por <strong>${c.vendedor}</strong> · ${c.fecha_solicitud}
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="resolverCambioPrecio(${c.id}, 'aprobar')"
+                            style="flex:1; padding:9px; background:#065f46; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:800; font-size:12px;">
+                        <i class="fa-solid fa-check"></i> Aprobar
+                    </button>
+                    <button onclick="resolverCambioPrecio(${c.id}, 'rechazar')"
+                            style="flex:1; padding:9px; background:#7f1d1d; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:800; font-size:12px;">
+                        <i class="fa-solid fa-xmark"></i> Rechazar
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+
+    } catch (e) {
+        contenedor.innerHTML = `<p style="color:#ef4444; font-size:13px;">Error: ${e.message}</p>`;
+    }
+}
+
+async function resolverCambioPrecio(cambioId, accion) {
+    const esAprobar = accion === 'aprobar';
+    let notasAdmin  = '';
+
+    if (!esAprobar) {
+        const { value, isConfirmed } = await Swal.fire({
+            title: 'Rechazar solicitud',
+            input: 'textarea',
+            inputLabel: 'Motivo del rechazo (opcional)',
+            inputPlaceholder: 'Ej: El precio ya fue acordado con el cliente...',
+            showCancelButton: true,
+            confirmButtonText: 'Rechazar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#991b1b',
+        });
+        if (!isConfirmed) return;
+        notasAdmin = value || '';
+    } else {
+        const confirm = await Swal.fire({
+            title: '¿Aprobar cambio de precio?',
+            text: 'El monto total de la venta se actualizará inmediatamente.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, aprobar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#065f46',
+        });
+        if (!confirm.isConfirmed) return;
+    }
+
+    try {
+        const url = `${API_URL}/api/cambios-precio/${cambioId}/${esAprobar ? 'aprobar' : 'rechazar'}`;
+        const res = await apiFetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                admin_id:     usuarioActivo?.id,
+                admin_nombre: usuarioActivo?.nombre,
+                notas_admin:  notasAdmin
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error desconocido');
+
+        Swal.fire('✅ Listo', data.mensaje, 'success');
+        cargarCambiosPrecioPendientes();
+        if (typeof loadContratos === 'function') loadContratos();
+
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function descargarExcelContratos() {
+    const desde = document.getElementById('contratos-desde')?.value;
+    const hasta = document.getElementById('contratos-hasta')?.value;
+    const btn = document.getElementById('btn-exportar-excel-contratos');
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando...';
+    }
+
+    try {
+        let url = `${API_URL}/api/ventas/exportar`;
+        const params = [];
+        if (desde) params.push(`inicio=${desde}`);
+        if (hasta) params.push(`fin=${hasta}`);
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
+
+        const res = await apiFetch(url);
+
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || 'No se pudo generar el Excel. El servidor devolvió un error.');
+        }
+
+        const blob = await res.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = downloadUrl;
+        a.download = `reporte_ventas_${new Date().toISOString().slice(0,10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+        a.remove();
+    } catch (e) {
+        Swal.fire('Error', e.message || 'Fallo al generar el Excel. Revisa la conexión.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-file-excel"></i> Exportar Excel';
+        }
+    }
+}
+
+// ==========================================
+// GESTIÓN MANUAL DE ESTADO Y ANULACIÓN (ADMIN)
+// ==========================================
+async function gestionarEstadoVenta(ventaId, estadoActual) {
+    const { value: accion } = await Swal.fire({
+        title: 'Gestionar Venta',
+        input: 'select',
+        inputOptions: {
+            'Estados': {
+                'Pendiente': 'Marcar como Pendiente',
+                'En producción': 'Marcar como En Producción',
+                'Listo': 'Marcar como Listo',
+                'Despachado': 'Marcar como Despachado',
+                'Entregado': 'Marcar como Entregado'
+            },
+            'Peligro': {
+                'ANULAR': '❌ ANULAR VENTA (cancela, conserva el registro)',
+                'ELIMINAR': '🗑️ ELIMINAR POR COMPLETO ESTA VENTA (borra todo)'
+            }
+        },
+        inputPlaceholder: 'Selecciona una acción',
+        showCancelButton: true,
+        confirmButtonColor: '#0f172a'
+    });
+
+    if (!accion) return;
+
+    if (accion === 'ELIMINAR') {
+        return _eliminarVentaCompleta(ventaId);
+    }
+
+    try {
+        let url, body;
+        if (accion === 'ANULAR') {
+            const confirm = await Swal.fire({ title: '¿Seguro?', text: 'Esto cancelará el pedido, vaciará los tickets del taller y cancelará la logística externa.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#b91c1c' });
+            if (!confirm.isConfirmed) return;
+            url = `${API_URL}/api/ventas/${ventaId}/anular`;
+        } else {
+            url = `${API_URL}/api/ventas/${ventaId}/estado`;
+            body = JSON.stringify({ estado: accion });
+        }
+
+        Swal.fire({ title: 'Procesando...', didOpen: () => Swal.showLoading() });
+        const res = await apiFetch(url, { method: accion === 'ANULAR' ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: body });
+        const data = await res.json();
+        
+        if (data.exito) {
+            Swal.fire('Éxito', data.mensaje, 'success');
+            loadContratos();
+        } else throw new Error(data.error);
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+/**
+ * Elimina una venta POR COMPLETO (DELETE real en cascada: items, tickets
+ * de taller, pagos, logística y cambios de precio) — a diferencia de
+ * "Anular", que solo cambia el estado y conserva el registro.
+ * Exige un motivo, porque la acción es irreversible y queda auditada
+ * en el backend (ventas_eliminadas_log) junto con quién la ejecutó.
+ */
+async function _eliminarVentaCompleta(ventaId) {
+    const { value: motivo, isConfirmed: pasoMotivo } = await Swal.fire({
+        title: '🗑️ Eliminar venta por completo',
+        html: `
+            <p style="text-align:left; font-size:13px; color:#7f1d1d; background:#fef2f2; border-left:4px solid #dc2626; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
+                Esta acción <b>borra la venta y todo lo relacionado</b> (productos, tickets de taller, pagos, logística
+                y cambios de precio) <b>como si nunca hubiera existido</b>. No se puede deshacer.
+            </p>
+        `,
+        input: 'textarea',
+        inputLabel: 'Motivo de la eliminación (obligatorio)',
+        inputPlaceholder: 'Ej: Venta duplicada por error, pedido de prueba, cliente nunca pagó y se registró por error...',
+        showCancelButton: true,
+        confirmButtonText: 'Continuar',
+        confirmButtonColor: '#7f1d1d',
+        inputValidator: (value) => {
+            if (!value || !value.trim()) return 'Debes indicar el motivo para poder continuar.';
+        }
+    });
+    if (!pasoMotivo || !motivo) return;
+
+    const { isConfirmed: confirmoFinal } = await Swal.fire({
+        title: '¿Confirmas la eliminación definitiva?',
+        text: 'Se borrará todo rastro operativo de esta venta. Esta acción no se puede deshacer.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar para siempre',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#7f1d1d',
+    });
+    if (!confirmoFinal) return;
+
+    try {
+        Swal.fire({ title: 'Eliminando...', didOpen: () => Swal.showLoading() });
+        const res = await apiFetch(`${API_URL}/api/ventas/${ventaId}/eliminar-completo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                motivo:       motivo.trim(),
+                admin_id:     usuarioActivo?.id,
+                admin_nombre: usuarioActivo?.nombre
+            })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.exito) throw new Error(data.error || 'No se pudo eliminar la venta');
+
+        Swal.fire('Eliminada', data.mensaje, 'success');
+        loadContratos();
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function abrirModalLote() {
+    try {
+        const res = await apiFetch(`${API_URL}/api/logistica/pendientes-por-proveedor`);
+        const proveedores = await res.json();
+
+        if (!proveedores || proveedores.length === 0) {
+            return Swal.fire('Sin pendientes', 'No hay materiales pendientes asignados a un proveedor.', 'info');
+        }
+
+        const opcionesProv = proveedores.map(p => `<option value="${p.proveedor_id}">${p.proveedor_nombre} (${p.items.length} items)</option>`).join('');
+
+        const { value: provId } = await Swal.fire({
+            title: 'Cotización por lote',
+            html: `
+                <label style="font-weight:bold;display:block;margin-bottom:8px;text-align:left;">Selecciona el proveedor:</label>
+                <select id="swal-prov-lote" class="swal2-input" style="width:100%; margin:0;">
+                    ${opcionesProv}
+                </select>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Siguiente',
+            preConfirm: () => document.getElementById('swal-prov-lote').value
+        });
+
+        if (!provId) return;
+        const proveedorSelec = proveedores.find(p => p.proveedor_id == provId);
+
+        let itemsHtml = proveedorSelec.items.map((item, idx) => `
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; text-align:left; background:#f8fafc; padding:8px; border-radius:6px;">
+                <input type="checkbox" id="chk-lote-${idx}" class="chk-lote-item" value="${idx}" checked style="width:18px;height:18px;">
+                <img src="${item.foto_url || 'imagenes/sin_foto.jpg'}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;">
+                <div style="line-height:1.2;">
+                    <strong style="font-size:13px;">${item.insumo_nombre}</strong><br>
+                    <span style="font-size:11px;color:#64748b;">SKU: ${item.sku || 'N/A'} | Cant: ${item.cantidad || 0} ${item.unidad || ''}</span>
+                </div>
+            </div>
+        `).join('');
+
+        const { value: confirmLote } = await Swal.fire({
+            title: 'Seleccionar Materiales',
+            html: `<div style="max-height:300px; overflow-y:auto; margin-bottom:10px;">${itemsHtml}</div>`,
+            showCancelButton: true,
+            confirmButtonText: '<i class="fa-brands fa-whatsapp"></i> Crear Lote y Enviar',
+            confirmButtonColor: '#25D366',
+            preConfirm: () => {
+                const checkboxes = document.querySelectorAll('.chk-lote-item:checked');
+                if (checkboxes.length === 0) { Swal.showValidationMessage('Debes seleccionar al menos un material'); return false; }
+                return Array.from(checkboxes).map(chk => proveedorSelec.items[chk.value]);
+            }
+        });
+        if (!confirmLote) return;
+
+        Swal.fire({ title: 'Generando link...', didOpen: () => Swal.showLoading() });
+        const resLote = await apiFetch(`${API_URL}/api/logistica/crear-lote-cotizacion`, {
+            method: 'POST', body: JSON.stringify({ proveedor_id: provId, items: confirmLote })
+        });
+        const dLote = await resLote.json();
+        if (!resLote.ok || !dLote.exito) throw new Error(dLote.error || 'Error al generar el lote');
+
+        let tel = (dLote.telefono || '').replace(/[\s\-\(\)]/g, '');
+        if (!tel.startsWith('+')) tel = '51' + tel.replace(/^0+/, '');
+
+        let msgItems = dLote.items.map((it, i) => `${i+1}. 📦 *${it.sku ? it.sku + ' — ' : ''}${it.insumo_nombre}* | Cant: ${it.cantidad || 0} ${it.unidad || ''}`).join('\n');
+
+        const msgWsp = [
+            `Hola ${dLote.nombre_proveedor} 👋, somos *Innova Möbili*.`,``,`Le solicitamos cotización de los siguientes materiales:`,``,msgItems,``,
+            `Por favor ingrese al siguiente link para enviarnos sus precios y fechas:`,`👉 ${dLote.link}`,``,`Tiene 3 días hábiles para responder. Gracias 🙏`
+        ].join('\n');
+
+        window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`, '_blank');
+        cargarLogisticaExterna();
+    } catch (error) { Swal.fire('Error', error.message, 'error'); }
+}
+

@@ -667,7 +667,7 @@ def guardar_venta():
                         # IMPORTANTE: todas las líneas "SKU: XXXX" que agreguemos aquí
                         # son las que luego /api/taller/fichatecnica-skus usa para
                         # traer la foto del material y mostrarla en la Ficha Técnica
-                        # del ticket (galería por área) — ver taller.js:verFichaTaller.
+                        # del ticket (galería por área) — ver modules/taller/ficha_asignaciones.js:verFichaTaller.
                         partes_override = []
                         if area_destino == 'ARMADO_COJINES' and detalle_cojines_armado:
                             partes_override.append("COJINERÍA:\n" + "\n".join(detalle_cojines_armado))
@@ -921,7 +921,40 @@ def listar_ventas():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        cursor.execute("""
+        q      = (request.args.get('q') or '').strip()
+        estado = (request.args.get('estado') or '').strip()
+        desde  = (request.args.get('desde') or '').strip()
+        hasta  = (request.args.get('hasta') or '').strip()
+        try:
+            limit = min(max(int(request.args.get('limit', 500)), 1), 1000)
+        except (TypeError, ValueError):
+            limit = 500
+
+        condiciones = []
+        params = []
+        if q:
+            like = f"%{q.lower()}%"
+            condiciones.append("""(
+                LOWER(v.codigo_venta) LIKE %s
+                OR LOWER(v.nombre_cliente) LIKE %s
+                OR LOWER(COALESCE(v.vendedor_nombre, '')) LIKE %s
+                OR LOWER(COALESCE(itm.productos, '')) LIKE %s
+            )""")
+            params.extend([like, like, like, like])
+        if estado:
+            condiciones.append("COALESCE(v.estado_general, 'Pendiente') = %s")
+            params.append(estado)
+        if desde:
+            condiciones.append("v.fecha_emision::date >= %s")
+            params.append(desde)
+        if hasta:
+            condiciones.append("v.fecha_emision::date <= %s")
+            params.append(hasta)
+
+        where_sql = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+        params.append(limit)
+
+        cursor.execute(f"""
             SELECT
                 v.id, v.codigo_venta, v.nombre_cliente, v.monto_total,
                 COALESCE(pg.total_pagado, 0) AS monto_adelanto,
@@ -939,8 +972,10 @@ def listar_ventas():
                 SELECT venta_id, STRING_AGG(producto, ' / ') AS productos
                 FROM items_venta GROUP BY venta_id
             ) itm ON itm.venta_id = v.id
-            ORDER BY v.id DESC;
-        """)
+            {where_sql}
+            ORDER BY v.id DESC
+            LIMIT %s;
+        """, params)
         filas = cursor.fetchall()
         resultado = [{
             'id':            f[0],
@@ -1940,6 +1975,7 @@ def obtener_comisiones_vendedores():
         if hasta:
             cond_v.append("fecha_emision::date <= %s")
             params_v.append(hasta)
+        cond_v.append("COALESCE(estado_general, 'Pendiente') <> 'Cancelado'")
         where_v = ("WHERE " + " AND ".join(cond_v)) if cond_v else ""
 
         cursor.execute(f"""
@@ -1947,7 +1983,7 @@ def obtener_comisiones_vendedores():
                 vendedor_id,
                 LOWER(TRIM(vendedor_nombre))        AS vnom,
                 COUNT(DISTINCT id)                  AS contratos,
-                COALESCE(SUM(monto_total), 0)       AS total_ventas
+                COALESCE(SUM(COALESCE(monto_total, 0)), 0) AS total_ventas
             FROM ventas
             {where_v}
             GROUP BY vendedor_id, LOWER(TRIM(vendedor_nombre));
@@ -2070,6 +2106,7 @@ def obtener_comisiones_vendedores():
                 'neto':               neto,
                 'deuda_siguiente':    deuda_siguiente,   # pasa a próx. semana
                 'vendio':             vendio_algo,
+                'hizo_pedido':         vendio_algo,
             })
 
         # Ordenar: primero los que sí vendieron, luego los que no
@@ -2234,9 +2271,10 @@ def cerrar_semana_vendedor():
         # como respaldo, cualquier venta vieja sin vendedor_id que sí
         # coincida por nombre.
         cursor.execute("""
-            SELECT COUNT(*), COALESCE(SUM(monto_total), 0)
+            SELECT COUNT(*), COALESCE(SUM(COALESCE(monto_total, 0)), 0)
             FROM ventas
             WHERE fecha_emision::date BETWEEN %s AND %s
+              AND COALESCE(estado_general, 'Pendiente') <> 'Cancelado'
               AND (
                     vendedor_id = %s
                     OR (vendedor_id IS NULL AND LOWER(TRIM(vendedor_nombre)) = LOWER(TRIM(%s)))

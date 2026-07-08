@@ -3,12 +3,24 @@ routes_catalogo.py — Módulo 1: Catálogo, Insumos y Vouchers.
 Blueprint: catalogo_bp  (sin prefijo de URL)
 """
 
+import json
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto, cloudinary_upload
 from auth_middleware import requiere_login, requiere_rol
 
 catalogo_bp = Blueprint('catalogo', __name__)
+
+
+def _asegurar_columnas_catalogo(cursor):
+    cursor.execute("""
+        ALTER TABLE catalogo_productos
+            ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'Sofá',
+            ADD COLUMN IF NOT EXISTS fotos_urls TEXT DEFAULT '',
+            ADD COLUMN IF NOT EXISTS config_json JSONB,
+            ADD COLUMN IF NOT EXISTS requiere_tela BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS observaciones TEXT
+    """)
 
 
 # ==========================================
@@ -18,19 +30,39 @@ catalogo_bp = Blueprint('catalogo', __name__)
 @catalogo_bp.route('/api/catalogo', methods=['GET'])
 def obtener_catalogo():
     try:
+        q = request.args.get('q', '').strip().lower()
+        categoria = request.args.get('categoria', '').strip()
+        modo = request.args.get('modo', '').strip().lower()
+        try:
+            limit = min(max(int(request.args.get('limit', 0)), 0), 1000)
+        except (TypeError, ValueError):
+            limit = 0
+
         conexion = get_db_connection()
         cursor = conexion.cursor()
         # Asegurar columnas categoria y fotos_urls existen (migración lazy)
-        cursor.execute("""
-            ALTER TABLE catalogo_productos
-                ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'Sofá',
-                ADD COLUMN IF NOT EXISTS fotos_urls TEXT DEFAULT '',
-                ADD COLUMN IF NOT EXISTS config_json JSONB,
-                ADD COLUMN IF NOT EXISTS requiere_tela BOOLEAN DEFAULT FALSE,
-                ADD COLUMN IF NOT EXISTS observaciones TEXT
-        """)
+        _asegurar_columnas_catalogo(cursor)
         conexion.commit()
-        cursor.execute("""
+        where, params = [], []
+        if q:
+            where.append("(LOWER(nombre_modelo) LIKE %s OR LOWER(COALESCE(observaciones, '')) LIKE %s)")
+            params.extend([f"%{q}%", f"%{q}%"])
+        if categoria:
+            where.append("COALESCE(categoria, 'Sofá') = %s")
+            params.append(categoria)
+        if modo == 'plantillas':
+            where.append("es_plantilla = TRUE")
+        elif modo == 'catalogo':
+            where.append("COALESCE(en_stock, FALSE) = FALSE AND COALESCE(es_plantilla, FALSE) = FALSE")
+        elif modo == 'stock':
+            where.append("COALESCE(en_stock, FALSE) = TRUE")
+
+        where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+        limit_sql = "LIMIT %s" if limit else ""
+        if limit:
+            params.append(limit)
+
+        cursor.execute(f"""
             SELECT id, nombre_modelo, precio_base, foto_url,
                    es_plantilla, en_stock,
                    COALESCE(stock_cantidad, 0) AS stock_cantidad,
@@ -40,8 +72,10 @@ def obtener_catalogo():
                    requiere_tela,
                    observaciones
             FROM catalogo_productos
+            {where_sql}
             ORDER BY es_plantilla DESC, nombre_modelo ASC
-        """)
+            {limit_sql}
+        """, params)
         productos = cursor.fetchall()
         lista_productos = []
         for p in productos:
@@ -86,6 +120,8 @@ def agregar_plantilla_catalogo():
         precio    = float(request.form.get('precio', 0) or 0)
         categoria = request.form.get('categoria', 'Sofá').strip()
         observaciones = request.form.get('observaciones', '').strip()
+        tipo_config = request.form.get('tipo_config', '').strip()
+        config_json = {'tipo_config': tipo_config} if tipo_config else None
 
         if not nombre:
             return jsonify({'error': 'El nombre del modelo es obligatorio'}), 400
@@ -105,19 +141,100 @@ def agregar_plantilla_catalogo():
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        _asegurar_columnas_catalogo(cursor)
         cursor.execute("""
             INSERT INTO catalogo_productos
                 (nombre_modelo, precio_base, foto_url, fotos_urls, categoria, observaciones,
-                 es_plantilla, en_stock, origen_produccion, stock_cantidad)
-            VALUES (%s, %s, %s, %s, %s, %s, True, False, 'Producción', 0)
+                 config_json, es_plantilla, en_stock, origen_produccion, stock_cantidad)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, True, False, 'Producción', 0)
             RETURNING id
-        """, (nombre, precio, foto_principal, fotos_urls_str, categoria, observaciones))
+        """, (nombre, precio, foto_principal, fotos_urls_str, categoria, observaciones,
+              json.dumps(config_json) if config_json else None))
         nuevo_id = cursor.fetchone()[0]
         conexion.commit()
         return jsonify({'exito': True, 'id': nuevo_id, 'mensaje': f'Modelo "{nombre}" añadido a la carta'}), 200
 
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
+@catalogo_bp.route('/api/catalogo/plantilla/<int:producto_id>', methods=['PUT'])
+@requiere_rol('Admin')
+def editar_plantilla_catalogo(producto_id):
+    """Edita una plantilla de la carta sin cambiar su ID ni las ventas existentes."""
+    try:
+        nombre = request.form.get('nombre', '').strip()
+        categoria = request.form.get('categoria', 'Sofá').strip()
+        observaciones = request.form.get('observaciones', '').strip()
+        tipo_config = request.form.get('tipo_config', '').strip()
+        reemplazar_fotos = str(request.form.get('reemplazar_fotos', '')).lower() in ('1', 'true', 'si')
+        precio = float(request.form.get('precio', 0) or 0)
+
+        if not nombre:
+            return jsonify({'error': 'El nombre del modelo es obligatorio'}), 400
+
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        _asegurar_columnas_catalogo(cursor)
+
+        cursor.execute("""
+            SELECT foto_url, COALESCE(fotos_urls, ''), es_plantilla
+            FROM catalogo_productos
+            WHERE id = %s
+        """, (producto_id,))
+        actual = cursor.fetchone()
+        if not actual:
+            return jsonify({'error': 'Producto no encontrado'}), 404
+        if not actual[2]:
+            return jsonify({'error': 'Solo se pueden editar plantillas de la carta'}), 400
+
+        foto_principal = actual[0] or ''
+        fotos_urls_str = actual[1] or ''
+        fotos = [f for f in request.files.getlist('fotos') if f and f.filename]
+        if fotos:
+            urls_subidas = []
+            for f in fotos:
+                res = cloudinary_upload(f, folder="catalogo_plantillas")
+                urls_subidas.append(res.get('secure_url'))
+            if reemplazar_fotos:
+                foto_principal = urls_subidas[0]
+                fotos_urls_str = '|'.join(urls_subidas[1:]) if len(urls_subidas) > 1 else ''
+            else:
+                actuales = [foto_principal] + [f for f in fotos_urls_str.split('|') if f.strip()]
+                combinadas = []
+                for url in actuales + urls_subidas:
+                    if url and url not in combinadas:
+                        combinadas.append(url)
+                foto_principal = combinadas[0] if combinadas else ''
+                fotos_urls_str = '|'.join(combinadas[1:]) if len(combinadas) > 1 else ''
+
+        config_json = {'tipo_config': tipo_config} if tipo_config else None
+        cursor.execute("""
+            UPDATE catalogo_productos
+            SET nombre_modelo = %s,
+                precio_base = %s,
+                foto_url = %s,
+                fotos_urls = %s,
+                categoria = %s,
+                observaciones = %s,
+                config_json = %s::jsonb
+            WHERE id = %s AND es_plantilla = TRUE
+        """, (
+            nombre, precio, foto_principal, fotos_urls_str,
+            categoria, observaciones,
+            json.dumps(config_json) if config_json else None,
+            producto_id
+        ))
+        conexion.commit()
+        return jsonify({'exito': True, 'mensaje': f'Modelo "{nombre}" actualizado'}), 200
+
+    except Exception as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if 'conexion' in locals() and conexion:

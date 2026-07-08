@@ -7,8 +7,8 @@
  *
  * INSTRUCCIONES DE INTEGRACIÓN
  * ─────────────────────────────
- * 1. Copia este archivo en tu carpeta Vendedor/ (junto a app.js, taller.js, etc.)
- * 2. En index.html, carga este script DESPUÉS de app.js y taller.js:
+ * 1. Copia este archivo en tu carpeta Vendedor/js/.
+ * 2. En index.html, carga este script DESPUÉS de los módulos App y Taller:
  *      <script src="busqueda_filtros.js"></script>
  * 3. Listo. Las funciones aquí redefinen las anteriores; no borres nada más.
  * ─────────────────────────────────────────────────────────────────────────────
@@ -649,14 +649,14 @@ function _opFiltrar() {
         return;
     }
 
-    // Reutilizamos el renderer original de órdenes que ya existía en taller.js
+    // Reutilizamos el renderer original de órdenes que ya existía en los módulos de Taller.
     // El helper _opRenderOrdenes recibe el array ya filtrado
     _opRenderOrdenes(lista, filtrados);
 }
 
 /**
  * Renderer de tarjetas de orden de producción.
- * Extraído de la función original cargarOrdenesProduccion en taller.js
+ * Extraído de la función original cargarOrdenesProduccion en modules/taller/ordenes_despacho.js
  * para poder reutilizarlo con datos filtrados.
  */
 function _opRenderOrdenes(wrapper, ordenes) {

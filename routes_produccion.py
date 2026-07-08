@@ -40,7 +40,7 @@ AREA_ALIASES = {
 # FIX (julio 2026): helper compartido para saber si la TELA de un ítem
 # específico (no de toda la venta) ya está lista para que tapicería/cojines
 # puedan trabajar. Antes esta lógica solo existía como indicador visual en
-# obtener_cola_recojo (JOIN por venta_id, no por item_id) y taller.js se
+# obtener_cola_recojo (JOIN por venta_id, no por item_id) y los módulos de Taller se
 # limitaba a deshabilitar el botón en el navegador — el endpoint real de
 # confirmar recojo no validaba nada de esto en el servidor.
 #
@@ -277,7 +277,7 @@ def obtener_cola_recojo():
         # filtro solo reconocía uno de los dos:
         #
         #   a) Manual: el Jefe elige "Listo para Recojo" en el selector de
-        #      estado del modal de Logística Externa (ver app.js,
+        #      estado del modal de Logística Externa (ver modules/app/logistica_externa.js,
         #      estadosPosibles) → escribe l.estado = 'Listo para Recojo'.
         #      Este es el que el filtro original SÍ cubría.
         #
@@ -695,7 +695,7 @@ def obtener_tickets_taller():
                     "tapicero_destino": destino.get('tapicero'),
                     "cojinero_destino": destino.get('cojinero'),
                     # Campos nuevos para agrupar por contrato en el frontend
-                    # (taller.js: tarjeta de contrato con desglose por línea).
+                    # (modules/taller/tickets.js: tarjeta de contrato con desglose por línea).
                     "venta_id":       r[5],
                     "codigo_venta":   r[1],
                     "sku":            r[3] or '',
@@ -1483,7 +1483,7 @@ def actualizar_logistica():
         # modal solo actualizaba esa columna — el registro se quedaba
         # "Pendiente" para siempre esperando una cotización o un recojo que
         # nunca iban a llegar (porque el taller lo fabrica/consigue por su
-        # cuenta). La UI ya prometía esto (texto del modal en app.js:
+        # cuenta). La UI ya prometía esto (texto del modal en modules/app/logistica_externa.js:
         # "Marca como Recibido cuando esté listo... los tickets se
         # desbloquearán automáticamente") pero el backend nunca lo hacía.
         #
@@ -3937,6 +3937,10 @@ def listar_stock_estructuras():
     hasta       = (request.args.get('hasta') or '').strip()
     carpintero  = (request.args.get('carpintero') or '').strip()
     estado_pago = (request.args.get('pago') or '').strip()   # 'pagado' | 'pendiente'
+    try:
+        limit = min(max(int(request.args.get('limit', 500)), 1), 1000)
+    except (TypeError, ValueError):
+        limit = 500
 
     try:
         conexion = get_db_connection()
@@ -3991,7 +3995,8 @@ def listar_stock_estructuras():
             FROM stock_estructuras_sofa
             {where_sql}
             ORDER BY fecha_registro DESC
-        """, params)
+            LIMIT %s
+        """, [*params, limit])
         rows = cursor.fetchall()
         return jsonify([{
             'id': r[0], 'nombre_modelo': r[1],

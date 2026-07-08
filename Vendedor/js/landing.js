@@ -414,7 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const u = JSON.parse(sesion);
     // ROLES_ERP viene de config.js — no redeclarar aquí
     if (ROLES_ERP.includes(u.rol)) {
-      // Trabajador: init() en app.js lo maneja, nada que hacer aquí
+      // Trabajador: init() en modules/app/session_ui.js lo maneja, nada que hacer aquí
     } else {
       // Cliente: restaurar navbar con saludo y botón cerrar sesión
       usuarioActivo = u;
