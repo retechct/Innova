@@ -338,7 +338,7 @@ Innova Möbili — Área de Compras
         msg['From'] = remitente
         msg['To']   = correo_proveedor
 
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
             server.starttls()
             server.login(remitente, password)
             server.send_message(msg)
@@ -391,7 +391,7 @@ def notificar_usuario(destinatario_email, nombre_destinatario, asunto, mensaje, 
         msg['From']    = remitente
         msg['To']      = destinatario_email
 
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
             server.starttls()
             server.login(remitente, password)
             server.send_message(msg)

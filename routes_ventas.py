@@ -1124,20 +1124,10 @@ def notificaciones_ping():
 def notificaciones_probar_correo():
     """Envia un correo simple para validar SMTP en Render."""
     try:
-        conexion = get_db_connection()
-        cursor = conexion.cursor()
-        data = enviar_correo_prueba(cursor)
-        conexion.commit()
+        data = enviar_correo_prueba()
         return jsonify(data), 200
     except Exception as ex:
-        if 'conexion' in locals() and conexion:
-            conexion.rollback()
         return jsonify({'error': str(ex)}), 500
-    finally:
-        _cerrar_db_silencioso(
-            cursor if 'cursor' in locals() else None,
-            conexion if 'conexion' in locals() else None,
-        )
 
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])

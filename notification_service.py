@@ -313,9 +313,19 @@ def enviar_resumen_operativo(cursor):
     return {**data, "notificaciones": result}
 
 
-def enviar_correo_prueba(cursor):
-    asegurar_esquema_notificaciones(cursor)
-    recipients = _fetch_admins(cursor)
+def enviar_correo_prueba(cursor=None):
+    recipients = [
+        {
+            "email": email,
+            "nombre": "Administracion",
+            "telefono": None,
+        }
+        for email in _env_emails()
+    ]
+    if cursor is not None:
+        asegurar_esquema_notificaciones(cursor)
+        recipients = _fetch_admins(cursor)
+
     result = _send_many(
         recipients,
         "[Innova] Prueba de correo",
