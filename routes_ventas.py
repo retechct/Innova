@@ -28,8 +28,14 @@ import cloudinary.uploader
 from flask import Blueprint, jsonify, request, send_file
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-from database import get_db_connection, release_db_connection, enviar_notificacion_venta, limpiar_foto
+from database import get_db_connection, release_db_connection, limpiar_foto
 from auth_middleware import requiere_login, requiere_rol
+from notification_service import (
+    enviar_resumen_operativo,
+    notificar_contrato_creado,
+    notificar_estado_contrato,
+    resumen_operativo,
+)
 
 ventas_bp = Blueprint('ventas', __name__)
 
@@ -874,10 +880,16 @@ def guardar_venta():
         print(f"[PASO 5] COMMIT")
         conexion.commit()
 
-        cursor.execute("SELECT email FROM usuarios WHERE id = %s", (datos['vendedor_id'],))
-        v_correo = cursor.fetchone()
-        if v_correo:
-            enviar_notificacion_venta(v_correo[0], datos['codigo'], datos['cliente'])
+        try:
+            notif = notificar_contrato_creado(
+                cursor,
+                venta_id,
+                datos,
+                cantidad_items=len(datos.get('muebles') or []),
+            )
+            print(f"[NOTIF] Contrato {datos.get('codigo')}: {notif}")
+        except Exception as ex_notif:
+            print(f"[NOTIF] No se pudo notificar contrato {datos.get('codigo')}: {ex_notif}")
 
         print(f"[VENTA] ✅ Venta registrada exitosamente — venta_id={venta_id}\n")
         return jsonify({"mensaje": "Venta procesada exitosamente", "id": venta_id}), 201
@@ -1065,6 +1077,28 @@ def reporte_ventas_rapidas():
             cursor.close(); release_db_connection(conexion)
 
 
+@ventas_bp.route('/api/notificaciones/resumen-operativo', methods=['GET', 'POST'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def notificaciones_resumen_operativo():
+    """Consulta o envia por correo el resumen operativo pendiente."""
+    enviar = request.method == 'POST' or request.args.get('enviar') == '1'
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        data = enviar_resumen_operativo(cursor) if enviar else resumen_operativo(cursor)
+        conexion.commit()
+        return jsonify(data), 200
+    except Exception as ex:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(ex)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            release_db_connection(conexion)
+
+
 @ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])
 @requiere_login
 def cambiar_estado_venta(venta_id):
@@ -1089,6 +1123,11 @@ def cambiar_estado_venta(venta_id):
         # ─────────────────────────────────────────────────────────────────────
 
         conexion.commit()
+        try:
+            notif = notificar_estado_contrato(cursor, venta_id, nuevo_estado)
+            print(f"[NOTIF] Estado venta {venta_id}: {notif}")
+        except Exception as ex_notif:
+            print(f"[NOTIF] No se pudo notificar estado de venta {venta_id}: {ex_notif}")
         return jsonify({'exito': True, 'mensaje': f'Estado actualizado a {nuevo_estado}'}), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
