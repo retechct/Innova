@@ -1078,6 +1078,19 @@ def reporte_ventas_rapidas():
             cursor.close(); release_db_connection(conexion)
 
 
+def _cerrar_db_silencioso(cursor=None, conexion=None):
+    try:
+        if cursor:
+            cursor.close()
+    except Exception as ex:
+        print(f"[NOTIF] No se pudo cerrar cursor: {ex}")
+    try:
+        if conexion:
+            release_db_connection(conexion)
+    except Exception as ex:
+        print(f"[NOTIF] No se pudo devolver conexion: {ex}")
+
+
 @ventas_bp.route('/api/notificaciones/resumen-operativo', methods=['GET', 'POST'])
 @requiere_rol('Admin', 'Jefe_Taller')
 def notificaciones_resumen_operativo():
@@ -1094,10 +1107,16 @@ def notificaciones_resumen_operativo():
             conexion.rollback()
         return jsonify({'error': str(ex)}), 500
     finally:
-        if 'conexion' in locals() and conexion:
-            if 'cursor' in locals() and cursor:
-                cursor.close()
-            release_db_connection(conexion)
+        _cerrar_db_silencioso(
+            cursor if 'cursor' in locals() else None,
+            conexion if 'conexion' in locals() else None,
+        )
+
+
+@ventas_bp.route('/api/notificaciones/ping', methods=['GET'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def notificaciones_ping():
+    return jsonify({'ok': True, 'modulo': 'notificaciones'}), 200
 
 
 @ventas_bp.route('/api/notificaciones/probar-correo', methods=['POST'])
@@ -1115,10 +1134,10 @@ def notificaciones_probar_correo():
             conexion.rollback()
         return jsonify({'error': str(ex)}), 500
     finally:
-        if 'conexion' in locals() and conexion:
-            if 'cursor' in locals() and cursor:
-                cursor.close()
-            release_db_connection(conexion)
+        _cerrar_db_silencioso(
+            cursor if 'cursor' in locals() else None,
+            conexion if 'conexion' in locals() else None,
+        )
 
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])

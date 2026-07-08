@@ -33,7 +33,7 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 
-from flask import Flask, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -67,6 +67,14 @@ cloudinary.config(
 
 # ─── Aplicación Flask ─────────────────────────────────────────────────────────
 app = Flask(__name__, static_folder='Vendedor', static_url_path='')
+
+
+@app.errorhandler(Exception)
+def manejar_error_api(ex):
+    if request.path.startswith('/api/'):
+        app.logger.exception("Error no controlado en %s", request.path)
+        return jsonify({'error': str(ex), 'tipo': type(ex).__name__}), 500
+    raise ex
 
 # Restringir CORS al dominio de producción.
 # En desarrollo local, agregar también: 'http://localhost:5000'
