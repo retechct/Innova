@@ -376,6 +376,8 @@ def _enviar_email_resend(destinatario_email, asunto, mensaje):
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "InnovaERP/1.0 (+https://innova-4cnn.onrender.com)",
         },
         method="POST",
     )
