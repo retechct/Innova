@@ -42,21 +42,25 @@ function renderGrid() {
         const tipoConfig = _cartaTipoConfig(p);
         const textoBoton = tipoConfig ? 'CONFIGURAR' : 'AÑADIR AL CARRO';
         const esAdmin = window.usuarioActivo && String(window.usuarioActivo.rol || '').toLowerCase() === 'admin';
+        const foto = escapeAttr(p.foto || 'imagenes/sin_foto.jpg');
+        const nombre = escapeHTML(p.nombre || '');
+        const precio = Number(p.precio || 0);
+        const id = Number(p.id || 0);
         return `
         <div class="card" style="position:relative;">
-            <img src="${p.foto}" onerror="this.src='imagenes/sin_foto.jpg'">
+            <img src="${foto}" onerror="this.src='imagenes/sin_foto.jpg'">
             <div class="card-info">
                 <span class="status-badge" style="background:#f1f5f9; color:var(--text-muted);">
                     <i class="fa-solid fa-ruler-combined" style="font-size:9px;"></i> A MEDIDA
                 </span>
-                <h4>${p.nombre}</h4>
-                <span class="price-tag">${p.precio > 0 ? 'S/ ' + p.precio.toFixed(2) : 'A Cotizar'}</span>
+                <h4>${nombre}</h4>
+                <span class="price-tag">${precio > 0 ? 'S/ ' + precio.toFixed(2) : 'A Cotizar'}</span>
                 <button class="btn-action btn-primary"
-                        onclick="_cartaSeleccionarModelo(${p.id})">
+                        onclick="_cartaSeleccionarModelo(${id})">
                     <i class="fa-solid ${tipoConfig ? 'fa-sliders' : 'fa-plus'}"></i> ${textoBoton}
                 </button>
                 ${esAdmin ? `<button class="btn-action btn-ghost" style="margin-top:6px; padding:8px; font-size:11px;"
-                        onclick="_cartaEditarPlantilla(${p.id})">
+                        onclick="_cartaEditarPlantilla(${id})">
                     <i class="fa-solid fa-pen"></i> EDITAR
                 </button>` : ''}
             </div>
@@ -242,7 +246,7 @@ function _renderStockUI(grid) {
             <span style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-right: 10px; display: inline-block; margin-bottom: 5px;">TIENDA:</span>
             <button onclick="_cambiarFiltroStock('sede', 'Todas')" style="margin-right: 5px; margin-bottom: 5px; padding: 6px 12px; border-radius: 20px; border: 1px solid ${_stkFiltroSede === 'Todas' ? '#0f172a' : '#e2e8f0'}; background: ${_stkFiltroSede === 'Todas' ? '#0f172a' : 'white'}; color: ${_stkFiltroSede === 'Todas' ? 'white' : '#475569'}; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">Todas</button>
             ${_stockTiendasSedes.map(sede => `
-                <button onclick="_cambiarFiltroStock('sede', '${sede}')" style="margin-right: 5px; margin-bottom: 5px; padding: 6px 12px; border-radius: 20px; border: 1px solid ${_stkFiltroSede === sede ? '#0f172a' : '#e2e8f0'}; background: ${_stkFiltroSede === sede ? '#0f172a' : 'white'}; color: ${_stkFiltroSede === sede ? 'white' : '#475569'}; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">${sede}</button>
+                <button onclick="_cambiarFiltroStock('sede', ${jsStringAttr(sede)})" style="margin-right: 5px; margin-bottom: 5px; padding: 6px 12px; border-radius: 20px; border: 1px solid ${_stkFiltroSede === sede ? '#0f172a' : '#e2e8f0'}; background: ${_stkFiltroSede === sede ? '#0f172a' : 'white'}; color: ${_stkFiltroSede === sede ? 'white' : '#475569'}; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">${escapeHTML(sede)}</button>
             `).join('')}
         </div>
         <div>
@@ -259,6 +263,12 @@ function _renderStockUI(grid) {
         html += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px;">`;
         paginaActualItems.forEach(item => {
             const isProd = item.tipoElemento === 'Producto';
+            const nombreSeguro = escapeHTML(item.nombre || '');
+            const nombreJS = jsStringAttr(item.nombre || '');
+            const sedeSeguro = escapeHTML(item.sede || '');
+            const categoriaSeguro = escapeHTML(item.categoria || '');
+            const observacionesSeguro = escapeHTML(item.observaciones || '');
+            const observacionesAttr = escapeAttr(item.observaciones || '');
             // FIX (julio 2026): antes solo se pasaba item.foto (la primera
             // imagen). Ahora se pasan TODAS las fotos del producto/pieza
             // unidas con '|' para que no se pierdan al llegar a la venta
@@ -266,8 +276,8 @@ function _renderStockUI(grid) {
             // en cartItem.img).
             const fotosStock = (item.fotos && item.fotos.length ? item.fotos : (item.foto ? [item.foto] : [])).join('|');
             const actionArgs = isProd 
-                ? `${item.catalogo_id || 'null'}, '${item.nombre.replace(/'/g,"\\'")}', 0, '${fotosStock}', false`
-                : `'${item.sku}', '${item.nombre.replace(/'/g,"\\'")}', 0, '${fotosStock}', true`;
+                ? `${Number(item.catalogo_id) || 'null'}, ${nombreJS}, 0, ${jsStringAttr(fotosStock)}, false`
+                : `${jsStringAttr(item.sku || '')}, ${nombreJS}, 0, ${jsStringAttr(fotosStock)}, true`;
 
             html += `
             <div class="card" style="position:relative; margin:0; border:1px solid #e2e8f0; box-shadow:none; transition: transform 0.2s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
@@ -277,7 +287,7 @@ function _renderStockUI(grid) {
                         const _sf = (item.fotos && item.fotos.length) ? item.fotos : (item.foto ? [item.foto] : []);
                         const _cid = 'stkc-' + Math.random().toString(36).slice(2,8);
                         const _slides = _sf.length
-                            ? _sf.map(f => '<div style="min-width:100%;scroll-snap-align:center;"><img src="'+f+'" onerror="this.src=\'imagenes/sin_foto.jpg\'" style="width:100%;height:200px;object-fit:contain;object-position:center;background:#f8f6f2;cursor:zoom-in;" onclick="_invLightbox(\''+f+'\',\''+(item.nombre||'').replace(/'/g,"\'")+'\')"></div>').join('')
+                            ? _sf.map(f => '<div style="min-width:100%;scroll-snap-align:center;"><img src="'+escapeAttr(f)+'" onerror="this.src=\'imagenes/sin_foto.jpg\'" style="width:100%;height:200px;object-fit:contain;object-position:center;background:#f8f6f2;cursor:zoom-in;" onclick="_invLightbox('+jsStringAttr(f)+','+nombreJS+')"></div>').join('')
                             : '<div style="min-width:100%;height:200px;background:#f8f6f2;display:flex;align-items:center;justify-content:center;color:#cbd5e1;"><i class=\"fa-solid fa-image\" style=\"font-size:2rem;\"></i></div>';
                         const _nav = _sf.length > 1
                             ? '<button onclick="event.stopPropagation();_carouselNav(\''+_cid+'\',  -1)" style="position:absolute;top:50%;left:5px;transform:translateY(-50%);background:rgba(0,0,0,0.45);color:white;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">‹</button>'
@@ -292,16 +302,16 @@ function _renderStockUI(grid) {
                             <i class="fa-solid ${isProd ? 'fa-box' : 'fa-puzzle-piece'}"></i> Disp: ${item.cantidad}
                         </span>
                         <span class="status-badge" style="background:#f1f5f9; color:#475569; font-size:10px;">
-                            <i class="fa-solid fa-store"></i> ${item.sede}
+                            <i class="fa-solid fa-store"></i> ${sedeSeguro}
                         </span>
                     </div>
-                    <h4 style="font-size:14px; margin-bottom:4px; min-height: 38px;">${item.nombre}</h4>
+                    <h4 style="font-size:14px; margin-bottom:4px; min-height: 38px;">${nombreSeguro}</h4>
                     ${item.observaciones ? `
-                    <div style="font-size:11px; color:#64748b; margin-top:2px; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${item.observaciones}">
-                        <i class="fa-solid fa-ruler-horizontal" style="margin-right:4px; color:#94a3b8;"></i> ${item.observaciones}
+                    <div style="font-size:11px; color:#64748b; margin-top:2px; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${observacionesAttr}">
+                        <i class="fa-solid fa-ruler-horizontal" style="margin-right:4px; color:#94a3b8;"></i> ${observacionesSeguro}
                     </div>
                     ` : ''}
-                    <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${item.categoria}</span>
+                    <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${categoriaSeguro}</span>
                     <div style="display:flex; gap:6px;">
                         <button class="btn-action btn-primary" style="flex:1; border-radius:8px; ${!isProd ? 'background:#0f172a;' : ''}"
                             onclick="addStockItemToCart(${actionArgs})">

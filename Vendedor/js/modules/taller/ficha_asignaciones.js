@@ -1,4 +1,4 @@
-// Taller - ficha tecnica y asignaciones
+﻿// Taller - ficha tecnica y asignaciones
 /* --- HELPER: Scroll para el carrusel de la ficha técnica --- */
 function scrollFichaCarousel(direction) {
     const container = document.getElementById('ficha-carousel-container');
@@ -23,7 +23,7 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
     const esTelas     = area === 'TELAS' || area === 'CORTE_Y_CONTROL_TELAS';
     const esCojines   = area === 'ARMADO_COJINES';
     const esTapiceria = area === 'TAPICERIA_SOFAS' || area === 'TAPICERIA_SILLAS' || area === 'TAPICERIA';
-    const esEstructura= area.includes('ESTRUCTURAS') || area.includes('CARPINTERIA') || area.includes('PATAS') || area.includes('ZOCALO') || area === 'PREPARACION_PATAS_ZOCALO';
+    const esEstructura= area.includes('ESTRUCTURAS') || area.includes('PATAS') || area.includes('ZOCALO') || area === 'PREPARACION_PATAS_ZOCALO';
     const esDespacho  = area === 'DESPACHO_CENTRAL';
 
     if (esTelas) {
@@ -39,7 +39,7 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
         tituloSeccion = '🛋️ Tapicería'; colorBorde = '#6ee7b7'; colorTitulo = '#065f46';
     } else if (esEstructura) {
         seccionesFiltradas = lines.filter(l => l.trim() && !/TELA|COJIN|TAPIZ|SKU.*TEL|SKU.*COJ/i.test(l));
-        tituloSeccion = '🪵 Carpintería / Estructuras'; colorBorde = '#fcd34d'; colorTitulo = '#92400e';
+        tituloSeccion = 'Estructuras'; colorBorde = '#fcd34d'; colorTitulo = '#92400e';
     } else if (esDespacho) {
         seccionesFiltradas = lines.filter(l => l.trim());
         tituloSeccion = '📦 Despacho — Ficha Completa'; colorBorde = '#fca5a5'; colorTitulo = '#991b1b';

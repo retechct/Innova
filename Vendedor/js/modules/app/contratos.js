@@ -110,47 +110,47 @@ cards.style.display = isMobile ? 'block' : 'none';
 const ec = (v) => {
     const e = ESTADO_COLORS[v.estado] || { bg:'#f1f5f9', color:'#475569' };
     return `<span style="background:${e.bg}; color:${e.color}; font-size:10px; font-weight:800;
-                    padding:3px 8px; border-radius:20px; white-space:nowrap;">${v.estado || '—'}</span>`;
+                    padding:3px 8px; border-radius:20px; white-space:nowrap;">${escapeHTML(v.estado || '—')}</span>`;
 };
 
 tbody.innerHTML = lista.map((v, i) => `
     <tr style="border-bottom:1px solid #f1f5f9; background:${i%2===0?'white':'#fafafa'};"
         onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='${i%2===0?'white':'#fafafa'}'">
-        <td style="padding:11px 14px; font-weight:800; color:#d4af37;">#${v.codigo}</td>
+        <td style="padding:11px 14px; font-weight:800; color:#d4af37;">#${escapeHTML(v.codigo)}</td>
         <td style="padding:11px 14px;">
-            <div style="font-weight:700; font-size:13px;">${v.cliente}</div>
-            <div style="font-size:11px; color:#94a3b8;">${v.vendedor || 'Sin asignar'}</div>
+            <div style="font-weight:700; font-size:13px;">${escapeHTML(v.cliente)}</div>
+            <div style="font-size:11px; color:#94a3b8;">${escapeHTML(v.vendedor || 'Sin asignar')}</div>
         </td>
         
         <td style="padding:11px 14px; font-size:12px; color:#64748b;">
-            ${v.fecha_emision ? v.fecha_emision.split('-').reverse().join('/') : '—'}
+            ${escapeHTML(v.fecha_emision ? v.fecha_emision.split('-').reverse().join('/') : '—')}
         </td>
         
         <td style="padding:11px 14px; font-weight:800; color:#10b981;">S/ ${parseFloat(v.total||0).toFixed(2)}</td>
         <td style="padding:11px 14px; color:#0f172a;">S/ ${parseFloat(v.adelanto||0).toFixed(2)}</td>
         <td style="padding:11px 14px; color:#ef4444; font-weight:700;">S/ ${parseFloat(v.saldo||0).toFixed(2)}</td>
         <td style="padding:11px 14px;">${ec(v)}</td>
-        <td style="padding:11px 14px; font-size:12px; color:#64748b;">${v.fecha_entrega || '—'}</td>
+        <td style="padding:11px 14px; font-size:12px; color:#64748b;">${escapeHTML(v.fecha_entrega || '—')}</td>
         <td style="padding:11px 14px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
-            <button onclick="verDetalleContrato('${v.codigo}')" title="Ver pedido"
+            <button onclick="verDetalleContrato(${jsStringAttr(v.codigo)})" title="Ver pedido"
                     style="background:#0f172a; color:white; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
                 <i class="fa-solid fa-eye"></i>
             </button>
-            <button onclick="verHistorialPrecios('${v.codigo}')" title="Historial de precios"
+            <button onclick="verHistorialPrecios(${jsStringAttr(v.codigo)})" title="Historial de precios"
                     style="background:#f1f5f9; color:#475569; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
                 <i class="fa-solid fa-clock-rotate-left"></i>
             </button>
-            <button onclick="verSeguimientoVendedor('${v.codigo}')" title="Ver progreso y operarios"
+            <button onclick="verSeguimientoVendedor(${jsStringAttr(v.codigo)})" title="Ver progreso y operarios"
                     style="background:#3b82f6; color:white; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
                 <i class="fa-solid fa-list-check"></i>
             </button>
             ${(usuarioActivo?.rol === 'Admin') ? `
-            <button onclick="gestionarEstadoVenta(${v.id}, '${v.estado}')" title="Cambiar Estado / Anular"
+            <button onclick="gestionarEstadoVenta(${Number(v.id || 0)}, ${jsStringAttr(v.estado || '')})" title="Cambiar Estado / Anular"
                     style="background:#fee2e2; color:#b91c1c; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
                 <i class="fa-solid fa-gear"></i>
             </button>` : ''}
             ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
-            <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
+            <button onclick="abrirModalCambioPrecio(${jsStringAttr(v.codigo)}, ${Number(v.total || 0)})"
                     title="Proponer cambio de precio"
                     style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:700;">
                 <i class="fa-solid fa-tag"></i>
@@ -165,15 +165,15 @@ cards.style.gap = '15px';
 cards.innerHTML = lista.map(v => `
     <div style="background:white; border-radius:12px; border:1px solid #e2e8f0; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
-            <span style="font-weight:900; font-size:15px; color:#d4af37;">#${v.codigo}</span>
+            <span style="font-weight:900; font-size:15px; color:#d4af37;">#${escapeHTML(v.codigo)}</span>
             ${ec(v)}
         </div>
-        <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${v.cliente}</div>
+        <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${escapeHTML(v.cliente)}</div>
         
         <div style="font-size:12px; color:#64748b; margin-bottom:10px; display:flex; align-items:center; gap:5px;">
-            <span>${v.vendedor || 'Vendedor'}</span> · 
-            <span>Emisión: <b>${v.fecha_emision ? v.fecha_emision.split('-').reverse().join('/') : '—'}</b></span>
-            · Entrega: <b>${v.fecha_entrega || '—'}</b>
+            <span>${escapeHTML(v.vendedor || 'Vendedor')}</span> ·
+            <span>Emisión: <b>${escapeHTML(v.fecha_emision ? v.fecha_emision.split('-').reverse().join('/') : '—')}</b></span>
+            · Entrega: <b>${escapeHTML(v.fecha_entrega || '—')}</b>
         </div>
         
         <div style="display:flex; gap:10px; font-size:13px; margin-bottom:12px;">
@@ -186,16 +186,16 @@ cards.innerHTML = lista.map(v => `
                 <div style="font-weight:900; color:#9a3412;">S/ ${parseFloat(v.saldo||0).toFixed(2)}</div>
             </div>
         </div>
-        <button onclick="verDetalleContrato('${v.codigo}')"
+        <button onclick="verDetalleContrato(${jsStringAttr(v.codigo)})"
                 style="width:100%; background:#0f172a; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; margin-bottom:${(usuarioActivo?.rol==='Vendedor'&&v.estado!=='Entregado'&&v.estado!=='Cancelado')?'8px':'0'};">
             <i class="fa-solid fa-eye"></i> Ver contrato
         </button>
-        <button onclick="verSeguimientoVendedor('${v.codigo}')"
+        <button onclick="verSeguimientoVendedor(${jsStringAttr(v.codigo)})"
                 style="width:100%; background:#3b82f6; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; margin-bottom:8px; margin-top:8px;">
             <i class="fa-solid fa-list-check"></i> Ver progreso de fabricación
         </button>
         ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
-        <button onclick="abrirModalCambioPrecio('${v.codigo}', ${v.total})"
+        <button onclick="abrirModalCambioPrecio(${jsStringAttr(v.codigo)}, ${Number(v.total || 0)})"
                 style="width:100%; background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">
             <i class="fa-solid fa-tag"></i> Proponer cambio de precio
         </button>` : ''}
@@ -223,27 +223,27 @@ async function verHistorialPrecios(codigo) {
                     return `
                     <div style="border-bottom:1px solid #eee; padding:10px 0; font-size:12px;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                            <span style="font-weight:900; color:${colorEstado}">${h.estado.toUpperCase()}</span>
-                            <span style="color:gray;">${h.fecha_solicitud}</span>
+                            <span style="font-weight:900; color:${colorEstado}">${escapeHTML(String(h.estado || '').toUpperCase())}</span>
+                            <span style="color:gray;">${escapeHTML(h.fecha_solicitud || '')}</span>
                         </div>
                         <div style="margin-bottom:5px;">
                             De <b>S/ ${h.price_original?.toFixed(2) || h.precio_original?.toFixed(2)}</b> 
                             a <b style="color:#d4af37">S/ ${h.price_nuevo?.toFixed(2) || h.precio_nuevo?.toFixed(2)}</b>
                         </div>
                         <div style="background:#f8fafc; padding:8px; border-radius:6px; margin-bottom:5px; color:#475569;">
-                            <b>Motivo:</b> ${h.motivo}
+                            <b>Motivo:</b> ${escapeHTML(h.motivo || '')}
                         </div>
                         <div style="font-size:11px;">
-                            Solicitó: <b>${h.vendedor}</b><br>
-                            ${h.admin ? `Resuelto por: <b>${h.admin}</b>` : ''}
-                            ${h.notas_admin ? `<br><i style="color:gray;">"${h.notas_admin}"</i>` : ''}
+                            Solicitó: <b>${escapeHTML(h.vendedor || '')}</b><br>
+                            ${h.admin ? `Resuelto por: <b>${escapeHTML(h.admin)}</b>` : ''}
+                            ${h.notas_admin ? `<br><i style="color:gray;">"${escapeHTML(h.notas_admin)}"</i>` : ''}
                         </div>
                     </div>`;
                 }).join('')}
             </div>`;
 
         Swal.fire({
-            title: `Historial de Precios #${codigo}`,
+            title: `Historial de Precios #${escapeHTML(codigo)}`,
             html: html,
             confirmButtonText: 'Cerrar',
             confirmButtonColor: '#0f172a',
@@ -287,16 +287,16 @@ async function abrirModalCambioPrecio(codigo) {
 
         lista.innerHTML = _cambioPrecioActual.items.map((it, idx) => `
             <div onclick="cpSeleccionarProducto(${idx})" style="display:flex; align-items:center; gap:10px; background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:10px; padding:8px 10px; cursor:pointer; transition:0.15s;">
-                <img src="${it.foto}" onerror="this.src='imagenes/sin_foto.jpg'" style="width:42px; height:42px; object-fit:cover; border-radius:6px; flex-shrink:0;">
+                <img src="${escapeAttr(it.foto || 'imagenes/sin_foto.jpg')}" onerror="this.src='imagenes/sin_foto.jpg'" style="width:42px; height:42px; object-fit:cover; border-radius:6px; flex-shrink:0;">
                 <div style="flex:1; min-width:0;">
-                    <div style="font-weight:800; color:#0f172a; font-size:13px;">${it.producto}</div>
-                    <div style="font-size:11px; color:#64748b;">${it.detalles || 'Sin tela registrada'}</div>
+                    <div style="font-weight:800; color:#0f172a; font-size:13px;">${escapeHTML(it.producto || '')}</div>
+                    <div style="font-size:11px; color:#64748b;">${escapeHTML(it.detalles || 'Sin tela registrada')}</div>
                 </div>
-                <div style="font-weight:800; color:#065f46; font-size:13px; white-space:nowrap;">S/ ${it.precio_unitario.toFixed(2)}</div>
+                <div style="font-weight:800; color:#065f46; font-size:13px; white-space:nowrap;">S/ ${Number(it.precio_unitario || 0).toFixed(2)}</div>
             </div>
         `).join('');
     } catch (e) {
-        lista.innerHTML = `<p style="color:#ef4444; font-size:12px;">Error: ${e.message}</p>`;
+        lista.innerHTML = `<p style="color:#ef4444; font-size:12px;">Error: ${escapeHTML(e.message)}</p>`;
     }
 }
 
@@ -318,7 +318,7 @@ function cpSeleccionarProducto(idx) {
     document.getElementById('input-motivo-precio').value   = '';
 
     if (_cambioPrecioActual.item) {
-        box.innerHTML = `<strong>${_cambioPrecioActual.item.producto}</strong><br>Precio actual: <strong style="color:#d97706;">S/ ${_cambioPrecioActual.item.precio_unitario.toFixed(2)}</strong>`;
+        box.innerHTML = `<strong>${escapeHTML(_cambioPrecioActual.item.producto || '')}</strong><br>Precio actual: <strong style="color:#d97706;">S/ ${Number(_cambioPrecioActual.item.precio_unitario || 0).toFixed(2)}</strong>`;
         selectorTipo.style.display = 'flex';
         campoNombre.style.display  = 'none';
         cpElegirTipo('precio');
@@ -455,18 +455,18 @@ async function cargarCambiosPrecioPendientes() {
             <div style="background:white; border:1px solid #fde68a; border-radius:12px; padding:16px; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
                     <div>
-                        <span style="font-weight:900; color:#d97706; font-size:14px;">#${c.codigo_venta}</span>
-                        <span style="font-size:12px; color:#64748b; margin-left:8px;">${c.cliente}</span>
+                        <span style="font-weight:900; color:#d97706; font-size:14px;">#${escapeHTML(c.codigo_venta)}</span>
+                        <span style="font-size:12px; color:#64748b; margin-left:8px;">${escapeHTML(c.cliente)}</span>
                     </div>
                     ${mostrarDiff ? `<span style="font-size:11px; font-weight:700; color:${diffColor}; background:${esSube?'#fef2f2':'#f0fdf4'}; padding:2px 8px; border-radius:20px;">${diffLabel}</span>` : ''}
                 </div>
                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
                     <span style="font-size:10px; font-weight:800; color:${tipoInfo.color}; background:${tipoInfo.bg}; padding:2px 8px; border-radius:20px; text-transform:uppercase;">${tipoInfo.texto}</span>
-                    <span style="font-size:12px; font-weight:700; color:#334155;"><i class="fa-solid fa-couch"></i> ${c.producto}</span>
+                    <span style="font-size:12px; font-weight:700; color:#334155;"><i class="fa-solid fa-couch"></i> ${escapeHTML(c.producto)}</span>
                 </div>
                 ${c.tipo_cambio === 'material' ? `
                 <div style="background:#f5f3ff; border-radius:8px; padding:8px 10px; margin-bottom:10px; font-size:12px; color:#5b21b6;">
-                    <strong>Tela/material nuevo:</strong> ${c.detalle_nuevo || '—'}
+                    <strong>Tela/material nuevo:</strong> ${escapeHTML(c.detalle_nuevo || '—')}
                 </div>` : ''}
                 <div style="display:flex; gap:10px; margin-bottom:10px; font-size:13px;">
                     <div style="flex:1; text-align:center; background:#f8fafc; border-radius:8px; padding:8px;">
@@ -479,17 +479,17 @@ async function cargarCambiosPrecioPendientes() {
                     </div>
                 </div>
                 <div style="background:#f8fafc; border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px; color:#475569;">
-                    <strong>Motivo:</strong> ${c.motivo}
+                    <strong>Motivo:</strong> ${escapeHTML(c.motivo || '')}
                 </div>
                 <div style="font-size:11px; color:#94a3b8; margin-bottom:12px;">
-                    Solicitado por <strong>${c.vendedor}</strong> · ${c.fecha_solicitud}
+                    Solicitado por <strong>${escapeHTML(c.vendedor || '')}</strong> · ${escapeHTML(c.fecha_solicitud || '')}
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button onclick="resolverCambioPrecio(${c.id}, 'aprobar')"
+                    <button onclick="resolverCambioPrecio(${Number(c.id || 0)}, 'aprobar')"
                             style="flex:1; padding:9px; background:#065f46; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:800; font-size:12px;">
                         <i class="fa-solid fa-check"></i> Aprobar
                     </button>
-                    <button onclick="resolverCambioPrecio(${c.id}, 'rechazar')"
+                    <button onclick="resolverCambioPrecio(${Number(c.id || 0)}, 'rechazar')"
                             style="flex:1; padding:9px; background:#7f1d1d; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:800; font-size:12px;">
                         <i class="fa-solid fa-xmark"></i> Rechazar
                     </button>
@@ -498,7 +498,7 @@ async function cargarCambiosPrecioPendientes() {
         }).join('');
 
     } catch (e) {
-        contenedor.innerHTML = `<p style="color:#ef4444; font-size:13px;">Error: ${e.message}</p>`;
+        contenedor.innerHTML = `<p style="color:#ef4444; font-size:13px;">Error: ${escapeHTML(e.message)}</p>`;
     }
 }
 

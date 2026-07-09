@@ -236,19 +236,19 @@ async function cargarLogisticaExterna() {
                 ${fotoHTML}
                 <div style="padding:14px;display:flex;flex-direction:column;flex:1;">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">
-                        <span style="font-weight:900;color:#d97706;font-size:13px;">#${item.codigo_venta}</span>
-                        <span style="background:${c.bg};color:${c.color};padding:3px 9px;border-radius:20px;font-weight:800;font-size:10px;white-space:nowrap;">${item.estado}</span>
+                        <span style="font-weight:900;color:#d97706;font-size:13px;">#${escapeHTML(item.codigo_venta)}</span>
+                        <span style="background:${c.bg};color:${c.color};padding:3px 9px;border-radius:20px;font-weight:800;font-size:10px;white-space:nowrap;">${escapeHTML(item.estado)}</span>
                     </div>
-                    <div style="font-weight:900;font-size:14px;line-height:1.3;">${item.insumo}</div>
-                    ${item.sku ? `<div style="font-size:11px;color:#94a3b8;margin-top:1px;">${item.sku}</div>` : ''}
-                    ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;margin-top:3px;">${item.detalle_insumo}</div>` : ''}
-                    ${item.producto_item ? `<div style="font-size:11px;color:#0369a1;margin-top:3px;font-weight:700;"><i class="fa-solid fa-couch" style="font-size:10px;"></i> ${item.producto_item}</div>` : ''}
+                    <div style="font-weight:900;font-size:14px;line-height:1.3;">${escapeHTML(item.insumo)}</div>
+                    ${item.sku ? `<div style="font-size:11px;color:#94a3b8;margin-top:1px;">${escapeHTML(item.sku)}</div>` : ''}
+                    ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;margin-top:3px;">${escapeHTML(item.detalle_insumo)}</div>` : ''}
+                    ${item.producto_item ? `<div style="font-size:11px;color:#0369a1;margin-top:3px;font-weight:700;"><i class="fa-solid fa-couch" style="font-size:10px;"></i> ${escapeHTML(item.producto_item)}</div>` : ''}
 
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin:10px 0;">
                         <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
                             <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Proveedor</div>
-                            <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.proveedor}</div>
-                            ${item.proveedor_informal ? `<div style="font-size:10px;color:#64748b;margin-top:1px;"><i class="fa-solid fa-phone" style="font-size:9px;"></i> ${item.proveedor_informal}</div>` : ''}
+                            <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHTML(item.proveedor)}</div>
+                            ${item.proveedor_informal ? `<div style="font-size:10px;color:#64748b;margin-top:1px;"><i class="fa-solid fa-phone" style="font-size:9px;"></i> ${escapeHTML(item.proveedor_informal)}</div>` : ''}
                         </div>
                         ${item.precio_cotizado ? `
                         <div style="background:#fef9c3;border-radius:6px;padding:6px 8px;">
@@ -262,12 +262,12 @@ async function cargarLogisticaExterna() {
                         ${item.fecha_entrega_proveedor ? `
                         <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
                             <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">F. Entrega</div>
-                            <div style="font-weight:600;">${item.fecha_entrega_proveedor}</div>
+                            <div style="font-weight:600;">${escapeHTML(item.fecha_entrega_proveedor)}</div>
                         </div>` : ''}
                         ${item.cantidad ? `
                         <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
                             <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Cantidad</div>
-                            <div style="font-weight:600;">${item.cantidad} ${item.unidad || ''}</div>
+                            <div style="font-weight:600;">${escapeHTML(item.cantidad)} ${escapeHTML(item.unidad || '')}</div>
                         </div>` : ''}
                         ${item.tipo_gestion && item.tipo_gestion !== 'Externo' ? `
                         <div style="background:${item.tipo_gestion === 'Informal' ? '#fef9c3' : '#dcfce7'};border-radius:6px;padding:6px 8px;">
@@ -277,7 +277,7 @@ async function cargarLogisticaExterna() {
                     </div>
 
                     ${item.url_comprobante_pago ? `
-                    <a href="${item.url_comprobante_pago}" target="_blank"
+                    <a href="${escapeAttr(item.url_comprobante_pago)}" target="_blank" rel="noopener"
                        style="font-size:11px;font-weight:700;color:#1d4ed8;text-decoration:none;display:inline-flex;align-items:center;gap:4px;margin-bottom:8px;">
                        <i class="fa-solid fa-receipt"></i> Ver comprobante de pago
                     </a>` : ''}
@@ -343,14 +343,14 @@ async function cargarLogisticaExterna() {
 
         const pillsHTML = ESTADOS_PILLS
             .filter(e => e === 'Todos' || cuentaEstado[e] > 0)
-            .map(e => `<button class="log-pill" data-estado="${e}"
-                onclick="_logFiltrarEstado('${e}')"
+            .map(e => `<button class="log-pill" data-estado="${escapeAttr(e)}"
+                onclick="_logFiltrarEstado(${jsStringAttr(e)})"
                 style="background:${e === 'Todos' ? '#0f172a' : '#f1f5f9'};
                        color:${e === 'Todos' ? 'white' : '#475569'};
                        border:none;border-radius:20px;padding:5px 13px;
                        font-size:11px;font-weight:${e === 'Todos' ? '800' : '600'};
                        cursor:pointer;white-space:nowrap;">
-                ${e === 'Todos' ? 'Todos' : e.replace(/_/g,' ')}
+                ${e === 'Todos' ? 'Todos' : escapeHTML(e.replace(/_/g,' '))}
                 ${cuentaEstado[e] > 0 ? `<span style="background:rgba(255,255,255,.25);border-radius:10px;padding:1px 6px;margin-left:4px;">${cuentaEstado[e]}</span>` : ''}
             </button>`).join('');
 
@@ -432,11 +432,11 @@ async function cargarLogisticaExterna() {
                     return `
                     <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                            <div style="font-weight:900;font-size:14px;color:#d97706;">#${grupo.codigo_venta}</div>
-                            <span style="background:${c.bg};color:${c.color};padding:3px 9px;border-radius:20px;font-weight:800;font-size:10px;">${estadoLabel}</span>
+                            <div style="font-weight:900;font-size:14px;color:#d97706;">#${escapeHTML(grupo.codigo_venta)}</div>
+                            <span style="background:${c.bg};color:${c.color};padding:3px 9px;border-radius:20px;font-weight:800;font-size:10px;">${escapeHTML(estadoLabel)}</span>
                         </div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:10px;">
-                            <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;"><div style="font-size:10px;color:#94a3b8;font-weight:700;">PROVEEDOR</div><div style="font-weight:600;">${provLabel}</div></div>
+                            <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;"><div style="font-size:10px;color:#94a3b8;font-weight:700;">PROVEEDOR</div><div style="font-weight:600;">${escapeHTML(provLabel)}</div></div>
                             <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;"><div style="font-size:10px;color:#94a3b8;font-weight:700;">TOTAL</div><div style="font-weight:900;color:#166534;">S/ ${grupo.precio_total.toFixed(2)}</div></div>
                         </div>
                         <button onclick="document.getElementById('${subId}').style.display = document.getElementById('${subId}').style.display === 'none' ? 'block' : 'none';"
@@ -444,7 +444,7 @@ async function cargarLogisticaExterna() {
                             Ver ${grupo.items.length} insumos <i class="fa-solid fa-chevron-down" style="font-size:9px;"></i>
                         </button>
                         <div id="${subId}" style="display:none;margin-top:10px;font-size:11px;border-top:1px solid #f1f5f9;padding-top:8px;">
-                            ${grupo.items.map(i => `<div style="display:flex;justify-content:space-between;padding:4px 0;"><span>${i.insumo}</span><span style="font-weight:600;">S/ ${(i.precio_cotizado||0).toFixed(2)}</span></div>`).join('')}
+                            ${grupo.items.map(i => `<div style="display:flex;justify-content:space-between;padding:4px 0;"><span>${escapeHTML(i.insumo)}</span><span style="font-weight:600;">S/ ${Number(i.precio_cotizado||0).toFixed(2)}</span></div>`).join('')}
                         </div>
                     </div>`;
                 }).join('')}
@@ -461,7 +461,7 @@ async function cargarLogisticaExterna() {
 
     } catch(e) {
         tabla.innerHTML = `<div style="text-align:center;padding:30px;color:#ef4444;">
-            <i class="fa-solid fa-triangle-exclamation"></i> Error al cargar: ${e.message}
+            <i class="fa-solid fa-triangle-exclamation"></i> Error al cargar: ${escapeHTML(e.message)}
         </div>`;
     }
 }

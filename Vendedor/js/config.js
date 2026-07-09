@@ -44,4 +44,23 @@ let tipoActual = "";
 // ─── Roles con acceso al panel ERP ────────────────────────────────────────────
 // Definido UNA sola vez aquí. Importar desde este archivo en vez de redeclarar.
 // Si agregas un rol nuevo, cámbialo solo en esta línea.
-const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'ALMACEN', 'Chofer'];
+const ROLES_ERP = ['Admin', 'Vendedor', 'Operario', 'Jefe_Taller', 'Chofer'];
+
+const AREA_LABELS = {
+    'ESTRUCTURAS_MUEBLES': 'Estructura de Sofa',
+    'ESTRUCTURAS_SILLAS': 'Estructura de Sillas',
+    'CARPINTERIA': 'Carpinteria',
+    'CORTE_Y_CONTROL_TELAS': 'Telas',
+    'TELAS': 'Telas',
+    'TAPICERIA_SOFAS': 'Tapiceria Sofa',
+    'TAPICERIA_SILLAS': 'Tapiceria Sillas',
+    'ARMADO_COJINES': 'Cojineria',
+    'DESPACHO_CENTRAL': 'Despacho',
+    'DESPACHO': 'Despacho',
+    'PREPARACION_PATAS_ZOCALO': 'Patas y Zocalos',
+    'TABLEROS_Y_PIEDRAS': 'Tableros y Piedras',
+};
+
+function areaLabel(area) {
+    return AREA_LABELS[area] || area || '';
+}

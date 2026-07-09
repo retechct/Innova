@@ -1,4 +1,4 @@
-/**
+﻿/**
  * busqueda_filtros.js — Innova Möbili ERP
  * ─────────────────────────────────────────────────────────────────────────────
  * Reemplaza / extiende tres funciones existentes:
@@ -153,10 +153,16 @@ function _mpCardHTML(v) {
     const c = estadoColor[v.estado] || { bg:'#f8fafc', border:'#e2e8f0', badge:'#64748b', text:'#475569' };
 
     const esFinalizado = (v.estado === 'Entregado' || v.estado === 'Cancelado');
-    const pct = v.estado === 'Entregado' ? 100 : (v.progreso || 0);
+    const pct = v.estado === 'Entregado' ? 100 : Math.max(0, Math.min(100, Number(v.progreso || 0)));
+    const codigo = escapeHTML(v.codigo);
+    const codigoJS = jsStringAttr(v.codigo);
+    const cliente = escapeHTML(String(v.cliente || '').toUpperCase());
+    const estado = escapeHTML(v.estado || '');
+    const entrega = escapeHTML(v.entrega || '');
+    const montoTotal = Number(v.monto_total || 0);
 
     return `
-    <div class="pedido-card" onclick="abrirDetallePedido('${v.codigo}')"
+    <div class="pedido-card" onclick="abrirDetallePedido(${codigoJS})"
         style="background:#fff; border:1px solid ${c.border}; border-radius:12px;
             margin-bottom:12px; overflow:hidden; cursor:pointer;
             box-shadow:0 2px 8px rgba(0,0,0,0.05);
@@ -170,16 +176,16 @@ function _mpCardHTML(v) {
             display:flex; justify-content:space-between; align-items:center;">
             <div>
                 <div style="font-weight:900; color:#0f172a; font-size:14px; letter-spacing:.3px;">
-                    #${v.codigo}
+                    #${codigo}
                 </div>
                 <div style="font-size:11px; color:#64748b; margin-top:2px;">
-                    ${v.cliente.toUpperCase()}
+                    ${cliente}
                 </div>
             </div>
             <span style="background:${c.badge}; color:#fff; font-size:10px;
                 font-weight:800; padding:4px 10px; border-radius:20px;
                 text-transform:uppercase; letter-spacing:.5px;">
-                ${v.estado}
+                ${estado}
             </span>
         </div>
 
@@ -188,10 +194,10 @@ function _mpCardHTML(v) {
             <div style="display:flex; justify-content:space-between;
                 align-items:center; margin-bottom:10px;">
                 <span style="font-weight:900; color:#10b981; font-size:14px;">
-                    S/ ${v.monto_total.toFixed(2)}
+                    S/ ${montoTotal.toFixed(2)}
                 </span>
                 <span style="font-size:11px; color:#64748b;">
-                    Entrega: <b>${v.entrega}</b>
+                    Entrega: <b>${entrega}</b>
                 </span>
             </div>
 
@@ -209,20 +215,20 @@ function _mpCardHTML(v) {
 
             <!-- Botones -->
             <div style="display:flex; gap:8px;">
-                <button onclick="event.stopPropagation(); abrirDetallePedido('${v.codigo}')"
+                <button onclick="event.stopPropagation(); abrirDetallePedido(${codigoJS})"
                     style="flex:1; background:#0f172a; color:#fff; border:none;
                         padding:9px; border-radius:8px; font-size:11px;
                         font-weight:800; cursor:pointer; font-family:'Jost',sans-serif;">
                     <i class="fa-solid fa-eye"></i> Ficha
                 </button>
-                <button onclick="event.stopPropagation(); verSeguimientoVendedor('${v.codigo}')"
+                <button onclick="event.stopPropagation(); verSeguimientoVendedor(${codigoJS})"
                     style="flex:1; background:#3b82f6; color:#fff; border:none;
                         padding:9px; border-radius:8px; font-size:11px;
                         font-weight:800; cursor:pointer; font-family:'Jost',sans-serif;">
                     <i class="fa-solid fa-list-check"></i> Progreso
                 </button>
                 ${!esFinalizado ? `
-                <button onclick="event.stopPropagation(); abrirModalCambioPrecio('${v.codigo}', ${v.monto_total})"
+                <button onclick="event.stopPropagation(); abrirModalCambioPrecio(${codigoJS}, ${montoTotal})"
                     style="flex:1; background:#fef3c7; color:#92400e;
                         border:1px solid #fde68a; padding:9px; border-radius:8px;
                         font-size:11px; font-weight:800; cursor:pointer;
@@ -237,7 +243,7 @@ function _mpCardHTML(v) {
 function _mpVacio(msg) {
     return `<div style="text-align:center; padding:60px 20px; color:#64748b;">
         <div style="font-size:48px; margin-bottom:16px;">📋</div>
-        <p style="font-weight:700; color:#374151; margin:0 0 8px;">${msg}</p>
+        <p style="font-weight:700; color:#374151; margin:0 0 8px;">${escapeHTML(msg)}</p>
     </div>`;
 }
 
@@ -289,11 +295,11 @@ async function cargarVistaEntregados(contenedor, choferId) {
 
 function _entRenderUI(contenedor, choferId, opciones) {
     const sedes  = (opciones?.sedes || []);
-    const opsSede = sedes.map(s => `<option value="${s}">${s}</option>`).join('');
+    const opsSede = sedes.map(s => `<option value="${escapeAttr(s)}">${escapeHTML(s)}</option>`).join('');
 
     // Si hay varios choferes (vista Admin), ofrecer filtro por chofer
     const choferes  = !choferId ? (opciones?.choferes || []) : [];
-    const opsChofer = choferes.map(c => `<option value="${c}">${c}</option>`).join('');
+    const opsChofer = choferes.map(c => `<option value="${escapeAttr(c)}">${escapeHTML(c)}</option>`).join('');
 
     // ── IMPORTANTE: el contenedor padre es un grid multi-columna.
     // Envolvemos todo en un div con grid-column:1/-1 para que ocupe el ancho
@@ -661,15 +667,15 @@ function _opFiltrar() {
  */
 function _opRenderOrdenes(wrapper, ordenes) {
     const AREA_NOMBRES = {
-        'ESTRUCTURAS_MUEBLES':     'Carpintería (Sofás)',
-        'ESTRUCTURAS_SILLAS':      'Carpintería (Sillas)',
-        'CORTE_Y_CONTROL_TELAS':   'Corte y Telas',
-        'TELAS':                   'Corte y Telas',
+        'ESTRUCTURAS_MUEBLES':     'Estructura de Sofa',
+        'ESTRUCTURAS_SILLAS':      'Estructura de Sillas',
+        'CORTE_Y_CONTROL_TELAS':   'Telas',
+        'TELAS':                   'Telas',
         'PREPARACION_PATAS_ZOCALO':'Patas y Zócalos',
         'TABLEROS_Y_PIEDRAS':      'Tableros',
         'TAPICERIA_SOFAS':         'Tapicería Sofás',
         'TAPICERIA_SILLAS':        'Tapicería Sillas',
-        'ARMADO_COJINES':          'Armado de Cojines',
+        'ARMADO_COJINES':          'Cojineria',
         'DESPACHO_CENTRAL':        'Despacho',
     };
     const ESTADO_BADGE = {

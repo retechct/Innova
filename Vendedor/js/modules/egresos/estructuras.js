@@ -67,7 +67,7 @@ async function cargarPagosCarpinteros() {
                     sel.innerHTML = '<option value="">Todos los carpinteros</option>' +
                         _egCarpinteros
                             .filter(Boolean)
-                            .map(c => `<option value="${c}">${c}</option>`)
+                            .map(c => `<option value="${escapeAttr(c)}">${escapeHTML(c)}</option>`)
                             .join('');
                 }
             } catch(_) {}
@@ -148,14 +148,15 @@ function _egRenderEstructuras() {
 }
 
 function _egFilaEstructura(e) {
+    const id = Number(e.id || 0);
     // Carpintero: mostrar solo si estÃ¡ registrado (no "â€”")
     const carpintero = (e.carpintero_nombre && e.carpintero_nombre.trim())
-        ? `<span style="font-weight:600;color:#0f172a;">${e.carpintero_nombre}</span>`
+        ? `<span style="font-weight:600;color:#0f172a;">${escapeHTML(e.carpintero_nombre)}</span>`
         : `<span style="color:#cbd5e1;font-size:12px;">Sin asignar</span>`;
 
     // Chofer: etiquetado claramente como tal
     const chofer = (e.chofer_nombre && e.chofer_nombre.trim())
-        ? `<span style="color:#374151;">${e.chofer_nombre}</span>`
+        ? `<span style="color:#374151;">${escapeHTML(e.chofer_nombre)}</span>`
         : `<span style="color:#cbd5e1;font-size:12px;">â€”</span>`;
 
     const medidas = e.medida_estandar
@@ -169,25 +170,25 @@ function _egFilaEstructura(e) {
     return `
     <tr style="border-bottom:1px solid #f1f5f9;transition:background .15s;" id="eg-row-${e.id}"
         onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
-        <td style="padding:10px;color:#64748b;white-space:nowrap;font-size:12px;">${e.fecha || 'â€”'}</td>
+        <td style="padding:10px;color:#64748b;white-space:nowrap;font-size:12px;">${escapeHTML(e.fecha || 'â€”')}</td>
         <td style="padding:10px;">
-            <div style="font-weight:700;color:#0f172a;">${e.nombre_modelo || 'â€”'}</div>
-            ${e.modelo_base ? `<div style="font-size:11px;color:#94a3b8;">${e.modelo_base}</div>` : ''}
+            <div style="font-weight:700;color:#0f172a;">${escapeHTML(e.nombre_modelo || 'â€”')}</div>
+            ${e.modelo_base ? `<div style="font-size:11px;color:#94a3b8;">${escapeHTML(e.modelo_base)}</div>` : ''}
         </td>
         <td style="padding:10px;">${carpintero}</td>
         <td style="padding:10px;">${chofer}</td>
-        <td style="padding:10px;color:#64748b;font-size:12px;">${e.tipo || 'â€”'}</td>
+        <td style="padding:10px;color:#64748b;font-size:12px;">${escapeHTML(e.tipo || 'â€”')}</td>
         <td style="padding:10px;">${medidas}</td>
         <td style="padding:10px;text-align:right;font-weight:800;color:#0f172a;white-space:nowrap;">S/ ${(e.precio || 0).toFixed(2)}</td>
         <td style="padding:10px;text-align:center;">${estadoBadge}</td>
         <td style="padding:10px;text-align:center;">
             ${e.foto_url
-                ? `<a href="${e.foto_url}" target="_blank" title="Ver foto"
+                ? `<a href="${escapeAttr(e.foto_url)}" target="_blank" rel="noopener" title="Ver foto"
                      style="color:#3b82f6;font-size:18px;"><i class="fa-solid fa-image"></i></a>`
                 : `<span style="color:#cbd5e1;font-size:14px;">â€”</span>`}
         </td>
         <td style="padding:10px;text-align:center;white-space:nowrap;">
-            <button onclick="egTogglePagoEstructura(${e.id}, ${!e.pagado})"
+            <button onclick="egTogglePagoEstructura(${id}, ${!e.pagado})"
                 style="border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;
                        font-weight:700;transition:opacity .15s;
                        background:${e.pagado ? '#fef9c3' : '#dcfce7'};

@@ -4,10 +4,13 @@ Blueprint: usuarios_bp  (sin prefijo de URL)
 """
 
 from flask import Blueprint, jsonify, request
+from werkzeug.security import check_password_hash, generate_password_hash
 from database import get_db_connection, release_db_connection
 from auth_middleware import generar_token, requiere_login, requiere_rol, forzar_logout_global
+from erp_constants import aliases_area
 
 usuarios_bp = Blueprint('usuarios', __name__)
+_seguridad_usuarios_lista = False
 
 
 def _asegurar_columna_telefono(cursor):
@@ -19,6 +22,52 @@ def _asegurar_columna_telefono(cursor):
     incluir código de país, ej: +51987654321.
     """
     cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);")
+
+
+def _asegurar_columnas_seguridad_usuarios(cursor):
+    """
+    Mantiene compatibilidad con instalaciones antiguas mientras migramos
+    credenciales internas desde texto plano hacia hashes.
+    """
+    global _seguridad_usuarios_lista
+    if _seguridad_usuarios_lista:
+        return
+    _asegurar_columna_telefono(cursor)
+    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
+    _seguridad_usuarios_lista = True
+
+
+def _hash_valido(valor_hash, secreto):
+    if not valor_hash or not secreto:
+        return False
+    try:
+        return check_password_hash(valor_hash, secreto)
+    except (ValueError, TypeError):
+        return False
+
+
+def _credencial_staff_valida(cursor, usuario_id, secreto, password_hash, contrasena_legacy, pin_legacy):
+    """
+    Verifica credenciales de staff.
+
+    - Primero intenta password_hash.
+    - Si el usuario aun es legacy, acepta contrasena/pin historicos.
+    - Si entro por contrasena legacy, guarda hash para el siguiente login.
+    """
+    if _hash_valido(password_hash, secreto):
+        return True
+
+    if secreto and pin_legacy and secreto == str(pin_legacy):
+        return True
+
+    if secreto and contrasena_legacy and secreto == str(contrasena_legacy):
+        cursor.execute(
+            "UPDATE usuarios SET password_hash = %s WHERE id = %s;",
+            (generate_password_hash(secreto), usuario_id)
+        )
+        return True
+
+    return False
 
 
 # ==========================================
@@ -51,7 +100,7 @@ def obtener_usuarios_detalle():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columna_telefono(cursor)
+        _asegurar_columnas_seguridad_usuarios(cursor)
         cursor.execute("""
             SELECT id, nombre, rol, email, area_asignada, empresa_nombre, empresa_ruc, telefono
             FROM usuarios ORDER BY nombre;
@@ -72,15 +121,24 @@ def obtener_usuarios_detalle():
 @usuarios_bp.route('/api/usuarios/nuevo', methods=['POST'])
 @requiere_rol('Admin')
 def crear_usuario():
-    data = request.json
+    data = request.get_json(silent=True) or {}
+    requeridos = ['nombre', 'correo', 'pin', 'rol', 'area', 'empresa_nombre', 'empresa_ruc']
+    faltantes = [campo for campo in requeridos if campo not in data]
+    if faltantes:
+        return jsonify({'error': f"Campos obligatorios faltantes: {', '.join(faltantes)}"}), 400
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columna_telefono(cursor)
+        _asegurar_columnas_seguridad_usuarios(cursor)
+        contrasena_temporal = (data.get('contrasena') or '').strip() or '123456'
         cursor.execute("""
-            INSERT INTO usuarios (nombre, email, pin_acceso, contrasena, rol, area_asignada, empresa_nombre, empresa_ruc, telefono)
-            VALUES (%s, %s, %s, '123456', %s, %s, %s, %s, %s);
-        """, (data['nombre'], data['correo'], data['pin'], data['rol'],
+            INSERT INTO usuarios
+                (nombre, email, pin_acceso, contrasena, password_hash, rol,
+                 area_asignada, empresa_nombre, empresa_ruc, telefono)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+        """, (data['nombre'], data['correo'], data['pin'],
+              '', generate_password_hash(contrasena_temporal), data['rol'],
               data['area'], data['empresa_nombre'], data['empresa_ruc'], data.get('telefono')))
         conexion.commit()
         return jsonify({'exito': True}), 201
@@ -123,7 +181,7 @@ def editar_usuario(usuario_id):
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columna_telefono(cursor)
+        _asegurar_columnas_seguridad_usuarios(cursor)
 
         set_clause = ", ".join(f"{col} = %s" for col in actualizaciones.keys())
         valores    = list(actualizaciones.values()) + [usuario_id]
@@ -146,21 +204,7 @@ def editar_usuario(usuario_id):
 @usuarios_bp.route('/api/usuarios/por-area/<string:area>', methods=['GET'])
 @requiere_login
 def obtener_usuarios_por_area(area):
-    AREA_ALIASES = {
-        'CORTE_Y_CONTROL_TELAS':    ['CORTE_Y_CONTROL_TELAS', 'TELAS'],
-        'TELAS':                    ['TELAS', 'CORTE_Y_CONTROL_TELAS'],
-        'TAPICERIA_SOFAS':          ['TAPICERIA_SOFAS', 'TAPICERIA'],
-        'TAPICERIA_SILLAS':         ['TAPICERIA_SILLAS', 'TAPICERIA'],
-        'ESTRUCTURAS_MUEBLES':      ['ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS', 'CARPINTERIA'],
-        'ESTRUCTURAS_SILLAS':       ['ESTRUCTURAS_SILLAS', 'ESTRUCTURAS', 'CARPINTERIA'],
-        'ARMADO_COJINES':           ['ARMADO_COJINES', 'COJINES'],
-        'PREPARACION_PATAS_ZOCALO': ['PREPARACION_PATAS_ZOCALO', 'PATAS', 'ZOCALO'],
-        'TABLEROS_Y_PIEDRAS':       ['TABLEROS_Y_PIEDRAS', 'TABLEROS'],
-        'DESPACHO_CENTRAL':         ['DESPACHO_CENTRAL', 'DESPACHO'],
-    }
-    area_upper = area.upper()
-    areas_buscar = AREA_ALIASES.get(area_upper, [area_upper])
-    areas_buscar_set = list(dict.fromkeys([a.upper() for a in areas_buscar] + [area_upper]))
+    areas_buscar_set = aliases_area(area)
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -217,11 +261,13 @@ def obtener_choferes():
 @usuarios_bp.route('/api/login', methods=['POST'])
 def verificar_pin():
     try:
-        usuario_id    = request.json.get('usuario_id')
-        pin_ingresado = request.json.get('pin')
+        data = request.get_json(silent=True) or {}
+        usuario_id    = data.get('usuario_id')
+        pin_ingresado = data.get('pin')
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        _asegurar_columnas_seguridad_usuarios(cursor)
         cursor.execute("""
             SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email, area_asignada, pin_acceso
             FROM usuarios WHERE id = %s AND pin_acceso = %s;
@@ -337,26 +383,31 @@ def verificar_email_pin():
     Si no encuentra, busca en `clientes` (registrados desde el landing).
     """
     try:
-        email = (request.json.get('email') or '').strip().lower()
-        pin   = (request.json.get('pin')   or '').strip()
+        data = request.get_json(silent=True) or {}
+        email = (data.get('email') or '').strip().lower()
+        pin   = (data.get('pin')   or '').strip()
 
         if not email or not pin:
             return jsonify({"exito": False, "error": "Correo y contraseña son obligatorios"}), 400
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        _asegurar_columnas_seguridad_usuarios(cursor)
 
         # ── 1. Buscar en usuarios (staff: Admin, Vendedor, Operario…) ──────
         cursor.execute("""
-            SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email, area_asignada
+            SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email,
+                   area_asignada, password_hash, contrasena, pin_acceso
             FROM usuarios
             WHERE LOWER(email) = %s
-              AND (pin_acceso = %s OR contrasena = %s)
               AND COALESCE(estado, true) = true;
-        """, (email, pin, pin))
+        """, (email,))
         usuario = cursor.fetchone()
 
-        if usuario:
+        if usuario and _credencial_staff_valida(
+            cursor, usuario[0], pin, usuario[7], usuario[8], usuario[9]
+        ):
+            conexion.commit()
             tokens = generar_token({
                 "id":            usuario[0],
                 "nombre":        usuario[1],
@@ -380,7 +431,6 @@ def verificar_email_pin():
             }), 200
 
         # ── 2. Buscar en clientes (registrados desde el landing) ───────────
-        from werkzeug.security import check_password_hash
         cursor.execute("""
             SELECT id, nombre, email, telefono, contrasena
             FROM clientes
@@ -444,7 +494,6 @@ def registrar_usuario_web():
     if not nombre or not email or not contrasena:
         return jsonify({'error': 'Nombre, correo y contraseña son obligatorios'}), 400
 
-    from werkzeug.security import generate_password_hash
     contrasena_hash = generate_password_hash(contrasena)  # nunca guardar texto plano
 
     try:
@@ -484,4 +533,4 @@ def registrar_usuario_web():
     except Exception as e:
         import traceback; traceback.print_exc()
         if 'conexion' in locals() and conexion: conexion.rollback()
-        return jsonify({'error': str(e), 'detalle': traceback.format_exc()}), 500
+        return jsonify({'error': 'Error interno del servidor'}), 500

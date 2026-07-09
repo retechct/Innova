@@ -1,4 +1,4 @@
-// Taller - ordenes, notas, despacho y entregados
+﻿// Taller - ordenes, notas, despacho y entregados
 /* --- 1. STATS DEL TALLER (puebla el badge del header) --- */
 async function cargarStatsTaller() {
     const badge = document.getElementById('stats-taller');
@@ -50,15 +50,16 @@ async function cargarOrdenesProduccion(contenedor) {
         }
 
         const AREA_NOMBRES = {
-            'ESTRUCTURAS_MUEBLES':     'Carpintería (Sofás)',
-            'ESTRUCTURAS_SILLAS':      'Carpintería (Sillas)',
-            'CORTE_Y_CONTROL_TELAS':   'Corte y Telas',
-            'TELAS':                   'Corte y Telas',
-            'PREPARACION_PATAS_ZOCALO':'Patas y Zócalos',
-            'TABLEROS_Y_PIEDRAS':      'Tableros',
-            'TAPICERIA_SOFAS':         'Tapicería Sofás',
-            'TAPICERIA_SILLAS':        'Tapicería Sillas',
-            'ARMADO_COJINES':          'Armado de Cojines',
+            'ESTRUCTURAS_MUEBLES':     'Estructura de Sofa',
+            'ESTRUCTURAS_SILLAS':      'Estructura de Sillas',
+            'CARPINTERIA':             'Carpinteria',
+            'CORTE_Y_CONTROL_TELAS':   'Telas',
+            'TELAS':                   'Telas',
+            'PREPARACION_PATAS_ZOCALO':'Patas y Zocalos',
+            'TABLEROS_Y_PIEDRAS':      'Tableros y Piedras',
+            'TAPICERIA_SOFAS':         'Tapiceria Sofa',
+            'TAPICERIA_SILLAS':        'Tapiceria Sillas',
+            'ARMADO_COJINES':          'Cojineria',
             'DESPACHO_CENTRAL':        'Despacho',
         };
 

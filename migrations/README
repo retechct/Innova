@@ -1,1 +1,42 @@
-Single-database configuration for Flask.
+Migraciones de base de datos para Innova
+========================================
+
+Este proyecto ya no usa Flask-Migrate ni SQLAlchemy dentro de la app Flask.
+Alembic se mantiene solo como herramienta de migraciones.
+
+Variables requeridas
+--------------------
+
+Opcion 1:
+
+    DATABASE_URL=postgresql+psycopg2://usuario:password@host/base
+
+Opcion 2:
+
+    DB_HOST=...
+    DB_NAME=...
+    DB_USER=...
+    DB_PASSWORD=...
+
+Comandos
+--------
+
+Ver migracion actual:
+
+    alembic current
+
+Aplicar pendientes:
+
+    alembic upgrade head
+
+Crear una revision manual:
+
+    alembic revision -m "descripcion_del_cambio"
+
+Reglas
+------
+
+- No crear ni alterar tablas desde endpoints normales salvo como red temporal.
+- Cada cambio de estructura debe tener una revision en `migrations/versions`.
+- Evitar downgrades destructivos en tablas operativas.
+- Revisar manualmente cualquier migracion autogenerada antes de aplicarla.

@@ -16,8 +16,8 @@ function _cerrarModalInvNuevo() {
 
 function _formProducto() {
     const sedes = (_invSedesList || [])
-        .map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
-    const cats  = CATEGORIAS_PRODUCTO.map(c=>`<option value="${c}">${c}</option>`).join('');
+        .map(s => `<option value="${escapeAttr(s.id)}">${escapeHTML(s.nombre)}</option>`).join('');
+    const cats  = CATEGORIAS_PRODUCTO.map(c=>`<option value="${escapeAttr(c)}">${escapeHTML(c)}</option>`).join('');
 
     return `
     <div id="inv-nuevo-form-container">
@@ -204,7 +204,7 @@ function _invFiltrarCatalogoBuscador() {
 
     listContainer.innerHTML = filtrados.length
         ? filtrados.map(p => _invHtmlItemCatalogo(p)).join('') + htmlAvisoMas
-        : `<div style="padding:12px;font-size:12px;color:#94a3b8;text-align:center;">Sin resultados para "${texto}"</div>`;
+        : `<div style="padding:12px;font-size:12px;color:#94a3b8;text-align:center;">Sin resultados para "${escapeHTML(texto)}"</div>`;
     listContainer.classList.add('show');
 }
 
@@ -237,18 +237,18 @@ function _invHtmlItemCatalogo(p) {
     const cat      = p.categoria || '';
     const fotoUrl  = p.foto_url || p.foto || '';
     const subtitulo = p._mat ? p._mat : cat;
-    const safeNom  = nombre.replace(/'/g, "\\'");
-    const safeFoto = fotoUrl.replace(/'/g, "\\'");
-    const safeId   = (p.id || '').toString().replace(/'/g, "\\'");
+    const safeNom  = jsStringAttr(nombre);
+    const safeFoto = jsStringAttr(fotoUrl);
+    const safeId   = jsStringAttr((p.id || '').toString());
     const esMaestro = p._tipo === 'silla' || p._tipo === 'butaca';
 
     return `
-        <div class="custom-option-item" onclick="_invSeleccionarProductoCatalogo('${safeId}','${safeNom}','${safeFoto}','${esMaestro}')">
-            <img src="${fotoUrl || 'imagenes/sin_foto.jpg'}" class="custom-option-img"
+        <div class="custom-option-item" onclick="_invSeleccionarProductoCatalogo(${safeId}, ${safeNom}, ${safeFoto}, ${jsStringAttr(esMaestro)})">
+            <img src="${escapeAttr(fotoUrl || 'imagenes/sin_foto.jpg')}" class="custom-option-img"
                  onerror="this.src='imagenes/sin_foto.jpg'">
             <div style="flex-grow:1;">
-                <span class="custom-option-sku">${cat.toUpperCase()}</span>
-                <div class="custom-option-text"><strong>${nombre}</strong>${subtitulo ? '<br>' + subtitulo : ''}</div>
+                <span class="custom-option-sku">${escapeHTML(cat.toUpperCase())}</span>
+                <div class="custom-option-text"><strong>${escapeHTML(nombre)}</strong>${subtitulo ? '<br>' + escapeHTML(subtitulo) : ''}</div>
             </div>
         </div>`;
 }
@@ -343,8 +343,8 @@ function _invActualizarFormDinamico() {
 
 function _formPieza() {
     const sedes = (_invSedesList || [])
-        .map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
-    const cats = CATEGORIAS_PIEZA.map(c => `<option value="${c.val}">${c.label}</option>`).join('');
+        .map(s => `<option value="${escapeAttr(s.id)}">${escapeHTML(s.nombre)}</option>`).join('');
+    const cats = CATEGORIAS_PIEZA.map(c => `<option value="${escapeAttr(c.val)}">${escapeHTML(c.label)}</option>`).join('');
 
     return `
     <div class="form-group">
@@ -593,15 +593,21 @@ async function _invGuardarProducto() {
         // El backend devuelve unidades[] si se registraron múltiples, o codigo_barra si fue 1
         const unidades = d.unidades || (d.codigo_barra ? [{ codigo_barra: d.codigo_barra }] : []);
 
-        const codigosHTML = unidades.map(u => `
+        const codigosHTML = unidades.map(u => {
+            const codigoHTML = escapeHTML(u.codigo_barra || '');
+            const codigoJS = jsStringAttr(u.codigo_barra || '');
+            const nombreJS = jsStringAttr(nombreProd);
+            const sedeJS = jsStringAttr(sedeNombre);
+            return `
             <div style="margin:6px 0;">
-                <b style="color:var(--accent);">${u.codigo_barra}</b>
-                <button onclick="imprimirEtiqueta('${u.codigo_barra}','${nombreProd.replace(/'/g,"\\'")}','${sedeNombre}')"
+                <b style="color:var(--accent);">${codigoHTML}</b>
+                <button onclick="imprimirEtiqueta(${codigoJS}, ${nombreJS}, ${sedeJS})"
                     style="margin-left:10px;background:var(--primary);color:white;border:none;
                            padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;">
                     🖨️ Imprimir
                 </button>
-            </div>`).join('');
+            </div>`;
+        }).join('');
 
         Swal.fire({
             icon: 'success', title: `¡${unidades.length} unidad(es) registrada(s)!`,
@@ -706,15 +712,21 @@ async function _invGuardarPieza() {
         }
         const nombrePieza = `${nombreBase} - ${medida.toUpperCase()}`;
 
-        const codigosHTML = (d.unidades || []).map(u => `
+        const codigosHTML = (d.unidades || []).map(u => {
+            const codigoHTML = escapeHTML(u.codigo_barra || '');
+            const codigoJS = jsStringAttr(u.codigo_barra || '');
+            const nombreJS = jsStringAttr(nombrePieza);
+            const sedeJS = jsStringAttr(sedeNombre);
+            return `
             <div style="margin:6px 0;">
-                <b style="color:var(--accent);">${u.codigo_barra}</b>
-                <button onclick="imprimirEtiqueta('${u.codigo_barra}','${nombrePieza.replace(/'/g,"\\'")}','${sedeNombre}', '')"
+                <b style="color:var(--accent);">${codigoHTML}</b>
+                <button onclick="imprimirEtiqueta(${codigoJS}, ${nombreJS}, ${sedeJS}, '')"
                     style="margin-left:10px;background:var(--primary);color:white;border:none;
                            padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;">
                     🖨️ Imprimir
                 </button>
-            </div>`).join('');
+            </div>`;
+        }).join('');
 
         Swal.fire({
             icon: 'success', title: `¡${d.unidades.length} pieza(s) registradas!`,
@@ -753,7 +765,7 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
             html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:15px;">`;
             Object.entries(porSede).forEach(([sede, counts]) => {
                 html += `<div style="background:#f8fafc;border-radius:12px;padding:12px;text-align:center;border:1px solid #e2e8f0;">
-                    <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:6px;">${sede}</div>
+                    <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:6px;">${escapeHTML(sede)}</div>
                     <div style="font-size:2rem;font-weight:900;color:${counts.disponibles>0?'#16a34a':'#cbd5e1'};">${counts.disponibles}</div>
                     <div style="font-size:10px;color:var(--text-muted);">disponibles</div>
                     ${counts.total > counts.disponibles ? `<div style="font-size:10px;color:var(--text-muted);">${counts.total} total</div>` : ''}
@@ -774,17 +786,23 @@ async function _invVerUnidades(nombre, categoria, catalogoId) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${unidades.map(u => `
+                                    ${unidades.map(u => {
+                                        const codigoHTML = escapeHTML(u.codigo_barra || '');
+                                        const codigoJS = jsStringAttr(u.codigo_barra || '');
+                                        const sedeHTML = escapeHTML(u.sede || '');
+                                        const estadoHTML = escapeHTML(u.estado || '');
+                                        return `
                                         <tr style="border-bottom: 1px solid #f1f5f9;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-                                            <td style="padding: 8px; font-weight: bold; color: var(--accent);">${u.codigo_barra}</td>
-                                            <td style="padding: 8px;">${u.sede}</td>
+                                            <td style="padding: 8px; font-weight: bold; color: var(--accent);">${codigoHTML}</td>
+                                            <td style="padding: 8px;">${sedeHTML}</td>
                                             <td style="padding: 8px; text-align: center;">
-                                                <span style="background: ${u.estado === 'Disponible' ? '#dcfce7' : '#f1f5f9'}; color: ${u.estado === 'Disponible' ? '#16a34a' : '#64748b'}; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: bold;">${u.estado}</span>
+                                                <span style="background: ${u.estado === 'Disponible' ? '#dcfce7' : '#f1f5f9'}; color: ${u.estado === 'Disponible' ? '#16a34a' : '#64748b'}; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: bold;">${estadoHTML}</span>
                                             </td>
                                             <td style="padding: 8px; text-align: center;">
-                                                <button onclick="Swal.close(); setTimeout(() => _invBuscarBarcode('${u.codigo_barra}'), 300)" style="background: var(--primary); color: white; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold;"><i class="fa-solid fa-eye"></i> Detalles</button>
+                                                <button onclick="Swal.close(); setTimeout(() => _invBuscarBarcode(${codigoJS}), 300)" style="background: var(--primary); color: white; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold;"><i class="fa-solid fa-eye"></i> Detalles</button>
                                             </td>
-                                        </tr>`).join('')}
+                                        </tr>`;
+                                    }).join('')}
                                 </tbody>
                             </table>
                         </div>

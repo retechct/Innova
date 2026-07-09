@@ -53,7 +53,7 @@ async function cargarComisionesVendedores() {
         if (selVd && selVd.options.length <= 1) {
             const nombres = _egVendedores.map(v => v.vendedor_nombre).filter(Boolean);
             selVd.innerHTML = '<option value="">Todos los vendedores</option>' +
-                nombres.map(n => `<option value="${n}">${n}</option>`).join('');
+                nombres.map(n => `<option value="${escapeAttr(n)}">${escapeHTML(n)}</option>`).join('');
         }
 
         _egRenderVendedores(data);
@@ -162,14 +162,16 @@ function _egFilaVendedor(v, idx) {
         : `<span style="color:#94a3b8;">â€”</span>`;
 
     const netoColor = v.neto > 0 ? '#059669' : '#dc2626';
+    const vendedorNombre = escapeHTML(v.vendedor_nombre || 'â€”');
+    const sede = escapeHTML(v.sede || '');
 
     return `
     <tr style="border-bottom:1px solid #f1f5f9;${rowBg}" id="eg-vrow-${idx}"
         onmouseover="this.style.background='${sinVenta ? '#fef3c7' : '#fafafa'}'"
         onmouseout="this.style.background='${sinVenta ? '#fffbeb' : ''}'">
         <td style="padding:10px;">
-            <div style="font-weight:700;color:#0f172a;">${v.vendedor_nombre || 'â€”'}</div>
-            ${v.sede ? `<div style="font-size:11px;color:#94a3b8;">${v.sede}</div>` : ''}
+            <div style="font-weight:700;color:#0f172a;">${vendedorNombre}</div>
+            ${sede ? `<div style="font-size:11px;color:#94a3b8;">${sede}</div>` : ''}
             ${sinVenta ? `<div style="font-size:10px;background:#fde68a;color:#92400e;border-radius:10px;padding:1px 7px;display:inline-block;margin-top:3px;">Sin pedido</div>` : ''}
         </td>
         <td style="padding:10px;text-align:center;">

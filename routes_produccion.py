@@ -1,4 +1,4 @@
-"""
+﻿"""
 routes_produccion.py — Módulos 8–13: Taller/Kanban, inventario de materiales,
 logística externa, recetas BOM, sugerencias de insumos y despacho.
 Blueprint: produccion_bp  (sin prefijo de URL)
@@ -14,6 +14,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from flask import Blueprint, jsonify, request, send_file
 from database import get_db_connection, release_db_connection, limpiar_foto, notificar_usuario, cloudinary_upload
 from auth_middleware import requiere_login, requiere_rol
+from erp_constants import AREA_ALIASES
 
 # pip install reportlab==4.2.2
 from reportlab.pdfgen import canvas as rl_canvas
@@ -23,18 +24,6 @@ from reportlab.platypus import Table, TableStyle
 from reportlab.lib.units import mm
 
 produccion_bp = Blueprint('produccion', __name__)
-
-AREA_ALIASES = {
-    'TELAS':                  ['TELAS', 'CORTE_Y_CONTROL_TELAS'],
-    'CORTE_Y_CONTROL_TELAS':  ['CORTE_Y_CONTROL_TELAS', 'TELAS'],
-    'TAPICERIA':              ['TAPICERIA', 'TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'],
-    'TAPICERIA_SOFAS':        ['TAPICERIA_SOFAS', 'TAPICERIA'],
-    'TAPICERIA_SILLAS':       ['TAPICERIA_SILLAS', 'TAPICERIA'],
-    'ESTRUCTURAS':            ['ESTRUCTURAS', 'ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS', 'CARPINTERIA'],
-    'ESTRUCTURAS_MUEBLES':    ['ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS', 'CARPINTERIA'],
-    'ESTRUCTURAS_SILLAS':     ['ESTRUCTURAS_SILLAS', 'ESTRUCTURAS', 'CARPINTERIA'],
-    'CARPINTERIA':            ['CARPINTERIA', 'ESTRUCTURAS_MUEBLES', 'ESTRUCTURAS_SILLAS'],
-}
 
 
 # FIX (julio 2026): helper compartido para saber si la TELA de un ítem
@@ -1458,6 +1447,118 @@ def obtener_logistica():
             cursor.close(); release_db_connection(conexion)
 
 
+@produccion_bp.route('/api/logistica/telas-por-contrato', methods=['GET'])
+@requiere_login
+def obtener_telas_por_contrato():
+    """
+    Bandeja operativa del area Telas.
+
+    Devuelve una tarjeta por contrato y dentro agrupa todas las telas que ese
+    contrato necesita comprar, recoger o distribuir. Esta es la base para dejar
+    de manejar telas sueltas por WhatsApp.
+    """
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        cursor.execute("""
+            ALTER TABLE logistica_externa
+                ADD COLUMN IF NOT EXISTS categoria_insumo VARCHAR(30) DEFAULT 'OTRO',
+                ADD COLUMN IF NOT EXISTS estado_distribucion VARCHAR(30) DEFAULT NULL,
+                ADD COLUMN IF NOT EXISTS item_ids_extra TEXT DEFAULT NULL,
+                ADD COLUMN IF NOT EXISTS cantidad INTEGER,
+                ADD COLUMN IF NOT EXISTS unidad VARCHAR(30);
+        """)
+        cursor.execute("""
+            SELECT
+                v.id AS venta_id,
+                v.codigo_venta,
+                v.nombre_cliente,
+                v.estado_general,
+                v.fecha_entrega,
+                l.id AS logistica_id,
+                l.item_id,
+                COALESCE(i.producto, '') AS producto_item,
+                l.insumo_nombre,
+                l.sku,
+                COALESCE(l.cantidad, 1) AS cantidad,
+                COALESCE(l.unidad, '') AS unidad,
+                COALESCE(l.estado, 'Pendiente') AS estado,
+                COALESCE(l.estado_distribucion, 'En espera') AS estado_distribucion,
+                COALESCE(l.tipo_gestion, 'Externo') AS tipo_gestion,
+                COALESCE(p.nombre, 'Sin asignar') AS proveedor,
+                l.proveedor_id,
+                l.precio_cotizado,
+                l.fecha_entrega_proveedor,
+                l.url_comprobante_pago,
+                l.item_ids_extra
+            FROM logistica_externa l
+            JOIN ventas v ON l.venta_id = v.id
+            LEFT JOIN items_venta i ON i.id = l.item_id
+            LEFT JOIN proveedores p ON p.id = l.proveedor_id
+            WHERE COALESCE(v.estado_general, '') != 'Cancelado'
+              AND (
+                    COALESCE(l.categoria_insumo, '') = 'TELA'
+                    OR LOWER(COALESCE(l.insumo_nombre, '')) LIKE '%%tela%%'
+                    OR LOWER(COALESCE(l.unidad, '')) IN ('mts', 'metro', 'metros')
+              )
+            ORDER BY v.fecha_entrega ASC NULLS LAST, v.id ASC, l.id ASC;
+        """)
+
+        tarjetas = {}
+        for r in cursor.fetchall():
+            venta_id = r[0]
+            tarjeta = tarjetas.setdefault(venta_id, {
+                "venta_id": venta_id,
+                "codigo_venta": r[1],
+                "cliente": r[2],
+                "estado_contrato": r[3],
+                "fecha_entrega": r[4].strftime('%d/%m/%Y') if r[4] else None,
+                "total_telas": 0,
+                "pendientes": 0,
+                "en_recojo": 0,
+                "recogidas": 0,
+                "distribuidas": 0,
+                "lineas": [],
+            })
+
+            estado_dist = r[13] or "En espera"
+            tarjeta["total_telas"] += 1
+            if estado_dist == "Distribuido":
+                tarjeta["distribuidas"] += 1
+            elif estado_dist == "Recogido":
+                tarjeta["recogidas"] += 1
+            elif estado_dist == "En Recojo":
+                tarjeta["en_recojo"] += 1
+            else:
+                tarjeta["pendientes"] += 1
+
+            tarjeta["lineas"].append({
+                "logistica_id": r[5],
+                "item_id": r[6],
+                "producto_item": r[7],
+                "insumo": r[8],
+                "sku": r[9],
+                "cantidad": float(r[10]) if r[10] is not None else 1,
+                "unidad": r[11],
+                "estado": r[12],
+                "estado_distribucion": estado_dist,
+                "tipo_gestion": r[14],
+                "proveedor": r[15],
+                "proveedor_id": r[16],
+                "precio_cotizado": float(r[17]) if r[17] is not None else None,
+                "fecha_entrega_proveedor": r[18].strftime('%d/%m/%Y') if r[18] else None,
+                "url_comprobante_pago": r[19],
+                "item_ids_extra": r[20] or "",
+            })
+
+        return jsonify(list(tarjetas.values())), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
 @produccion_bp.route('/api/logistica/actualizar', methods=['POST'])
 @requiere_login
 def actualizar_logistica():
@@ -2387,11 +2488,11 @@ def ficha_chofer(item_id):
         """, (item_id,))
 
         NOMBRES_AREA = {
-            'CORTE_Y_CONTROL_TELAS':    'Corte de Telas',
+            'CORTE_Y_CONTROL_TELAS':    'Telas',
             'TAPICERIA_SOFAS':          'Tapicería Sofás',
             'TAPICERIA_SILLAS':         'Tapicería Sillas',
-            'ESTRUCTURAS_MUEBLES':      'Carpintería (Sofás)',
-            'ESTRUCTURAS_SILLAS':       'Carpintería (Sillas)',
+            'ESTRUCTURAS_MUEBLES':      'Estructura de Sofa',
+            'ESTRUCTURAS_SILLAS':       'Estructura de Sillas',
             'ARMADO_COJINES':           'Cojines',
             'PREPARACION_PATAS_ZOCALO': 'Patas y Zócalo',
             'TABLEROS_Y_PIEDRAS':       'Tableros',

@@ -1,18 +1,19 @@
-// Taller - kanban, tickets y contratos de tela
+﻿// Taller - kanban, tickets y contratos de tela
 /* --- KANBAN DE PRODUCCIÓN — LÓGICA UNIFICADA POR ROL           --- */
 /* ================================================================= */
 
 const CONFIG_AREAS = {
-    'ESTRUCTURAS_MUEBLES':    { icono: '<i class="fa-solid fa-tree"></i>',            nombre: 'Carpintería (Sofás)' },
-    'ESTRUCTURAS_SILLAS':     { icono: '<i class="fa-solid fa-chair"></i>',           nombre: 'Carpintería (Sillas)' },
-    'CORTE_Y_CONTROL_TELAS':  { icono: '<i class="fa-solid fa-scissors"></i>',        nombre: 'Corte y Costura (Telas)' },
-    'TELAS':                  { icono: '<i class="fa-solid fa-scissors"></i>',        nombre: 'Corte y Costura' },
-    'PREPARACION_PATAS_ZOCALO':{ icono: '<i class="fa-solid fa-shoe-prints"></i>',   nombre: 'Patas y Zócalos' },
-    'TABLEROS_Y_PIEDRAS':     { icono: '<i class="fa-solid fa-table-cells-large"></i>',nombre: 'Tableros (Comedor)' },
-    'TAPICERIA_SOFAS':        { icono: '<i class="fa-solid fa-couch"></i>',           nombre: 'Tapicería (Sofás)' },
-    'TAPICERIA_SILLAS':       { icono: '<i class="fa-solid fa-chair"></i>',           nombre: 'Tapicería (Sillas)' },
-    'ARMADO_COJINES':         { icono: '<i class="fa-solid fa-layer-group"></i>',     nombre: 'Armado de Cojines' },
-    'DESPACHO_CENTRAL':       { icono: '<i class="fa-solid fa-truck"></i>',           nombre: 'Despacho Central' },
+    'ESTRUCTURAS_MUEBLES':     { icono: '<i class="fa-solid fa-couch"></i>',           nombre: 'Estructura de Sofa' },
+    'ESTRUCTURAS_SILLAS':      { icono: '<i class="fa-solid fa-chair"></i>',           nombre: 'Estructura de Sillas' },
+    'CARPINTERIA':             { icono: '<i class="fa-solid fa-hammer"></i>',          nombre: 'Carpinteria' },
+    'CORTE_Y_CONTROL_TELAS':   { icono: '<i class="fa-solid fa-scroll"></i>',          nombre: 'Telas' },
+    'TELAS':                   { icono: '<i class="fa-solid fa-scroll"></i>',          nombre: 'Telas' },
+    'PREPARACION_PATAS_ZOCALO':{ icono: '<i class="fa-solid fa-shoe-prints"></i>',     nombre: 'Patas y Zocalos' },
+    'TABLEROS_Y_PIEDRAS':      { icono: '<i class="fa-solid fa-table-cells-large"></i>',nombre: 'Tableros y Piedras' },
+    'TAPICERIA_SOFAS':         { icono: '<i class="fa-solid fa-couch"></i>',           nombre: 'Tapiceria Sofa' },
+    'TAPICERIA_SILLAS':        { icono: '<i class="fa-solid fa-chair"></i>',           nombre: 'Tapiceria Sillas' },
+    'ARMADO_COJINES':          { icono: '<i class="fa-solid fa-layer-group"></i>',     nombre: 'Cojineria' },
+    'DESPACHO_CENTRAL':        { icono: '<i class="fa-solid fa-truck"></i>',           nombre: 'Despacho' },
 };
 
 /* ================================================================= */

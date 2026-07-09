@@ -10,4 +10,6 @@ flask-jwt-extended
 werkzeug
 pytz
 pandas
-reportlab   
+reportlab
+alembic
+sqlalchemy

@@ -73,7 +73,9 @@ app = Flask(__name__, static_folder='Vendedor', static_url_path='')
 def manejar_error_api(ex):
     if request.path.startswith('/api/'):
         app.logger.exception("Error no controlado en %s", request.path)
-        return jsonify({'error': str(ex), 'tipo': type(ex).__name__}), 500
+        if os.getenv('DEBUG_API_ERRORS', '').lower() in ('1', 'true', 'yes'):
+            return jsonify({'error': str(ex), 'tipo': type(ex).__name__}), 500
+        return jsonify({'error': 'Error interno del servidor'}), 500
     raise ex
 
 # Restringir CORS al dominio de producción.
@@ -103,6 +105,15 @@ limiter = Limiter(
     default_limits=[],
     storage_uri="memory://",
 )
+
+
+@app.after_request
+def agregar_cabeceras_seguridad(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault('Permissions-Policy', 'camera=(self), geolocation=(), microphone=()')
+    return response
 
 # ─── Blueprints propios ───────────────────────────────────────────────────────
 from routes_catalogo   import catalogo_bp
@@ -151,7 +162,8 @@ def obtener_sedes():
         sedes = [{'id': s[0], 'nombre': s[1], 'tipo': s[2]} for s in cursor.fetchall()]
         return jsonify(sedes), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        app.logger.exception("Error al obtener sedes")
+        return jsonify({'error': 'Error al cargar sedes'}), 500
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
@@ -179,7 +191,8 @@ def inicializar_sedes():
         return jsonify({'mensaje': 'Las 5 sedes operativas han sido creadas con éxito.'}), 201
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
-        return jsonify({'error': str(e)}), 500
+        app.logger.exception("Error al inicializar sedes")
+        return jsonify({'error': 'Error al inicializar sedes'}), 500
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)

@@ -394,6 +394,30 @@ function addBadgeToCell(cell, text, type = 'info') {
 }
 
 /**
+ * HTML SEGURO
+ */
+function escapeHTML(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value) {
+  return escapeHTML(value).replace(/`/g, '&#96;');
+}
+
+function jsStringAttr(value) {
+  return escapeAttr(JSON.stringify(String(value ?? '')));
+}
+
+function setText(element, value) {
+  if (element) element.textContent = value ?? '';
+}
+
+/**
  * NOTIFICACIONES / MENSAJES
  */
 function showError(message) {

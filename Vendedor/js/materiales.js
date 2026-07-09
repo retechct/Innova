@@ -1561,32 +1561,33 @@ function dibujarTarjetaMaterial(item, tipo) {
 
     // Construir líneas descriptivas según el tipo
     let lineas = [];
+    const linea = (label, value) => `<b>${label}:</b> ${escapeHTML(value)}`;
     if (tipo === 'tela') {
-        if (item.proveedor) lineas.push(`<b>Proveedor:</b> ${item.proveedor}`);
-        if (item.coleccion) lineas.push(`<b>Colección:</b> ${item.coleccion}`);
-        if (item.color)     lineas.push(`<b>Color:</b> ${item.color}`);
+        if (item.proveedor) lineas.push(linea('Proveedor', item.proveedor));
+        if (item.coleccion) lineas.push(linea('Colección', item.coleccion));
+        if (item.color)     lineas.push(linea('Color', item.color));
     } else if (tipo === 'cojin') {
-        if (item.nombre_diseno) lineas.push(`<b>Diseño:</b> ${item.nombre_diseno}`);
-        if (item.tipo_tela)     lineas.push(`<b>Tela req.:</b> ${item.tipo_tela}`);
+        if (item.nombre_diseno) lineas.push(linea('Diseño', item.nombre_diseno));
+        if (item.tipo_tela)     lineas.push(linea('Tela req.', item.tipo_tela));
     } else if (tipo === 'base') {
-        if (item.tipo)     lineas.push(`<b>Tipo:</b> ${item.tipo}`);
-        if (item.material) lineas.push(`<b>Material:</b> ${item.material}`);
-        if (item.modelo)   lineas.push(`<b>Modelo:</b> ${item.modelo}`);
-        if (item.color)    lineas.push(`<b>Color:</b> ${item.color}`);
-        if (item.medida)   lineas.push(`<b>Altura:</b> ${item.medida}`);
+        if (item.tipo)     lineas.push(linea('Tipo', item.tipo));
+        if (item.material) lineas.push(linea('Material', item.material));
+        if (item.modelo)   lineas.push(linea('Modelo', item.modelo));
+        if (item.color)    lineas.push(linea('Color', item.color));
+        if (item.medida)   lineas.push(linea('Altura', item.medida));
     } else if (tipo === 'base-comedor') {
-        if (item.material) lineas.push(`<b>Material:</b> ${item.material}`);
-        if (item.modelo)   lineas.push(`<b>Modelo:</b> ${item.modelo}`);
-        if (item.color)    lineas.push(`<b>Color:</b> ${item.color}`);
+        if (item.material) lineas.push(linea('Material', item.material));
+        if (item.modelo)   lineas.push(linea('Modelo', item.modelo));
+        if (item.color)    lineas.push(linea('Color', item.color));
     } else if (tipo === 'tablero') {
-        if (item.material_base) lineas.push(`<b>Material:</b> ${item.material_base}`);
-        if (item.nombre)        lineas.push(`<b>Modelo:</b> ${item.nombre}`);
-        if (item.color)         lineas.push(`<b>Veta:</b> ${item.color}`);
-        if (item.acabado)       lineas.push(`<b>Acabado:</b> ${item.acabado}`);
+        if (item.material_base) lineas.push(linea('Material', item.material_base));
+        if (item.nombre)        lineas.push(linea('Modelo', item.nombre));
+        if (item.color)         lineas.push(linea('Veta', item.color));
+        if (item.acabado)       lineas.push(linea('Acabado', item.acabado));
     } else if (tipo === 'silla' || tipo === 'butaca') {
-        if (item.material) lineas.push(`<b>Material:</b> ${item.material}`);
-        if (item.modelo)   lineas.push(`<b>Modelo:</b> ${item.modelo}`);
-        if (item.color)    lineas.push(`<b>Color:</b> ${item.color}`);
+        if (item.material) lineas.push(linea('Material', item.material));
+        if (item.modelo)   lineas.push(linea('Modelo', item.modelo));
+        if (item.color)    lineas.push(linea('Color', item.color));
     }
 
     const descHTML = lineas.length
@@ -1596,6 +1597,13 @@ function dibujarTarjetaMaterial(item, tipo) {
     const skuDisplay = item.sku || item.id || '—';
     const foto       = item.foto_url || 'imagenes/sin_foto.jpg';
     const catLabel   = item.categoria || tipo.toUpperCase();
+    const skuHTML    = escapeHTML(skuDisplay);
+    const skuJS      = jsStringAttr(skuDisplay);
+    const fotoHTML   = escapeAttr(foto);
+    const fotoJS     = jsStringAttr(foto);
+    const catHTML    = escapeHTML(catLabel);
+    const catJS      = jsStringAttr(item.categoria || '');
+    const itemId     = Number(item.id || 0);
 
     return `
     <div style="
@@ -1614,11 +1622,11 @@ function dibujarTarjetaMaterial(item, tipo) {
             background:rgba(15,23,42,0.75); color:#f0dfa0;
             font-size:9px; font-weight:900; letter-spacing:0.1em;
             padding:3px 8px; border-radius:20px;
-        ">${skuDisplay}</div>
+        ">${skuHTML}</div>
 
         <!-- Foto -->
-        <div style="position:relative; cursor:pointer;" onclick="ampliarImagen('${foto}')">
-            <img src="${foto}"
+        <div style="position:relative; cursor:pointer;" onclick="ampliarImagen(${fotoJS})">
+            <img src="${fotoHTML}"
                  onerror="this.src='imagenes/sin_foto.jpg'"
                  style="width:100%; height:140px; object-fit:cover; display:block;">
             <div style="
@@ -1631,15 +1639,15 @@ function dibujarTarjetaMaterial(item, tipo) {
         <!-- Cuerpo -->
         <div style="padding:12px; flex:1; display:flex; flex-direction:column; gap:8px;">
             <!-- Categoría -->
-            <div style="font-size:9px; font-weight:900; color:#a78bfa; letter-spacing:0.1em;">${catLabel}</div>
+            <div style="font-size:9px; font-weight:900; color:#a78bfa; letter-spacing:0.1em;">${catHTML}</div>
 
             <!-- Campos descriptivos -->
             <div>${descHTML}</div>
 
             <!-- Selector de estado -->
             <select
-                data-item-id="${item.id}"
-                onchange="actualizarEstadoInsumo(${item.id}, '${item.categoria}', this.value)"
+                data-item-id="${itemId}"
+                onchange="actualizarEstadoInsumo(${itemId}, ${catJS}, this.value)"
                 style="
                     width:100%; padding:6px 8px; border-radius:6px;
                     border:1px solid #e2e8f0; font-size:11px; font-weight:700;
@@ -1653,7 +1661,7 @@ function dibujarTarjetaMaterial(item, tipo) {
 
             <!-- Botón Editar -->
             <button
-                onclick="abrirEditorMaterial('${skuDisplay}', '${tipo}')"
+                onclick="abrirEditorMaterial(${skuJS}, ${jsStringAttr(tipo)})"
                 style="
                     width:100%; padding:8px;
                     background:#f1f5f9; color:#475569;
@@ -1668,7 +1676,7 @@ function dibujarTarjetaMaterial(item, tipo) {
                 <i class="fa-solid fa-pen"></i> Editar
             </button>
             <button
-                onclick="eliminarMaterialMaestro('${String(skuDisplay).replace(/'/g, "\\'")}', '${tipo}')"
+                onclick="eliminarMaterialMaestro(${skuJS}, ${jsStringAttr(tipo)})"
                 style="
                     width:100%; padding:8px;
                     background:#fef2f2; color:#b91c1c;
