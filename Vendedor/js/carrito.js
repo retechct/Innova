@@ -269,6 +269,7 @@ async function leerVoucherAutomatico(file) {
         const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo leer el voucher');
+        if (data.ok === false) throw new Error(data.error || 'No se pudo leer el voucher');
         _aplicarDatosVoucher(data);
     } catch (e) {
         _voucherSetStatus(`Voucher subido. No se pudo autollenar: ${e.message}. Completa los datos manualmente.`, 'warn');

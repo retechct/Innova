@@ -534,8 +534,12 @@ def leer_voucher():
         return jsonify({'error': 'No se recibió ningún archivo'}), 400
     resultado = _leer_voucher_con_openai(request.files['archivo'])
     if not resultado.get('ok'):
-        return jsonify({'error': resultado.get('error', 'No se pudo leer el voucher')}), 422
-    return jsonify(resultado['datos']), 200
+        return jsonify({
+            'ok': False,
+            'error': resultado.get('error', 'No se pudo leer el voucher'),
+            'modo': 'manual'
+        }), 200
+    return jsonify({'ok': True, **resultado['datos']}), 200
 
 # ==========================================
 # UPLOAD DE FOTOS GENÉRICO

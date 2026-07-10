@@ -1321,6 +1321,7 @@ async function _leerVoucherLogisticaAutomatico(file) {
         const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo leer el comprobante');
+        if (data.ok === false) throw new Error(data.error || 'No se pudo leer el comprobante');
         window._ultimoVoucherLogisticaOCR = data;
         const partes = [];
         if (data.entidad) partes.push(data.entidad);
