@@ -340,9 +340,21 @@ async function leerVoucherAutomatico(file) {
     }
     _voucherSetStatus('Leyendo voucher automáticamente...', 'info');
     try {
+        let archivoOCR = file;
+        if (typeof _comprimirImagen === 'function') {
+            try {
+                archivoOCR = await _comprimirImagen(file, 1200, 0.78);
+            } catch (e) {
+                console.warn('No se pudo comprimir el voucher para OCR; se usará el original.', e);
+            }
+        }
         const fd = new FormData();
-        fd.append('archivo', file);
+        fd.append('archivo', archivoOCR, 'voucher-ocr.webp');
         const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
+        const contentType = (res.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.includes('application/json')) {
+            throw new Error('El lector automático tardó demasiado o está reiniciándose');
+        }
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo leer el voucher');
         if (data.ok === false) throw new Error(data.error || 'No se pudo leer el voucher');

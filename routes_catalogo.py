@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 import cloudinary.uploader
@@ -61,7 +62,8 @@ def _llamar_openai_voucher(api_key, payload):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=35) as resp:
+    # Devolver control antes del timeout del worker de Gunicorn en Render.
+    with urllib.request.urlopen(req, timeout=12) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -94,17 +96,22 @@ def _datos_voucher_desde_json(extraido):
 
 
 def _leer_voucher_automatico(archivo):
-    intentos = []
-    for proveedor, lector in (('openai', _leer_voucher_con_openai), ('gemini', _leer_voucher_con_gemini)):
-        resultado = lector(archivo)
-        if resultado.get('ok'):
-            return resultado
-        intentos.append(f"{proveedor}: {resultado.get('error', 'sin detalle')}")
-        archivo.seek(0)
+    lectores = {
+        'openai': _leer_voucher_con_openai,
+        'gemini': _leer_voucher_con_gemini,
+    }
+    proveedor = os.getenv('VOUCHER_OCR_PROVIDER', '').strip().lower()
+    if proveedor not in lectores:
+        proveedor = 'openai' if os.getenv('OPENAI_API_KEY') else 'gemini'
+
+    resultado = lectores[proveedor](archivo)
+    if resultado.get('ok'):
+        return resultado
 
     return {
         'ok': False,
-        'error': 'No se pudo leer el voucher automáticamente. ' + ' | '.join(intentos)
+        'error': f"No se pudo leer el voucher automáticamente ({proveedor}): "
+                 f"{resultado.get('error', 'sin detalle')}"
     }
 
 
@@ -137,7 +144,7 @@ def _modelos_gemini_voucher(api_key):
         method="GET",
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=4) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
         print(f"No se pudo listar modelos Gemini: {e}")
@@ -193,7 +200,12 @@ def _leer_voucher_con_gemini(archivo):
     data = None
     errores_modelo = []
     try:
-        for model in modelos:
+        # Mantener toda la lectura por debajo del timeout del worker.
+        limite = time.monotonic() + 18
+        for model in modelos[:2]:
+            restante = limite - time.monotonic()
+            if restante < 2:
+                break
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             req = urllib.request.Request(
                 url,
@@ -205,7 +217,7 @@ def _leer_voucher_con_gemini(archivo):
                 method="POST",
             )
             try:
-                with urllib.request.urlopen(req, timeout=35) as resp:
+                with urllib.request.urlopen(req, timeout=min(12, restante)) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     break
             except urllib.error.HTTPError as e:

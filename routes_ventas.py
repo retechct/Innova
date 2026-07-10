@@ -302,6 +302,19 @@ def _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado_venta):
         WHERE venta_id = %s AND estado NOT IN ('Recibido', 'Cancelado', 'Rechazado')
     """, (venta_id,))
 
+    # Al marcar la venta como Entregada también debe cerrarse el despacho.
+    # Antes se excluía siempre DESPACHO_CENTRAL, dejando pedidos entregados
+    # visibles en la bandeja del jefe y del chofer.
+    if nuevo_estado_venta == 'Entregado':
+        cursor.execute("""
+            UPDATE tickets_produccion
+            SET estado_ticket = 'Terminado',
+                fecha_fin = COALESCE(fecha_fin, CURRENT_TIMESTAMP)
+            WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
+              AND area_trabajo = 'DESPACHO_CENTRAL'
+              AND estado_ticket NOT IN ('Terminado', 'Cancelado')
+        """, (venta_id,))
+
 # ==========================================
 # VENTAS — REGISTRO Y LISTADO
 # ==========================================

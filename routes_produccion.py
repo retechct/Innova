@@ -541,7 +541,7 @@ def obtener_tickets_taller():
         query = """
             SELECT t.id, i.producto, t.estado_ticket, t.area_trabajo, t.ticket_details_override,
                    t.trabajador_asignado_id, v.codigo_venta, i.color_tela, t.item_id,
-                   i.foto_url, t.foto_evidencia, u.nombre, v.id
+                   i.foto_url, t.foto_evidencia, u.nombre, v.id, v.estado_general
             FROM tickets_produccion t
             JOIN items_venta i ON t.item_id  = i.id
             JOIN ventas v      ON i.venta_id = v.id
@@ -608,8 +608,14 @@ def obtener_tickets_taller():
         tickets = []
         for row in raw_rows:
             estado = row[2]
+            # Compatibilidad con contratos antiguos: si la venta ya fue
+            # marcada como Entregada pero su ticket de despacho quedó abierto,
+            # no debe seguir apareciendo como pendiente.
+            if row[3] == 'DESPACHO_CENTRAL' and row[13] == 'Entregado':
+                estado = 'Terminado'
             if (
                 row[3] == 'DESPACHO_CENTRAL'
+                and row[13] != 'Entregado'
                 and (row[8] in items_incompletos or row[12] in ventas_con_logistica_pendiente)
             ):
                 estado = 'Bloqueado'
@@ -2918,6 +2924,7 @@ def obtener_cola_despacho_general():
             WHERE t.area_trabajo = 'DESPACHO_CENTRAL'
               AND t.estado_ticket = 'Pendiente'
               AND t.trabajador_asignado_id IS NULL
+              AND COALESCE(v.estado_general, '') NOT IN ('Entregado', 'Cancelado')
               AND NOT EXISTS (
                   SELECT 1
                   FROM tickets_produccion tp
