@@ -52,8 +52,15 @@ def _extraer_texto_responses(data):
 
 
 def _llamar_openai_voucher(api_key, payload):
-    payload_fallback = dict(payload)
-    payload_fallback["text"] = {"format": {"type": "json_object"}}
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
     with urllib.request.urlopen(req, timeout=35) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -123,15 +130,9 @@ def _leer_voucher_con_openai(archivo):
         "max_output_tokens": 500,
     }
 
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/responses",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
+    payload_fallback = dict(payload)
+    payload_fallback["text"] = {"format": {"type": "json_object"}}
+
     try:
         data = _llamar_openai_voucher(api_key, payload)
     except urllib.error.HTTPError as e:
