@@ -29,6 +29,8 @@ class ProjectSafetyTests(unittest.TestCase):
         session_js = read("Vendedor/js/modules/app/session_ui.js")
         bootstrap_js = read("Vendedor/js/modules/app/bootstrap.js")
         nav_js = read("Vendedor/js/modules/app/navigation_auth.js")
+        index_html = read("Vendedor/index.html")
+        orden_js = read("Vendedor/js/modules/taller/orden_pedido.js")
 
         self.assertIn("async function cargarDatosVentaIniciales", session_js)
         self.assertLess(session_js.index("const sesion = localStorage.getItem('usuarioInnova')"),
@@ -36,6 +38,10 @@ class ProjectSafetyTests(unittest.TestCase):
         self.assertIn("if (!tieneSesionERP) cargarDatosInicialesLogin()", bootstrap_js)
         self.assertIn("Cargando catálogo", nav_js)
         self.assertIn("window._datosVentaInicialesCargados", nav_js)
+        self.assertNotIn('<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas', index_html)
+        self.assertNotIn('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf', index_html)
+        self.assertIn("_asegurarLibreriasOrdenPDF", orden_js)
+        self.assertIn("data-pdf-lib", orden_js)
 
     def test_staff_login_uses_password_hash_path(self):
         usuarios_py = read("routes_usuarios.py")

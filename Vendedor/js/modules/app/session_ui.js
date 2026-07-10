@@ -2,6 +2,8 @@
 // ─────────────────────────────────────────────────────────────// === MÓDULO: App principal, init, vistas, sesión ===
 async function cargarDatosVentaIniciales({ force = false } = {}) {
     if (!force && window._datosVentaInicialesCargados) return true;
+    if (!force && window._datosVentaInicialesPromise) return window._datosVentaInicialesPromise;
+    window._datosVentaInicialesPromise = (async () => {
     try {
         const [catRes, matRes] = await Promise.all([
             fetch(`${API_URL}/api/catalogo`),
@@ -23,7 +25,11 @@ async function cargarDatosVentaIniciales({ force = false } = {}) {
         console.error("Error cargando datos de venta:", e);
         Swal.fire('Error de Conexión', 'El servidor no responde o hay un error cargando catálogo/materiales.', 'error');
         return false;
+    } finally {
+        window._datosVentaInicialesPromise = null;
     }
+    })();
+    return window._datosVentaInicialesPromise;
 }
 
 async function init() {

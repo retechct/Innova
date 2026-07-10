@@ -317,9 +317,43 @@ function imprimirOrdenTaller(data) {
  * navegador. Usa html2canvas para "fotografiar" el documento ya maquetado
  * y jsPDF para partirlo en páginas A4 y guardarlo como archivo.
  */
+function _cargarScriptOrdenPDF(src, globalCheck) {
+    if (globalCheck()) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        const existente = document.querySelector(`script[data-pdf-lib="${src}"]`);
+        if (existente) {
+            existente.addEventListener('load', resolve, { once: true });
+            existente.addEventListener('error', reject, { once: true });
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.dataset.pdfLib = src;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
+        document.head.appendChild(script);
+    });
+}
+
+async function _asegurarLibreriasOrdenPDF() {
+    await _cargarScriptOrdenPDF(
+        'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+        () => typeof html2canvas !== 'undefined'
+    );
+    await _cargarScriptOrdenPDF(
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+        () => typeof window.jspdf !== 'undefined'
+    );
+}
+
 async function descargarPDFOrdenTaller(data) {
     if (!data) { Swal.fire('Error', 'No hay datos del pedido para generar el PDF.', 'error'); return; }
-    if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+    Swal.fire({ title: 'Preparando PDF...', text: 'Cargando generador...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    try {
+        await _asegurarLibreriasOrdenPDF();
+    } catch (e) {
+        console.error('No se pudieron cargar librerías PDF:', e);
         Swal.fire('Error', 'No se pudo cargar el generador de PDF. Revisa tu conexión e intenta de nuevo.', 'error');
         return;
     }
