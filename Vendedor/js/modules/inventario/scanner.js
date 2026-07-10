@@ -51,7 +51,7 @@ function _iniciarEscaneoCamara() {
         if (document.getElementById('html5-qrcode-script')) return;
         const script = document.createElement('script');
         script.id = 'html5-qrcode-script';
-        script.src = "https://unpkg.com/html5-qrcode";
+        script.src = "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js";
         script.onload = () => _iniciarLectorLibreria();
         script.onerror = () => {
             script.remove();
@@ -67,21 +67,47 @@ async function _iniciarLectorLibreria() {
     if (_html5QrcodeInv && _html5QrcodeInv.isScanning) {
         return;
     }
-    _html5QrcodeInv = new Html5Qrcode("reader-inv");
+    _html5QrcodeInv = new Html5Qrcode("reader-inv", { verbose: false });
 
-    const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+    const formatos = window.Html5QrcodeSupportedFormats
+        ? [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.ITF,
+        ].filter(Boolean)
+        : undefined;
+    const config = {
+        fps: 15,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const width = Math.min(Math.floor(viewfinderWidth * 0.92), 460);
+            const height = Math.min(Math.max(Math.floor(width * 0.34), 130), Math.floor(viewfinderHeight * 0.5));
+            return { width, height };
+        },
+        aspectRatio: 1.777778,
+        disableFlip: false,
+        ...(formatos ? { formatsToSupport: formatos } : {}),
+    };
     const alLeer = (textoDecodificado) => {
         _cerrarEscaneoCamara();
-        _procesarBarcodeEscaneado(textoDecodificado);
+        _procesarBarcodeEscaneado(String(textoDecodificado || '').trim());
     };
     const alFallarLectura = () => { /* Ignorar mientras busca un codigo. */ };
 
     try {
-        const camaras = await Html5Qrcode.getCameras();
+        try {
+            await _html5QrcodeInv.start({ facingMode: "environment" }, config, alLeer, alFallarLectura);
+        } catch (errorCamaraTrasera) {
+            const camaras = await Html5Qrcode.getCameras();
         if (!camaras.length) throw new DOMException('No se detectaron cámaras', 'NotFoundError');
 
-        const preferida = camaras.find(c => /back|rear|environment|trasera/i.test(c.label)) || camaras[0];
-        await _html5QrcodeInv.start(preferida.id, config, alLeer, alFallarLectura);
+            const preferida = camaras.find(c => /back|rear|environment|trasera/i.test(c.label)) || camaras[0];
+            await _html5QrcodeInv.start(preferida.id, config, alLeer, alFallarLectura);
+        }
     } catch (error) {
         console.warn('No se pudo iniciar el escáner:', error);
         const nombre = error?.name || '';

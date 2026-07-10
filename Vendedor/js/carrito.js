@@ -387,15 +387,16 @@ async function leerVoucherAutomatico(file) {
     _voucherSetStatus('Leyendo voucher automáticamente...', 'info');
     try {
         let archivoOCR = file;
-        if (typeof _comprimirImagen === 'function') {
+        if (typeof _comprimirImagen === 'function' && file.size > 4 * 1024 * 1024) {
             try {
-                archivoOCR = await _comprimirImagen(file, 1200, 0.78);
+                archivoOCR = await _comprimirImagen(file, 1800, 0.9);
             } catch (e) {
                 console.warn('No se pudo comprimir el voucher para OCR; se usará el original.', e);
             }
         }
         const fd = new FormData();
-        fd.append('archivo', archivoOCR, 'voucher-ocr.webp');
+        const extensionOCR = (archivoOCR.type || file.type || 'image/jpeg').includes('webp') ? 'webp' : 'jpg';
+        fd.append('archivo', archivoOCR, `voucher-ocr.${extensionOCR}`);
         const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
         const contentType = (res.headers.get('content-type') || '').toLowerCase();
         if (!contentType.includes('application/json')) {
@@ -403,10 +404,19 @@ async function leerVoucherAutomatico(file) {
         }
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo leer el voucher');
-        if (data.ok === false) throw new Error(data.error || 'No se pudo leer el voucher');
+        if (data.ok === false) {
+            window._ultimoVoucherOCR = null;
+            _voucherSetStatus(data.error
+                ? `Voucher cargado. ${data.error}; completa empresa, monto y operación manualmente.`
+                : 'Voucher cargado. No pudimos leerlo automáticamente; completa empresa, monto y operación manualmente.',
+                'warn'
+            );
+            return;
+        }
         _aplicarDatosVoucher(data);
     } catch (e) {
-        console.warn('Autollenado de voucher no disponible:', e);
+        console.info('Autollenado de voucher no disponible:', e);
+        window._ultimoVoucherOCR = null;
         _voucherSetStatus('Voucher cargado. No pudimos leerlo automáticamente; completa empresa, monto y operación manualmente.', 'warn');
     }
 }
