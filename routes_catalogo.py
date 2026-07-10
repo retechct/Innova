@@ -118,6 +118,40 @@ def _prompt_voucher_json():
     )
 
 
+def _modelos_gemini_voucher(api_key):
+    preferidos = [
+        "gemini-3.5-flash",
+        "gemini-3-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-latest",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+    ]
+    req = urllib.request.Request(
+        "https://generativelanguage.googleapis.com/v1beta/models",
+        headers={"x-goog-api-key": api_key},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"No se pudo listar modelos Gemini: {e}")
+        return preferidos
+
+    disponibles = []
+    for modelo in data.get("models", []):
+        nombre = str(modelo.get("name", "")).replace("models/", "")
+        metodos = modelo.get("supportedGenerationMethods", [])
+        if nombre and "generateContent" in metodos:
+            disponibles.append(nombre)
+
+    ordenados = [m for m in preferidos if m in disponibles]
+    ordenados += [m for m in disponibles if "flash" in m and m not in ordenados]
+    ordenados += [m for m in disponibles if m not in ordenados]
+    return ordenados or preferidos
+
+
 def _leer_voucher_con_gemini(archivo):
     api_key = os.getenv('GEMINI_API_KEY')
     if not api_key:
@@ -133,7 +167,7 @@ def _leer_voucher_con_gemini(archivo):
         return {'ok': False, 'error': 'Archivo vacío'}
 
     model_env = os.getenv("GEMINI_VOUCHER_MODEL", "").strip()
-    modelos = [model_env] if model_env else ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+    modelos = [model_env] if model_env else _modelos_gemini_voucher(api_key)
     payload = {
         "contents": [{
             "role": "user",
@@ -174,7 +208,7 @@ def _leer_voucher_con_gemini(archivo):
                 detalle = e.read().decode("utf-8", errors="ignore")[:500]
                 print(f"Gemini voucher OCR HTTPError ({model}): {detalle}")
                 errores_modelo.append(f"{model}: {detalle}")
-                if e.code == 404 and not model_env:
+                if e.code in (404, 429) and not model_env:
                     continue
                 raise
     except urllib.error.HTTPError as e:
@@ -193,6 +227,8 @@ def _leer_voucher_con_gemini(archivo):
 
     if data is None:
         print(f"Gemini voucher OCR modelos no disponibles: {' | '.join(errores_modelo)[:500]}")
+        if any("quota" in e.lower() or "rate" in e.lower() for e in errores_modelo):
+            return {'ok': False, 'error': 'Gemini API no tiene cuota disponible para los modelos de tu key'}
         return {'ok': False, 'error': 'No hay un modelo Gemini disponible para leer imágenes'}
 
     try:
