@@ -38,6 +38,10 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_jwt_extended import JWTManager
+try:
+    from flask_compress import Compress
+except ImportError:
+    Compress = None
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -67,6 +71,17 @@ cloudinary.config(
 
 # ─── Aplicación Flask ─────────────────────────────────────────────────────────
 app = Flask(__name__, static_folder='Vendedor', static_url_path='')
+app.config['COMPRESS_MIMETYPES'] = [
+    'text/html',
+    'text/css',
+    'text/javascript',
+    'application/javascript',
+    'application/json',
+    'image/svg+xml',
+]
+app.config['COMPRESS_MIN_SIZE'] = 1024
+if Compress:
+    Compress(app)
 
 
 @app.errorhandler(Exception)
@@ -113,6 +128,13 @@ def agregar_cabeceras_seguridad(response):
     response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
     response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
     response.headers.setdefault('Permissions-Policy', 'camera=(self), geolocation=(), microphone=()')
+    if not request.path.startswith('/api/'):
+        if request.path == '/' or request.path.endswith('.html'):
+            response.headers['Cache-Control'] = 'no-cache'
+        elif request.path.startswith(('/js/', '/css/')):
+            response.headers.setdefault('Cache-Control', 'public, max-age=3600')
+        elif request.path.startswith(('/imagenes/', '/uploads/')) or request.path.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico')):
+            response.headers.setdefault('Cache-Control', 'public, max-age=86400')
     return response
 
 # ─── Blueprints propios ───────────────────────────────────────────────────────

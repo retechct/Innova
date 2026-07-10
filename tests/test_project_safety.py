@@ -14,12 +14,28 @@ class ProjectSafetyTests(unittest.TestCase):
         app_py = read("app.py")
 
         self.assertIn("DEBUG_API_ERRORS", app_py)
+        self.assertIn("flask_compress", app_py)
+        self.assertIn("if Compress:", app_py)
+        self.assertIn("Compress(app)", app_py)
+        self.assertIn("public, max-age=3600", app_py)
         self.assertIn("'Error interno del servidor'", app_py)
         self.assertIn("@app.route('/favicon.ico')", app_py)
         self.assertLess(
             app_py.index("DEBUG_API_ERRORS"),
             app_py.index("return jsonify({'error': str(ex), 'tipo': type(ex).__name__}), 500"),
         )
+
+    def test_startup_loads_catalog_data_on_demand(self):
+        session_js = read("Vendedor/js/modules/app/session_ui.js")
+        bootstrap_js = read("Vendedor/js/modules/app/bootstrap.js")
+        nav_js = read("Vendedor/js/modules/app/navigation_auth.js")
+
+        self.assertIn("async function cargarDatosVentaIniciales", session_js)
+        self.assertLess(session_js.index("const sesion = localStorage.getItem('usuarioInnova')"),
+                        session_js.index("const ok = await cargarDatosVentaIniciales()"))
+        self.assertIn("if (!tieneSesionERP) cargarDatosInicialesLogin()", bootstrap_js)
+        self.assertIn("Cargando catálogo", nav_js)
+        self.assertIn("window._datosVentaInicialesCargados", nav_js)
 
     def test_staff_login_uses_password_hash_path(self):
         usuarios_py = read("routes_usuarios.py")

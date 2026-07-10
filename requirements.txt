@@ -1,4 +1,5 @@
 flask
+flask-compress
 flask-cors
 flask-limiter
 psycopg2-binary

@@ -92,6 +92,12 @@ function changeView(view) {
     // ── Mostrar la vista seleccionada ──
     if (view === 'stock' || view === 'catalogo') {
         mostrar('view-productos');
+        if (!window._datosVentaInicialesCargados && typeof cargarDatosVentaIniciales === 'function') {
+            const grid = document.getElementById('product-grid');
+            if (grid) grid.innerHTML = '<div style="padding:40px;text-align:center;color:#94a3b8;font-weight:700;">Cargando catálogo...</div>';
+            cargarDatosVentaIniciales().then(ok => { if (ok) changeView(view); });
+            return;
+        }
         if (typeof _catPagina !== 'undefined') _catPagina = 1;
         renderGrid();
     }
@@ -280,6 +286,10 @@ async function entrarAlSistema() {
             if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'Chofer') {
                 changeView('taller');
             } else {
+                if (typeof cargarDatosVentaIniciales === 'function') {
+                    const ok = await cargarDatosVentaIniciales();
+                    if (!ok) return;
+                }
                 changeView('catalogo');
             }
 

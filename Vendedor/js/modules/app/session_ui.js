@@ -1,20 +1,34 @@
 // App - init, permisos y sidebar
 // ─────────────────────────────────────────────────────────────// === MÓDULO: App principal, init, vistas, sesión ===
-async function init() {
+async function cargarDatosVentaIniciales({ force = false } = {}) {
+    if (!force && window._datosVentaInicialesCargados) return true;
     try {
         const [catRes, matRes] = await Promise.all([
             fetch(`${API_URL}/api/catalogo`),
             fetch(`${API_URL}/api/materiales/listas`)
         ]);
-        
+
         allProducts = await catRes.json();
-        maestroMateriales = await matRes.json(); 
-        
-        // Verificamos si Python nos mandó un error de Base de Datos en lugar de la lista
+        maestroMateriales = await matRes.json();
+
         if (allProducts.error || maestroMateriales.error) {
             console.error("Error de BD:", allProducts.error || maestroMateriales.error);
-            return Swal.fire('Error de Base de Datos', 'Revisa la consola (F12) para ver la tabla que falta.', 'error');
+            Swal.fire('Error de Base de Datos', 'Revisa la consola (F12) para ver la tabla que falta.', 'error');
+            return false;
         }
+
+        window._datosVentaInicialesCargados = true;
+        return true;
+    } catch (e) {
+        console.error("Error cargando datos de venta:", e);
+        Swal.fire('Error de Conexión', 'El servidor no responde o hay un error cargando catálogo/materiales.', 'error');
+        return false;
+    }
+}
+
+async function init() {
+    try {
+        // Verificamos si Python nos mandó un error de Base de Datos en lugar de la lista
         
         // Punto 4: Persistencia de Sesión al recargar
         const sesion = localStorage.getItem('usuarioInnova');
@@ -47,6 +61,8 @@ async function init() {
             if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'Chofer') {
                 changeView('taller');
             } else {
+                const ok = await cargarDatosVentaIniciales();
+                if (!ok) return;
                 changeView('catalogo');
             }
         }
