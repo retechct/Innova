@@ -306,7 +306,8 @@ async function cargarLogisticaExterna() {
               match:i => i.estado === 'Cotizado' },
             { id:'pagar', titulo:'4. Pagar / seguir', icono:'fa-receipt', color:'#7e22ce', bg:'#faf5ff',
               desc:'Orden enviada: subir comprobante, confirmar transito o mandar a cola de recojo.',
-              match:i => ['Orden Enviada','Confirmado','En Tránsito','Pagado','Listo para Recojo'].includes(i.estado) },
+              match:i => i.estado_distribucion !== 'Recogido'
+                  && ['Orden Enviada','Confirmado','En Tránsito','Pagado','Listo para Recojo'].includes(i.estado) },
             { id:'recibir', titulo:'5. Recibir / juntar', icono:'fa-box-circle-check', color:'#0f766e', bg:'#f0fdfa',
               desc:'Material listo para entrar al contrato: recibir, distribuir o liberar despacho.',
               match:i => i.estado_distribucion === 'Recogido' },
@@ -729,8 +730,35 @@ async function _abrirEditarLogistica(item, proveedores) {
             }
 
             // ── INTERNO ────────────────────────────────────────────────────
-            Swal.fire({ icon:'success', title:'Guardado como interno', text:'El taller fabricará este insumo.', timer:2000, showConfirmButton:false });
+            const { isConfirmed: marcarListo } = await Swal.fire({
+                icon: 'info',
+                title: 'Insumo interno guardado',
+                html: 'Cuando el taller termine físicamente este insumo, márcalo como <b>listo para usar</b> para desbloquear las tareas que dependen de él.',
+                confirmButtonText: 'Marcar listo para usar',
+                showCancelButton: true,
+                cancelButtonText: 'Lo haré después',
+                confirmButtonColor: '#0f172a',
+            });
+            if (marcarListo) {
+                const resListo = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: item.id, estado: 'Recibido' }),
+                });
+                const dListo = await resListo.json();
+                if (!resListo.ok || !dListo.exito) throw new Error(dListo.error || 'Error al marcar el insumo como listo');
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Insumo listo',
+                    text: dListo.mensaje || `Se desbloquearon ${dListo.desbloqueados || 0} tarea(s).`,
+                    timer: 2500,
+                    showConfirmButton: false,
+                });
+            } else {
+                Swal.fire({ icon:'success', title:'Guardado como interno', timer:1500, showConfirmButton:false });
+            }
             cargarLogisticaExterna();
+            return;
 
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
         return;

@@ -109,11 +109,23 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
                 const notaMarker = '↳ Nota:';
                 const notaIndex = rest.indexOf(notaMarker);
                 if (notaIndex !== -1) {
-                    const notaTexto = rest.substring(notaIndex + notaMarker.length).trim();
+                    let notaTexto = rest.substring(notaIndex + notaMarker.length).trim();
                     rest = rest.substring(0, notaIndex).trim(); // Limpiar la nota del 'rest' principal
-                    notaHtml = `<div style="padding:4px 8px; margin-top:4px; background:#fffbeb; color:#92400e; border-left:3px solid #f59e0b; font-size:11px; border-radius:0 4px 4px 0;">
-                                    <i class="fa-solid fa-circle-info"></i> <b>Nota:</b> ${notaTexto}
-                                </div>`;
+                    const esReferenciaAntigua = /^Ver foto adjunta\s*:?/i.test(notaTexto)
+                        && (!notaTexto.replace(/^Ver foto adjunta\s*:?/i, '').trim()
+                            || /<img\b/i.test(notaTexto)
+                            || /^Ver foto adjunta\s*:?\s*https?:\/\//i.test(notaTexto));
+                    if (esReferenciaAntigua) {
+                        const fotosReferencia = (notaTexto.match(/<img\b[^>]*>/gi) || []).join('');
+                        notaHtml = `<div style="padding:4px 8px; margin-top:4px; background:#eff6ff; color:#1e40af; border-left:3px solid #3b82f6; font-size:11px; border-radius:0 4px 4px 0;">
+                                        <i class="fa-solid fa-image"></i> <b>Referencia visual adjunta</b>
+                                        ${fotosReferencia}
+                                    </div>`;
+                    } else if (notaTexto) {
+                        notaHtml = `<div style="padding:4px 8px; margin-top:4px; background:#fffbeb; color:#92400e; border-left:3px solid #f59e0b; font-size:11px; border-radius:0 4px 4px 0;">
+                                        <i class="fa-solid fa-circle-info"></i> <b>Nota:</b> ${notaTexto}
+                                    </div>`;
+                    }
                 }
                 
                 if (prefix.startsWith('-') || prefix.startsWith('•')) {
