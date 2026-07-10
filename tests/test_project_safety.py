@@ -63,6 +63,8 @@ class ProjectSafetyTests(unittest.TestCase):
         self.assertIn("'modo': 'manual'", catalogo_py)
         self.assertIn("OPENAI_API_KEY", catalogo_py)
         self.assertIn("GEMINI_API_KEY", catalogo_py)
+        self.assertIn("gemini-2.5-flash", catalogo_py)
+        self.assertIn("x-goog-api-key", catalogo_py)
         self.assertIn("generativelanguage.googleapis.com", catalogo_py)
         self.assertIn("proveedor_ocr", catalogo_py)
         self.assertIn("leerVoucherAutomatico", carrito_js)

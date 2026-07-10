@@ -132,8 +132,8 @@ def _leer_voucher_con_gemini(archivo):
     if not contenido:
         return {'ok': False, 'error': 'Archivo vacío'}
 
-    model = os.getenv("GEMINI_VOUCHER_MODEL", "gemini-1.5-flash")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    model_env = os.getenv("GEMINI_VOUCHER_MODEL", "").strip()
+    modelos = [model_env] if model_env else ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
     payload = {
         "contents": [{
             "role": "user",
@@ -152,15 +152,31 @@ def _leer_voucher_con_gemini(archivo):
             "temperature": 0
         }
     }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    data = None
+    errores_modelo = []
     try:
-        with urllib.request.urlopen(req, timeout=35) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        for model in modelos:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": api_key,
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=35) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    break
+            except urllib.error.HTTPError as e:
+                detalle = e.read().decode("utf-8", errors="ignore")[:500]
+                print(f"Gemini voucher OCR HTTPError ({model}): {detalle}")
+                errores_modelo.append(f"{model}: {detalle}")
+                if e.code == 404 and not model_env:
+                    continue
+                raise
     except urllib.error.HTTPError as e:
         detalle = e.read().decode("utf-8", errors="ignore")[:500]
         print(f"Gemini voucher OCR HTTPError: {detalle}")
@@ -168,10 +184,16 @@ def _leer_voucher_con_gemini(archivo):
             return {'ok': False, 'error': 'GEMINI_API_KEY inválida o revocada'}
         if "quota" in detalle.lower() or "billing" in detalle.lower():
             return {'ok': False, 'error': 'Gemini API no tiene cuota o billing disponible'}
+        if "not found" in detalle.lower() or "not supported" in detalle.lower():
+            return {'ok': False, 'error': 'El modelo configurado en GEMINI_VOUCHER_MODEL no está disponible'}
         return {'ok': False, 'error': 'No se pudo leer el voucher con Gemini'}
     except Exception as e:
         print(f"Gemini voucher OCR error: {e}")
         return {'ok': False, 'error': 'No se pudo conectar al lector Gemini'}
+
+    if data is None:
+        print(f"Gemini voucher OCR modelos no disponibles: {' | '.join(errores_modelo)[:500]}")
+        return {'ok': False, 'error': 'No hay un modelo Gemini disponible para leer imágenes'}
 
     try:
         texto = data["candidates"][0]["content"]["parts"][0].get("text", "")
