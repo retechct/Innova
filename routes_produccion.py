@@ -2047,12 +2047,29 @@ def obtener_etiquetas_disponibles():
                 })
             else:
                 # Filtrar stock_productos enteros
-                query = """
-                    SELECT codigo_barra, (SELECT nombre FROM sedes WHERE id = sede_id)
-                    FROM stock_productos
-                    WHERE catalogo_id = %(cat_id)s AND estado = 'Disponible'
-                """
-                cursor.execute(query, {'cat_id': item.get('catalogo_id')})
+                if item.get('catalogo_id'):
+                    query = """
+                        SELECT codigo_barra, (SELECT nombre FROM sedes WHERE id = sede_id)
+                        FROM stock_productos
+                        WHERE catalogo_id = %(cat_id)s AND estado = 'Disponible'
+                    """
+                    cursor.execute(query, {'cat_id': item.get('catalogo_id')})
+                else:
+                    # Los modelos registrados directamente en Inventario no
+                    # siempre están enlazados a catalogo_productos. La vista
+                    # los agrupa por nombre + observaciones, así que la etiqueta
+                    # debe usar exactamente la misma identidad.
+                    query = """
+                        SELECT codigo_barra, (SELECT nombre FROM sedes WHERE id = sede_id)
+                        FROM stock_productos
+                        WHERE LOWER(nombre_modelo) = LOWER(%(nombre)s)
+                          AND COALESCE(observaciones, '') = %(observaciones)s
+                          AND estado = 'Disponible'
+                    """
+                    cursor.execute(query, {
+                        'nombre': item.get('nombre_modelo') or '',
+                        'observaciones': item.get('observaciones') or ''
+                    })
             
             filas = cursor.fetchall()
             nombre_etiqueta = item.get('nombreConMedida') or item.get('nombre_modelo')
@@ -2063,14 +2080,18 @@ def obtener_etiquetas_disponibles():
                     etiquetas.append({'codigo': r[0], 'nombre': nombre_etiqueta, 'sede': r[1] or 'Tienda'})
                 # Fallback: si pidieron todas pero no hay stock, imprimir 1 genérica de aviso
                 if not filas:
-                    fallback_code = item.get('sku_maestro') if es_pieza else f"PROD-{item.get('catalogo_id')}"
+                    fallback_code = item.get('sku_maestro') if es_pieza else (
+                        f"PROD-{item.get('catalogo_id')}" if item.get('catalogo_id') else 'SIN-STOCK'
+                    )
                     etiquetas.append({'codigo': fallback_code, 'nombre': nombre_etiqueta, 'sede': 'Sin Stock Disp.'})
             else:
                 # Imprimir solo 1 por modelo (la primera unidad física que encuentre)
                 if filas:
                     etiquetas.append({'codigo': filas[0][0], 'nombre': nombre_etiqueta, 'sede': filas[0][1] or 'Tienda'})
                 else:
-                    fallback_code = item.get('sku_maestro') if es_pieza else f"PROD-{item.get('catalogo_id')}"
+                    fallback_code = item.get('sku_maestro') if es_pieza else (
+                        f"PROD-{item.get('catalogo_id')}" if item.get('catalogo_id') else 'SIN-STOCK'
+                    )
                     etiquetas.append({'codigo': fallback_code, 'nombre': nombre_etiqueta, 'sede': 'Sin Stock Disp.'})
                     
         return jsonify({'exito': True, 'etiquetas': etiquetas}), 200

@@ -38,19 +38,32 @@ function _ensureScannerInventarioModal() {
 
 function _iniciarEscaneoCamara() {
     _ensureScannerInventarioModal().style.display = 'flex';
+    const aviso = document.getElementById('scanner-inv-error');
+    if (aviso) aviso.style.display = 'none';
+
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        _mostrarErrorScanner('La cámara requiere abrir el sistema desde una conexión segura (HTTPS). También puedes escribir el código abajo.');
+        return;
+    }
 
     // Cargar la libreria dinamicamente solo cuando se necesita.
     if (typeof Html5Qrcode === 'undefined') {
+        if (document.getElementById('html5-qrcode-script')) return;
         const script = document.createElement('script');
+        script.id = 'html5-qrcode-script';
         script.src = "https://unpkg.com/html5-qrcode";
         script.onload = () => _iniciarLectorLibreria();
+        script.onerror = () => {
+            script.remove();
+            _mostrarErrorScanner('No se pudo cargar el lector de códigos. Revisa tu conexión e inténtalo nuevamente.');
+        };
         document.head.appendChild(script);
     } else {
         _iniciarLectorLibreria();
     }
 }
 
-function _iniciarLectorLibreria() {
+async function _iniciarLectorLibreria() {
     if (_html5QrcodeInv && _html5QrcodeInv.isScanning) {
         return;
     }
@@ -63,29 +76,29 @@ function _iniciarLectorLibreria() {
     };
     const alFallarLectura = () => { /* Ignorar mientras busca un codigo. */ };
 
-    _html5QrcodeInv.start(
-        { facingMode: { ideal: "environment" } },
-        config,
-        alLeer,
-        alFallarLectura
-    ).catch(async errInicial => {
-        // En laptops suele no existir una camara trasera. Si hay alguna
-        // webcam disponible, usarla como alternativa.
-        try {
-            const camaras = await Html5Qrcode.getCameras();
-            if (camaras.length) {
-                await _html5QrcodeInv.start(camaras[0].id, config, alLeer, alFallarLectura);
-                _mostrarErrorScanner('Se esta usando la camara disponible de este equipo.');
-                return;
-            }
-        } catch (errAlternativo) {
-            console.warn('No se pudo iniciar una camara alternativa:', errAlternativo);
+    try {
+        const camaras = await Html5Qrcode.getCameras();
+        if (!camaras.length) throw new DOMException('No se detectaron cámaras', 'NotFoundError');
+
+        const preferida = camaras.find(c => /back|rear|environment|trasera/i.test(c.label)) || camaras[0];
+        await _html5QrcodeInv.start(preferida.id, config, alLeer, alFallarLectura);
+    } catch (error) {
+        console.warn('No se pudo iniciar el escáner:', error);
+        const nombre = error?.name || '';
+        const detalle = String(error?.message || error || '').toLowerCase();
+        let mensaje = 'No se pudo iniciar la cámara. Cierra otras aplicaciones que la estén usando e inténtalo nuevamente.';
+
+        if (nombre === 'NotAllowedError' || /permission|permiso|denied|denegad/.test(detalle)) {
+            mensaje = 'El permiso de cámara está bloqueado. Habilítalo en el candado del navegador y vuelve a presionar Escanear.';
+        } else if (nombre === 'NotFoundError' || /not found|no se detectaron|requested device not found/.test(detalle)) {
+            mensaje = 'No se detectó una cámara en este equipo. Puedes escribir el código en el campo de abajo.';
+        } else if (nombre === 'NotReadableError' || /could not start|notreadable|in use|ocupad/.test(detalle)) {
+            mensaje = 'La cámara está siendo usada por otra aplicación. Ciérrala y vuelve a presionar Escanear.';
         }
 
-        console.warn('No hay una camara disponible para escanear:', errInicial);
-        _mostrarErrorScanner('Este equipo no tiene una camara disponible. Puedes escribir el codigo en el campo de abajo.');
+        _mostrarErrorScanner(mensaje);
         document.getElementById('scanner-inv-codigo-manual')?.focus();
-    });
+    }
 }
 
 function _mostrarErrorScanner(mensaje) {
