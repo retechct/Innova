@@ -50,16 +50,16 @@ async function cargarOrdenesProduccion(contenedor) {
         }
 
         const AREA_NOMBRES = {
-            'ESTRUCTURAS_MUEBLES':     'Estructura de Sofa',
+            'ESTRUCTURAS_MUEBLES':     'Estructura de sofá',
             'ESTRUCTURAS_SILLAS':      'Estructura de Sillas',
-            'CARPINTERIA':             'Carpinteria',
+            'CARPINTERIA':             'Carpintería',
             'CORTE_Y_CONTROL_TELAS':   'Telas',
             'TELAS':                   'Telas',
-            'PREPARACION_PATAS_ZOCALO':'Patas y Zocalos',
+            'PREPARACION_PATAS_ZOCALO':'Patas y zócalos',
             'TABLEROS_Y_PIEDRAS':      'Tableros y Piedras',
-            'TAPICERIA_SOFAS':         'Tapiceria Sofa',
-            'TAPICERIA_SILLAS':        'Tapiceria Sillas',
-            'ARMADO_COJINES':          'Cojineria',
+            'TAPICERIA_SOFAS':         'Tapicería de sofá',
+            'TAPICERIA_SILLAS':        'Tapicería de sillas',
+            'ARMADO_COJINES':          'Cojinería',
             'DESPACHO_CENTRAL':        'Despacho',
         };
 
@@ -120,11 +120,18 @@ async function cargarOrdenesProduccion(contenedor) {
                             <div style="font-size:12px; font-weight:800; color:#0f172a; margin-bottom:5px;">${item.producto}</div>
                             ${hayTickets ? `<div style="display:flex; gap:5px; flex-wrap:wrap;">${ticketsHTML}</div>` : `<span style="font-size:11px; color:#94a3b8;">Sin tickets de producción</span>`}
                         </div>
-                        <button onclick="abrirNotaOrden(${item.tickets && item.tickets[0] ? item.tickets[0].id : 0})"
-                            style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0;"
-                            title="Agregar nota/incidencia">
-                            <i class="fa-solid fa-note-sticky"></i>
-                        </button>
+                        <div style="display:flex; gap:6px; flex-shrink:0;">
+                            <button onclick="abrirNotaOrden(${item.tickets && item.tickets[0] ? item.tickets[0].id : 0})"
+                                style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; width:34px; height:34px; border-radius:6px; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;"
+                                title="Agregar nota o incidencia">
+                                <i class="fa-solid fa-note-sticky"></i>
+                            </button>
+                            <button onclick="descargarContratoOrden('${orden.codigo}')"
+                                style="background:#0f172a; border:1px solid #0f172a; color:white; width:34px; height:34px; border-radius:6px; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;"
+                                title="Descargar contrato completo con imágenes">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                        </div>
                     </div>`;
             });
 

@@ -546,7 +546,9 @@ def obtener_tickets_taller():
             JOIN items_venta i ON t.item_id  = i.id
             JOIN ventas v      ON i.venta_id = v.id
             LEFT JOIN usuarios u ON t.trabajador_asignado_id = u.id
-            WHERE t.item_id NOT IN (
+            WHERE COALESCE(v.estado_general, '') != 'Cancelado'
+              AND COALESCE(t.estado_ticket, '') != 'Cancelado'
+              AND t.item_id NOT IN (
                 -- Excluir items que SOLO tienen tickets de ESTRUCTURAS_SILLAS/TAPICERIA_SILLAS
                 -- y ningún ticket de áreas internas reales (tela, cojines, etc.)
                 -- Esto indica que la silla/butaca es comprada externamente (logística externa)

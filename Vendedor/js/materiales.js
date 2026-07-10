@@ -3,6 +3,14 @@
 // A11: Estado para paginación de buscadores inteligentes
 let _smartSearchState = {};
 
+function _resolverUrlImagenMaterial(url) {
+    const valor = String(url || '').trim();
+    if (!valor) return 'imagenes/sin_foto.jpg';
+    if (/^(?:https?:|data:|blob:)/i.test(valor)) return valor;
+    if (/^\/uploads\//i.test(valor)) return `${API_URL}${valor}`;
+    return `${API_URL}/uploads/${valor.replace(/^\/+/, '')}`;
+}
+
 /**
  * mostrarUltimasMaterial — se llama en el onfocus del input de búsqueda.
  * Si el campo está vacío, muestra las últimas 10 telas/materiales ingresados
@@ -593,7 +601,7 @@ async function verMisCreaciones() {
         container.innerHTML = creaciones.map(item => `
             <div class="card card-template" style="position: relative;">
                 <div class="badge-template"><i class="fa-solid fa-star"></i> PLANTILLA</div>
-                <img src="${item.foto_url && item.foto_url.startsWith('http') ? item.foto_url : `${API_URL}/uploads/${item.foto_url}`}" onerror="this.src='imagenes/sin_foto.jpg'">
+                <img src="${_resolverUrlImagenMaterial(item.foto_url)}" onerror="this.src='imagenes/sin_foto.jpg'">
                 <div class="card-info">
                     <span class="status-badge status-template">${item.categoria.toUpperCase()}</span>
                     <h4>${item.nombre}</h4>
@@ -665,9 +673,7 @@ async function editarPlantilla(id) {
                 actualizarVistaButaca();
             }
         } else {
-            const fotoResucitada = (plantilla.foto_url && plantilla.foto_url.startsWith('http'))
-                ? plantilla.foto_url
-                : `${API_URL}/uploads/${plantilla.foto_url}`;
+            const fotoResucitada = _resolverUrlImagenMaterial(plantilla.foto_url);
             openConfig(plantilla.nombre, fotoResucitada);
             if (adn['sofa-modelo']) {
                 document.getElementById('sofa-modelo').value = adn['sofa-modelo'];
@@ -744,9 +750,7 @@ async function cargarPlantilla(id) {
 
         // 4. Si el vendedor puso el precio y aceptó, lo mandamos de frente al carrito
         if (precioFinal) {
-            const fotoParaCarrito = (plantilla.foto_url && plantilla.foto_url.startsWith('http'))
-                ? plantilla.foto_url
-                : `${API_URL}/uploads/${plantilla.foto_url}`;
+            const fotoParaCarrito = _resolverUrlImagenMaterial(plantilla.foto_url);
             
             // Usamos tu misma función universal del carrito
             addToCart(plantilla.nombre, parseFloat(precioFinal), fotoParaCarrito, especificaciones);

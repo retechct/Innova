@@ -58,7 +58,7 @@ async function cargarComisionesVendedores() {
 
         _egRenderVendedores(data);
     } catch(e) {
-        cont.innerHTML = _egError('Error de conexiÃ³n: ' + e.message);
+        cont.innerHTML = _egError('Error de conexión: ' + e.message);
     }
 }
 
@@ -89,7 +89,7 @@ function _egRenderVendedores(meta = {}) {
             <div style="font-size:11px;opacity:.65;">${vendedoresSinPedido} sin pedido esta semana</div>
         </div>
         <div style="${_egCardStyle('#1d4ed8')}">
-            <div style="font-size:10px;opacity:.75;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Total ventas perÃ­odo</div>
+            <div style="font-size:10px;opacity:.75;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Total ventas período</div>
             <div style="font-size:22px;font-weight:800;margin:5px 0 2px;">S/ ${totalVentas.toFixed(2)}</div>
             <div style="font-size:11px;opacity:.65;">${totalContratos} pedido${totalContratos !== 1 ? 's' : ''}</div>
         </div>
@@ -101,15 +101,15 @@ function _egRenderVendedores(meta = {}) {
         <div style="${_egCardStyle('#059669')}">
             <div style="font-size:10px;opacity:.75;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Total neto a pagar</div>
             <div style="font-size:22px;font-weight:800;margin:5px 0 2px;">S/ ${totalNeto.toFixed(2)}</div>
-            <div style="font-size:11px;opacity:.65;">sueldo + comisiÃ³n Â± ajustes</div>
+            <div style="font-size:11px;opacity:.65;">sueldo + comisión ± ajustes</div>
         </div>
     </div>
 
     ${vendedoresSinPedido > 0 ? `
     <div style="background:#fef9c3;border-left:4px solid #d97706;border-radius:0 8px 8px 0;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#92400e;">
         <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>
-        <b>${vendedoresSinPedido} vendedor${vendedoresSinPedido !== 1 ? 'es' : ''}</b> no registrÃ³ pedidos esta semana.
-        No recibirÃ¡n sueldo base. Los descuentos pendientes se acumulan para la siguiente semana.
+        <b>${vendedoresSinPedido} vendedor${vendedoresSinPedido !== 1 ? 'es' : ''}</b> no registró pedidos esta semana.
+        No recibirán sueldo base. Los descuentos pendientes se acumulan para la siguiente semana.
     </div>` : ''}
 
     <!-- Tabla principal -->
@@ -120,7 +120,7 @@ function _egRenderVendedores(meta = {}) {
                 <th style="${_egTh()}">Vendedor</th>
                 <th style="${_egTh('center')}">Contratos</th>
                 <th style="${_egTh('right')}">Ventas</th>
-                <th style="${_egTh('right')}">ComisiÃ³n 3%</th>
+                <th style="${_egTh('right')}">Comisión 3%</th>
                 <th style="${_egTh('right')}">Sueldo base</th>
                 <th style="${_egTh('right')}">Aumentos</th>
                 <th style="${_egTh('right')}">Descuentos</th>
@@ -272,7 +272,7 @@ async function egAbrirAjusteVendedor(idx, tipo) {
             const motivo = document.getElementById('sw-motivo').value.trim();
             const inicio = document.getElementById('sw-inicio').value;
             const fin    = document.getElementById('sw-fin').value;
-            if (!monto || monto <= 0) { Swal.showValidationMessage('Ingresa un monto vÃ¡lido mayor a 0'); return false; }
+            if (!monto || monto <= 0) { Swal.showValidationMessage('Ingresa un monto válido mayor a 0'); return false; }
             if (!inicio || !fin)      { Swal.showValidationMessage('Selecciona el rango de la semana'); return false; }
 
             const res = await apiFetch(`${API_URL}/api/vendedores/ajuste`, {
@@ -308,7 +308,7 @@ async function egVerAjustesVendedor(idx) {
     if (!res.ok) { Swal.fire('Error', data.error, 'error'); return; }
 
     if (!data.length) {
-        Swal.fire({ icon: 'info', title: `${v.vendedor_nombre}`, text: 'Sin ajustes registrados aÃºn.' });
+        Swal.fire({ icon: 'info', title: `${v.vendedor_nombre}`, text: 'Sin ajustes registrados aún.' });
         return;
     }
 
@@ -359,12 +359,12 @@ async function egVerAjustesVendedor(idx) {
 
 async function egEliminarAjuste(ajusteId) {
     const conf = await Swal.fire({
-        title: 'Â¿Eliminar ajuste?',
-        text:  'Solo se puede eliminar si aÃºn no fue aplicado en un cierre.',
+        title: '¿Eliminar ajuste?',
+        text:  'Solo se puede eliminar si aún no fue aplicado en un cierre.',
         icon:  'warning',
         showCancelButton:   true,
         confirmButtonColor: '#dc2626',
-        confirmButtonText:  'SÃ­, eliminar',
+        confirmButtonText:  'Sí, eliminar',
         cancelButtonText:   'Cancelar',
     });
     if (!conf.isConfirmed) return;
@@ -394,12 +394,12 @@ async function egCerrarSemanaVendedor(idx) {
         <div style="text-align:left;">
             ${sinVenta ? `<div style="background:#fef9c3;border-left:4px solid #d97706;padding:10px 14px;border-radius:0 8px 8px 0;margin-bottom:14px;font-size:13px;color:#92400e;">
                 <b>Sin pedidos esta semana.</b> El monto a pagar sera S/ 0.00.
-                Los descuentos pendientes (S/ ${(v.descuentos_total||0).toFixed(2)}) pasarÃ¡n a la siguiente semana.
+                Los descuentos pendientes (S/ ${(v.descuentos_total||0).toFixed(2)}) pasarán a la siguiente semana.
             </div>` : `
             <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:10px 14px;border-radius:0 8px 8px 0;margin-bottom:14px;font-size:13px;color:#166534;">
                 <b>Neto calculado:</b> S/ ${netoCalculado.toFixed(2)}
                 &nbsp;|&nbsp; Sueldo S/ ${(v.sueldo_efectivo||0).toFixed(2)}
-                + ComisiÃ³n S/ ${(v.comision||0).toFixed(2)}
+                + Comisión S/ ${(v.comision||0).toFixed(2)}
                 ${v.aumentos > 0 ? `+ Aum. S/ ${v.aumentos.toFixed(2)}` : ''}
                 ${v.descuentos_total > 0 ? `âˆ’ Desc. S/ ${v.descuentos_total.toFixed(2)}` : ''}
             </div>`}

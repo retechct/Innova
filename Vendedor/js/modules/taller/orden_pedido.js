@@ -111,6 +111,55 @@ async function abrirDetallePedido(codigo) {
 // "Descargar PDF" / "Imprimir" del modal (HTML plano, sin closure) lo lean.
 let _ultimoPedidoDetalle = null;
 
+function _normalizarTextoOrden(valor) {
+    let texto = String(valor ?? '');
+    const reemplazos = {
+        'Ã¡':'á', 'Ã©':'é', 'Ã­':'í', 'Ã³':'ó', 'Ãº':'ú', 'Ã±':'ñ',
+        'Ã':'Á', 'Ã‰':'É', 'Ã':'Í', 'Ã“':'Ó', 'Ãš':'Ú', 'Ã‘':'Ñ',
+        'Â¿':'¿', 'Â¡':'¡', 'Â±':'±', 'Â°':'°', 'Â·':'·',
+        'â€”':'—', 'â€“':'–', 'â†’':'→', 'â€¢':'•',
+        'ðŸ“‹':'📋', 'ðŸ“¦':'📦', 'ðŸ“':'📝', 'ðŸšš':'🚚',
+    };
+    Object.entries(reemplazos).forEach(([mal, bien]) => {
+        texto = texto.split(mal).join(bien);
+    });
+    return texto.replace(/Â(?=[\s<])/g, '');
+}
+
+function _textoPlanoOrden(html) {
+    const temporal = document.createElement('div');
+    temporal.innerHTML = _normalizarTextoOrden(html || '');
+    return (temporal.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function _descripcionImagenOrden(item, foto, indice) {
+    const detalle = _normalizarTextoOrden(item.detalles || '');
+    const linea = detalle.split(/<br\s*\/?>|\n/i).find(parte => parte.includes(foto));
+    if (linea) {
+        const descripcion = _textoPlanoOrden(linea)
+            .replace(foto, '')
+            .replace(/↳\s*Nota:\s*Ver foto adjunta:?/i, '')
+            .replace(/\[Ver Foto\]/gi, '')
+            .trim();
+        if (descripcion) return descripcion;
+    }
+    return indice === 0
+        ? `Vista general de ${_normalizarTextoOrden(item.producto)}`
+        : `Referencia visual ${indice + 1} de ${_normalizarTextoOrden(item.producto)}`;
+}
+
+async function descargarContratoOrden(codigo) {
+    try {
+        Swal.fire({ title: 'Preparando contrato...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res = await apiFetch(`${API_URL}/api/pedido/detalle/${encodeURIComponent(codigo)}`);
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'No se pudo cargar el contrato.');
+        await descargarPDFOrdenTaller(data);
+    } catch (e) {
+        Swal.fire('Error', e.message || 'No se pudo descargar el contrato.', 'error');
+    }
+}
+
 /**
  * Arma el HTML del documento "Orden de Producción" (mismo diseño para
  * impresión y para exportar a PDF). Se separó de imprimirOrdenTaller()
@@ -125,31 +174,35 @@ function _construirHTMLOrdenTaller(data, paraCanvas = false) {
     let filasItems = '';
     data.items.forEach((item, index) => {
         // Leemos el HTML exacto de la BD
-        let detalleHTML = item.detalles || "Especificaciones estándar de fabricación.";
+        let detalleHTML = _normalizarTextoOrden(item.detalles || "Especificaciones estándar de fabricación.");
         // FIX (julio 2026): item.fotos trae TODAS las fotos que el vendedor
         // eligió del catálogo para esta pieza (antes solo se imprimía una,
         // aunque el pedido tuviera varias imágenes de referencia guardadas).
         const fotosItem = (item.fotos && item.fotos.length) ? item.fotos : (item.foto ? [item.foto] : []);
         const fotoCelda = fotosItem.length
-            ? `<div style="display:flex; flex-wrap:wrap; gap:4px; width:100px;">
-                ${fotosItem.map(f => `<img src="${f}" crossorigin="anonymous" style="width:${fotosItem.length > 1 ? '42px' : '90px'};height:${fotosItem.length > 1 ? '42px' : '90px'};object-fit:cover;border-radius:6px;border:1px solid #cbd5e1;display:block;" onerror="this.style.display='none'">`).join('')}
+            ? `<div class="photo-grid">
+                ${fotosItem.map((f, fotoIndex) => `
+                    <figure class="photo-figure">
+                        <img src="${f}" crossorigin="anonymous" onerror="this.closest('figure').style.display='none'">
+                        <figcaption>${_descripcionImagenOrden(item, f, fotoIndex)}</figcaption>
+                    </figure>`).join('')}
                </div>`
-            : `<div style="width:90px;height:90px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;text-align:center;">Sin foto</div>`;
+            : `<div class="photo-empty">Sin imagen de referencia</div>`;
 
         filasItems += `
             <tr>
                 <td style="padding: 15px; border-bottom: 1px solid #cbd5e1; text-align: center; font-weight: bold; color: #64748b; vertical-align: top;">${index + 1}</td>
-                <td style="padding: 15px; border-bottom: 1px solid #cbd5e1; vertical-align: top; width: 100px;">
+                <td class="photo-cell">
                     ${fotoCelda}
                 </td>
                 <td style="padding: 15px; border-bottom: 1px solid #cbd5e1; vertical-align: top;">
-                    <div style="font-weight: 900; color: #0f172a; font-size: 14px; margin-bottom: 8px; text-transform: uppercase;">${item.producto}</div>
+                    <div style="font-weight: 900; color: #0f172a; font-size: 14px; margin-bottom: 8px; text-transform: uppercase;">${_normalizarTextoOrden(item.producto)}</div>
                     
                     <div style="background: #f8fafc; border-left: 3px solid #d4af37; padding: 10px; font-size: 11.5px; color: #334155; line-height: 1.6; border-radius: 0 4px 4px 0;">
                         ${detalleHTML}
                     </div>
                 </td>
-                <td style="padding: 15px; border-bottom: 1px solid #cbd5e1; vertical-align: top; width: 140px;">
+                <td style="padding: 15px; border-bottom: 1px solid #cbd5e1; vertical-align: top; width: 105px;">
                     <div style="border: 2px dashed #cbd5e1; height: 100%; min-height: 110px; border-radius: 5px; background: #fff; padding: 5px; font-size: 9px; color: #94a3b8; text-align: center; display: flex; flex-direction: column; justify-content: flex-end;">
                         <span style="border-top: 1px solid #cbd5e1; padding-top: 5px; width: 80%; margin: 0 auto;">Firma Taller / CC</span>
                     </div>
@@ -162,7 +215,7 @@ function _construirHTMLOrdenTaller(data, paraCanvas = false) {
             @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@300;400;600;800;900&display=swap');
             
             body { font-family: 'Plus Jakarta Sans', sans-serif; color: #333; margin: 0; padding: 0; background-color: #fff; }
-            .page { width: 210mm; min-height: 297mm; padding: 15mm; margin: auto; position: relative; box-sizing: border-box; overflow: hidden; background: #fff; }
+            .page { width: 210mm; min-height: 297mm; padding: 13mm; margin: auto; position: relative; box-sizing: border-box; overflow: hidden; background: #fff; }
             
             /* DECORACIÓN GEOMÉTRICA (Estilo Carey) */
             .corner-top { position: absolute; top: -50px; right: -50px; width: 250px; height: 250px; background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%); transform: rotate(45deg); z-index: 0; opacity: 0.9; }
@@ -187,6 +240,12 @@ function _construirHTMLOrdenTaller(data, paraCanvas = false) {
             /* TABLA */
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             thead th { background: #1f2937; color: white; padding: 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: left; }
+            .photo-cell { padding: 12px; border-bottom: 1px solid #cbd5e1; vertical-align: top; width: 300px; }
+            .photo-grid { width: 286px; display: flex; flex-direction: column; gap: 10px; }
+            .photo-figure { width: 286px; margin: 0; padding: 0; break-inside: avoid; }
+            .photo-figure img { width: 286px; height: 215px; object-fit: contain; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; display: block; }
+            .photo-figure figcaption { margin-top: 4px; padding: 5px 7px; background: #fffbeb; border-left: 3px solid #d4af37; color: #334155; font-size: 9px; line-height: 1.35; font-weight: 600; }
+            .photo-empty { width: 286px; height: 160px; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f8fafc; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 11px; }
             
             .warning-box { border: 2px dashed #b8860b; padding: 15px; text-align: center; margin-top: 40px; font-size: 11px; font-weight: 800; background: #fffcf0; color: #1a1a1a; text-transform: uppercase; border-radius: 6px; }
 
@@ -212,13 +271,13 @@ function _construirHTMLOrdenTaller(data, paraCanvas = false) {
                     <div class="contract-title">
                         <h1>ORDEN DE PRODUCCIÓN</h1>
                         
-                        <div style="margin-top: 5px; font-size: 18pxpx; font-weight: 900; color: #ffffff; font-family: 'Plus Jakarta Sans', sans-serif;">N° ${data.codigo}</div>
+                        <div style="margin-top: 5px; font-size: 18px; font-weight: 900; color: #ffffff; font-family: 'Plus Jakarta Sans', sans-serif;">N° ${data.codigo}</div>
                     </div>
                 </div>
 
                 <div class="client-section">
                     <div class="info-box">
-                        <div><strong>Cliente:</strong> ${data.cliente.toUpperCase()}</div>
+                        <div><strong>Cliente:</strong> ${_normalizarTextoOrden(data.cliente).toUpperCase()}</div>
                         <div><strong>Emisión:</strong> ${new Date().toLocaleDateString('es-PE')}</div>
                     </div>
                     <div class="info-box">
@@ -233,9 +292,9 @@ function _construirHTMLOrdenTaller(data, paraCanvas = false) {
                     <thead>
                         <tr>
                             <th style="width:40px; text-align:center;">#</th>
-                            <th style="width:100px; text-align:center;">Foto</th>
-                            <th>Despiece Técnico y Tapicería</th>
-                            <th style="width:140px; text-align:center;">Control Calidad</th>
+                            <th style="width:300px; text-align:center;">Imágenes de referencia</th>
+                            <th>Especificaciones técnicas</th>
+                            <th style="width:105px; text-align:center;">Control de calidad</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -272,6 +331,7 @@ function _construirHTMLOrdenTaller(data, paraCanvas = false) {
     <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="UTF-8">
         <title>Orden Taller #${data.codigo}</title>
         ${estilos}
     </head>
@@ -293,7 +353,7 @@ function imprimirOrdenTaller(data) {
     // blanco para siempre. Generando un Blob con el HTML completo y abriendo
     // esa URL directamente, el navegador la carga como cualquier página
     // normal — sin ninguna carrera de tiempos.
-    const blob = new Blob([htmlOrden], { type: 'text/html' });
+    const blob = new Blob([htmlOrden], { type: 'text/html;charset=UTF-8' });
     const blobUrl = URL.createObjectURL(blob);
     const printWindow = window.open(blobUrl, '_blank');
 

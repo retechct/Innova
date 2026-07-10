@@ -335,7 +335,7 @@ function _aplicarDatosVoucher(datos) {
 async function leerVoucherAutomatico(file) {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-        _voucherSetStatus('Voucher subido. La lectura automática por ahora acepta imágenes; completa los datos manualmente.', 'warn');
+        _voucherSetStatus('Voucher cargado. El autollenado acepta imágenes; completa los datos manualmente.', 'warn');
         return;
     }
     _voucherSetStatus('Leyendo voucher automáticamente...', 'info');
@@ -353,14 +353,15 @@ async function leerVoucherAutomatico(file) {
         const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
         const contentType = (res.headers.get('content-type') || '').toLowerCase();
         if (!contentType.includes('application/json')) {
-            throw new Error('El lector automático tardó demasiado o está reiniciándose');
+            throw new Error('El lector automático no está disponible');
         }
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo leer el voucher');
         if (data.ok === false) throw new Error(data.error || 'No se pudo leer el voucher');
         _aplicarDatosVoucher(data);
     } catch (e) {
-        _voucherSetStatus(`Voucher subido. No se pudo autollenar: ${e.message}. Completa los datos manualmente.`, 'warn');
+        console.warn('Autollenado de voucher no disponible:', e);
+        _voucherSetStatus('Voucher cargado. No pudimos leerlo automáticamente; completa empresa, monto y operación manualmente.', 'warn');
     }
 }
 

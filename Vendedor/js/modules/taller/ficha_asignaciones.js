@@ -38,7 +38,22 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
         seccionesFiltradas = lines.filter(l => l.trim() && !/PATA|ZOCALO|^BASE.*MADERA/i.test(l));
         tituloSeccion = '🛋️ Tapicería'; colorBorde = '#6ee7b7'; colorTitulo = '#065f46';
     } else if (esEstructura) {
-        seccionesFiltradas = lines.filter(l => l.trim() && !/TELA|COJIN|TAPIZ|SKU.*TEL|SKU.*COJ/i.test(l));
+        let ocultarBloqueMaterial = false;
+        seccionesFiltradas = lines.filter(linea => {
+            if (!linea.trim()) return false;
+
+            const texto = linea.replace(/<[^>]+>/g, '').trim();
+            if (/^(?:TELA|TELAS|TELA PRINCIPAL|TAPIZ|TAPIZADO|COJ[IÍ]NERÍA|COJ[IÍ]NES?)\s*:/i.test(texto)) {
+                ocultarBloqueMaterial = true;
+                return false;
+            }
+            if (/^(?:MOD|MODELO|INTERIOR\/ESTRUCTURA|ESTRUCTURA|BASE|PATA|PATAS|ZÓCALO|ZOCALO|BANQUETA|NOTAS?)\s*:/i.test(texto)) {
+                ocultarBloqueMaterial = false;
+            }
+            if (ocultarBloqueMaterial) return false;
+
+            return !/(?:SKU\s*:\s*(?:TEL|COJ))|\b(?:TELA|TAPIZ|COJ[IÍ]N)\b/i.test(texto);
+        });
         tituloSeccion = 'Estructuras'; colorBorde = '#fcd34d'; colorTitulo = '#92400e';
     } else if (esDespacho) {
         seccionesFiltradas = lines.filter(l => l.trim());

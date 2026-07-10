@@ -104,14 +104,25 @@ def _leer_voucher_automatico(archivo):
     if proveedor not in lectores:
         proveedor = 'openai' if os.getenv('OPENAI_API_KEY') else 'gemini'
 
-    resultado = lectores[proveedor](archivo)
-    if resultado.get('ok'):
-        return resultado
+    proveedores = [proveedor]
+    alterno = 'gemini' if proveedor == 'openai' else 'openai'
+    clave_alterno = 'GEMINI_API_KEY' if alterno == 'gemini' else 'OPENAI_API_KEY'
+    if os.getenv(clave_alterno):
+        proveedores.append(alterno)
+
+    errores = []
+    for nombre_proveedor in proveedores:
+        archivo.seek(0)
+        resultado = lectores[nombre_proveedor](archivo)
+        if resultado.get('ok'):
+            return resultado
+        errores.append(f"{nombre_proveedor}: {resultado.get('error', 'sin detalle')}")
+
+    print(f"Voucher OCR sin resultado: {' | '.join(errores)}")
 
     return {
         'ok': False,
-        'error': f"No se pudo leer el voucher automáticamente ({proveedor}): "
-                 f"{resultado.get('error', 'sin detalle')}"
+        'error': 'El lector automático no pudo reconocer este comprobante'
     }
 
 
