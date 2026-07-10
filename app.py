@@ -207,6 +207,10 @@ def mostrar_foto(filename):
 def bienvenida():
     return send_from_directory('Vendedor', 'index.html')
 
+@app.route('/favicon.ico')
+def favicon():
+    return ('', 204)
+
 # ← AGREGAR AQUÍ
 @app.route('/<path:filename>')
 def serve_frontend(filename):

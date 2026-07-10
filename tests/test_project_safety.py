@@ -15,6 +15,7 @@ class ProjectSafetyTests(unittest.TestCase):
 
         self.assertIn("DEBUG_API_ERRORS", app_py)
         self.assertIn("'Error interno del servidor'", app_py)
+        self.assertIn("@app.route('/favicon.ico')", app_py)
         self.assertLess(
             app_py.index("DEBUG_API_ERRORS"),
             app_py.index("return jsonify({'error': str(ex), 'tipo': type(ex).__name__}), 500"),
@@ -53,6 +54,9 @@ class ProjectSafetyTests(unittest.TestCase):
         self.assertIn("comision_pos > monto_bruto", ventas_py)
         self.assertIn("/api/voucher/leer", catalogo_py)
         self.assertIn("_leer_voucher_con_openai", catalogo_py)
+        self.assertIn("_llamar_openai_voucher", catalogo_py)
+        self.assertIn("json_object", catalogo_py)
+        self.assertIn("La API key de OpenAI no tiene saldo", catalogo_py)
         self.assertIn("OPENAI_API_KEY", catalogo_py)
         self.assertIn("leerVoucherAutomatico", carrito_js)
         self.assertIn("_aplicarDatosVoucher", carrito_js)

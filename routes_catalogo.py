@@ -39,6 +39,25 @@ def _normalizar_monto(valor):
         return None
 
 
+def _extraer_texto_responses(data):
+    texto = data.get("output_text")
+    if texto:
+        return texto
+    partes = []
+    for item in data.get("output", []):
+        for content in item.get("content", []):
+            if content.get("type") in ("output_text", "text"):
+                partes.append(content.get("text", ""))
+    return "\n".join(partes)
+
+
+def _llamar_openai_voucher(api_key, payload):
+    payload_fallback = dict(payload)
+    payload_fallback["text"] = {"format": {"type": "json_object"}}
+    with urllib.request.urlopen(req, timeout=35) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
 def _leer_voucher_con_openai(archivo):
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
@@ -114,24 +133,28 @@ def _leer_voucher_con_openai(archivo):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=35) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        data = _llamar_openai_voucher(api_key, payload)
     except urllib.error.HTTPError as e:
         detalle = e.read().decode("utf-8", errors="ignore")[:500]
-        print(f"OpenAI voucher OCR HTTPError: {detalle}")
-        return {'ok': False, 'error': 'No se pudo leer el voucher con IA'}
+        print(f"OpenAI voucher OCR schema HTTPError: {detalle}")
+        try:
+            data = _llamar_openai_voucher(api_key, payload_fallback)
+        except urllib.error.HTTPError as e2:
+            detalle2 = e2.read().decode("utf-8", errors="ignore")[:500]
+            print(f"OpenAI voucher OCR fallback HTTPError: {detalle2}")
+            if "insufficient_quota" in detalle2 or "billing" in detalle2.lower():
+                return {'ok': False, 'error': 'La API key de OpenAI no tiene saldo o cuota disponible'}
+            if "invalid_api_key" in detalle2 or "Incorrect API key" in detalle2:
+                return {'ok': False, 'error': 'OPENAI_API_KEY inválida o revocada'}
+            return {'ok': False, 'error': 'No se pudo leer el voucher con IA'}
+        except Exception as e2:
+            print(f"OpenAI voucher OCR fallback error: {e2}")
+            return {'ok': False, 'error': 'No se pudo conectar al lector automático'}
     except Exception as e:
         print(f"OpenAI voucher OCR error: {e}")
         return {'ok': False, 'error': 'No se pudo conectar al lector automático'}
 
-    texto = data.get("output_text")
-    if not texto:
-        partes = []
-        for item in data.get("output", []):
-            for content in item.get("content", []):
-                if content.get("type") in ("output_text", "text"):
-                    partes.append(content.get("text", ""))
-        texto = "\n".join(partes)
+    texto = _extraer_texto_responses(data)
 
     try:
         extraido = _parse_json_modelo(texto)
