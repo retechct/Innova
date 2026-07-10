@@ -85,6 +85,7 @@ def _datos_voucher_desde_json(extraido):
             'monto_neto': monto_neto,
             'numero_operacion': extraido.get('numero_operacion') or None,
             'fecha_pago': extraido.get('fecha_pago') or None,
+            'contacto_destino': extraido.get('contacto_destino') or extraido.get('destinatario') or None,
             'moneda': extraido.get('moneda') or 'PEN',
             'confianza': _normalizar_monto(extraido.get('confianza')),
             'notas': extraido.get('notas') or '',
@@ -110,9 +111,12 @@ def _leer_voucher_automatico(archivo):
 def _prompt_voucher_json():
     return (
         "Lee este voucher/comprobante de pago peruano. Devuelve SOLO JSON válido con estas claves: "
-        "tipo_pago, entidad, monto_bruto, comision_pos, monto_neto, numero_operacion, fecha_pago, "
+        "tipo_pago, entidad, monto_bruto, comision_pos, monto_neto, numero_operacion, fecha_pago, contacto_destino, "
         "moneda, confianza, notas. Reglas: monto_bruto es el total cobrado al cliente; "
         "si ves comisión POS o merchant discount ponla en comision_pos; monto_neto = monto_bruto - comision_pos. "
+        "contacto_destino es la persona/cuenta que recibe el dinero, por ejemplo el valor junto a Contacto, "
+        "Destinatario, Beneficiario o Titular; no lo confundas con la app o banco. "
+        "Si el nombre del contacto está truncado o enmascarado, igual devuelve el texto visible, por ejemplo Inn **** L. "
         "Si un campo no se ve, usa null. tipo_pago debe ser POS, Transferencia, Yape, Plin, Efectivo u Otro. "
         "confianza debe ser número de 0 a 1."
     )
@@ -268,13 +272,14 @@ def _leer_voucher_con_openai(archivo):
             "monto_neto": {"type": ["number", "null"]},
             "numero_operacion": {"type": ["string", "null"]},
             "fecha_pago": {"type": ["string", "null"]},
+            "contacto_destino": {"type": ["string", "null"]},
             "moneda": {"type": ["string", "null"]},
             "confianza": {"type": ["number", "null"]},
             "notas": {"type": ["string", "null"]},
         },
         "required": [
             "tipo_pago", "entidad", "monto_bruto", "comision_pos", "monto_neto",
-            "numero_operacion", "fecha_pago", "moneda", "confianza", "notas"
+            "numero_operacion", "fecha_pago", "contacto_destino", "moneda", "confianza", "notas"
         ],
         "additionalProperties": False,
     }

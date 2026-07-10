@@ -221,6 +221,79 @@ function _normalizarEntidadVoucher(entidad) {
     return mapa[raw.toLowerCase()] || raw;
 }
 
+function _normalizarTextoVoucher(texto) {
+    return String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function _textoVoucherTieneAlias(texto, alias) {
+    const limpio = _normalizarTextoVoucher(texto);
+    const aliasLimpio = _normalizarTextoVoucher(alias);
+    if (!limpio || !aliasLimpio) return false;
+    if (limpio.includes(aliasLimpio)) return true;
+
+    const tokens = aliasLimpio.split(' ').filter(t => t.length > 1);
+    if (tokens.length <= 1) return false;
+    return tokens.every(t => limpio.includes(t));
+}
+
+function _seleccionarEmpresaPorVoucher(datos) {
+    const select = document.getElementById('pago-empresa');
+    if (!select) return '';
+
+    const contacto = _normalizarTextoVoucher([
+        datos.contacto_destino,
+        datos.destinatario,
+        datos.titular_destino,
+        datos.notas
+    ].filter(Boolean).join(' '));
+    if (!contacto) return '';
+
+    const aliasEmpresa = [
+        { empresa: 'Señora Dani', alias: ['denixa canilla', 'denixa canlla', 'denixa', 'dani', 'daniela'] },
+        { empresa: 'Señor Rommel', alias: ['rommel', 'romel', 'sr rommel', 'senor rommel'] },
+        {
+            empresa: 'INNOVA MOBILI LIMA E.I.R.L.',
+            alias: [
+                'innova mobili lima', 'innova lima', 'mobili lima', 'lima eirl',
+                'inn l', 'innova l', 'mobili l', '20614763044', '63044'
+            ]
+        },
+        {
+            empresa: 'INNOVA MOBILI S.A.C.',
+            alias: [
+                'innova mobili sac', 'innova sac', 'mobili sac', 'sac',
+                'inn s', 'innova s', 'mobili s', '20600768175', '68175'
+            ]
+        },
+    ];
+
+    for (const regla of aliasEmpresa) {
+        if (regla.alias.some(a => _textoVoucherTieneAlias(contacto, a))) {
+            const opt = [...select.options].find(o => o.value === regla.empresa);
+            if (opt) {
+                select.value = regla.empresa;
+                return regla.empresa;
+            }
+        }
+    }
+
+    const optTexto = [...select.options].find(o => {
+        const value = _normalizarTextoVoucher(o.value);
+        const text = _normalizarTextoVoucher(o.textContent);
+        return value && (contacto.includes(value) || text.includes(contacto) || contacto.includes(value.split(' ')[0]));
+    });
+    if (optTexto) {
+        select.value = optTexto.value;
+        return optTexto.value;
+    }
+    return '';
+}
+
 function _aplicarDatosVoucher(datos) {
     if (!datos) return false;
     window._ultimoVoucherOCR = datos;
@@ -246,9 +319,12 @@ function _aplicarDatosVoucher(datos) {
     if (document.getElementById('pago-comision') && datos.comision_pos != null) {
         document.getElementById('pago-comision').value = Number(datos.comision_pos || 0).toFixed(2);
     }
+    const empresaDetectada = _seleccionarEmpresaPorVoucher(datos);
 
     const partes = [];
     if (entidadDetectada) partes.push(entidadDetectada);
+    if (datos.contacto_destino) partes.push(`Contacto: ${datos.contacto_destino}`);
+    if (empresaDetectada) partes.push(`Empresa: ${empresaDetectada}`);
     if (datos.monto_bruto != null) partes.push(`S/ ${Number(datos.monto_bruto).toFixed(2)}`);
     if (datos.numero_operacion) partes.push(`Op. ${datos.numero_operacion}`);
     const confianza = datos.confianza != null ? ` Confianza ${Math.round(Number(datos.confianza) * 100)}%.` : '';
