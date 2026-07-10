@@ -413,13 +413,19 @@ async function agregarMetodoPago() {
             method: 'POST',
             body: formDataFoto
         });
-        if (!res.ok) throw new Error('Error al subir la imagen');
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const mensaje = res.status === 401
+                ? 'Tu sesion vencio. Vuelve a iniciar sesion y carga nuevamente el voucher.'
+                : (data.error || `El servidor respondio con error ${res.status}`);
+            throw new Error(mensaje);
+        }
+        if (!data.url) throw new Error('El servidor no devolvio la URL del voucher.');
         comprobante_url = data.url;
         Swal.close();
     } catch (e) {
         Swal.close();
-        return Swal.fire('Error', 'No se pudo subir la foto del voucher. Verifica tu conexión.', 'error');
+        return Swal.fire('No se pudo subir el voucher', e.message, 'error');
     }
 
     const montoNeto = monto - comision;

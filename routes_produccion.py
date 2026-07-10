@@ -613,13 +613,24 @@ def obtener_tickets_taller():
                 and (row[8] in items_incompletos or row[12] in ventas_con_logistica_pendiente)
             ):
                 estado = 'Bloqueado'
+
+            # La ficha original contiene las notas escritas por el vendedor.
+            # El detalle particular del area (SKU, notas internas, etc.) debe
+            # complementarla, no reemplazarla.
+            ficha_original = (row[7] or '').strip()
+            detalle_area = (row[4] or '').strip()
+            partes_ficha = [ficha_original]
+            if detalle_area and detalle_area not in ficha_original:
+                partes_ficha.append(detalle_area)
+            especificaciones = '<br>'.join(p for p in partes_ficha if p) or 'Sin notas técnicas'
+
             tickets.append({
                 "id":              row[0],
                 "producto":        f"{row[1]} (Ref: {row[6]})",
                 "estado":          estado,
                 "area":            row[3],
                 "trabajador":      row[5],
-                "especificaciones": row[4] if row[4] else (row[7] if row[7] else "Sin notas técnicas"),
+                "especificaciones": especificaciones,
                 "foto":            "|".join([limpiar_foto(p) for p in row[9].split('|')]) if row[9] and "|" in row[9] else limpiar_foto(row[9]),
                 "trabajador_nombre": row[11] if row[11] else 'Sin asignar',
                 "item_id":         row[8]

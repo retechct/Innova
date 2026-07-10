@@ -157,6 +157,17 @@ function _htmlEsqueleto() {
             </div>
             <div id="reader-inv" style="width:100%; min-height:250px; background:#f1f5f9; border-radius:8px; overflow:hidden;"></div>
             <p style="font-size:12px;color:gray;margin-top:10px;">Apunta la cámara del celular al código de barras impreso.</p>
+            <div id="scanner-inv-error" style="display:none;margin:10px 0;padding:9px;background:#fff7ed;color:#9a3412;border-radius:6px;font-size:12px;text-align:left;"></div>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+                <input id="scanner-inv-codigo-manual" type="text" class="form-input"
+                       placeholder="Escribir o pegar código"
+                       onkeydown="if(event.key === 'Enter') _usarCodigoManualScanner()"
+                       style="flex:1;min-width:0;">
+                <button type="button" class="btn-action btn-primary" onclick="_usarCodigoManualScanner()"
+                        title="Buscar código" style="width:auto;white-space:nowrap;">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+            </div>
         </div>
     </div>
     `;

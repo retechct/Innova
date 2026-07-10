@@ -47,6 +47,13 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
         seccionesFiltradas = lines.filter(l => l.trim());
     }
 
+    // Las notas generales del vendedor aplican a todas las areas. Nunca deben
+    // desaparecer por el filtrado tecnico de Telas, Cojines o Estructuras.
+    const notasGenerales = lines.filter(l => /\bNOTAS?\s*:/i.test(l));
+    notasGenerales.forEach(linea => {
+        if (!seccionesFiltradas.includes(linea)) seccionesFiltradas.push(linea);
+    });
+
     // ── Extraer todos los SKUs mencionados en las líneas filtradas ──
     const skuRegex = /SKU:\s*([A-Z0-9\-]+)/gi;
     const skusEncontrados = new Set();
@@ -69,6 +76,13 @@ async function verFichaTaller(producto, especificaciones, foto, area) {
             let fLine = l.replace(/<[^>]+>/g, '').trim();
             fLine = fLine.replace(/\[Ver Foto\]/gi, '').trim();
             if (!fLine && _fotosHref.length === 0) return '';
+
+            if (/^NOTAS?\s*:/i.test(fLine)) {
+                const notaTexto = fLine.replace(/^NOTAS?\s*:/i, '').trim();
+                return `<div style="padding:9px 10px; margin:8px 0 2px; background:#fffbeb; color:#92400e; border-left:4px solid #f59e0b; font-size:12px; line-height:1.5; border-radius:0 6px 6px 0;">
+                            <i class="fa-solid fa-clipboard-list"></i> <b>Notas del vendedor:</b> ${notaTexto}
+                        </div>`;
+            }
 
             // 3. Convertir URLs de texto plano en imágenes
             const urlRegex = /(https?:\/\/[^\s"<]+)/g;

@@ -964,6 +964,7 @@ async function confirmarPersonalizadoSofa() {
     // Nombre libre para contrato (Feature 4)
     const nombreLibre = (document.getElementById('sofa-nombre-libre')?.value || '').trim();
     const anchoTotalSofa = (document.getElementById('sofa-ancho-total')?.value || '').trim();
+    const notasTextoSofa = (document.getElementById('sofa-notas')?.value || '').trim();
     const medidasResumenSofa = `${anchoTotalSofa ? `| Ancho total: ${anchoTotalSofa}cm ` : ''}${medidasText}`;
 
     const specs = `
@@ -979,6 +980,7 @@ async function confirmarPersonalizadoSofa() {
         }
         <b>BASE:</b> [SKU: ${skuBase}] ${nombreBase}${provBase ? ` <span style="color:#6b7280;font-size:10px;">[Prov: ${provBase}]</span>` : ''}${notas['base']}
         ${banquetaText}
+        ${notasTextoSofa ? `<br><b style="color:var(--accent);">NOTAS:</b> ${escapeHTML(notasTextoSofa)}` : ''}
     `;
 
     const componentes = {
@@ -1065,6 +1067,7 @@ async function confirmarComedor() {
     const skuTelaSilla = document.getElementById('sku-tela-silla').value;
 
     const notas = await procesarNotasConFotos(['tablero', 'base-mesa', 'silla', 'tela-silla']);
+    const notasTextoComedor = (document.getElementById('comedor-notas')?.value || '').trim();
 
     const specs = `
         <b>FORMATO:</b> ${formatoTexto} para ${cantidadSillas} personas<br>
@@ -1073,6 +1076,7 @@ async function confirmarComedor() {
         <b>BASE MESA:</b> [SKU: ${skuBaseMesa}] ${nombreBaseMesa} (Alto: ${alturaBase}cm, Ancho: ${anchoBase}cm)${notas['base-mesa']}<br>
         <b>SILLERÍA:</b> ${cantidadSillas} Unds x [SKU: ${skuSilla}] ${nombreSilla}${notas['silla']}<br>
         <b>TAPIZ SILLAS:</b> ${skuTelaSilla ? `[SKU: ${skuTelaSilla}] ${nombreTelaSilla}` : "Sin tapiz específico"}${notas['tela-silla']}
+        ${notasTextoComedor ? `<br><b style="color:var(--accent);">NOTAS:</b> ${escapeHTML(notasTextoComedor)}` : ''}
     `;
 
     const nombreProducto = `Comedor Pro ${formatoTexto} (${cantidadSillas} Sillas)`;
