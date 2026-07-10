@@ -379,7 +379,13 @@ def guardar_venta():
         print(f"[PASO 3] {_paso_actual} — {len(lista_pagos_raw)} pago(s)")
         total_adelanto = 0
         for idx_p, p in enumerate(lista_pagos_raw):
-            monto_bruto = p.get('monto', 0)
+            monto_bruto = float(p.get('monto') or 0)
+            comision_pos = float(p.get('comision') or 0)
+            if monto_bruto <= 0:
+                raise ValueError('El monto del pago debe ser mayor a 0')
+            if comision_pos < 0 or comision_pos > monto_bruto:
+                raise ValueError('La comision POS no puede ser negativa ni superar el monto pagado')
+            monto_neto = p.get('monto_neto', monto_bruto - comision_pos)
             total_adelanto += monto_bruto
             print(f"[PASO 3.{idx_p+1}] Pago: {p}")
             cursor.execute("""
@@ -390,7 +396,7 @@ def guardar_venta():
             """, (
                 venta_id,
                 p.get('tipo'), p.get('entidad'), p.get('operacion'),
-                monto_bruto, p.get('comision', 0), p.get('monto_neto', 0),
+                monto_bruto, comision_pos, monto_neto,
                 p.get('empresa'), p.get('comprobante_url', 'Sin imagen')
             ))
         print(f"[PASO 3] OK — total_adelanto={total_adelanto}")

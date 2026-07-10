@@ -3,13 +3,166 @@ routes_catalogo.py — Módulo 1: Catálogo, Insumos y Vouchers.
 Blueprint: catalogo_bp  (sin prefijo de URL)
 """
 
+import base64
 import json
+import os
+import re
+import urllib.error
+import urllib.request
 import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto, cloudinary_upload
 from auth_middleware import requiere_login, requiere_rol
 
 catalogo_bp = Blueprint('catalogo', __name__)
+
+
+def _parse_json_modelo(texto):
+    if not texto:
+        return {}
+    texto = texto.strip()
+    try:
+        return json.loads(texto)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", texto, re.S)
+        if not match:
+            raise
+        return json.loads(match.group(0))
+
+
+def _normalizar_monto(valor):
+    if valor in (None, ''):
+        return None
+    try:
+        return round(float(str(valor).replace(',', '.')), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _leer_voucher_con_openai(archivo):
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        return {'ok': False, 'error': 'OPENAI_API_KEY no configurada'}
+
+    mime = archivo.mimetype or 'image/jpeg'
+    if not mime.startswith('image/'):
+        return {'ok': False, 'error': 'Por ahora la lectura automática acepta imágenes. Para PDF, registra manualmente.'}
+
+    contenido = archivo.read()
+    archivo.seek(0)
+    if not contenido:
+        return {'ok': False, 'error': 'Archivo vacío'}
+
+    data_url = f"data:{mime};base64,{base64.b64encode(contenido).decode('ascii')}"
+    voucher_schema = {
+        "type": "object",
+        "properties": {
+            "tipo_pago": {"type": ["string", "null"]},
+            "entidad": {"type": ["string", "null"]},
+            "monto_bruto": {"type": ["number", "null"]},
+            "comision_pos": {"type": ["number", "null"]},
+            "monto_neto": {"type": ["number", "null"]},
+            "numero_operacion": {"type": ["string", "null"]},
+            "fecha_pago": {"type": ["string", "null"]},
+            "moneda": {"type": ["string", "null"]},
+            "confianza": {"type": ["number", "null"]},
+            "notas": {"type": ["string", "null"]},
+        },
+        "required": [
+            "tipo_pago", "entidad", "monto_bruto", "comision_pos", "monto_neto",
+            "numero_operacion", "fecha_pago", "moneda", "confianza", "notas"
+        ],
+        "additionalProperties": False,
+    }
+    payload = {
+        "model": os.getenv("OPENAI_VOUCHER_MODEL", "gpt-4.1-mini"),
+        "input": [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Lee este voucher/comprobante de pago peruano. Devuelve SOLO JSON válido con estas claves: "
+                        "tipo_pago, entidad, monto_bruto, comision_pos, monto_neto, numero_operacion, fecha_pago, "
+                        "moneda, confianza, notas. Reglas: monto_bruto es el total cobrado al cliente; "
+                        "si ves comisión POS o merchant discount ponla en comision_pos; monto_neto = monto_bruto - comision_pos. "
+                        "Si un campo no se ve, usa null. tipo_pago debe ser POS, Transferencia, Yape, Plin, Efectivo u Otro. "
+                        "confianza debe ser número de 0 a 1."
+                    )
+                },
+                {"type": "input_image", "image_url": data_url}
+            ]
+        }],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "voucher_pago",
+                "strict": True,
+                "schema": voucher_schema,
+            }
+        },
+        "max_output_tokens": 500,
+    }
+
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=35) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detalle = e.read().decode("utf-8", errors="ignore")[:500]
+        print(f"OpenAI voucher OCR HTTPError: {detalle}")
+        return {'ok': False, 'error': 'No se pudo leer el voucher con IA'}
+    except Exception as e:
+        print(f"OpenAI voucher OCR error: {e}")
+        return {'ok': False, 'error': 'No se pudo conectar al lector automático'}
+
+    texto = data.get("output_text")
+    if not texto:
+        partes = []
+        for item in data.get("output", []):
+            for content in item.get("content", []):
+                if content.get("type") in ("output_text", "text"):
+                    partes.append(content.get("text", ""))
+        texto = "\n".join(partes)
+
+    try:
+        extraido = _parse_json_modelo(texto)
+    except Exception as e:
+        print(f"No se pudo parsear OCR voucher: {e}; texto={texto[:300] if texto else ''}")
+        return {'ok': False, 'error': 'La IA no devolvió datos legibles'}
+
+    monto_bruto = _normalizar_monto(extraido.get('monto_bruto'))
+    comision = _normalizar_monto(extraido.get('comision_pos')) or 0
+    monto_neto = _normalizar_monto(extraido.get('monto_neto'))
+    if monto_bruto is not None and (monto_neto is None or monto_neto > monto_bruto):
+        monto_neto = round(monto_bruto - comision, 2)
+    if monto_bruto is not None and comision > monto_bruto:
+        comision = 0
+        monto_neto = monto_bruto
+
+    return {
+        'ok': True,
+        'datos': {
+            'tipo_pago': extraido.get('tipo_pago') or None,
+            'entidad': extraido.get('entidad') or None,
+            'monto_bruto': monto_bruto,
+            'comision_pos': comision,
+            'monto_neto': monto_neto,
+            'numero_operacion': extraido.get('numero_operacion') or None,
+            'fecha_pago': extraido.get('fecha_pago') or None,
+            'moneda': extraido.get('moneda') or 'PEN',
+            'confianza': _normalizar_monto(extraido.get('confianza')),
+            'notas': extraido.get('notas') or '',
+        }
+    }
 
 
 def _asegurar_columnas_catalogo(cursor):
@@ -348,6 +501,17 @@ def upload_voucher():
     except Exception as e:
         print(f"Error al subir voucher: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@catalogo_bp.route('/api/voucher/leer', methods=['POST'])
+@requiere_login
+def leer_voucher():
+    if 'archivo' not in request.files or request.files['archivo'].filename == '':
+        return jsonify({'error': 'No se recibió ningún archivo'}), 400
+    resultado = _leer_voucher_con_openai(request.files['archivo'])
+    if not resultado.get('ok'):
+        return jsonify({'error': resultado.get('error', 'No se pudo leer el voucher')}), 422
+    return jsonify(resultado['datos']), 200
 
 # ==========================================
 # UPLOAD DE FOTOS GENÉRICO

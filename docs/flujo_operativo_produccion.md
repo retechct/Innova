@@ -139,6 +139,73 @@ Las telas deben agruparse por contrato. Si un contrato tiene sofa, silla y
 comedor que usan telas, el operario debe ver una sola tarjeta de telas del
 contrato con lineas internas por item/componente.
 
+### Estados practicos de logistica externa
+
+Logistica externa no significa "cotizar siempre". Significa que ese componente
+no se fabrica directamente en el taller y necesita una gestion externa o de
+proveedor.
+
+Aplica a:
+
+- Sillas compradas.
+- Butacas compradas.
+- Tableros.
+- Piedras.
+- Bases.
+- Patas/zocalos externos.
+- Telas externas.
+- Insumos especiales de proveedor.
+
+Flujo correcto:
+
+1. `Pendiente` o `POR_PEDIR`: falta definir proveedor, cantidad, unidad o
+   confirmar si se compra externo, informal o se fabrica interno.
+2. `Cotizacion Enviada`: se pidio precio al proveedor. Aqui no se compra
+   todavia; se espera respuesta.
+3. `Cotizacion Recibida` o `Cotizado`: ya hay precio/fecha/proveedor. Desde
+   aqui no debe volver a cotizarse; el siguiente paso es revisar y generar la
+   orden de compra o pedido.
+4. `Orden Enviada`: ya se emitio la orden de compra/pedido al proveedor. Debe
+   poder descargarse o abrirse el PDF de la orden y enviarse al proveedor.
+5. `Pagado`: ya se subio comprobante de pago. Si es tela, queda visible para
+   Telas como lista para recojo; si es estructural, pasa a cola de recojo o
+   recepcion segun corresponda.
+6. `Recibido`: el componente ya llego al taller o tienda. Desde aqui desbloquea
+   la parte de produccion o despacho que dependia de ese componente.
+7. `Cancelado`: no se compra ni se espera.
+
+Regla importante para cotizaciones ya existentes:
+
+- Si en el mismo contrato ya existe una fila de `logistica_externa` para el
+  mismo `sku` y proveedor, se debe reutilizar esa fila y sumar el item/componente
+  relacionado, no crear otra cotizacion.
+- Si esa fila ya esta `Cotizado`, `Cotizacion Recibida`, `Orden Enviada`,
+  `Pagado` o `Recibido`, no se vuelve a mandar cotizacion. El contrato debe
+  continuar desde el estado que ya existe.
+- Si el componente comparte proveedor con otros componentes del contrato, se
+  puede agrupar para pedido/orden, pero sin perder las lineas internas por
+  item.
+
+Regla para despacho:
+
+- Despacho no debe mirar solo tickets de taller. Tambien debe esperar que las
+  filas de `logistica_externa` del contrato esten resueltas.
+- Un contrato se junta para despacho cuando todos sus items y componentes estan
+  terminados o recibidos:
+  - tickets internos terminados,
+  - telas distribuidas,
+  - estructuras recogidas/entregadas al tapicero cuando aplique,
+  - sillas/tableros/piedras/bases externas recibidas,
+  - tapiceria/cojineria terminadas,
+  - componentes de stock reservados o entregados.
+
+Regla de comprobantes:
+
+- El comprobante de pago pertenece a la compra/recojo del componente.
+- La orden de compra/pedido pertenece al estado `Orden Enviada`.
+- Ambos deben quedar asociados a la fila de `logistica_externa` para que el
+  contrato tenga trazabilidad completa.
+
 ## Base de datos objetivo
 
 La base debe avanzar hacia estas entidades:

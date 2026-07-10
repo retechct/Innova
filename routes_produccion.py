@@ -541,7 +541,7 @@ def obtener_tickets_taller():
         query = """
             SELECT t.id, i.producto, t.estado_ticket, t.area_trabajo, t.ticket_details_override,
                    t.trabajador_asignado_id, v.codigo_venta, i.color_tela, t.item_id,
-                   i.foto_url, t.foto_evidencia, u.nombre
+                   i.foto_url, t.foto_evidencia, u.nombre, v.id
             FROM tickets_produccion t
             JOIN items_venta i ON t.item_id  = i.id
             JOIN ventas v      ON i.venta_id = v.id
@@ -583,6 +583,7 @@ def obtener_tickets_taller():
         raw_rows = cursor.fetchall()
 
         item_ids_despacho = {row[8] for row in raw_rows if row[3] == 'DESPACHO_CENTRAL'}
+        venta_ids_despacho = {row[12] for row in raw_rows if row[3] == 'DESPACHO_CENTRAL'}
         items_incompletos = set()
         if item_ids_despacho:
             placeholders_items = ','.join(['%s'] * len(item_ids_despacho))
@@ -593,10 +594,24 @@ def obtener_tickets_taller():
             """, tuple(item_ids_despacho))
             items_incompletos = {r[0] for r in cursor.fetchall()}
 
+        ventas_con_logistica_pendiente = set()
+        if venta_ids_despacho:
+            placeholders_ventas = ','.join(['%s'] * len(venta_ids_despacho))
+            cursor.execute(f"""
+                SELECT DISTINCT venta_id
+                FROM logistica_externa
+                WHERE venta_id IN ({placeholders_ventas})
+                  AND estado NOT IN ('Recibido', 'Cancelado')
+            """, tuple(venta_ids_despacho))
+            ventas_con_logistica_pendiente = {r[0] for r in cursor.fetchall()}
+
         tickets = []
         for row in raw_rows:
             estado = row[2]
-            if row[3] == 'DESPACHO_CENTRAL' and row[8] in items_incompletos:
+            if (
+                row[3] == 'DESPACHO_CENTRAL'
+                and (row[8] in items_incompletos or row[12] in ventas_con_logistica_pendiente)
+            ):
                 estado = 'Bloqueado'
             tickets.append({
                 "id":              row[0],
@@ -620,10 +635,9 @@ def obtener_tickets_taller():
             # no aparecía aquí, esa tela nunca llegaba a esta bandeja y
             # tampoco existía ningún otro botón en el frontend para
             # moverla — se quedaba pagada pero invisible indefinidamente.
-            # Al incluirla, vuelve a pasar por el flujo normal: el jefe la
-            # ve con el badge "Pagado, en espera" y puede asignarle un
-            # operario (asignar_operario_logistica ya la mueve a
-            # 'En Recojo' automáticamente, sin tocar ese endpoint).
+            # Al incluirla, vuelve a pasar por el flujo normal de la
+            # bandeja compartida de Telas: cualquier operario del area puede
+            # confirmar el recojo sin asignacion individual.
             log_query = """
                 SELECT l.id, v.codigo_venta, l.insumo_nombre, l.sku, l.estado_distribucion, v.id,
                        l.operario_id, COALESCE(u.nombre, 'Sin asignar'),
@@ -1458,6 +1472,8 @@ def obtener_telas_por_contrato():
     de manejar telas sueltas por WhatsApp.
     """
     try:
+        operario_id = request.args.get('operario_id')
+        operario_id = int(operario_id) if operario_id else None
         conexion = get_db_connection()
         cursor = conexion.cursor()
         cursor.execute("""
@@ -1490,29 +1506,56 @@ def obtener_telas_por_contrato():
                 l.precio_cotizado,
                 l.fecha_entrega_proveedor,
                 l.url_comprobante_pago,
-                l.item_ids_extra
+                l.item_ids_extra,
+                l.operario_id,
+                COALESCE(u.nombre, 'Sin asignar') AS operario_nombre
             FROM logistica_externa l
             JOIN ventas v ON l.venta_id = v.id
             LEFT JOIN items_venta i ON i.id = l.item_id
             LEFT JOIN proveedores p ON p.id = l.proveedor_id
+            LEFT JOIN usuarios u ON u.id = l.operario_id
             WHERE COALESCE(v.estado_general, '') != 'Cancelado'
               AND (
                     COALESCE(l.categoria_insumo, '') = 'TELA'
                     OR LOWER(COALESCE(l.insumo_nombre, '')) LIKE '%%tela%%'
                     OR LOWER(COALESCE(l.unidad, '')) IN ('mts', 'metro', 'metros')
               )
+              AND (%s IS NULL OR l.operario_id = %s)
             ORDER BY v.fecha_entrega ASC NULLS LAST, v.id ASC, l.id ASC;
-        """)
+        """, (operario_id, operario_id))
+
+        rows = cursor.fetchall()
+        destinos_por_venta = {}
+        venta_ids = {r[0] for r in rows}
+        if venta_ids:
+            placeholders = ','.join(['%s'] * len(venta_ids))
+            cursor.execute(f"""
+                SELECT i.venta_id, t.area_trabajo, COALESCE(u.nombre, 'Sin asignar')
+                FROM tickets_produccion t
+                JOIN items_venta i ON t.item_id = i.id
+                LEFT JOIN usuarios u ON t.trabajador_asignado_id = u.id
+                WHERE i.venta_id IN ({placeholders})
+                  AND t.area_trabajo IN ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS', 'ARMADO_COJINES')
+            """, tuple(venta_ids))
+            for venta_id, area, nombre in cursor.fetchall():
+                destino = destinos_por_venta.setdefault(venta_id, {"tapicero": None, "cojinero": None})
+                if area in ('TAPICERIA_SOFAS', 'TAPICERIA_SILLAS'):
+                    destino["tapicero"] = nombre
+                elif area == 'ARMADO_COJINES':
+                    destino["cojinero"] = nombre
 
         tarjetas = {}
-        for r in cursor.fetchall():
+        for r in rows:
             venta_id = r[0]
+            destino = destinos_por_venta.get(venta_id, {})
             tarjeta = tarjetas.setdefault(venta_id, {
                 "venta_id": venta_id,
                 "codigo_venta": r[1],
                 "cliente": r[2],
                 "estado_contrato": r[3],
                 "fecha_entrega": r[4].strftime('%d/%m/%Y') if r[4] else None,
+                "tapicero_destino": destino.get("tapicero"),
+                "cojinero_destino": destino.get("cojinero"),
                 "total_telas": 0,
                 "pendientes": 0,
                 "en_recojo": 0,
@@ -1549,6 +1592,8 @@ def obtener_telas_por_contrato():
                 "fecha_entrega_proveedor": r[18].strftime('%d/%m/%Y') if r[18] else None,
                 "url_comprobante_pago": r[19],
                 "item_ids_extra": r[20] or "",
+                "operario_id": r[21],
+                "operario_nombre": r[22],
             })
 
         return jsonify(list(tarjetas.values())), 200
@@ -2161,6 +2206,48 @@ def rechazar_sugerencia_insumo():
 # 13. DESPACHO — ASIGNAR CHOFER Y PROGRESO
 # ==========================================
 
+def _validar_contrato_listo_para_despacho(cursor, ticket_id):
+    """Valida que todo el contrato esté completo antes de activar despacho."""
+    cursor.execute("""
+        SELECT t.id, t.item_id, t.estado_ticket, i.venta_id
+        FROM tickets_produccion t
+        JOIN items_venta i ON t.item_id = i.id
+        WHERE t.id = %s AND t.area_trabajo = 'DESPACHO_CENTRAL'
+    """, (ticket_id,))
+    ticket = cursor.fetchone()
+    if not ticket:
+        return None, {'error': 'Ticket de despacho no encontrado'}, 404
+
+    venta_id = ticket[3]
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM tickets_produccion t
+        JOIN items_venta i ON t.item_id = i.id
+        WHERE i.venta_id = %s
+          AND t.area_trabajo != 'DESPACHO_CENTRAL'
+          AND t.estado_ticket != 'Terminado'
+    """, (venta_id,))
+    pendientes_taller = cursor.fetchone()[0]
+    if pendientes_taller > 0:
+        return ticket, {
+            'error': f'Aún hay {pendientes_taller} área(s) del contrato sin terminar. No se puede despachar.'
+        }, 409
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM logistica_externa
+        WHERE venta_id = %s
+          AND estado NOT IN ('Recibido', 'Cancelado')
+    """, (venta_id,))
+    pendientes_logistica = cursor.fetchone()[0]
+    if pendientes_logistica > 0:
+        return ticket, {
+            'error': f'Aún hay {pendientes_logistica} insumo(s) de logística externa del contrato sin recibir. '
+                     f'No se puede despachar.'
+        }, 409
+
+    return ticket, None, None
+
 @produccion_bp.route('/api/despacho/asignar-chofer', methods=['POST'])
 @requiere_rol('Admin', 'Jefe_Taller')
 def asignar_chofer_despacho():
@@ -2172,39 +2259,9 @@ def asignar_chofer_despacho():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        cursor.execute("""
-            SELECT t.id, t.item_id, t.estado_ticket FROM tickets_produccion t
-            WHERE t.id = %s AND t.area_trabajo = 'DESPACHO_CENTRAL'
-        """, (ticket_id,))
-        ticket = cursor.fetchone()
-        if not ticket:
-            return jsonify({'error': 'Ticket de despacho no encontrado'}), 404
-        item_id = ticket[1]
-        cursor.execute("""
-            SELECT COUNT(*) FROM tickets_produccion
-            WHERE item_id = %s AND area_trabajo != 'DESPACHO_CENTRAL' AND estado_ticket != 'Terminado'
-        """, (item_id,))
-        pendientes = cursor.fetchone()[0]
-        if pendientes > 0:
-            return jsonify({'error': f'Aún hay {pendientes} área(s) sin terminar. No se puede despachar.'}), 409
-
-        # FIX (julio 2026): un componente 100% externo (butaca/puff comprado
-        # afuera, tablero, silla metálica, etc.) NUNCA tiene fila en
-        # tickets_produccion — solo vive en logistica_externa. El chequeo de
-        # arriba por sí solo daba 0 pendientes aunque ese insumo externo
-        # todavía no hubiera llegado, permitiendo asignar chofer y despachar
-        # sin la pieza completa. Se suma el chequeo de logística externa de
-        # este mismo item_id.
-        cursor.execute("""
-            SELECT COUNT(*) FROM logistica_externa
-            WHERE item_id = %s AND estado NOT IN ('Recibido', 'Cancelado')
-        """, (item_id,))
-        pendientes_logistica = cursor.fetchone()[0]
-        if pendientes_logistica > 0:
-            return jsonify({
-                'error': f'Aún hay {pendientes_logistica} insumo(s) de logística externa sin recibir. '
-                         f'No se puede despachar.'
-            }), 409
+        _, error_payload, status = _validar_contrato_listo_para_despacho(cursor, ticket_id)
+        if error_payload:
+            return jsonify(error_payload), status
 
         cursor.execute("""
             UPDATE tickets_produccion
@@ -2850,6 +2907,20 @@ def obtener_cola_despacho_general():
             WHERE t.area_trabajo = 'DESPACHO_CENTRAL'
               AND t.estado_ticket = 'Pendiente'
               AND t.trabajador_asignado_id IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM tickets_produccion tp
+                  JOIN items_venta ip ON tp.item_id = ip.id
+                  WHERE ip.venta_id = v.id
+                    AND tp.area_trabajo != 'DESPACHO_CENTRAL'
+                    AND tp.estado_ticket != 'Terminado'
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM logistica_externa le
+                  WHERE le.venta_id = v.id
+                    AND le.estado NOT IN ('Recibido', 'Cancelado')
+              )
             ORDER BY v.fecha_entrega ASC NULLS LAST, v.id ASC;
         """)
         return jsonify([{
@@ -2879,11 +2950,18 @@ def auto_asignar_despacho(ticket_id):
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        _, error_payload, status = _validar_contrato_listo_para_despacho(cursor, ticket_id)
+        if error_payload:
+            return jsonify(error_payload), status
+
         cursor.execute("""
             UPDATE tickets_produccion
             SET trabajador_asignado_id = %s, estado_ticket = 'En Proceso', fecha_inicio = NOW()
             WHERE id = %s AND area_trabajo = 'DESPACHO_CENTRAL' AND estado_ticket = 'Pendiente';
         """, (chofer_id, ticket_id))
+        if cursor.rowcount == 0:
+            conexion.rollback()
+            return jsonify({'error': 'El despacho ya fue tomado o no está pendiente.'}), 409
         conexion.commit()
         return jsonify({'exito': True, 'mensaje': 'Te has asignado la entrega. Ahora aparecerá en "Mis Entregas".'}), 200
     except Exception as e:
@@ -3284,7 +3362,7 @@ def registrar_pago_proveedor(id):
             cursor.execute("SELECT 1 FROM maestro_telas WHERE sku = %s LIMIT 1", (sku,))
             if cursor.fetchone():
                 categoria_insumo     = 'TELA'
-                estado_recien_pagado = 'En espera'   # el operario decide cuándo está listo
+                estado_recien_pagado = 'En espera'   # disponible en la bandeja compartida de Telas
             else:
                 cursor.execute("""
                     SELECT 1 FROM (

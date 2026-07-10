@@ -68,6 +68,10 @@ function goToStep(step) {
             const btnContainer = document.createElement('div');
             btnContainer.style.cssText = 'display:flex; gap:8px; margin-top:5px;';
 
+            const ocrStatus = document.createElement('div');
+            ocrStatus.id = 'voucher-ocr-status';
+            ocrStatus.style.cssText = 'display:none;margin-top:8px;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;line-height:1.35;';
+
             const camLabel = document.createElement('label');
             camLabel.innerHTML = '<i class="fa-solid fa-camera"></i> Tomar foto';
             camLabel.className = 'btn-action btn-primary';
@@ -79,7 +83,10 @@ function goToStep(step) {
             camInput.capture = 'environment';
             camInput.style.display = 'none';
             camInput.onchange = () => {
-                if (camInput.files.length > 0) comprobanteInput.files = camInput.files;
+                if (camInput.files.length > 0) {
+                    comprobanteInput.files = camInput.files;
+                    leerVoucherAutomatico(camInput.files[0]);
+                }
             };
             camLabel.appendChild(camInput);
 
@@ -89,10 +96,14 @@ function goToStep(step) {
             galLabel.style.cssText = 'flex:1; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;';
             galLabel.htmlFor = 'pago-comprobante';
             comprobanteInput.removeAttribute('capture');
+            comprobanteInput.onchange = () => {
+                if (comprobanteInput.files.length > 0) leerVoucherAutomatico(comprobanteInput.files[0]);
+            };
 
             btnContainer.appendChild(camLabel);
             btnContainer.appendChild(galLabel);
             container.insertBefore(btnContainer, comprobanteInput);
+            container.insertBefore(ocrStatus, comprobanteInput.nextSibling);
         }
     }
 
@@ -177,6 +188,93 @@ function actualizarCamposPago() {
     }
 }
 
+function _voucherSetStatus(texto, tipo = 'info') {
+    const box = document.getElementById('voucher-ocr-status');
+    if (!box) return;
+    const colores = {
+        info: ['#eff6ff', '#1d4ed8'],
+        ok: ['#ecfdf5', '#047857'],
+        warn: ['#fffbeb', '#b45309'],
+        error: ['#fef2f2', '#b91c1c'],
+    };
+    const [bg, color] = colores[tipo] || colores.info;
+    box.style.display = 'block';
+    box.style.background = bg;
+    box.style.color = color;
+    box.textContent = texto;
+}
+
+function _normalizarEntidadVoucher(entidad) {
+    const raw = String(entidad || '').trim();
+    const mapa = {
+        culqi: 'Culqui',
+        culqui: 'Culqui',
+        izipay: 'Izipay',
+        niubiz: 'Niubis',
+        niubis: 'Niubis',
+        openpay: 'Openpay',
+        bcp: 'BCP',
+        bbva: 'BBVA',
+        yape: 'Yape',
+        plin: 'Plin',
+    };
+    return mapa[raw.toLowerCase()] || raw;
+}
+
+function _aplicarDatosVoucher(datos) {
+    if (!datos) return false;
+    window._ultimoVoucherOCR = datos;
+    const entidadDetectada = _normalizarEntidadVoucher(datos.entidad);
+    const tipoRaw = String(datos.tipo_pago || '').toLowerCase();
+    const tipo = tipoRaw.includes('pos') ? 'POS'
+        : (tipoRaw.includes('trans') || ['BCP', 'BBVA', 'Yape', 'Plin'].includes(entidadDetectada)) ? 'Transferencia'
+        : tipoRaw.includes('efect') ? 'Efectivo'
+        : document.getElementById('pago-tipo').value;
+
+    document.getElementById('pago-tipo').value = tipo;
+    actualizarCamposPago();
+
+    const entidadEl = document.getElementById('pago-entidad');
+    if (entidadDetectada && entidadEl && entidadEl.style.display !== 'none') {
+        const existe = [...entidadEl.options].some(o => o.value === entidadDetectada);
+        if (!existe) entidadEl.add(new Option(entidadDetectada, entidadDetectada));
+        entidadEl.value = entidadDetectada;
+    }
+
+    if (datos.monto_bruto != null) document.getElementById('pago-monto').value = Number(datos.monto_bruto).toFixed(2);
+    if (datos.numero_operacion) document.getElementById('pago-operacion').value = datos.numero_operacion;
+    if (document.getElementById('pago-comision') && datos.comision_pos != null) {
+        document.getElementById('pago-comision').value = Number(datos.comision_pos || 0).toFixed(2);
+    }
+
+    const partes = [];
+    if (entidadDetectada) partes.push(entidadDetectada);
+    if (datos.monto_bruto != null) partes.push(`S/ ${Number(datos.monto_bruto).toFixed(2)}`);
+    if (datos.numero_operacion) partes.push(`Op. ${datos.numero_operacion}`);
+    const confianza = datos.confianza != null ? ` Confianza ${Math.round(Number(datos.confianza) * 100)}%.` : '';
+    _voucherSetStatus(`Voucher leído: ${partes.join(' · ') || 'revisa los campos'}.${confianza} Revisa y confirma antes de agregar.`, 'ok');
+    return true;
+}
+
+async function leerVoucherAutomatico(file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        _voucherSetStatus('Voucher subido. La lectura automática por ahora acepta imágenes; completa los datos manualmente.', 'warn');
+        return;
+    }
+    _voucherSetStatus('Leyendo voucher automáticamente...', 'info');
+    try {
+        const fd = new FormData();
+        fd.append('archivo', file);
+        const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo leer el voucher');
+        _aplicarDatosVoucher(data);
+    } catch (e) {
+        _voucherSetStatus(`Voucher subido. No se pudo autollenar: ${e.message}. Completa los datos manualmente.`, 'warn');
+    }
+}
+
 // En carrito.js
 function limpiarFormularioVenta() {
     const camposCliente = ['c-codigo', 'c-nombre', 'c-dni', 'c-celular', 'c-direccion', 'c-entrega'];
@@ -217,6 +315,8 @@ async function agregarMetodoPago() {
     }
 
     if (isNaN(monto) || monto <= 0) return Swal.fire('Error', 'Ingrese un monto mayor a 0', 'warning');
+    if (comision < 0) return Swal.fire('Error', 'La comisión no puede ser negativa.', 'warning');
+    if (comision > monto) return Swal.fire('Error', 'La comisión POS no puede superar el monto pagado.', 'warning');
     if (tipo !== 'Efectivo' && !empresa) return Swal.fire('Falta empresa', '¿A qué empresa entró el dinero? Selecciona una.', 'warning');
     if (tipo !== 'Efectivo' && operacion.trim() === '') return Swal.fire('Error', 'El Número de Operación es obligatorio para transferencias o POS', 'warning');
 
@@ -255,6 +355,8 @@ async function agregarMetodoPago() {
         comision: comision,
         monto_neto: montoNeto,
         empresa,
+        voucher_leido_auto: !!window._ultimoVoucherOCR,
+        voucher_confianza: window._ultimoVoucherOCR?.confianza ?? null,
         comprobante_url  // URL real de Cloudinary
     });
 
@@ -264,6 +366,8 @@ async function agregarMetodoPago() {
     document.getElementById('pago-empresa').value = '';
     if(document.getElementById('pago-comision')) document.getElementById('pago-comision').value = '';
     comprobanteInput.value = '';
+    window._ultimoVoucherOCR = null;
+    _voucherSetStatus('Pago agregado con voucher subido.', 'ok');
     
     actualizarPagosUI();
 }
@@ -322,6 +426,9 @@ function actualizarPagosUI() {
         const detalle = p.tipo === 'Efectivo' ? 'Efectivo' : `${p.entidad} (Op: ${p.operacion})`;
         const iconoComprobante = p.comprobante_nombre !== 'Sin comprobante' ? '<i class="fa-solid fa-image" style="color: var(--primary);"></i>' : '';
         const empresaTag = p.empresa ? `<span style="font-size:10px; background:#f0fdf4; color:#166534; padding:2px 6px; border-radius:4px; font-weight:800;">${p.empresa}</span>` : '';
+        const voucherTag = p.voucher_leido_auto
+            ? `<span style="font-size:10px;background:#eff6ff;color:#1d4ed8;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:4px;">Voucher leido</span>`
+            : `<span style="font-size:10px;background:#f8fafc;color:#64748b;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:4px;">Voucher subido</span>`;
         
         return `
         <div style="background:#fff; border-left: 4px solid var(--accent); padding:8px 10px; border-radius:5px; margin-bottom:8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
@@ -329,7 +436,7 @@ function actualizarPagosUI() {
                 <div>
                     <strong style="font-size: 13px;">${p.tipo}</strong> <span style="font-size: 11px; color: gray;">${iconoComprobante}</span><br>
                     <span style="font-size: 11px; color: var(--text-muted);">${detalle}</span><br>
-                    ${empresaTag}
+                    ${empresaTag}${voucherTag}
                 </div>
                 <div style="text-align: right;">
                     <strong style="color: var(--success); font-size: 14px;">S/ ${p.monto.toFixed(2)}</strong><br>

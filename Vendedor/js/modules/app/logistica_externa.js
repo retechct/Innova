@@ -184,7 +184,7 @@ async function cargarLogisticaExterna() {
             'Cancelado':           { bg: '#fee2e2', color: '#991b1b' },
         };
 
-        const esAdmin = usuarioActivo && usuarioActivo.rol === 'Admin';
+        const esAdmin = usuarioActivo && ['Admin', 'Jefe_Taller'].includes(usuarioActivo.rol);
 
         // ── Foto grande con carrusel para la parte superior de la tarjeta ──
         // Igual que _logFotoHTML pero a ancho completo (100%) con relación de
@@ -287,20 +287,76 @@ async function cargarLogisticaExterna() {
                     <button onclick="_abrirEditarLogistica(${JSON.stringify(item).replace(/"/g,'&quot;')}, ${JSON.stringify(proveedores).replace(/"/g,'&quot;')})"
                             style="width:100%;background:#0f172a;color:white;border:none;margin-top:4px;
                                    padding:9px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
-                        <i class="fa-solid fa-pen"></i> Gestionar requerimiento
+                        <i class="fa-solid fa-pen"></i> Gestionar etapa
                     </button>` : ''}
                 </div>
             </div>`;
         };
 
         // ── Filtrado reactivo en memoria ────────────────────────────
-        const ESTADOS_PILLS = ['Todos','POR_PEDIR','Cotizado','Cotizacion Enviada','Confirmado','En Tránsito'];
-        let _filtroEstado = 'Todos';
+        const FLUJO_LOGISTICA = [
+            { id:'resolver', titulo:'1. Resolver', icono:'fa-clipboard-question', color:'#854d0e', bg:'#fffbeb',
+              desc:'Definir proveedor, cantidad y si se compra, se consigue informal o se fabrica interno.',
+              match:i => ['POR_PEDIR','Pendiente',null,undefined,''].includes(i.estado) },
+            { id:'cotizar', titulo:'2. Cotizar', icono:'fa-comments-dollar', color:'#0369a1', bg:'#eff6ff',
+              desc:'Cotizacion enviada o respondida. Si ya hay precio, no se vuelve a cotizar.',
+              match:i => ['Cotizacion Enviada','Cotizacion Recibida'].includes(i.estado) },
+            { id:'comprar', titulo:'3. Comprar', icono:'fa-file-invoice-dollar', color:'#166534', bg:'#f0fdf4',
+              desc:'Cotizacion aprobada: generar orden de compra o pedido al proveedor.',
+              match:i => i.estado === 'Cotizado' },
+            { id:'pagar', titulo:'4. Pagar / seguir', icono:'fa-receipt', color:'#7e22ce', bg:'#faf5ff',
+              desc:'Orden enviada: subir comprobante, confirmar transito o mandar a cola de recojo.',
+              match:i => ['Orden Enviada','Confirmado','En Tránsito','Pagado','Listo para Recojo'].includes(i.estado) },
+            { id:'recibir', titulo:'5. Recibir / juntar', icono:'fa-box-circle-check', color:'#0f766e', bg:'#f0fdfa',
+              desc:'Material listo para entrar al contrato: recibir, distribuir o liberar despacho.',
+              match:i => i.estado_distribucion === 'Recogido' },
+        ];
         let _filtroBusqueda = '';
+
+        const _renderCarrilesLogistica = (lista) => {
+            const asignados = new Set();
+            const carrilesHTML = FLUJO_LOGISTICA.map(carril => {
+                const itemsCarril = lista.filter(i => {
+                    if (asignados.has(i.id)) return false;
+                    const ok = carril.match(i);
+                    if (ok) asignados.add(i.id);
+                    return ok;
+                });
+                return `
+                <section style="background:${carril.bg};border:1px solid #e2e8f0;border-radius:10px;min-width:280px;overflow:hidden;">
+                    <div style="padding:12px 12px 10px;border-bottom:1px solid rgba(15,23,42,.08);">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                            <i class="fa-solid ${carril.icono}" style="color:${carril.color};"></i>
+                            <h4 style="margin:0;font-size:13px;color:#0f172a;font-weight:900;">${carril.titulo}</h4>
+                            <span style="margin-left:auto;background:white;color:${carril.color};border:1px solid rgba(15,23,42,.08);border-radius:20px;padding:2px 8px;font-size:10px;font-weight:900;">${itemsCarril.length}</span>
+                        </div>
+                        <p style="margin:0;color:#64748b;font-size:10px;line-height:1.35;">${carril.desc}</p>
+                    </div>
+                    <div style="padding:10px;display:flex;flex-direction:column;gap:10px;">
+                        ${itemsCarril.length
+                            ? itemsCarril.map(i => _renderCardLogistica(i, proveedores, esAdmin, coloresEstado)).join('')
+                            : `<div style="background:rgba(255,255,255,.65);border:1px dashed #cbd5e1;border-radius:8px;padding:16px;text-align:center;color:#94a3b8;font-size:11px;font-weight:700;">Sin items</div>`}
+                    </div>
+                </section>`;
+            }).join('');
+
+            const sinCarril = lista.filter(i => !asignados.has(i.id));
+            const extraHTML = sinCarril.length ? `
+                <section style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;min-width:280px;overflow:hidden;">
+                    <div style="padding:12px;border-bottom:1px solid #e2e8f0;">
+                        <h4 style="margin:0;font-size:13px;color:#0f172a;font-weight:900;"><i class="fa-solid fa-layer-group"></i> Otros estados</h4>
+                        <p style="margin:5px 0 0;color:#64748b;font-size:10px;">Estados antiguos o excepciones que deben revisarse.</p>
+                    </div>
+                    <div style="padding:10px;display:flex;flex-direction:column;gap:10px;">
+                        ${sinCarril.map(i => _renderCardLogistica(i, proveedores, esAdmin, coloresEstado)).join('')}
+                    </div>
+                </section>` : '';
+
+            return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:start;">${carrilesHTML}${extraHTML}</div>`;
+        };
 
         const _aplicarFiltros = () => {
             const filtrados = itemsActivos.filter(i => {
-                const matchEstado  = _filtroEstado === 'Todos' || i.estado === _filtroEstado;
                 const q = _filtroBusqueda.toLowerCase();
                 const matchTexto   = !q ||
                     (i.codigo_venta   || '').toLowerCase().includes(q) ||
@@ -308,7 +364,7 @@ async function cargarLogisticaExterna() {
                     (i.proveedor      || '').toLowerCase().includes(q) ||
                     (i.sku            || '').toLowerCase().includes(q) ||
                     (i.producto_item  || '').toLowerCase().includes(q);
-                return matchEstado && matchTexto;
+                return matchTexto;
             });
 
             // Re-renderiza solo la sección activos
@@ -321,38 +377,10 @@ async function cargarLogisticaExterna() {
                 </div>`;
                 return;
             }
-            cont.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:16px;">
-                ${filtrados.map(i => _renderCardLogistica(i, proveedores, esAdmin, coloresEstado)).join('')}
-            </div>`;
-            // Actualizar contador pills
-            document.querySelectorAll('.log-pill').forEach(btn => {
-                const est = btn.dataset.estado;
-                const activo = est === _filtroEstado;
-                btn.style.background  = activo ? '#0f172a' : '#f1f5f9';
-                btn.style.color       = activo ? 'white'   : '#475569';
-                btn.style.fontWeight  = activo ? '800'     : '600';
-            });
+            cont.innerHTML = _renderCarrilesLogistica(filtrados);
         };
 
-        window._logFiltrarEstado = (estado) => { _filtroEstado = estado; _aplicarFiltros(); };
         window._logFiltrarTexto  = (q)      => { _filtroBusqueda = q;    _aplicarFiltros(); };
-
-        // Contar activos por estado para los pills
-        const cuentaEstado = {};
-        ESTADOS_PILLS.forEach(e => { cuentaEstado[e] = e === 'Todos' ? itemsActivos.length : itemsActivos.filter(i => i.estado === e).length; });
-
-        const pillsHTML = ESTADOS_PILLS
-            .filter(e => e === 'Todos' || cuentaEstado[e] > 0)
-            .map(e => `<button class="log-pill" data-estado="${escapeAttr(e)}"
-                onclick="_logFiltrarEstado(${jsStringAttr(e)})"
-                style="background:${e === 'Todos' ? '#0f172a' : '#f1f5f9'};
-                       color:${e === 'Todos' ? 'white' : '#475569'};
-                       border:none;border-radius:20px;padding:5px 13px;
-                       font-size:11px;font-weight:${e === 'Todos' ? '800' : '600'};
-                       cursor:pointer;white-space:nowrap;">
-                ${e === 'Todos' ? 'Todos' : escapeHTML(e.replace(/_/g,' '))}
-                ${cuentaEstado[e] > 0 ? `<span style="background:rgba(255,255,255,.25);border-radius:10px;padding:1px 6px;margin-left:4px;">${cuentaEstado[e]}</span>` : ''}
-            </button>`).join('');
 
         let html = `
         <div style="display:flex;justify-content:space-between;margin-bottom:12px;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -362,7 +390,6 @@ async function cargarLogisticaExterna() {
             </button>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-            ${pillsHTML}
             <input oninput="_logFiltrarTexto(this.value)" placeholder="🔍 Pedido, insumo, mueble o proveedor…"
                 style="margin-left:auto;border:1.5px solid #e2e8f0;border-radius:20px;
                        padding:5px 14px;font-size:12px;outline:none;min-width:200px;max-width:260px;"
@@ -377,9 +404,7 @@ async function cargarLogisticaExterna() {
                 <span style="font-weight:700;">Sin requerimientos pendientes</span>
             </div>`;
         } else {
-            html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:16px;">`;
-            itemsActivos.forEach(item => { html += _renderCardLogistica(item, proveedores, esAdmin, coloresEstado); });
-            html += `</div>`;
+            html += _renderCarrilesLogistica(itemsActivos);
         }
         html += `</div>`;
 
@@ -999,6 +1024,14 @@ async function _abrirEditarLogistica(item, proveedores) {
                     Swal.showValidationMessage('Adjunta el comprobante de pago para continuar.');
                     return false;
                 }
+                const detectado = window._ultimoVoucherLogisticaOCR;
+                if (nuevoEstado === 'Pagado' && detectado?.monto_bruto && item.precio_cotizado) {
+                    const dif = Math.abs(Number(detectado.monto_bruto) - Number(item.precio_cotizado));
+                    if (dif > 1) {
+                        Swal.showValidationMessage(`El voucher parece ser por S/ ${Number(detectado.monto_bruto).toFixed(2)}, pero el precio acordado es S/ ${Number(item.precio_cotizado).toFixed(2)}. Revisa antes de guardar.`);
+                        return false;
+                    }
+                }
                 return { id: item.id, estado: nuevoEstado, archivo };
             }
         });
@@ -1251,6 +1284,54 @@ async function _ingresarCotizacionManual(item) {
 /**
  * _previewVoucher — igual que _previewCotizacion pero para el comprobante de pago.
  */
+function _voucherLogisticaStatus(texto, tipo = 'info') {
+    const previewDiv = document.getElementById('voucher-preview');
+    if (!previewDiv) return;
+    let box = document.getElementById('voucher-ocr-status-logistica');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'voucher-ocr-status-logistica';
+        box.style.cssText = 'display:none;margin-top:8px;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;line-height:1.35;';
+        previewDiv.insertAdjacentElement('afterend', box);
+    }
+    const colores = {
+        info: ['#eff6ff', '#1d4ed8'],
+        ok: ['#ecfdf5', '#047857'],
+        warn: ['#fffbeb', '#b45309'],
+        error: ['#fef2f2', '#b91c1c'],
+    };
+    const [bg, color] = colores[tipo] || colores.info;
+    box.style.display = 'block';
+    box.style.background = bg;
+    box.style.color = color;
+    box.textContent = texto;
+}
+
+async function _leerVoucherLogisticaAutomatico(file) {
+    window._ultimoVoucherLogisticaOCR = null;
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        _voucherLogisticaStatus('Voucher subido. La lectura automática por ahora acepta imágenes; registra el pago manualmente.', 'warn');
+        return;
+    }
+    _voucherLogisticaStatus('Leyendo comprobante automáticamente...', 'info');
+    try {
+        const fd = new FormData();
+        fd.append('archivo', file);
+        const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo leer el comprobante');
+        window._ultimoVoucherLogisticaOCR = data;
+        const partes = [];
+        if (data.entidad) partes.push(data.entidad);
+        if (data.monto_bruto != null) partes.push(`S/ ${Number(data.monto_bruto).toFixed(2)}`);
+        if (data.numero_operacion) partes.push(`Op. ${data.numero_operacion}`);
+        _voucherLogisticaStatus(`Comprobante leído: ${partes.join(' · ') || 'revisa el comprobante'}. Se validará contra el precio acordado al guardar.`, 'ok');
+    } catch (e) {
+        _voucherLogisticaStatus(`Voucher subido. No se pudo autoleer: ${e.message}. Puedes continuar manualmente.`, 'warn');
+    }
+}
+
 function _previewVoucher(inputEl) {
     const file = inputEl?.files[0];
     if (!file) return;
@@ -1275,6 +1356,7 @@ function _previewVoucher(inputEl) {
         if (pdfNombre) pdfNombre.textContent = file.name;
         previewDiv.style.display = 'block';
     }
+    _leerVoucherLogisticaAutomatico(file);
 }
 
 function _previewCotizacion(inputEl) {

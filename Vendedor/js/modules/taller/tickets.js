@@ -655,6 +655,7 @@ async function cargarTicketsTaller() {
     const esAdmin      = ['Admin', 'Jefe_Taller'].includes(usuarioActivo.rol);
     const esOperario   = usuarioActivo.rol === 'Operario';
     const esChofer     = usuarioActivo.rol === 'Chofer';
+    const esOperarioTelas = esOperario && ['TELAS', 'CORTE_Y_CONTROL_TELAS'].includes(usuarioActivo.area_asignada);
 
     // ── TABS: solo para Operario y Jefe viendo sus tareas ──
     let tabsHeader = document.getElementById('tabs-taller-header');
@@ -917,14 +918,24 @@ async function cargarTicketsTaller() {
         let ticketsFiltrados = tickets;
 
         if (esAdmin) {
-            // Admin ve tickets no terminados, no listos para recojo ni recogidos.
+            // Admin/Jefe ve solo lo pendiente de asignar; Telas es bandeja
+            // compartida del area, asi que no requiere asignacion individual.
             ticketsFiltrados = tickets.filter(t => 
                 (t.es_logistica && t.estado !== 'Distribuido') ||
-                (!t.es_logistica && t.estado !== 'Terminado' && t.estado !== 'Listo para Recojo' && t.estado !== 'Recogido')
+                (!t.es_logistica
+                    && t.area !== 'CORTE_Y_CONTROL_TELAS'
+                    && t.area !== 'TELAS'
+                    && !t.trabajador
+                    && t.estado !== 'Terminado'
+                    && t.estado !== 'Listo para Recojo'
+                    && t.estado !== 'Recogido')
             );
         } else if (esOperario) {
-            // Operario: solo los asignados a él
-            ticketsFiltrados = tickets.filter(t => Number(t.trabajador) === Number(usuarioActivo.id));
+            // Telas es una bandeja global del area: todos los operarios de Telas
+            // ven todas las telas. Las demas areas si son "mis tareas".
+            ticketsFiltrados = esOperarioTelas
+                ? tickets
+                : tickets.filter(t => Number(t.trabajador) === Number(usuarioActivo.id));
             // Luego aplica filtro de tab
             if (filtroTaller === 'Pendientes') {
                 ticketsFiltrados = ticketsFiltrados.filter(t => 
@@ -959,6 +970,13 @@ async function cargarTicketsTaller() {
             contenedor.innerHTML = `<p style="color:gray; font-size:13px; text-align:center; padding:30px;">${msg}</p>`;
             return;
         }
+
+        const usaBandejaTelas = ticketsFiltrados.some(t =>
+            t.es_logistica && (t.area === 'CORTE_Y_CONTROL_TELAS' || t.area === 'TELAS')
+        );
+        const contratosTelaBackend = usaBandejaTelas
+            ? await cargarContratosTelaAgrupados(null, filtroTaller)
+            : null;
 
         // Agrupar por área
         const areas = {};
@@ -1002,7 +1020,9 @@ async function cargarTicketsTaller() {
             }
 
             if (ticketsLogistica.length > 0) {
-                html += renderContratosTelaHTML(ticketsLogistica, esAdmin);
+                html += contratosTelaBackend && contratosTelaBackend.length
+                    ? renderContratosTelaBackendHTML(contratosTelaBackend, esAdmin)
+                    : renderContratosTelaHTML(ticketsLogistica, esAdmin);
             }
 
             html += `</div>`;
@@ -1073,6 +1093,39 @@ async function cargarTicketsTaller() {
     } catch (err) {
         console.error('Error cargando taller:', err);
         contenedor.innerHTML = '<p style="color:red; text-align:center;">❌ Error al conectar con el servidor.</p>';
+    }
+}
+
+async function cargarContratosTelaAgrupados(operarioId, filtro) {
+    try {
+        const qs = operarioId ? `?operario_id=${encodeURIComponent(operarioId)}` : '';
+        const res = await apiFetch(`${API_URL}/api/logistica/telas-por-contrato${qs}`);
+        const contratos = await res.json();
+        if (!res.ok || !Array.isArray(contratos)) return null;
+
+        const quiereDistribuidos = filtro !== 'Pendientes';
+        return contratos
+            .map(c => {
+                const lineas = (c.lineas || []).filter(l =>
+                    quiereDistribuidos
+                        ? l.estado_distribucion === 'Distribuido'
+                        : l.estado_distribucion !== 'Distribuido'
+                );
+                if (!lineas.length) return null;
+                return {
+                    ...c,
+                    lineas,
+                    total_telas: lineas.length,
+                    pendientes: lineas.filter(l => !['En Recojo', 'Recogido', 'Distribuido'].includes(l.estado_distribucion)).length,
+                    en_recojo: lineas.filter(l => l.estado_distribucion === 'En Recojo').length,
+                    recogidas: lineas.filter(l => l.estado_distribucion === 'Recogido').length,
+                    distribuidas: lineas.filter(l => l.estado_distribucion === 'Distribuido').length,
+                };
+            })
+            .filter(Boolean);
+    } catch (e) {
+        console.warn('No se pudo cargar /api/logistica/telas-por-contrato; usando agrupacion local.', e);
+        return null;
     }
 }
 
@@ -1171,7 +1224,7 @@ function renderTicketCardHTML(t, esAdmin) {
    que antes no se pintaba en ningún lado porque ni siquiera llegaba a esta
    bandeja — ver el fix en obtener_tickets_taller, backend). */
 function _badgeLogisticaTela(estado) {
-    if (estado === 'En espera')   return { bg:'#fef3c7', col:'#92400e', txt:'🟡 PAGADO — ESPERANDO OPERARIO' };
+    if (estado === 'En espera')   return { bg:'#fef3c7', col:'#92400e', txt:'🟡 LISTO PARA RECOJO' };
     if (estado === 'En Recojo')   return { bg:'#fef9c3', col:'#854d0e', txt:'🟡 EN RECOJO' };
     if (estado === 'Recogido')    return { bg:'#dcfce7', col:'#166534', txt:'✅ RECOGIDO (POR DISTRIBUIR)' };
     if (estado === 'Distribuido') return { bg:'#dcfce7', col:'#166534', txt:'✅ DISTRIBUIDO' };
@@ -1186,6 +1239,96 @@ function _badgeLogisticaTela(estado) {
    línea con su propio botón de acción (mismo renderBotonTicket de
    siempre — no se toca el flujo de asignar/pagar/distribuir). */
 /* ================================================================= */
+function renderContratosTelaBackendHTML(contratos, esAdmin) {
+    let out = `<div style="display:flex; flex-direction:column; gap:14px; margin-top:${contratos.length ? '4px' : '0'};">`;
+
+    contratos.forEach(c => {
+        const codigo = escapeHTML(c.codigo_venta || '—');
+        const cliente = escapeHTML(c.cliente || '');
+        const entrega = c.fecha_entrega ? `Entrega: <b>${escapeHTML(c.fecha_entrega)}</b>` : '';
+        const tapicero = c.tapicero_destino && c.tapicero_destino !== 'Sin asignar'
+            ? `<span title="Tapicero destino"><i class="fa-solid fa-arrow-right"></i> ${escapeHTML(c.tapicero_destino)}</span>` : '';
+        const cojinero = c.cojinero_destino && c.cojinero_destino !== 'Sin asignar'
+            ? `<span title="Cojinero destino"><i class="fa-solid fa-arrow-right"></i> ${escapeHTML(c.cojinero_destino)}</span>` : '';
+        const resumen = [
+            c.pendientes ? `${c.pendientes} pendiente(s)` : '',
+            c.en_recojo ? `${c.en_recojo} en recojo` : '',
+            c.recogidas ? `${c.recogidas} recogida(s)` : '',
+            c.distribuidas ? `${c.distribuidas} distribuida(s)` : '',
+        ].filter(Boolean).join(' · ');
+
+        const lineas = (c.lineas || []).map(l => ({
+            id: l.logistica_id,
+            producto: `TELA EXTERNA: ${l.insumo || ''}`,
+            estado: l.estado_distribucion || 'En espera',
+            area: 'CORTE_Y_CONTROL_TELAS',
+            trabajador: l.operario_id,
+            trabajador_nombre: l.operario_nombre || 'Sin asignar',
+            especificaciones: `Ref: ${c.codigo_venta || ''} | SKU: ${l.sku || 'N/A'} | ${l.producto_item || ''}`,
+            foto: 'imagenes/sin_foto.jpg',
+            item_id: l.item_id || c.venta_id,
+            es_logistica: true,
+            venta_id: c.venta_id,
+            codigo_venta: c.codigo_venta || '',
+            sku: l.sku || '',
+            cantidad: l.cantidad || 1,
+            unidad: l.unidad || '',
+            proveedor: l.proveedor || 'Sin proveedor',
+            cliente: c.cliente || '',
+            fecha_entrega: c.fecha_entrega || '',
+            producto_item: l.producto_item || '',
+        }));
+
+        const totalesPorUnidad = {};
+        lineas.forEach(l => {
+            const u = (l.unidad || '').trim().toLowerCase() || 'unid.';
+            totalesPorUnidad[u] = (totalesPorUnidad[u] || 0) + (Number(l.cantidad) || 0);
+        });
+        const totalHTML = Object.entries(totalesPorUnidad)
+            .map(([u, cant]) => `<b>${cant % 1 === 0 ? cant : cant.toFixed(2)} ${escapeHTML(u)}</b>`)
+            .join(' &nbsp;+&nbsp; ');
+
+        const idsRecogidos = lineas.filter(l => l.estado === 'Recogido').map(l => l.id);
+        const idsEnRecojo = lineas.filter(l => l.estado === 'En Recojo' || l.estado === 'En espera').map(l => l.id);
+        const botonRecojoContratoHTML = (!esAdmin && idsEnRecojo.length > 1)
+            ? `<button onclick='confirmarRecojoContratoTela(${JSON.stringify(idsEnRecojo)})'
+                   style="width:100%; background:#f59e0b; color:white; border:none; padding:9px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-top:10px;">
+                   <i class="fa-solid fa-truck-ramp-box"></i> Confirmar recojo de ${idsEnRecojo.length} telas con un comprobante
+               </button>`
+            : '';
+        const botonLoteHTML = (!esAdmin && idsRecogidos.length > 1)
+            ? `<button onclick='confirmarDistribucionLote(${JSON.stringify(idsRecogidos)})'
+                   style="width:100%; background:#16a34a; color:white; border:none; padding:9px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-top:10px;">
+                   <i class="fa-solid fa-people-carry-box"></i> Distribuir las ${idsRecogidos.length} lineas ya recogidas de este contrato
+               </button>`
+            : '';
+
+        out += `
+        <div style="background:#ffffff; border:1px solid #dbeafe; border-radius:10px; padding:14px; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px; border-bottom:1px dashed #e2e8f0; padding-bottom:10px; margin-bottom:10px;">
+                <div>
+                    <div style="font-size:13px; font-weight:900; color:#0f172a;"><i class="fa-solid fa-file-contract"></i> ${codigo} <span style="font-weight:600; color:#64748b;">— ${cliente}</span></div>
+                    <div style="font-size:10px; color:#64748b; margin-top:3px; display:flex; gap:10px; flex-wrap:wrap;">
+                        ${entrega}
+                        ${tapicero}
+                        ${cojinero}
+                        ${resumen ? `<span><i class="fa-solid fa-list-check"></i> ${escapeHTML(resumen)}</span>` : ''}
+                    </div>
+                </div>
+                ${totalHTML ? `<div style="font-size:11px; color:#0f172a; background:#f1f5f9; padding:6px 10px; border-radius:8px; white-space:nowrap;">Total: ${totalHTML}</div>` : ''}
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                ${lineas.map(l => renderLineaTelaHTML(l, esAdmin)).join('')}
+            </div>
+            ${botonRecojoContratoHTML}
+            ${botonLoteHTML}
+        </div>`;
+    });
+
+    out += `</div>`;
+    return out;
+}
+
 function renderContratosTelaHTML(ticketsLogistica, esAdmin) {
     // Agrupar por venta_id (con fallback a item_id por compatibilidad
     // con cachés viejos que no tengan el campo nuevo todavía)
@@ -1305,3 +1448,53 @@ async function confirmarDistribucionLote(ids) {
     cargarTicketsTaller();
 }
 
+async function confirmarRecojoContratoTela(ids) {
+    if (!Array.isArray(ids) || !ids.length) return;
+
+    const { value: archivo, isConfirmed } = await Swal.fire({
+        title: `Confirmar recojo de ${ids.length} telas`,
+        html: `<div style="text-align:left;font-size:12px;color:#475569;">
+                   <p>Sube un comprobante para registrar el pago/recojo de todas estas lineas.</p>
+                   <input id="swal-voucher-contrato-telas" type="file" accept="image/*,application/pdf" class="swal2-file" style="width:100%;">
+               </div>`,
+        showCancelButton: true,
+        confirmButtonColor: '#f59e0b',
+        cancelButtonText: 'Cancelar',
+        confirmButtonText: 'Confirmar recojo',
+        preConfirm: () => {
+            const file = document.getElementById('swal-voucher-contrato-telas')?.files[0];
+            if (!file) {
+                Swal.showValidationMessage('Adjunta el comprobante para continuar');
+                return false;
+            }
+            return file;
+        }
+    });
+    if (!isConfirmed || !archivo) return;
+
+    Swal.fire({ title: 'Registrando recojo...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    let okCount = 0;
+    const errores = [];
+    for (const id of ids) {
+        try {
+            const formData = new FormData();
+            formData.append('comprobante', archivo);
+            const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-recojo`, {
+                method: 'POST',
+                body: formData
+            });
+            const d = await res.json();
+            if (d.exito) okCount++;
+            else errores.push(`#${id}: ${d.error || 'error'}`);
+        } catch (e) {
+            errores.push(`#${id}: error de conexion`);
+        }
+    }
+
+    if (errores.length) {
+        Swal.fire('Recojo parcial', `${okCount} tela(s) registrada(s). Pendientes: ${errores.join(', ')}`, 'warning');
+    } else {
+        Swal.fire('Recojo confirmado', `${okCount} tela(s) quedaron registradas como recogidas.`, 'success');
+    }
+    cargarTicketsTaller();
+}

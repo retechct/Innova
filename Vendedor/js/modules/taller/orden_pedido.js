@@ -1,4 +1,4 @@
-// Taller - orden de pedido, impresion y PDF
+﻿// Taller - orden de pedido, impresion y PDF
 // === MÓDULO: Taller, producción y admin ===
 async function abrirDetallePedido(codigo) {
     try {
@@ -393,22 +393,17 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
     // porque ese bloque hace return temprano y nunca llegaría aquí ──
     if (t.es_logistica) {
         if (esAdmin) {
-            const trabajadorInfo = t.trabajador
-                ? `<div style="background:#f0fdf4; color:#166534; padding:6px; border-radius:6px; text-align:center; font-size:10px; margin-bottom:6px;"><i class="fa-solid fa-user-check"></i> Asignado: <b>${t.trabajador_nombre}</b></div>`
-                : '';
-            return `${trabajadorInfo}
-                <button onclick="asignarTrabajadorLogistica(${t.id})"
-                    style="width:100%; background:#94a3b8; color:white; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">
-                    <i class="fa-solid fa-user-clock"></i> ${t.trabajador ? 'Reasignar' : 'Asignar'} Operario de Telas
-                </button>`;
+            return `<div style="background:#e0f2fe; color:#0369a1; padding:8px; border-radius:8px; text-align:center; font-size:11px; font-weight:bold;">
+                        <i class="fa-solid fa-users"></i> Bandeja compartida de Telas
+                    </div>`;
         } else {
-            if (t.estado === 'En Recojo') {
+            if (t.estado === 'En Recojo' || t.estado === 'En espera') {
                 return `<div style="margin-top:10px; padding:10px; background:#fef9c3; border-radius:8px; border:1px solid #fde047;">
                             <label style="font-size:9px; font-weight:900; color:#854d0e; display:block; margin-bottom:6px;">📷 SUBIR VOUCHER / RECIBO DE PAGO:</label>
                             <input type="file" id="foto-voucher-${t.id}" accept="image/*,application/pdf" style="width:100%; margin-bottom:8px; font-size:11px;">
                             <button onclick="confirmarRecojoLogistica(${t.id}, document.getElementById('foto-voucher-${t.id}'))"
                                 style="width:100%; background:#f59e0b; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
-                                <i class="fa-solid fa-truck-ramp-box"></i> Pagar y Confirmar Recojo
+                                <i class="fa-solid fa-truck-ramp-box"></i> Confirmar Recojo
                             </button>
                         </div>`;
             } else if (t.estado === 'Recogido') {
@@ -417,9 +412,9 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                             <i class="fa-solid fa-people-carry-box"></i> Entregar a Tapicería
                         </button>`;
             }
-            // Sin asignar (no admin) — informativo, el admin debe asignar primero
+            // Otros estados no accionables para Telas.
             return `<div style="background:#fef3c7; color:#92400e; padding:8px; border-radius:8px; text-align:center; font-size:11px;">
-                        <i class="fa-solid fa-user-clock"></i> Esperando asignación de operario
+                        <i class="fa-solid fa-clock"></i> Esperando avance de logística
                     </div>`;
         }
     }
@@ -531,6 +526,20 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                 </div>`;
     }
 
+    // Area de Telas: bandeja compartida. Un ticket interno de Telas puede
+    // venir Pendiente o En Proceso, pero no se asigna a una persona.
+    const esAreaTelas = t.area === 'CORTE_Y_CONTROL_TELAS' || t.area === 'TELAS';
+    const usuarioEsTelas = usuarioActivo.area_asignada === 'CORTE_Y_CONTROL_TELAS' || usuarioActivo.area_asignada === 'TELAS';
+    if (esAreaTelas && usuarioEsTelas && (t.estado === 'Pendiente' || isEnProceso)) {
+        const specsB64Derivar = btoa(unescape(encodeURIComponent(t.especificaciones || '')));
+        return `<button onclick="abrirModalDerivar(${t.id})"
+                    data-ticket-id="${t.id}"
+                    data-specs="${specsB64Derivar}"
+                    style="width:100%; background:#f97316; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; margin-top:4px;">
+                    ✂️ Subir Foto y Derivar Material
+                </button>`;
+    }
+
     if (isEnProceso) {
         // Despacho en proceso: chofer confirma entrega
         if (t.area === 'DESPACHO_CENTRAL') {
@@ -563,20 +572,6 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                             <i class="fa-solid fa-check-double"></i> CONFIRMAR ENTREGA
                         </button>
                     </div>`;
-        }
-
-        // Área de Telas: botón especial "Derivar material" (pase de posta)
-        const esAreaTelas = t.area === 'CORTE_Y_CONTROL_TELAS' || t.area === 'TELAS';
-        const usuarioEsTelas = usuarioActivo.area_asignada === 'CORTE_Y_CONTROL_TELAS' || usuarioActivo.area_asignada === 'TELAS';
-        if (esAreaTelas && usuarioEsTelas) {
-            // data-specs en base64 para que abrirModalDerivar detecte si hay cojines
-            const specsB64Derivar = btoa(unescape(encodeURIComponent(t.especificaciones || '')));
-            return `<button onclick="abrirModalDerivar(${t.id})"
-                        data-ticket-id="${t.id}"
-                        data-specs="${specsB64Derivar}"
-                        style="width:100%; background:#f97316; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; margin-top:4px;">
-                        ✂️ Subir Foto y Derivar Material
-                    </button>`;
         }
 
         // Cualquier otra área en proceso: evidencia + finalizar

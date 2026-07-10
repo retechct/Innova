@@ -415,6 +415,10 @@ async function abrirModalDerivar(ticketId) {
 /* --- CONFIRMAR LLEGADA DE TELA DESDE LOGÍSTICA --- */
 async function confirmarRecojoLogistica(id, fileInput) {
     const file = fileInput ? fileInput.files[0] : null;
+    if (!file) {
+        Swal.fire('Comprobante obligatorio', 'Adjunta el voucher o recibo de pago para confirmar el recojo.', 'warning');
+        return;
+    }
 
     const conf = await Swal.fire({
         title: 'Confirmar recepción y pago',
@@ -445,65 +449,6 @@ async function confirmarRecojoLogistica(id, fileInput) {
 }
 
 /* --- DISTRIBUIR TELA A TAPICERÍA --- */
-
-async function asignarTrabajadorLogistica(logisticaId) {
-    try {
-        Swal.fire({ title: 'Buscando personal...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-
-        const res = await apiFetch(`${API_URL}/api/usuarios/por-area/CORTE_Y_CONTROL_TELAS`);
-        const usuarios = await res.json();
-        Swal.close();
-
-        if (!Array.isArray(usuarios) || usuarios.length === 0) {
-            return Swal.fire({
-                title: 'Sin personal registrado',
-                html: `No hay operarios asignados al área <b style="color:#558fc5;">CORTE Y CONTROL TELAS</b>.`,
-                icon: 'info',
-                confirmButtonColor: '#0f172a'
-            });
-        }
-
-        let selectHtml = `<select id="swal-select-trabajador-log" class="swal2-input" style="width:100%; font-size:14px; border-radius:8px;">
-            <option value="">-- Selecciona un operario --</option>`;
-        usuarios.forEach(u => {
-            selectHtml += `<option value="${u.id}">${u.nombre} (${u.rol})</option>`;
-        });
-        selectHtml += `</select>`;
-
-        const { isConfirmed } = await Swal.fire({
-            title: 'Asignar Operario de Telas',
-            html: selectHtml,
-            showCancelButton: true,
-            confirmButtonColor: '#0f172a',
-            cancelButtonText: 'Cancelar',
-            confirmButtonText: 'Confirmar Asignación',
-            preConfirm: () => {
-                const val = document.getElementById('swal-select-trabajador-log').value;
-                if (!val) { Swal.showValidationMessage('Debes seleccionar un trabajador'); return false; }
-                return val;
-            }
-        });
-
-        if (isConfirmed) {
-            const trabajadorId = document.getElementById('swal-select-trabajador-log').value;
-            Swal.fire({ title: 'Asignando...', didOpen: () => Swal.showLoading() });
-            const resp = await apiFetch(`${API_URL}/api/logistica/${logisticaId}/asignar-operario`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ trabajador_id: trabajadorId })
-            });
-            const data = await resp.json();
-            if (data.exito) {
-                Swal.fire('¡Asignado!', 'El operario ya puede ver la recolección en su bandeja.', 'success');
-                cargarTicketsTaller();
-            } else {
-                Swal.fire('Error', data.error, 'error');
-            }
-        }
-    } catch (e) {
-        Swal.fire('Error', 'No se pudo conectar con el servidor.', 'error');
-    }
-}
 async function confirmarDistribucionTela(id) {
     const conf = await Swal.fire({
         title: '¿Distribuir tela a Tapicería?',
