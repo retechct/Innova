@@ -274,11 +274,16 @@ async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, c
             alto:        alto        || 0,
         });
         if (modeloBase) params.append('modelo_base', modeloBase.trim());
+        const ticketNotas = window._ticketsTallerPorId?.[Number(ticketId)]?.especificaciones || '';
+        if (ticketNotas) params.append('notas', ticketNotas.slice(0, 1200));
  
         const res          = await apiFetch(`${API_URL}/api/stock-estructuras/sugerir?${params}`);
         const sugerencias  = await res.json();
  
-        if (!Array.isArray(sugerencias) || !sugerencias.length) return;
+        if (!Array.isArray(sugerencias) || !sugerencias.length) {
+            cont.innerHTML = '';
+            return false;
+        }
  
         // — Agrupar resultados —
         const porModelo   = sugerencias.filter(s =>
@@ -342,9 +347,62 @@ async function cargarSugerenciasEstructura(ancho, profundidad, alto, ticketId, c
                 ✅ Usar esta estructura (ya está pagada — no cobrar al cliente)
             </button>
           </div>`;
+        return true;
  
     } catch(e) {
         console.warn('No se pudieron cargar sugerencias de stock:', e);
+        return false;
+    }
+}
+
+async function activarBuscadorInteligenteEstructura(ticketId) {
+    const ticket = window._ticketsTallerPorId?.[ticketId];
+    const cont = document.getElementById(`sug-est-${ticketId}`);
+    if (!ticket || !cont) return;
+
+    const btn = document.getElementById(`btn-buscador-est-${ticketId}`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analizando medidas y notas...';
+    }
+    cont.style.display = 'block';
+    cont.innerHTML = '<div style="padding:10px;text-align:center;color:#64748b;font-size:11px;">Buscando coincidencias en el stock...</div>';
+
+    let ancho = 0, profundidad = 0, alto = 0;
+    const spec = ticket.especificaciones || '';
+    const regexes = [
+        /L\s*(\d+(?:\.\d+)?)\s*[xX×]\s*P\s*(\d+(?:\.\d+)?)(?:\s*[xX×]\s*(?:H|Alto)\s*(\d+(?:\.\d+)?))?/i,
+        /Ancho[:\s]+(\d+(?:\.\d+)?)[,\s]+(?:Prof|Profundidad|Fondo)[.:\s]+(\d+(?:\.\d+)?)(?:[,\s]+(?:Alto|H)[.:\s]+(\d+(?:\.\d+)?))?/i,
+        /(\d+(?:\.\d+)?)\s*cm\s*[xX×]\s*(\d+(?:\.\d+)?)\s*cm(?:\s*[xX×]\s*(\d+(?:\.\d+)?)\s*cm)?/i,
+        /\b(\d{2,3}(?:\.\d+)?)\s*[xX×]\s*(\d{2,3}(?:\.\d+)?)(?:\s*[xX×]\s*(\d{2,3}(?:\.\d+)?))?/
+    ];
+    for (const rx of regexes) {
+        const m = spec.match(rx);
+        if (m) {
+            ancho = parseFloat(m[1]) || 0;
+            profundidad = parseFloat(m[2]) || 0;
+            alto = parseFloat(m[3]) || 0;
+            break;
+        }
+    }
+
+    const encontroCoincidencias = await cargarSugerenciasEstructura(
+        ancho,
+        profundidad,
+        alto,
+        ticket.id,
+        `sug-est-${ticket.id}`,
+        _extraerModeloBase(ticket.producto || '')
+    );
+
+    if (encontroCoincidencias) {
+        if (btn) btn.style.display = 'none';
+    } else {
+        cont.innerHTML = '<div style="margin-top:8px;padding:9px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;color:#64748b;font-size:11px;">No encontré una estructura compatible por modelo, medidas o notas.</div>';
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Buscar nuevamente';
+        }
     }
 }
  
@@ -915,6 +973,8 @@ async function cargarTicketsTaller() {
             return;
         }
 
+        window._ticketsTallerPorId = Object.fromEntries(tickets.map(t => [Number(t.id), t]));
+
         let ticketsFiltrados = tickets;
 
         if (esAdmin) {
@@ -1029,54 +1089,6 @@ async function cargarTicketsTaller() {
         }
 
         contenedor.innerHTML = html;
-
-        // Cargar sugerencias para estructuras — buscar por modelo base + medidas
-        ticketsFiltrados.forEach(t => {
-    if (t.area === 'ESTRUCTURAS_MUEBLES' && t.estado !== 'Terminado'
-        && esOperario && usuarioActivo.area_asignada === 'ESTRUCTURAS_MUEBLES') {
- 
-        let l = 0, p = 0, h = 0;
-        const spec = t.especificaciones || '';
- 
-        // Formatos soportados (en orden de especificidad):
-        // 1. L120 x P90 x H45          (formato original)
-        // 2. L120 x P90 x Alto 45      (variante con "Alto")
-        // 3. Ancho: 120, Prof: 90       (con labels y coma)
-        // 4. Ancho 120 / Fondo 90       (con slash, sin ":")
-        // 5. 120cm x 90cm x 45cm        (con unidad cm)
-        // 6. 120 x 90 x 45              (solo números con x)
-        // 7. 120 x 90                   (sin alto)
- 
-        const regexes = [
-            // L120 x P90 x H45  /  L120 x P90 x Alto 45
-            /L\s*(\d+(?:\.\d+)?)\s*[xX×]\s*P\s*(\d+(?:\.\d+)?)(?:\s*[xX×]\s*(?:H|Alto)\s*(\d+(?:\.\d+)?))?/i,
-            // Ancho: 120[,]? Prof/Fondo: 90[,]? (Alto: 45)?
-            /Ancho[:\s]+(\d+(?:\.\d+)?)[,\s]+(?:Prof|Profundidad|Fondo)[.:\s]+(\d+(?:\.\d+)?)(?:[,\s]+(?:Alto|H)[.:\s]+(\d+(?:\.\d+)?))?/i,
-            // Ancho 120 / Fondo 90
-            /Ancho\s+(\d+(?:\.\d+)?)\s*[/]\s*(?:Fondo|Prof|Profundidad)\s+(\d+(?:\.\d+)?)/i,
-            // 120cm x 90cm x 45cm  (con unidad)
-            /(\d+(?:\.\d+)?)\s*cm\s*[xX×]\s*(\d+(?:\.\d+)?)\s*cm(?:\s*[xX×]\s*(\d+(?:\.\d+)?)\s*cm)?/i,
-            // 120 x 90 x 45  o  120 x 90  (solo números)
-            /\b(\d{2,3}(?:\.\d+)?)\s*[xX×]\s*(\d{2,3}(?:\.\d+)?)(?:\s*[xX×]\s*(\d{2,3}(?:\.\d+)?))?/,
-        ];
- 
-        for (const rx of regexes) {
-            const m = spec.match(rx);
-            if (m) {
-                l = parseFloat(m[1]) || 0;
-                p = parseFloat(m[2]) || 0;
-                h = parseFloat(m[3]) || 0;
-                break;
-            }
-        }
- 
-        const modeloBaseDetectado = _extraerModeloBase(t.producto || '');
- 
-        // Siempre intentar — el backend devolverá vacío si no hay nada
-        // (el fallback a solo_estandar ocurre dentro de cargarSugerenciasEstructura)
-        cargarSugerenciasEstructura(l, p, h, t.id, `sug-est-${t.id}`, modeloBaseDetectado);
-    }
-});
 
         // Event delegation para fichas técnicas
         contenedor.querySelectorAll('.btn-ver-ficha').forEach(btn => {
@@ -1197,6 +1209,12 @@ function renderTicketCardHTML(t, esAdmin) {
                    onerror="this.parentElement.style.display='none'">
            </div>`
         : '';
+    const puedeBuscarStock = !esAdmin
+        && t.area === 'ESTRUCTURAS_MUEBLES'
+        && t.estado !== 'Terminado'
+        && typeof usuarioActivo !== 'undefined'
+        && usuarioActivo.rol === 'Operario'
+        && usuarioActivo.area_asignada === 'ESTRUCTURAS_MUEBLES';
 
     return `
     <div style="background:${bgCard}; border-left:5px solid ${colorBorde}; border-radius:8px; padding:15px; opacity:${opacidad}; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:0.2s; overflow:hidden;">
@@ -1216,7 +1234,12 @@ function renderTicketCardHTML(t, esAdmin) {
             <i class="fa-solid fa-eye"></i> Ver Ficha Técnica Completa
         </button>
         ${renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin)}
-        <div id="sug-est-${t.id}"></div>
+        ${puedeBuscarStock ? `
+        <button id="btn-buscador-est-${t.id}" onclick="activarBuscadorInteligenteEstructura(${t.id})"
+            style="width:100%;margin-top:8px;background:#f5f3ff;color:#6d28d9;border:1.5px solid #8b5cf6;padding:9px;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Buscador inteligente
+        </button>` : ''}
+        <div id="sug-est-${t.id}" style="display:none;"></div>
     </div>`;
 }
 

@@ -5,6 +5,7 @@ Blueprint: produccion_bp  (sin prefijo de URL)
 """
 
 import json
+import re
 import uuid
 from datetime import datetime
 from io import BytesIO
@@ -4657,8 +4658,20 @@ def sugerir_estructura():
         profundidad  = float(request.args.get('profundidad', 0))
         alto         = float(request.args.get('alto', 0))
         modelo_base  = request.args.get('modelo_base', '').strip()
+        notas        = request.args.get('notas', '').strip()[:1200]
         solo_estandar = request.args.get('solo_estandar', 'false').lower() == 'true'
         margen       = 15  # cm
+
+        palabras_omitidas = {
+            'para', 'con', 'sin', 'del', 'las', 'los', 'una', 'uno', 'medida',
+            'medidas', 'estructura', 'estructuras', 'modelo', 'notas', 'nota',
+            'cliente', 'confirmar', 'final', 'sku', 'ref'
+        }
+        palabras_notas = [
+            p for p in re.findall(r'[a-záéíóúñ0-9]+', notas.lower())
+            if len(p) >= 4 and p not in palabras_omitidas and not p.isdigit()
+        ][:8]
+        patrones_notas = [f'%{p}%' for p in dict.fromkeys(palabras_notas)]
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -4695,6 +4708,14 @@ def sugerir_estructura():
                 # Sin medidas: no incluir cláusula de distancia
                 medidas_clause = ""
 
+            notas_clause = ""
+            if patrones_notas:
+                notas_clause = """
+                    OR LOWER(CONCAT_WS(' ', nombre_modelo, modelo_base, tipo_base,
+                                             medida_base, comentario_parte, comentario_entrega))
+                       LIKE ANY (%(patrones_notas)s)
+                """
+
             sql = f"""
                 SELECT id, nombre_modelo, ancho, profundidad, alto,
                        medida_estandar, foto_url, tipo, cantidad,
@@ -4706,6 +4727,7 @@ def sugerir_estructura():
                     medida_estandar = TRUE
                     OR (%(modelo_base)s != '' AND LOWER(modelo_base) = LOWER(%(modelo_base)s))
                     {medidas_clause}
+                    {notas_clause}
                   )
                 ORDER BY
                     CASE WHEN %(modelo_base)s != ''
@@ -4721,6 +4743,7 @@ def sugerir_estructura():
                 'alto':         alto,
                 'modelo_base':  modelo_base,
                 'margen':       margen,
+                'patrones_notas': patrones_notas,
             })
 
         rows = cursor.fetchall()

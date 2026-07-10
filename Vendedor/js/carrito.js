@@ -85,6 +85,7 @@ function goToStep(step) {
             camInput.onchange = () => {
                 if (camInput.files.length > 0) {
                     comprobanteInput.files = camInput.files;
+                    _mostrarVoucherSeleccionado(camInput.files[0]);
                     leerVoucherAutomatico(camInput.files[0]);
                 }
             };
@@ -97,7 +98,10 @@ function goToStep(step) {
             galLabel.htmlFor = 'pago-comprobante';
             comprobanteInput.removeAttribute('capture');
             comprobanteInput.onchange = () => {
-                if (comprobanteInput.files.length > 0) leerVoucherAutomatico(comprobanteInput.files[0]);
+                if (comprobanteInput.files.length > 0) {
+                    _mostrarVoucherSeleccionado(comprobanteInput.files[0]);
+                    leerVoucherAutomatico(comprobanteInput.files[0]);
+                }
             };
 
             btnContainer.appendChild(camLabel);
@@ -113,6 +117,48 @@ function goToStep(step) {
     if(step === 1) btn.innerHTML = 'CONTINUAR A CLIENTE <i class="fa-solid fa-arrow-right"></i>';
     else if(step === 2) btn.innerHTML = 'CONTINUAR A PAGO <i class="fa-solid fa-arrow-right"></i>';
     else btn.innerHTML = '<i class="fa-solid fa-print"></i> FINALIZAR VENTA';
+}
+
+function toggleModoEscanearVoucher(activo) {
+    document.querySelectorAll('#step-3 .pago-campo-manual').forEach(el => {
+        if (activo) {
+            el.dataset.displayAnterior = el.style.display || '';
+            el.style.display = 'none';
+        } else {
+            el.style.display = el.dataset.displayAnterior || '';
+        }
+    });
+
+    const btn = document.getElementById('btn-modo-scan-voucher');
+    if (btn) {
+        btn.innerHTML = activo
+            ? '<i class="fa-solid fa-arrow-left"></i> VOLVER A DATOS DEL PAGO'
+            : '<i class="fa-solid fa-camera"></i> ESCANEAR VOUCHER';
+        btn.onclick = () => toggleModoEscanearVoucher(!activo);
+    }
+    document.getElementById('pago-voucher-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function _mostrarVoucherSeleccionado(file) {
+    const box = document.getElementById('pago-voucher-box');
+    if (!box || !file) return;
+
+    let confirmacion = document.getElementById('voucher-seleccionado');
+    if (!confirmacion) {
+        confirmacion = document.createElement('div');
+        confirmacion.id = 'voucher-seleccionado';
+        confirmacion.style.cssText = 'margin-top:8px;padding:8px;background:#ecfdf5;border:1px solid #86efac;border-radius:7px;color:#166534;font-size:11px;font-weight:800;display:flex;gap:8px;align-items:center;';
+        box.appendChild(confirmacion);
+    }
+
+    if (window._voucherPreviewUrl) URL.revokeObjectURL(window._voucherPreviewUrl);
+    window._voucherPreviewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+    confirmacion.innerHTML = `
+        ${window._voucherPreviewUrl ? `<img src="${window._voucherPreviewUrl}" alt="Voucher seleccionado" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #86efac;">` : '<i class="fa-solid fa-file"></i>'}
+        <span><i class="fa-solid fa-circle-check"></i> Voucher subido correctamente<br><small style="font-weight:600;overflow-wrap:anywhere;">${file.name}</small></span>`;
+
+    // Después de elegir la foto, mostrar los datos que el OCR completará para revisión.
+    toggleModoEscanearVoucher(false);
 }
 
 function handleNextStep() {
