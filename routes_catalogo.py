@@ -65,6 +65,126 @@ def _llamar_openai_voucher(api_key, payload):
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _datos_voucher_desde_json(extraido):
+    monto_bruto = _normalizar_monto(extraido.get('monto_bruto'))
+    comision = _normalizar_monto(extraido.get('comision_pos')) or 0
+    monto_neto = _normalizar_monto(extraido.get('monto_neto'))
+    if monto_bruto is not None and (monto_neto is None or monto_neto > monto_bruto):
+        monto_neto = round(monto_bruto - comision, 2)
+    if monto_bruto is not None and comision > monto_bruto:
+        comision = 0
+        monto_neto = monto_bruto
+
+    return {
+        'ok': True,
+        'datos': {
+            'tipo_pago': extraido.get('tipo_pago') or None,
+            'entidad': extraido.get('entidad') or None,
+            'monto_bruto': monto_bruto,
+            'comision_pos': comision,
+            'monto_neto': monto_neto,
+            'numero_operacion': extraido.get('numero_operacion') or None,
+            'fecha_pago': extraido.get('fecha_pago') or None,
+            'moneda': extraido.get('moneda') or 'PEN',
+            'confianza': _normalizar_monto(extraido.get('confianza')),
+            'notas': extraido.get('notas') or '',
+        }
+    }
+
+
+def _leer_voucher_automatico(archivo):
+    intentos = []
+    for proveedor, lector in (('openai', _leer_voucher_con_openai), ('gemini', _leer_voucher_con_gemini)):
+        resultado = lector(archivo)
+        if resultado.get('ok'):
+            return resultado
+        intentos.append(f"{proveedor}: {resultado.get('error', 'sin detalle')}")
+        archivo.seek(0)
+
+    return {
+        'ok': False,
+        'error': 'No se pudo leer el voucher automáticamente. ' + ' | '.join(intentos)
+    }
+
+
+def _prompt_voucher_json():
+    return (
+        "Lee este voucher/comprobante de pago peruano. Devuelve SOLO JSON válido con estas claves: "
+        "tipo_pago, entidad, monto_bruto, comision_pos, monto_neto, numero_operacion, fecha_pago, "
+        "moneda, confianza, notas. Reglas: monto_bruto es el total cobrado al cliente; "
+        "si ves comisión POS o merchant discount ponla en comision_pos; monto_neto = monto_bruto - comision_pos. "
+        "Si un campo no se ve, usa null. tipo_pago debe ser POS, Transferencia, Yape, Plin, Efectivo u Otro. "
+        "confianza debe ser número de 0 a 1."
+    )
+
+
+def _leer_voucher_con_gemini(archivo):
+    api_key = os.getenv('GEMINI_API_KEY')
+    if not api_key:
+        return {'ok': False, 'error': 'GEMINI_API_KEY no configurada'}
+
+    mime = archivo.mimetype or 'image/jpeg'
+    if not mime.startswith('image/'):
+        return {'ok': False, 'error': 'Gemini OCR por ahora acepta imágenes. Para PDF, registra manualmente.'}
+
+    contenido = archivo.read()
+    archivo.seek(0)
+    if not contenido:
+        return {'ok': False, 'error': 'Archivo vacío'}
+
+    model = os.getenv("GEMINI_VOUCHER_MODEL", "gemini-1.5-flash")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    payload = {
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"text": _prompt_voucher_json()},
+                {
+                    "inline_data": {
+                        "mime_type": mime,
+                        "data": base64.b64encode(contenido).decode("ascii")
+                    }
+                }
+            ]
+        }],
+        "generationConfig": {
+            "response_mime_type": "application/json",
+            "temperature": 0
+        }
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=35) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detalle = e.read().decode("utf-8", errors="ignore")[:500]
+        print(f"Gemini voucher OCR HTTPError: {detalle}")
+        if "API_KEY_INVALID" in detalle or "API key not valid" in detalle:
+            return {'ok': False, 'error': 'GEMINI_API_KEY inválida o revocada'}
+        if "quota" in detalle.lower() or "billing" in detalle.lower():
+            return {'ok': False, 'error': 'Gemini API no tiene cuota o billing disponible'}
+        return {'ok': False, 'error': 'No se pudo leer el voucher con Gemini'}
+    except Exception as e:
+        print(f"Gemini voucher OCR error: {e}")
+        return {'ok': False, 'error': 'No se pudo conectar al lector Gemini'}
+
+    try:
+        texto = data["candidates"][0]["content"]["parts"][0].get("text", "")
+        extraido = _parse_json_modelo(texto)
+    except Exception as e:
+        print(f"No se pudo parsear OCR Gemini: {e}; data={str(data)[:300]}")
+        return {'ok': False, 'error': 'Gemini no devolvió datos legibles'}
+
+    resultado = _datos_voucher_desde_json(extraido)
+    resultado['datos']['proveedor_ocr'] = 'gemini'
+    return resultado
+
+
 def _leer_voucher_con_openai(archivo):
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
@@ -105,17 +225,7 @@ def _leer_voucher_con_openai(archivo):
         "input": [{
             "role": "user",
             "content": [
-                {
-                    "type": "input_text",
-                    "text": (
-                        "Lee este voucher/comprobante de pago peruano. Devuelve SOLO JSON válido con estas claves: "
-                        "tipo_pago, entidad, monto_bruto, comision_pos, monto_neto, numero_operacion, fecha_pago, "
-                        "moneda, confianza, notas. Reglas: monto_bruto es el total cobrado al cliente; "
-                        "si ves comisión POS o merchant discount ponla en comision_pos; monto_neto = monto_bruto - comision_pos. "
-                        "Si un campo no se ve, usa null. tipo_pago debe ser POS, Transferencia, Yape, Plin, Efectivo u Otro. "
-                        "confianza debe ser número de 0 a 1."
-                    )
-                },
+                {"type": "input_text", "text": _prompt_voucher_json()},
                 {"type": "input_image", "image_url": data_url}
             ]
         }],
@@ -163,30 +273,9 @@ def _leer_voucher_con_openai(archivo):
         print(f"No se pudo parsear OCR voucher: {e}; texto={texto[:300] if texto else ''}")
         return {'ok': False, 'error': 'La IA no devolvió datos legibles'}
 
-    monto_bruto = _normalizar_monto(extraido.get('monto_bruto'))
-    comision = _normalizar_monto(extraido.get('comision_pos')) or 0
-    monto_neto = _normalizar_monto(extraido.get('monto_neto'))
-    if monto_bruto is not None and (monto_neto is None or monto_neto > monto_bruto):
-        monto_neto = round(monto_bruto - comision, 2)
-    if monto_bruto is not None and comision > monto_bruto:
-        comision = 0
-        monto_neto = monto_bruto
-
-    return {
-        'ok': True,
-        'datos': {
-            'tipo_pago': extraido.get('tipo_pago') or None,
-            'entidad': extraido.get('entidad') or None,
-            'monto_bruto': monto_bruto,
-            'comision_pos': comision,
-            'monto_neto': monto_neto,
-            'numero_operacion': extraido.get('numero_operacion') or None,
-            'fecha_pago': extraido.get('fecha_pago') or None,
-            'moneda': extraido.get('moneda') or 'PEN',
-            'confianza': _normalizar_monto(extraido.get('confianza')),
-            'notas': extraido.get('notas') or '',
-        }
-    }
+    resultado = _datos_voucher_desde_json(extraido)
+    resultado['datos']['proveedor_ocr'] = 'openai'
+    return resultado
 
 
 def _asegurar_columnas_catalogo(cursor):
@@ -532,7 +621,7 @@ def upload_voucher():
 def leer_voucher():
     if 'archivo' not in request.files or request.files['archivo'].filename == '':
         return jsonify({'error': 'No se recibió ningún archivo'}), 400
-    resultado = _leer_voucher_con_openai(request.files['archivo'])
+    resultado = _leer_voucher_automatico(request.files['archivo'])
     if not resultado.get('ok'):
         return jsonify({
             'ok': False,
