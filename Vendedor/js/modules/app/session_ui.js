@@ -93,6 +93,7 @@ function configurarInterfazPorRol() {
     const btnProv        = document.getElementById('btn-menu-proveedores');
     const btnContratos   = document.getElementById('btn-menu-contratos');
     const btnEgresos     = document.getElementById('btn-menu-egresos');
+    const btnScanGlobal  = document.getElementById('btn-scan-global');
 
     // Ítems exclusivos de Vendedor / Admin
     const btnStock       = document.getElementById('btn-menu-stock');
@@ -104,7 +105,7 @@ function configurarInterfazPorRol() {
     // Ocultar todo por defecto
     [btnTaller, btnStockProduccion, btnInventario, btnInvTienda, btnGestor, btnAddProd,
     btnLogistica, btnUsuarios, btnProv, btnContratos,
-    btnStock, btnCatalogo, btnContrato, btnPedidos, btnCreaciones, btnEgresos
+    btnStock, btnCatalogo, btnContrato, btnPedidos, btnCreaciones, btnEgresos, btnScanGlobal
     ].forEach(b => { if (b) b.style.display = 'none'; });
 
     const rol = usuarioActivo.rol;
@@ -160,6 +161,10 @@ if (esAdmin || esJefeTaller) {
     const fab = document.querySelector('.fab');
     if (fab) {
         fab.style.display = (esAdmin || esVendedor) ? 'flex' : 'none';
+    }
+
+    if (btnScanGlobal) {
+        btnScanGlobal.style.display = (esAdmin || esVendedor || esJefeTaller) ? 'flex' : 'none';
     }
 }
 
