@@ -41,7 +41,7 @@ function _htmlEsqueleto() {
                     style="background:var(--primary);color:white;border:none;padding:10px 16px;
                            border-radius:10px;font-weight:800;cursor:pointer;font-size:12px;
                            display:flex;align-items:center;gap:6px;">
-                <i class="fas fa-barcode"></i> Imprimir SKUs
+                <i class="fas fa-barcode"></i> Imprimir etiquetas
             </button>` : ''}
             <button onclick="_invExportarCSV()"
                     style="background:white;color:var(--text-muted);border:1px solid #e2e8f0;
@@ -303,6 +303,7 @@ function _renderTablaProductos() {
 
     modelos.forEach((m, idx) => {
         const cid  = `inv-car-${idx}`;
+        const skuMaestro = m.sku_maestro || '';
         const fotos = (m.fotos && m.fotos.length) ? m.fotos
                     : (m.foto_url ? [m.foto_url] : []);
         const tieneCarousel = fotos.length > 1;
@@ -391,7 +392,7 @@ function _renderTablaProductos() {
                 <!-- Checkbox -->
                 <div style="position:absolute;top:8px;left:8px;">
                     <input type="checkbox" class="chk-prod"
-                           value="${encodeURIComponent(JSON.stringify(m))}"
+                           value="${escapeAttr(encodeURIComponent(JSON.stringify(m)))}"
                            data-cant="${m.disponibles}"
                            style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
                 </div>
@@ -402,16 +403,20 @@ function _renderTablaProductos() {
                 <div>
                     <div style="font-weight:800;font-size:13px;color:var(--primary);
                                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
-                         title="${m.nombre_modelo}">${m.nombre_modelo}</div>
+                         title="${escapeAttr(m.nombre_modelo)}">${escapeHTML(m.nombre_modelo)}</div>
                     ${m.observaciones ? `
-                    <div style="font-size:11px; color:#64748b; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${m.observaciones}">
-                        <i class="fas fa-ruler-horizontal" style="margin-right:4px; color:#94a3b8;"></i> ${m.observaciones}
+                    <div style="font-size:11px; color:#64748b; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeAttr(m.observaciones)}">
+                        <i class="fas fa-ruler-horizontal" style="margin-right:4px; color:#94a3b8;"></i> ${escapeHTML(m.observaciones)}
                     </div>
                     ` : ''}
+                    <div style="font-size:10px;color:${skuMaestro ? '#475569' : '#c2410c'};font-weight:800;margin-top:4px;">
+                        <i class="fas fa-tag"></i>
+                        ${skuMaestro ? `SKU maestro: ${escapeHTML(skuMaestro)}` : 'SKU maestro pendiente'}
+                    </div>
                     <span style="background:#eff6ff;color:var(--accent);font-size:9px;
                                  font-weight:900;padding:2px 7px;border-radius:8px;
                                  display:inline-block;margin-top:3px;">
-                        ${m.categoria.toUpperCase()}
+                        ${escapeHTML(m.categoria.toUpperCase())}
                     </span>
                 </div>
 
@@ -420,20 +425,20 @@ function _renderTablaProductos() {
 
                 <!-- Acciones -->
                 <div style="display:flex;gap:6px;margin-top:4px;">
-                    <button onclick="_invImprimirFisico('${encodeURIComponent(JSON.stringify(m))}')"
+                    <button onclick="_invAbrirEtiquetasModelo(${jsStringAttr(encodeURIComponent(JSON.stringify(m)))})"
                             style="flex:1;background:#f8fafc;border:1px solid #cbd5e1;
                                    padding:7px 0;border-radius:8px;color:var(--text-muted);
                                    cursor:pointer;font-size:11px;font-weight:700;">
-                        <i class="fas fa-barcode"></i> SKU
+                        <i class="fas fa-barcode"></i> Etiquetas
                     </button>
-                    <button onclick="_invVerUnidades('${m.nombre_modelo.replace(/'/g,"\\'")}','${m.categoria}',${m.catalogo_id||'null'})"
+                    <button onclick="_invVerUnidades(${jsStringAttr(m.nombre_modelo)},${jsStringAttr(m.categoria)},${m.catalogo_id||'null'})"
                             style="flex:1;background:#f1f5f9;border:none;padding:7px 0;
                                    border-radius:8px;color:var(--text-muted);cursor:pointer;
                                    font-size:11px;font-weight:700;">
                         <i class="fas fa-eye"></i> Ver
                     </button>
                     ${_puedeEditarInv() ? `
-                    <button onclick="_invAbrirEditarProducto('${encodeURIComponent(JSON.stringify(m))}')"
+                    <button onclick="_invAbrirEditarProducto(${jsStringAttr(encodeURIComponent(JSON.stringify(m)))})"
                             style="flex:1;background:#fff7ed;border:1px solid #fed7aa;padding:7px 0;
                                    border-radius:8px;color:#c2410c;cursor:pointer;
                                    font-size:11px;font-weight:700;">
@@ -469,6 +474,15 @@ function _carouselGoTo(cid, idx) {
 /* ─── Editar producto (datos generales: nombre, categoría, observaciones, precio) ─── */
 let _invEditOriginal = null;
 
+function _invCategoriaOficializableStock(categoria) {
+    const normalizada = String(categoria || '').normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+    return CATEGORIAS_OFICIALIZABLES_STOCK.some(c =>
+        c.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === normalizada
+    );
+}
+
 async function _invAbrirEditarProducto(encodedObj) {
     if (!_puedeEditarInv()) { Swal.fire('Sin permisos', 'Solo Admin o Jefe de Taller.', 'warning'); return; }
     let m = JSON.parse(decodeURIComponent(encodedObj));
@@ -501,10 +515,12 @@ async function _invAbrirEditarProducto(encodedObj) {
 
 function _invRenderModalEditarProducto(m) {
     const cats = CATEGORIAS_PRODUCTO.map(c =>
-        `<option value="${c}" ${c === m.categoria ? 'selected' : ''}>${c}</option>`
+        `<option value="${escapeAttr(c)}" ${c === m.categoria ? 'selected' : ''}>${escapeHTML(c)}</option>`
     ).join('');
 
     const cuerpo = document.getElementById('modal-inv-editar-cuerpo');
+    const esAdmin = String(window.usuarioActivo?.rol || '').toLowerCase() === 'admin';
+    const puedeOficializar = esAdmin && !m.catalogo_id && _invCategoriaOficializableStock(m.categoria);
 
     // Foto actual del modelo (si tiene) — para mostrar preview y permitir cambiarla
     const fotoActual = (m.fotos && m.fotos.length) ? m.fotos[0] : (m.foto_url || '');
@@ -518,7 +534,7 @@ function _invRenderModalEditarProducto(m) {
             <span style="flex:1;font-size:12px;color:var(--text-muted);">${s.nombre}</span>
             <input type="number" min="0" id="ef-stock-${s.id}" class="form-input"
                    value="${stSede}" style="width:70px;padding:6px 8px;font-size:12px;text-align:center;" />
-            <button onclick="_invAjustarStockSede(${s.id}, '${(m.nombre_modelo||'').replace(/'/g,"\\'")}', '${(m.categoria||'').replace(/'/g,"\\'")}', ${m.catalogo_id ? m.catalogo_id : 'null'}, '${(m.observaciones||'').replace(/'/g,"\\'")}')"
+            <button onclick="_invAjustarStockSede(${s.id}, ${jsStringAttr(m.nombre_modelo || '')}, ${jsStringAttr(m.categoria || '')}, ${m.catalogo_id ? m.catalogo_id : 'null'}, ${jsStringAttr(m.observaciones || '')})"
                     title="Guardar cantidad de esta tienda"
                     style="background:#0f172a;color:white;border:none;padding:6px 12px;
                            border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">
@@ -546,11 +562,14 @@ function _invRenderModalEditarProducto(m) {
             </div>
         </div>
         <div class="form-group"><label>Nombre Modelo *</label>
-            <input id="ef-nombre" type="text" class="form-input" value="${(m.nombre_modelo||'').replace(/"/g,'&quot;')}" /></div>
+            <input id="ef-nombre" type="text" class="form-input" value="${escapeAttr(m.nombre_modelo || '')}" /></div>
         <div class="form-group"><label>Categoría *</label>
             <select id="ef-categoria" class="form-input">${cats}</select></div>
         <div class="form-group"><label>Observaciones</label>
-            <input id="ef-obs" type="text" class="form-input" value="${(m.observaciones||'').replace(/"/g,'&quot;')}" placeholder="Opcional" /></div>
+            <input id="ef-obs" type="text" class="form-input" value="${escapeAttr(m.observaciones || '')}" placeholder="Opcional" /></div>
+        <div class="form-group"><label>SKU maestro</label>
+            <input type="text" class="form-input" value="${escapeAttr(m.sku_maestro || 'Se asignara al guardar/oficializar')}" readonly
+                   style="background:#f8fafc;color:${m.sku_maestro ? '#0f172a' : '#94a3b8'};font-weight:800;" /></div>
         ${m.catalogo_id ? `
         <div class="form-group"><label>Precio Base (S/) — modelo de la carta</label>
             <input id="ef-precio" type="number" class="form-input" step="0.01" placeholder="Dejar vacío para no cambiar" /></div>
@@ -561,6 +580,20 @@ function _invRenderModalEditarProducto(m) {
         <button onclick="_invGuardarEdicionProducto()" class="btn-action btn-primary" style="margin-top:10px;">
             <i class="fas fa-save"></i> Guardar Cambios
         </button>
+        ${puedeOficializar ? `
+        <button onclick="_invOficializarProductoCatalogo()" class="btn-action"
+                style="margin-top:8px;background:#0f766e;color:white;border:none;">
+            <i class="fas fa-book-open"></i> Oficializar en catalogo
+        </button>` : ''}
+        ${m.catalogo_id && esAdmin ? `
+        <button onclick="_invEditarFichaCatalogo(${Number(m.catalogo_id)})" class="btn-action"
+                style="margin-top:8px;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;">
+            <i class="fas fa-images"></i> Editar ficha, descripcion y fotos
+        </button>` : ''}
+        ${!m.catalogo_id && !_invCategoriaOficializableStock(m.categoria) ? `
+        <p style="font-size:11px;color:#64748b;margin:8px 0 0;">
+            Esta categoria usa plantilla o tickets de produccion; su publicacion se gestiona desde La Carta.
+        </p>` : ''}
 
         <hr style="margin:16px 0;border:none;border-top:1px solid #e2e8f0;">
         <label style="display:block;font-size:12px;font-weight:800;color:#1e293b;margin-bottom:8px;">
@@ -589,6 +622,143 @@ function _invPreviewNuevaFotoEdicion(event) {
         if (img) img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+}
+
+async function _invOficializarProductoCatalogo() {
+    const m = _invEditOriginal;
+    if (!m || m.catalogo_id) return;
+    if (String(window.usuarioActivo?.rol || '').toLowerCase() !== 'admin') {
+        return Swal.fire('Sin permisos', 'Solo el administrador puede publicar productos en el catalogo.', 'warning');
+    }
+
+    const categorias = CATEGORIAS_OFICIALIZABLES_STOCK.map(c =>
+        `<option value="${escapeAttr(c)}" ${c === m.categoria ? 'selected' : ''}>${escapeHTML(c)}</option>`
+    ).join('');
+    const fotos = (m.fotos && m.fotos.length) ? m.fotos : (m.foto_url ? [m.foto_url] : []);
+    const fotosHTML = fotos.length
+        ? fotos.map(f => `<img src="${escapeAttr(f)}" style="width:64px;height:64px;object-fit:cover;border:1px solid #cbd5e1;border-radius:6px;">`).join('')
+        : '<span style="font-size:12px;color:#94a3b8;">Sin fotos actuales</span>';
+
+    const resultado = await Swal.fire({
+        title: 'Oficializar producto en catalogo',
+        width: '650px',
+        html: `
+        <div style="text-align:left;display:flex;flex-direction:column;gap:12px;">
+            <div style="background:#ecfdf5;border:1px solid #86efac;padding:10px;border-radius:7px;font-size:12px;color:#166534;">
+                Se creara una ficha maestra y se enlazaran las <b>${Number(m.total || 0)}</b> unidades fisicas existentes.
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div>
+                    <label style="font-size:11px;font-weight:800;color:#475569;">SKU MAESTRO</label>
+                    <input id="ofc-sku" class="swal2-input" value="${escapeAttr(m.sku_maestro || '')}" placeholder="Se generara automaticamente" style="margin:5px 0 0;width:100%;box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:11px;font-weight:800;color:#475569;">CATEGORIA</label>
+                    <select id="ofc-categoria" class="swal2-input" style="margin:5px 0 0;width:100%;box-sizing:border-box;">${categorias}</select>
+                </div>
+            </div>
+            <div>
+                <label style="font-size:11px;font-weight:800;color:#475569;">NOMBRE COMERCIAL</label>
+                <input id="ofc-nombre" class="swal2-input" value="${escapeAttr(m.nombre_modelo || '')}" style="margin:5px 0 0;width:100%;box-sizing:border-box;">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div>
+                    <label style="font-size:11px;font-weight:800;color:#475569;">PRECIO DE VENTA (S/)</label>
+                    <input id="ofc-precio" type="number" min="0" step="0.01" class="swal2-input" value="${Number(m.precio || 0)}" style="margin:5px 0 0;width:100%;box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:11px;font-weight:800;color:#475569;">ABASTECIMIENTO</label>
+                    <select id="ofc-modo" class="swal2-input" style="margin:5px 0 0;width:100%;box-sizing:border-box;">
+                        <option value="STOCK_DIRECTO">Stock directo</option>
+                        <option value="COMPRA_EXTERNA">Compra externa</option>
+                        <option value="MIXTO">Stock o compra externa</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label style="font-size:11px;font-weight:800;color:#475569;">DESCRIPCION, MEDIDAS Y ACABADO</label>
+                <textarea id="ofc-descripcion" class="swal2-textarea" rows="4" style="margin:5px 0 0;width:100%;box-sizing:border-box;">${escapeHTML(m.observaciones || '')}</textarea>
+            </div>
+            <div>
+                <label style="font-size:11px;font-weight:800;color:#475569;">FOTOS REUTILIZADAS</label>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${fotosHTML}</div>
+            </div>
+            <div>
+                <label style="font-size:11px;font-weight:800;color:#475569;">AGREGAR MAS FOTOS</label>
+                <input id="ofc-fotos" type="file" accept="image/*" multiple
+                       style="margin-top:6px;width:100%;padding:9px;border:2px dashed #cbd5e1;border-radius:7px;box-sizing:border-box;">
+            </div>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-book-open"></i> Oficializar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0f766e',
+        preConfirm: async () => {
+            const nombre = document.getElementById('ofc-nombre')?.value.trim();
+            const precio = Number(document.getElementById('ofc-precio')?.value || 0);
+            if (!nombre) {
+                Swal.showValidationMessage('El nombre comercial es obligatorio');
+                return false;
+            }
+            if (precio <= 0) {
+                Swal.showValidationMessage('Ingresa un precio de venta mayor a cero');
+                return false;
+            }
+
+            const fd = new FormData();
+            fd.append('categoria_actual', m.categoria || '');
+            fd.append('nombre_actual', m.nombre_modelo || '');
+            fd.append('observaciones_actuales', m.observaciones || '');
+            fd.append('sku_maestro', document.getElementById('ofc-sku')?.value.trim() || '');
+            fd.append('nombre', nombre);
+            fd.append('categoria', document.getElementById('ofc-categoria')?.value || m.categoria || '');
+            fd.append('precio', precio);
+            fd.append('descripcion', document.getElementById('ofc-descripcion')?.value.trim() || '');
+            fd.append('modo_abastecimiento', document.getElementById('ofc-modo')?.value || 'STOCK_DIRECTO');
+            fd.append('fotos_existentes', fotos.join('|'));
+            for (const file of (document.getElementById('ofc-fotos')?.files || [])) {
+                fd.append('fotos', file);
+            }
+
+            try {
+                Swal.showLoading();
+                const res = await apiFetch(`${API_URL}/api/catalogo/oficializar-stock`, {
+                    method: 'POST', body: fd
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    Swal.showValidationMessage(data.error || 'No se pudo oficializar el producto');
+                    return false;
+                }
+                return data;
+            } catch (e) {
+                Swal.showValidationMessage('Error de conexion: ' + e.message);
+                return false;
+            }
+        }
+    });
+
+    if (!resultado.isConfirmed || !resultado.value?.exito) return;
+    document.getElementById('modal-inv-editar').style.display = 'none';
+    window._invalidarCacheStockTiendas?.();
+    if (typeof _recargarCatalogo === 'function') await _recargarCatalogo();
+    await _cargarDatosTab();
+    Swal.fire({
+        icon: 'success',
+        title: 'Producto oficializado',
+        html: `<b>SKU maestro:</b> ${escapeHTML(resultado.value.sku_maestro || '')}<br>${escapeHTML(resultado.value.mensaje || '')}`,
+        confirmButtonColor: '#0f766e'
+    });
+}
+
+async function _invEditarFichaCatalogo(catalogoId) {
+    document.getElementById('modal-inv-editar').style.display = 'none';
+    if (typeof _recargarCatalogo === 'function') await _recargarCatalogo();
+    if (typeof window._cartaEditarPlantilla === 'function') {
+        window._cartaEditarPlantilla(Number(catalogoId));
+    } else {
+        Swal.fire('No disponible', 'No se pudo abrir el editor del catalogo.', 'error');
+    }
 }
 
 /* ─── Ajustar (aumentar/reducir) el stock disponible de un modelo en una sede ─── */
@@ -772,7 +942,7 @@ function _renderTablaPiezas() {
             onmouseout="this.style.background='${bg}'">
             <td style="padding:12px 16px;position:sticky;left:0;background:inherit;z-index:1;">
                 <div style="display:flex; gap:10px; align-items:flex-start;">
-                    <input type="checkbox" class="chk-pieza" value="${encodeURIComponent(JSON.stringify(pObj))}" data-cant="${p.disponibles}" style="margin-top:2px;">
+                    <input type="checkbox" class="chk-pieza" value="${escapeAttr(encodeURIComponent(JSON.stringify(pObj)))}" data-cant="${p.disponibles}" style="margin-top:2px;">
                     <img src="${fotoPieza}" alt="${p.nombre_modelo || 'Pieza'}"
                          onclick="_invLightbox('${fotoPieza}', '${(p.nombre_modelo || 'Pieza').replace(/'/g, "\\'")}')"
                          onerror="this.src='imagenes/sin_foto.jpg'"
@@ -804,13 +974,13 @@ function _renderTablaPiezas() {
                 ${(p.sede_stock||{})[s]||0}
             </td>`).join('')}
             <td style="padding:12px 8px;text-align:center;display:flex;gap:4px;justify-content:center;">
-                <button onclick="_invImprimirFisico('${encodeURIComponent(JSON.stringify(pObj))}')"
+                <button onclick="_invAbrirEtiquetasModelo(${jsStringAttr(encodeURIComponent(JSON.stringify(pObj)))})"
                         style="background:#f8fafc;border:1px solid #cbd5e1;padding:6px 10px;border-radius:6px;
                                color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Imprimir Código Físico">
-                    <i class="fas fa-barcode"></i> SKU
+                    <i class="fas fa-barcode"></i> Etiquetas
                 </button>
                 ${isNew ? `
-                <button onclick="_invVerUnidades('${p.nombre_modelo.replace(/'/g,"\\'")}','${p.categoria}','es_pieza')"
+                <button onclick="_invVerUnidades(${jsStringAttr(p.nombre_modelo)},${jsStringAttr(p.categoria)},'es_pieza')"
                         style="background:#f1f5f9;border:none;padding:6px 12px;border-radius:8px;
                                color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:700;" title="Ver Stock Físico">
                     <i class="fas fa-eye"></i> Ver
@@ -927,6 +1097,23 @@ async function _invBuscarBarcode(barcode) {
             }
         }
 
+        const productoMaestro = (_invDataProd.modelos || []).find(p =>
+            String(p.sku_maestro || '').toUpperCase() === barcode.toUpperCase()
+        );
+        if (productoMaestro) {
+            Swal.fire({
+                title: 'SKU maestro reconocido',
+                text: 'Mostrando las unidades fisicas y las sedes donde se encuentran.',
+                icon: 'success', timer: 1800, showConfirmButton: false
+            });
+            _invVerUnidades(
+                productoMaestro.nombre_modelo,
+                productoMaestro.categoria,
+                productoMaestro.catalogo_id || null
+            );
+            return;
+        }
+
         // 2. Búsqueda normal de unidad física
         const res = await apiFetch(`${API_URL}/api/inventario/buscar/${encodeURIComponent(barcode)}`);
         const d   = await res.json();
@@ -940,6 +1127,19 @@ async function _invBuscarBarcode(barcode) {
             }
             Swal.fire('No encontrado', 'El código no pertenece a ninguna unidad física ni modelo registrado.', 'warning'); 
             return; 
+        }
+        if (d.tipo === 'modelo_producto' || d.tipo === 'modelo_pieza') {
+            Swal.fire({
+                title: 'SKU maestro reconocido',
+                text: 'Esta etiqueta representa el modelo. Mostrando sus unidades fisicas.',
+                icon: 'success', timer: 1800, showConfirmButton: false
+            });
+            _invVerUnidades(
+                d.nombre_modelo,
+                d.categoria,
+                d.tipo === 'modelo_pieza' ? 'es_pieza' : (d.catalogo_id || null)
+            );
+            return;
         }
         await _invMostrarDetalleUnidad(d);
     } catch(e) { Swal.fire('Error', e.message, 'error'); }
@@ -1043,7 +1243,8 @@ async function _invMostrarDetalleUnidad(d) {
     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:15px;">
         <div class="specs-section" style="background:#f8fafc; padding:12px; border-radius:8px;">
             <h4 style="margin:0 0 8px 0; font-size:12px; color:var(--primary); text-transform:uppercase;">Identificación</h4>
-            <p style="margin:4px 0;font-size:13px;"><b>Código:</b> <span style="color:var(--accent);font-weight:900;">${d.codigo_barra}</span></p>
+            ${d.sku_maestro ? `<p style="margin:4px 0;font-size:13px;"><b>SKU maestro:</b> ${escapeHTML(d.sku_maestro)}</p>` : ''}
+            <p style="margin:4px 0;font-size:13px;"><b>Código de unidad:</b> <span style="color:var(--accent);font-weight:900;">${d.codigo_barra}</span></p>
             <p style="margin:4px 0;font-size:13px;"><b>Modelo:</b> ${d.nombre_modelo}</p>
             <p style="margin:4px 0;font-size:13px;"><b>Categoría:</b> ${d.categoria}</p>
         </div>

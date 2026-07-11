@@ -154,7 +154,9 @@ async function renderStockTiendas(grid) {
                         categoria: p.categoria,
                         catalogo_id: p.catalogo_id,
                         observaciones: p.observaciones || '',
-                        sku: null
+                        sku: p.sku_maestro || '',
+                        precio: Number(p.precio || 0),
+                        modo_abastecimiento: p.modo_abastecimiento || 'STOCK_DIRECTO'
                     });
                 }
             });
@@ -200,7 +202,12 @@ async function renderStockTiendas(grid) {
                         nombre: p.nombre_modelo,
                         categoria: medidaStr,
                         catalogo_id: null,
-                        sku: p.sku_maestro
+                        sku: p.sku_maestro,
+                        precio: 0,
+                        forma: p.forma || '',
+                        largo_cm: Number(p.largo_cm || 0),
+                        ancho_cm: Number(p.ancho_cm || 0),
+                        alto_cm: Number(p.alto_cm || 0)
                     });
                 }
             });
@@ -269,6 +276,9 @@ function _renderStockUI(grid) {
             const categoriaSeguro = escapeHTML(item.categoria || '');
             const observacionesSeguro = escapeHTML(item.observaciones || '');
             const observacionesAttr = escapeAttr(item.observaciones || '');
+            const puedeAgregar = isProd
+                ? Number(item.catalogo_id) > 0 && Number(item.precio || 0) > 0
+                : Boolean(item.sku);
             // FIX (julio 2026): antes solo se pasaba item.foto (la primera
             // imagen). Ahora se pasan TODAS las fotos del producto/pieza
             // unidas con '|' para que no se pierdan al llegar a la venta
@@ -276,8 +286,8 @@ function _renderStockUI(grid) {
             // en cartItem.img).
             const fotosStock = (item.fotos && item.fotos.length ? item.fotos : (item.foto ? [item.foto] : [])).join('|');
             const actionArgs = isProd 
-                ? `${Number(item.catalogo_id) || 'null'}, ${nombreJS}, 0, ${jsStringAttr(fotosStock)}, false`
-                : `${jsStringAttr(item.sku || '')}, ${nombreJS}, 0, ${jsStringAttr(fotosStock)}, true`;
+                ? `${Number(item.catalogo_id) || 'null'}, ${nombreJS}, ${Number(item.precio || 0)}, ${jsStringAttr(fotosStock)}, false, ${jsStringAttr(item.categoria || '')}, ${jsStringAttr(item.sede || '')}, null`
+                : `${jsStringAttr(item.sku || '')}, ${nombreJS}, 0, ${jsStringAttr(fotosStock)}, true, ${jsStringAttr(item.categoria || '')}, ${jsStringAttr(item.sede || '')}, ${jsStringAttr(JSON.stringify({ forma:item.forma || '', largo_cm:item.largo_cm || 0, ancho_cm:item.ancho_cm || 0, alto_cm:item.alto_cm || 0 }))}`;
 
             html += `
             <div class="card" style="position:relative; margin:0; border:1px solid #e2e8f0; box-shadow:none; transition: transform 0.2s; cursor: default;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
@@ -306,17 +316,24 @@ function _renderStockUI(grid) {
                         </span>
                     </div>
                     <h4 style="font-size:14px; margin-bottom:4px; min-height: 38px;">${nombreSeguro}</h4>
+                    ${item.sku ? `<div style="font-size:10px;color:#64748b;font-weight:800;margin-bottom:4px;"><i class="fa-solid fa-tag"></i> ${escapeHTML(item.sku)}</div>` : ''}
                     ${item.observaciones ? `
                     <div style="font-size:11px; color:#64748b; margin-top:2px; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${observacionesAttr}">
                         <i class="fa-solid fa-ruler-horizontal" style="margin-right:4px; color:#94a3b8;"></i> ${observacionesSeguro}
                     </div>
                     ` : ''}
                     <span class="price-tag" style="font-size: 11px; color: #64748b; margin-bottom:12px; display:block;">${categoriaSeguro}</span>
+                    ${isProd && Number(item.precio || 0) > 0 ? `<span style="font-size:13px;color:#15803d;font-weight:900;margin-bottom:8px;display:block;">S/ ${Number(item.precio).toFixed(2)}</span>` : ''}
                     <div style="display:flex; gap:6px;">
+                        ${puedeAgregar ? `
                         <button class="btn-action btn-primary" style="flex:1; border-radius:8px; ${!isProd ? 'background:#0f172a;' : ''}"
                             onclick="addStockItemToCart(${actionArgs})">
                             <i class="fa-solid fa-cart-plus"></i> AGREGAR
-                        </button>
+                        </button>` : `
+                        <button class="btn-action" disabled title="El administrador debe oficializar este producto y definir su precio"
+                                style="flex:1;border-radius:8px;background:#e2e8f0;color:#64748b;cursor:not-allowed;">
+                            <i class="fa-solid fa-lock"></i> OFICIALIZAR PRIMERO
+                        </button>`}
                     </div>
                 </div>
             </div>`;
@@ -373,14 +390,26 @@ window._invalidarCacheStockTiendas = function() {
 /**
  * addStockItemToCart — maneja ítems de Stock (productos enteros y piezas).
  */
-async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false) {
+async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false, categoria = '', sedePreferida = '', identidadPieza = null) {
     const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
 
     let unidades = [];
     try {
-        const endpoint = isPieza 
-            ? `${API_URL}/api/inventario/piezas/disponibles/${itemId}` 
+        let endpoint = isPieza
+            ? `${API_URL}/api/inventario/piezas/disponibles/${encodeURIComponent(itemId)}`
             : `${API_URL}/api/inventario/disponibles/${itemId}`;
+        if (isPieza && identidadPieza) {
+            const identidad = typeof identidadPieza === 'string'
+                ? JSON.parse(identidadPieza)
+                : identidadPieza;
+            const qs = new URLSearchParams({
+                forma: identidad.forma || '',
+                largo_cm: Number(identidad.largo_cm || 0),
+                ancho_cm: Number(identidad.ancho_cm || 0),
+                alto_cm: Number(identidad.alto_cm || 0)
+            });
+            endpoint += `?${qs}`;
+        }
         const res = await apiFetch(endpoint);
         unidades  = await res.json();
     } catch (e) {
@@ -388,70 +417,128 @@ async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false)
         return;
     }
 
-    if (unidades.error || !unidades.length) {
+    if (unidades.error) {
+        return Swal.fire({
+            icon: 'error',
+            title: 'No se pudo consultar el stock',
+            text: unidades.error
+        });
+    }
+
+    const idsYaAgregados = new Set(
+        cart.map(item => isPieza ? item.stock_pieza_id : item.stock_producto_id)
+            .filter(id => id !== undefined && id !== null)
+            .map(Number)
+    );
+    unidades = unidades.filter(unidad => !idsYaAgregados.has(Number(unidad.id)));
+
+    if (!unidades.length) {
         return Swal.fire({
             icon: 'warning',
             title: 'Sin unidades disponibles',
-            text:  `No hay unidades físicas disponibles de "${nombre}".`,
+            text:  `No quedan unidades físicas libres de "${nombre}"; revisa las que ya agregaste al carrito.`,
             confirmButtonColor: 'var(--accent)'
         });
     }
 
-    let unidad;
+    let unidadesSeleccionadas = [];
     if (unidades.length === 1) {
-        unidad = unidades[0];
+        unidadesSeleccionadas = [unidades[0]];
     } else {
-        const opciones = unidades.map(u => `<option value="${u.id}">${u.label}</option>`).join('');
-        const { value: idSeleccionado, isConfirmed } = await Swal.fire({
-            title: `Seleccionar unidad — ${nombre}`,
+        const sedes = [...new Set(unidades.map(u => u.sede || 'Sin sede'))];
+        const opcionesSede = sedes.map(s => {
+            const cantidad = unidades.filter(u => (u.sede || 'Sin sede') === s).length;
+            return `<option value="${escapeAttr(s)}" ${s === sedePreferida ? 'selected' : ''}>${escapeHTML(s)} (${cantidad} disp.)</option>`;
+        }).join('');
+        const { value: seleccion, isConfirmed } = await Swal.fire({
+            title: `Agregar stock — ${nombre}`,
             html: `
                 <p style="font-size:13px;color:#6b7280;margin-bottom:12px;">
-                    Hay <strong>${unidades.length}</strong> unidades disponibles.<br>
-                    Elige la que estás vendiendo:
+                    Hay <strong>${unidades.length}</strong> unidades fisicas disponibles.
                 </p>
-                <select id="swal-picker-unidad" style="width:100%;padding:10px;border-radius:8px;font-size:13px;">
-                    ${opciones}
-                </select>`,
+                <div style="display:grid;grid-template-columns:1fr 110px;gap:10px;text-align:left;">
+                    <div>
+                        <label style="font-size:11px;font-weight:800;color:#64748b;">SEDE</label>
+                        <select id="swal-stock-sede" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:7px;margin-top:5px;">${opcionesSede}</select>
+                    </div>
+                    <div>
+                        <label style="font-size:11px;font-weight:800;color:#64748b;">CANTIDAD</label>
+                        <input id="swal-stock-cantidad" type="number" min="1" value="1" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:7px;margin-top:5px;box-sizing:border-box;">
+                    </div>
+                </div>
+                <p id="swal-stock-ayuda" style="font-size:11px;color:#64748b;margin-top:10px;text-align:left;"></p>`,
             showCancelButton: true,
-            confirmButtonText: 'Seleccionar esta unidad',
+            confirmButtonText: 'Agregar al carrito',
             confirmButtonColor: '#0f172a',
-            preConfirm: () => document.getElementById('swal-picker-unidad').value
+            didOpen: () => {
+                const sedeEl = document.getElementById('swal-stock-sede');
+                const cantidadEl = document.getElementById('swal-stock-cantidad');
+                const ayudaEl = document.getElementById('swal-stock-ayuda');
+                const actualizar = () => {
+                    const disponiblesSede = unidades.filter(u => (u.sede || 'Sin sede') === sedeEl.value).length;
+                    cantidadEl.max = disponiblesSede;
+                    if (Number(cantidadEl.value) > disponiblesSede) cantidadEl.value = disponiblesSede;
+                    ayudaEl.textContent = `Se asignaran automaticamente ${cantidadEl.value || 1} unidad(es) fisicas de esta sede.`;
+                };
+                sedeEl.addEventListener('change', actualizar);
+                cantidadEl.addEventListener('input', actualizar);
+                actualizar();
+            },
+            preConfirm: () => {
+                const sede = document.getElementById('swal-stock-sede')?.value || '';
+                const cantidad = Number(document.getElementById('swal-stock-cantidad')?.value || 0);
+                const disponiblesSede = unidades.filter(u => (u.sede || 'Sin sede') === sede).length;
+                if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > disponiblesSede) {
+                    Swal.showValidationMessage(`La cantidad debe estar entre 1 y ${disponiblesSede}`);
+                    return false;
+                }
+                return { sede, cantidad };
+            }
         });
 
-        if (!isConfirmed || !idSeleccionado) return;
-        unidad = unidades.find(u => u.id == idSeleccionado);
+        if (!isConfirmed || !seleccion) return;
+        unidadesSeleccionadas = unidades
+            .filter(u => (u.sede || 'Sin sede') === seleccion.sede)
+            .slice(0, seleccion.cantidad);
     }
 
-    if (!unidad) return;
+    if (!unidadesSeleccionadas.length) return;
 
-    const detalleLabel = [
-        `Cód: ${unidad.codigo_barra}`,
-        unidad.sede,
-        unidad.color_tela || unidad.material,
-        unidad.acabado || unidad.color_acabado,
-        unidad.observaciones
-    ].filter(Boolean).join(' · ');
+    unidadesSeleccionadas.forEach(unidad => {
+        const detalleLabel = [
+            unidad.sku_maestro ? `SKU: ${unidad.sku_maestro}` : '',
+            `Unidad: ${unidad.codigo_barra}`,
+            unidad.sede,
+            unidad.color_tela || unidad.material,
+            unidad.acabado || unidad.color_acabado,
+            unidad.observaciones
+        ].filter(Boolean).join(' · ');
 
-    const cartItem = {
-        name:              nombre,
-        price:             precio || 0,
-        img:               foto,
-        details:           detalleLabel,
-        componentes:       {},
-        es_stock:          true,
-    };
+        const cartItem = {
+            name: nombre,
+            price: precio || 0,
+            img: foto,
+            details: detalleLabel,
+            componentes: {},
+            es_stock: true,
+            categoria,
+        };
 
-    if (isPieza) {
-        cartItem.stock_pieza_id = unidad.id;
-    } else {
-        cartItem.stock_producto_id = unidad.id;
-        cartItem.catalogo_id = itemId;
-    }
+        if (isPieza) {
+            cartItem.stock_pieza_id = unidad.id;
+        } else {
+            cartItem.stock_producto_id = unidad.id;
+            cartItem.catalogo_id = itemId;
+        }
+        cart.push(cartItem);
+    });
 
-    cart.push(cartItem);
     document.getElementById('cart-count').innerText = cart.length;
     if(typeof updateCartUI === 'function') updateCartUI();
-    Toast.fire({ icon: 'success', title: `"${nombre}" añadido al carrito` });
+    Toast.fire({
+        icon: 'success',
+        title: `${unidadesSeleccionadas.length} unidad(es) de "${nombre}" agregada(s)`
+    });
 }
 /* --- LÓGICA DEL NUEVO MODAL DE SOFÁS --- */
 /* --- REEMPLAZA TU FUNCIÓN openConfig COMPLETA --- */
@@ -1600,7 +1687,11 @@ async function procesarNotasConFotos(tipos) {
 let _cartaPagina = 1;
 const _cartaItemsPorPagina = 12;
 let _cartaFiltroCategoria = '';
-const CATEGORIAS_CARTA = ['Sofá', 'Sillón', 'Butaca', 'Silla', 'Puff', 'Mesa', 'Cama', 'Esquinero', 'Florero', 'Manta', 'Otro'];
+const CATEGORIAS_CARTA = [
+    'Sofá', 'Sillón', 'Butaca', 'Silla', 'Puff', 'Mesa', 'Mesa Centro',
+    'Consola', 'Espejo', 'Cuadro', 'Cojin', 'Cama', 'Esquinero',
+    'Florero', 'Manta', 'Otro'
+];
 
 function renderCarta(grid) {
     grid.style.display = 'block';
@@ -2021,13 +2112,18 @@ window._cartaEditarPlantilla = function(id) {
     const p = allProducts.find(x => x.id === id);
     if (!p) return;
 
-    const catOpts = CATEGORIAS_CARTA.map(c =>
-        `<option value="${c}" ${c === (p.categoria || '') ? 'selected' : ''}>${c}</option>`
+    const categoriasEditor = CATEGORIAS_CARTA.includes(p.categoria)
+        ? CATEGORIAS_CARTA
+        : [p.categoria, ...CATEGORIAS_CARTA].filter(Boolean);
+    const catOpts = categoriasEditor.map(c =>
+        `<option value="${escapeAttr(c)}" ${c === (p.categoria || '') ? 'selected' : ''}>${escapeHTML(c)}</option>`
     ).join('');
     const tipoActual = _cartaTipoConfig(p);
+    const skuActual = p.sku_maestro || '';
+    const modoActual = p.modo_abastecimiento || (p.en_stock ? 'STOCK_DIRECTO' : 'PRODUCCION');
     const fotos = (p.fotos && p.fotos.length) ? p.fotos : (p.foto ? [p.foto] : []);
     const fotosHtml = fotos.length
-        ? fotos.map(f => `<img src="${f}" style="width:58px;height:58px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;">`).join('')
+        ? fotos.map(f => `<img src="${escapeAttr(f)}" style="width:58px;height:58px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;">`).join('')
         : '<span style="font-size:12px;color:#94a3b8;">Sin fotos actuales</span>';
 
     Swal.fire({
@@ -2036,7 +2132,22 @@ window._cartaEditarPlantilla = function(id) {
         <div style="text-align:left; display:flex; flex-direction:column; gap:12px; padding:4px 0;">
             <div>
                 <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Nombre *</label>
-                <input id="ep-nombre" class="swal2-input" value="${(p.nombre || '').replace(/"/g, '&quot;')}" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+                <input id="ep-nombre" class="swal2-input" value="${escapeAttr(p.nombre || '')}" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                    <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">SKU maestro</label>
+                    <input id="ep-sku" class="swal2-input" value="${escapeAttr(skuActual)}" placeholder="Ej: MEC-ROMA-DOR" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Abastecimiento</label>
+                    <select id="ep-modo" class="swal2-input" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+                        <option value="STOCK_DIRECTO" ${modoActual === 'STOCK_DIRECTO' ? 'selected' : ''}>Stock directo</option>
+                        <option value="COMPRA_EXTERNA" ${modoActual === 'COMPRA_EXTERNA' ? 'selected' : ''}>Compra externa</option>
+                        <option value="PRODUCCION" ${modoActual === 'PRODUCCION' ? 'selected' : ''}>Produccion</option>
+                        <option value="MIXTO" ${modoActual === 'MIXTO' ? 'selected' : ''}>Mixto</option>
+                    </select>
+                </div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                 <div>
@@ -2050,7 +2161,7 @@ window._cartaEditarPlantilla = function(id) {
             </div>
             <div>
                 <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Descripcion / medida</label>
-                <input id="ep-observaciones" class="swal2-input" value="${(p.observaciones || '').replace(/"/g, '&quot;')}" style="margin:6px 0 0; width:100%; box-sizing:border-box;">
+                <textarea id="ep-observaciones" class="swal2-textarea" rows="3" style="margin:6px 0 0; width:100%; box-sizing:border-box;">${escapeHTML(p.observaciones || '')}</textarea>
             </div>
             <div>
                 <label style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase;">Configurador base</label>
@@ -2089,6 +2200,8 @@ window._cartaEditarPlantilla = function(id) {
             fd.append('categoria', document.getElementById('ep-cat')?.value || '');
             fd.append('precio', parseFloat(document.getElementById('ep-precio')?.value || 0));
             fd.append('observaciones', document.getElementById('ep-observaciones')?.value.trim() || '');
+            fd.append('sku_maestro', document.getElementById('ep-sku')?.value.trim() || '');
+            fd.append('modo_abastecimiento', document.getElementById('ep-modo')?.value || 'STOCK_DIRECTO');
             fd.append('tipo_config', document.getElementById('ep-tipo-config')?.value || '');
             fd.append('reemplazar_fotos', document.getElementById('ep-reemplazar')?.checked ? '1' : '0');
             const files = document.getElementById('ep-fotos')?.files || [];
@@ -2108,6 +2221,7 @@ window._cartaEditarPlantilla = function(id) {
     }).then(async result => {
         if (result.isConfirmed && result.value?.exito) {
             await _recargarCatalogo();
+            window._invalidarCacheStockTiendas?.();
             if (document.getElementById('carta-panel-modelos')?.style.display !== 'none' && typeof _cartaCargarModelos === 'function') {
                 await _cartaCargarModelos();
             } else {

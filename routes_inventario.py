@@ -24,6 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from flask import Blueprint, request, jsonify, Response, send_file
 from database import get_db_connection, release_db_connection
 from auth_middleware import requiere_login, requiere_rol
+from sku_utils import generar_sku_maestro, normalizar_sku_maestro
 
 inventario_bp = Blueprint('inventario', __name__)
 tz_peru = pytz.timezone('America/Lima')
@@ -93,13 +94,42 @@ def _asegurar_columna_fotos_adicionales():
         cur = conn.cursor()
         cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
         cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS observaciones TEXT;")
+        cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS sku_maestro TEXT;")
         cur.execute("ALTER TABLE stock_piezas ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
         cur.execute("ALTER TABLE stock_piezas ADD COLUMN IF NOT EXISTS foto_url TEXT;")
+        cur.execute("ALTER TABLE catalogo_productos ADD COLUMN IF NOT EXISTS sku_maestro TEXT;")
+        cur.execute("ALTER TABLE catalogo_productos ADD COLUMN IF NOT EXISTS modo_abastecimiento TEXT DEFAULT 'STOCK_DIRECTO';")
         # Índices de performance para queries frecuentes
         cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_nombre ON stock_productos (LOWER(nombre_modelo));")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_sede ON stock_productos (sede_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_sku ON stock_productos (UPPER(sku_maestro));")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_piezas_sku ON stock_piezas (sku_maestro);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_piezas_sede ON stock_piezas (sede_id);")
+
+        # Backfill legacy whole products once. Existing unit barcodes remain intact.
+        cur.execute("""
+            SELECT DISTINCT categoria, nombre_modelo, COALESCE(observaciones, ''), catalogo_id
+            FROM stock_productos
+            WHERE COALESCE(sku_maestro, '') = ''
+            ORDER BY categoria, nombre_modelo
+        """)
+        grupos_sin_sku = cur.fetchall()
+        for categoria, nombre_modelo, observaciones, catalogo_id in grupos_sin_sku:
+            datos_sku = {
+                'categoria': categoria,
+                'nombre_modelo': nombre_modelo,
+                'observaciones': observaciones,
+                'catalogo_id': catalogo_id,
+            }
+            sku_maestro = _resolver_sku_producto(cur, datos_sku)
+            cur.execute("""
+                UPDATE stock_productos
+                   SET sku_maestro = %s
+                 WHERE categoria = %s
+                   AND LOWER(nombre_modelo) = LOWER(%s)
+                   AND COALESCE(observaciones, '') = %s
+                   AND COALESCE(sku_maestro, '') = ''
+            """, (sku_maestro, categoria, nombre_modelo, observaciones))
         _schema_fotos_adicionales_listo = True
     except Exception as e:
         print(f"⚠️  _asegurar_columna_fotos_adicionales: {e}")
@@ -113,6 +143,10 @@ def _asegurar_columna_fotos_adicionales():
 
 def _generar_codigo(cur, prefijo, tabla_col):
     """Genera el siguiente código de barras único: IM-{PREFIX}-{N:05d}"""
+    cur.execute(
+        "SELECT pg_advisory_xact_lock(hashtext(%s))",
+        (f'innova-barcode-{tabla_col}',),
+    )
     cur.execute(f"SELECT COUNT(*) FROM {tabla_col};")
     n = cur.fetchone()[0] + 1
     codigo = f"IM-{prefijo}-{str(n).zfill(5)}"
@@ -123,6 +157,54 @@ def _generar_codigo(cur, prefijo, tabla_col):
         codigo = f"IM-{prefijo}-{str(n).zfill(5)}"
         cur.execute(f"SELECT 1 FROM {tabla_col} WHERE codigo_barra = %s", (codigo,))
     return codigo
+
+
+def _resolver_sku_producto(cur, data):
+    """Returns one stable SKU for every physical unit in the same model group."""
+    solicitado = normalizar_sku_maestro(data.get('sku_maestro'))
+    catalogo_id = data.get('catalogo_id')
+
+    if catalogo_id:
+        cur.execute(
+            "SELECT COALESCE(sku_maestro, '') FROM catalogo_productos WHERE id = %s",
+            (catalogo_id,),
+        )
+        row = cur.fetchone()
+        sku_catalogo = normalizar_sku_maestro(row[0]) if row else ''
+        if sku_catalogo:
+            return sku_catalogo
+
+        sku_nuevo = generar_sku_maestro(
+            cur, data.get('categoria'), data.get('nombre_modelo'), solicitado or None,
+            excluir_catalogo_id=catalogo_id,
+        )
+        cur.execute(
+            "UPDATE catalogo_productos SET sku_maestro = %s WHERE id = %s",
+            (sku_nuevo, catalogo_id),
+        )
+        return sku_nuevo
+
+    cur.execute("""
+        SELECT sku_maestro
+        FROM stock_productos
+        WHERE LOWER(nombre_modelo) = LOWER(%s)
+          AND categoria = %s
+          AND COALESCE(observaciones, '') = %s
+          AND COALESCE(sku_maestro, '') != ''
+        ORDER BY id ASC
+        LIMIT 1
+    """, (
+        data.get('nombre_modelo'),
+        data.get('categoria'),
+        data.get('observaciones') or '',
+    ))
+    row = cur.fetchone()
+    if row and row[0]:
+        return normalizar_sku_maestro(row[0])
+
+    return generar_sku_maestro(
+        cur, data.get('categoria'), data.get('nombre_modelo'), solicitado or None
+    )
 
 
 def _registrar_historial(cur, tipo, reg_id, barcode, evento,
@@ -181,6 +263,7 @@ def _obtener_foto_maestro(cur, categoria, nombre_modelo):
 @inventario_bp.route('/api/inventario/resumen', methods=['GET'])
 @requiere_login
 def resumen_productos():
+    _asegurar_columna_fotos_adicionales()
     categoria = request.args.get('categoria', '')
     q         = request.args.get('q', '').strip().lower()
     sede_id   = request.args.get('sede_id', '')
@@ -226,7 +309,10 @@ def resumen_productos():
                 MAX(cp.foto_url)                                            AS cat_foto_url,
                 MAX(cp.fotos_urls)                                          AS cat_fotos_urls,
                 MAX(sp.fotos_adicionales)                                   AS stock_fotos_adicionales,
-                COALESCE(sp.observaciones, MAX(cp.observaciones))           AS observaciones
+                COALESCE(sp.observaciones, MAX(cp.observaciones))           AS observaciones,
+                COALESCE(MAX(NULLIF(sp.sku_maestro, '')), MAX(NULLIF(cp.sku_maestro, '')), '') AS sku_maestro,
+                COALESCE(MAX(cp.modo_abastecimiento), 'STOCK_DIRECTO')      AS modo_abastecimiento,
+                COALESCE(MAX(cp.precio_base), MAX(sp.precio_venta), 0)      AS precio_catalogo
             FROM stock_productos sp
             JOIN sedes se ON sp.sede_id = se.id
             LEFT JOIN catalogo_productos cp
@@ -261,6 +347,9 @@ def resumen_productos():
                     "fotos":         [],
                     "_fotos_seen":   set(),
                     "observaciones": observaciones_row,
+                    "sku_maestro":   r[14] or '',
+                    "modo_abastecimiento": r[15] or 'STOCK_DIRECTO',
+                    "precio":        float(r[16] or 0),
                     "total":         0,
                     "disponibles":   0,
                     "sede_stock":    {s[1]: {"total":0,"disponibles":0} for s in sedes},
@@ -271,6 +360,8 @@ def resumen_productos():
             # Si esta fila trae un catalogo_id y el modelo aún no tiene uno, usarlo
             if not m["catalogo_id"] and r[2]:
                 m["catalogo_id"] = r[2]
+            if not m["sku_maestro"] and r[14]:
+                m["sku_maestro"] = r[14]
 
             # Acumular fotos de esta sede: catálogo, luego las del registro de stock
             # sp.foto_url (r[9]) es legacy, puede contener la foto del catálogo
@@ -463,6 +554,10 @@ def resumen_piezas():
 @requiere_login
 def unidades_piezas_disponibles_por_sku(sku_maestro):
     sede_id = request.args.get('sede_id', '')
+    forma = request.args.get('forma', '')
+    largo_cm = request.args.get('largo_cm')
+    ancho_cm = request.args.get('ancho_cm')
+    alto_cm = request.args.get('alto_cm')
     conn = None
     try:
         conn = _conn(); cur = conn.cursor()
@@ -472,6 +567,17 @@ def unidades_piezas_disponibles_por_sku(sku_maestro):
         if sede_id:
             where_extra = " AND sp.sede_id = %s"
             params.append(sede_id)
+        if forma:
+            where_extra += " AND sp.forma = %s"
+            params.append(forma)
+        for columna, valor in (
+            ('largo_cm', largo_cm),
+            ('ancho_cm', ancho_cm),
+            ('alto_cm', alto_cm),
+        ):
+            if valor not in (None, ''):
+                where_extra += f" AND COALESCE(sp.{columna}, 0) = %s"
+                params.append(float(valor or 0))
 
         cur.execute(f"""
             SELECT sp.id, sp.codigo_barra, se.nombre AS sede,
@@ -505,6 +611,9 @@ def unidades_piezas_disponibles_por_sku(sku_maestro):
                 'id':            r[0],
                 'codigo_barra':  r[1],
                 'sede':          r[2],
+                'sku_maestro':   sku_maestro,
+                'material':      r[3] or '',
+                'color_acabado': r[4] or '',
                 'label':         ' — '.join(label_parts),
             })
         return jsonify(unidades), 200
@@ -521,6 +630,7 @@ def unidades_piezas_disponibles_por_sku(sku_maestro):
 @inventario_bp.route('/api/inventario/buscar/<barcode>', methods=['GET'])
 @requiere_login
 def buscar_por_barcode(barcode):
+    _asegurar_columna_fotos_adicionales()
     conn = None
     try:
         conn = _conn(); cur = conn.cursor()
@@ -532,7 +642,8 @@ def buscar_por_barcode(barcode):
                    sp.foto_url, sp.costo_ingreso, sp.precio_venta,
                    sp.fecha_ingreso, 'producto' AS tipo, sp.fotos_adicionales,
                    COALESCE(cp.foto_url, '')    AS cat_foto_url,
-                   COALESCE(cp.fotos_urls, '')  AS cat_fotos_urls
+                   COALESCE(cp.fotos_urls, '')  AS cat_fotos_urls,
+                   COALESCE(NULLIF(sp.sku_maestro, ''), cp.sku_maestro, '') AS sku_maestro
             FROM stock_productos sp
             LEFT JOIN sedes se ON sp.sede_id = se.id
             LEFT JOIN catalogo_productos cp
@@ -577,6 +688,7 @@ def buscar_por_barcode(barcode):
                 "precio_venta":      float(row[10]) if row[10] else None,
                 "fecha_ingreso":     row[11].strftime('%d/%m/%Y') if row[11] else None,
                 "fotos_adicionales": row[13] or "",
+                "sku_maestro":       row[16] or "",
             }), 200
 
         # 2. Buscar en stock_piezas
@@ -650,6 +762,7 @@ def buscar_por_barcode(barcode):
                 "foto_url":          todas_fotos[0] if todas_fotos else "",
                 "fotos":             todas_fotos,
                 "fotos_adicionales": fotos_adicionales_str,
+                "sku_maestro":       sku_maestro_pieza,
             }), 200
 
         # 3. ← NUEVO: Buscar en stock_unidades
@@ -675,6 +788,54 @@ def buscar_por_barcode(barcode):
                 "costo_ingreso": float(row[9]) if row[9] else None,
                 "precio_venta": None,
                 "fecha_ingreso": row[10].strftime('%d/%m/%Y') if row[10] else None,
+            }), 200
+
+        # 4. Buscar una etiqueta maestra de modelo (no identifica una unidad).
+        cur.execute("""
+            SELECT nombre_modelo, categoria, id, sku_maestro
+            FROM catalogo_productos
+            WHERE UPPER(COALESCE(sku_maestro, '')) = UPPER(%s)
+            ORDER BY id ASC LIMIT 1
+        """, (barcode,))
+        row = cur.fetchone()
+        if row:
+            return jsonify({
+                'tipo': 'modelo_producto',
+                'nombre_modelo': row[0],
+                'categoria': row[1],
+                'catalogo_id': row[2],
+                'sku_maestro': row[3] or barcode,
+            }), 200
+
+        cur.execute("""
+            SELECT nombre_modelo, categoria, catalogo_id, sku_maestro
+            FROM stock_productos
+            WHERE UPPER(COALESCE(sku_maestro, '')) = UPPER(%s)
+            ORDER BY id ASC LIMIT 1
+        """, (barcode,))
+        row = cur.fetchone()
+        if row:
+            return jsonify({
+                'tipo': 'modelo_producto',
+                'nombre_modelo': row[0],
+                'categoria': row[1],
+                'catalogo_id': row[2],
+                'sku_maestro': row[3] or barcode,
+            }), 200
+
+        cur.execute("""
+            SELECT nombre_modelo, categoria, sku_maestro
+            FROM stock_piezas
+            WHERE UPPER(COALESCE(sku_maestro, '')) = UPPER(%s)
+            ORDER BY id ASC LIMIT 1
+        """, (barcode,))
+        row = cur.fetchone()
+        if row:
+            return jsonify({
+                'tipo': 'modelo_pieza',
+                'nombre_modelo': row[0],
+                'categoria': row[1],
+                'sku_maestro': row[2] or barcode,
             }), 200
 
         return jsonify({'error': 'Código no encontrado'}), 404
@@ -705,6 +866,7 @@ def registrar_producto():
     conn = None
     try:
         conn = _conn(); cur = conn.cursor()
+        sku_maestro = _resolver_sku_producto(cur, data)
 
         unidades_creadas = []
         for _ in range(cantidad):
@@ -713,13 +875,14 @@ def registrar_producto():
 
             cur.execute("""
                 INSERT INTO stock_productos
-                    (catalogo_id, nombre_modelo, categoria, codigo_barra,
+                    (catalogo_id, sku_maestro, nombre_modelo, categoria, codigo_barra,
                      color_tela, acabado, observaciones, foto_url, fotos_adicionales,
                      sede_id, estado, costo_ingreso, precio_venta, creado_por)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Disponible',%s,%s,%s)
                 RETURNING id;
             """, (
                 data.get('catalogo_id'),
+                sku_maestro,
                 data['nombre_modelo'],
                 data['categoria'],
                 barcode,
@@ -742,16 +905,41 @@ def registrar_producto():
                 data['usuario_id'], data.get('usuario_nombre', ''),
                 notas=f"Ingreso inicial. {data.get('observaciones', '')}"
             )
-            unidades_creadas.append({'id': nuevo_id, 'codigo_barra': barcode})
+            unidades_creadas.append({
+                'id': nuevo_id,
+                'codigo_barra': barcode,
+                'sku_maestro': sku_maestro,
+            })
+
+        if data.get('catalogo_id'):
+            cur.execute("""
+                SELECT COUNT(*)
+                FROM stock_productos
+                WHERE catalogo_id = %s AND estado = 'Disponible'
+            """, (data['catalogo_id'],))
+            stock_catalogo = cur.fetchone()[0]
+            cur.execute("""
+                UPDATE catalogo_productos
+                   SET stock_cantidad = %s,
+                       en_stock = %s
+                 WHERE id = %s
+            """, (stock_catalogo, stock_catalogo > 0, data['catalogo_id']))
 
         conn.commit()
         # Compatibilidad: si solo se registró 1, devolver también codigo_barra directo
-        resp = {'exito': True, 'unidades': unidades_creadas}
+        resp = {
+            'exito': True,
+            'sku_maestro': sku_maestro,
+            'unidades': unidades_creadas,
+        }
         if len(unidades_creadas) == 1:
             resp['id'] = unidades_creadas[0]['id']
             resp['codigo_barra'] = unidades_creadas[0]['codigo_barra']
         return jsonify(resp), 201
 
+    except ValueError as e:
+        if conn: conn.rollback()
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         if conn: conn.rollback()
         import traceback; traceback.print_exc()
@@ -1089,6 +1277,7 @@ def unidades_disponibles_por_catalogo(catalogo_id):
 
     Query param opcional:  ?sede_id=3  → filtrar por tienda
     """
+    _asegurar_columna_fotos_adicionales()
     sede_id = request.args.get('sede_id', '')
     conn = None
     try:
@@ -1104,7 +1293,8 @@ def unidades_disponibles_por_catalogo(catalogo_id):
             SELECT sp.id, sp.codigo_barra, se.nombre AS sede,
                    sp.color_tela, sp.acabado, sp.observaciones,
                    sp.costo_ingreso, sp.precio_venta,
-                   TO_CHAR(sp.fecha_ingreso, 'DD/MM/YYYY') AS fecha_ingreso
+                   TO_CHAR(sp.fecha_ingreso, 'DD/MM/YYYY') AS fecha_ingreso,
+                   COALESCE(sp.sku_maestro, '') AS sku_maestro
             FROM stock_productos sp
             JOIN sedes se ON sp.sede_id = se.id
             WHERE sp.catalogo_id = %s
@@ -1130,6 +1320,7 @@ def unidades_disponibles_por_catalogo(catalogo_id):
                 'costo_ingreso': float(r[6]) if r[6] else None,
                 'precio_venta':  float(r[7]) if r[7] else None,
                 'fecha_ingreso': r[8] or '',
+                'sku_maestro':   r[9] or '',
                 'label':         ' — '.join(label_parts),
             })
 
@@ -1511,17 +1702,22 @@ def ajustar_cantidad_stock():
                     elif row[1]:
                         foto_url = row[1].split('|')[0].strip()
 
+            datos_sku = dict(data)
+            datos_sku['observaciones'] = observaciones_nuevas or ''
+            sku_maestro = _resolver_sku_producto(cur, datos_sku)
+
             for _ in range(diferencia):
                 barcode = _generar_codigo(cur, prefijo, 'stock_productos')
                 cur.execute(
                     """
                     INSERT INTO stock_productos
-                        (catalogo_id, nombre_modelo, categoria, codigo_barra,
+                        (catalogo_id, sku_maestro, nombre_modelo, categoria, codigo_barra,
                          observaciones, foto_url, fotos_adicionales, sede_id, estado, creado_por)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Disponible', %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'Disponible', %s)
                     RETURNING id;
                     """, (
                     data.get('catalogo_id'),
+                    sku_maestro,
                     data['nombre_modelo'],
                     data['categoria'],
                     barcode,
@@ -1555,6 +1751,20 @@ def ajustar_cantidad_stock():
                     notas=f'Ajuste: {cantidad_actual} → {cantidad_nueva} uds'
                 )
                 cur.execute("DELETE FROM stock_productos WHERE id = %s", (reg_id,))
+
+        if data.get('catalogo_id'):
+            cur.execute("""
+                SELECT COUNT(*)
+                FROM stock_productos
+                WHERE catalogo_id = %s AND estado = 'Disponible'
+            """, (data['catalogo_id'],))
+            stock_catalogo = cur.fetchone()[0]
+            cur.execute("""
+                UPDATE catalogo_productos
+                   SET stock_cantidad = %s,
+                       en_stock = %s
+                 WHERE id = %s
+            """, (stock_catalogo, stock_catalogo > 0, data['catalogo_id']))
 
         conn.commit()
         return jsonify({

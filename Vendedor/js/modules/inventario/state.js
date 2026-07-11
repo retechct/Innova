@@ -20,6 +20,11 @@ const CATEGORIAS_PRODUCTO = [
     'Esquinero', 'Florero', 'Manta', 'Puff'
 ];
 
+const CATEGORIAS_OFICIALIZABLES_STOCK = [
+    'Espejo', 'Cuadro', 'Cojin', 'Mesa Centro', 'Esquinero',
+    'Florero', 'Manta', 'Puff'
+];
+
 const CATEGORIAS_PIEZA = [
     { val: 'tablero',          label: 'Tablero (piedra / vidrio / madera)' },
     { val: 'base-comedor',     label: 'Base de Comedor' },

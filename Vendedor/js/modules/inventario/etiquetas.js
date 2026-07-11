@@ -43,7 +43,7 @@ function _generarBarcodeAjustado(codigo, maxWidthPx, alturaPx, margin) {
     return bcCanvas;
 }
 
-function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
+function imprimirEtiqueta(codigo, nombre, sede, observaciones, skuMaestro = '', esMaestra = false) {
     // Inyectar JsBarcode si aún no está cargado
     function _cargarJsBarcode(cb) {
         if (typeof JsBarcode !== 'undefined') { cb(); return; }
@@ -85,10 +85,14 @@ function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
         const nomCorto = nombre.length > 30 ? nombre.substring(0, 30) + '…' : nombre;
         ctx.fillText(nomCorto, canvas.width / 2, 74);
 
-        // Sede
+        // Identidad estable del modelo. La sede no se imprime porque puede cambiar.
         ctx.fillStyle = '#8a7560';
-        ctx.font      = '17px Arial';
-        ctx.fillText(sede, canvas.width / 2, 98);
+        ctx.font      = 'bold 17px Arial';
+        const skuVisible = skuMaestro.length > 34 ? skuMaestro.substring(0, 34) + '…' : skuMaestro;
+        const lineaSku = esMaestra
+            ? 'SKU MAESTRO'
+            : (skuVisible ? `SKU: ${skuVisible}` : 'UNIDAD FISICA');
+        ctx.fillText(lineaSku, canvas.width / 2, 98);
 
         // NEW: Observaciones (si existen)
         let barcodeY = 120;
@@ -111,7 +115,7 @@ function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
         // Código en texto
         ctx.fillStyle = '#1e140a';
         ctx.font      = 'bold 24px Arial';
-        ctx.fillText(codigo, canvas.width / 2, 328);
+        ctx.fillText(esMaestra ? codigo : `UNIDAD: ${codigo}`, canvas.width / 2, 328);
 
         // Limpiar canvas temporal
         bcCanvas.remove();
@@ -139,7 +143,7 @@ function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
         btnDesc.onclick = function() {
             const link    = document.createElement('a');
             link.href     = canvas.toDataURL('image/png');
-            link.download = 'etiqueta-' + codigo + '.png';
+            link.download = (esMaestra ? 'sku-maestro-' : 'unidad-') + codigo + '.png';
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -164,6 +168,14 @@ function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
         overlay.appendChild(btnCerrar);
         document.body.appendChild(overlay);
     });
+}
+
+function imprimirEtiquetaMaestra(skuMaestro, nombre) {
+    if (!skuMaestro) {
+        Swal.fire('SKU pendiente', 'Oficializa o actualiza el producto para generar su SKU maestro.', 'warning');
+        return;
+    }
+    imprimirEtiqueta(skuMaestro, nombre, '', '', skuMaestro, true);
 }
 
 /* ─── Impresión Masiva de Etiquetas Físicas ─────────────────────────────── */
@@ -194,6 +206,47 @@ async function _invImprimirMasivo() {
     await _ejecutarImpresionFisica(items, porCantidad);
 }
 
+async function _invAbrirEtiquetasModelo(encodedObj) {
+    const obj = JSON.parse(decodeURIComponent(encodedObj));
+    const skuMaestro = obj.sku_maestro || obj.sku || '';
+    const nombre = obj.nombre_modelo || obj.nombreConMedida || 'Producto';
+
+    if (!skuMaestro) {
+        const confirmar = await Swal.fire({
+            icon: 'info',
+            title: 'SKU maestro pendiente',
+            text: 'Este modelo aun no tiene SKU maestro. Puedes imprimir sus codigos unitarios o primero oficializarlo.',
+            showCancelButton: true,
+            confirmButtonText: 'Imprimir unidades',
+            cancelButtonText: 'Cancelar'
+        });
+        if (confirmar.isConfirmed) await _ejecutarImpresionFisica([obj], true);
+        return;
+    }
+
+    const eleccion = await Swal.fire({
+        title: 'Que etiqueta necesitas?',
+        html: `
+            <div style="text-align:left;font-size:13px;color:#475569;line-height:1.55;">
+                <p><b>Etiqueta maestra:</b> una para el estante o exhibicion. Se escanea una vez para buscar el modelo.</p>
+                <p><b>Etiquetas unitarias:</b> una diferente para cada unidad fisica disponible.</p>
+            </div>`,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: '<i class="fas fa-tag"></i> SKU maestro',
+        denyButtonText: '<i class="fas fa-barcode"></i> Todas las unidades',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0f172a',
+        denyButtonColor: '#16a34a'
+    });
+
+    if (eleccion.isConfirmed) {
+        imprimirEtiquetaMaestra(skuMaestro, nombre);
+    } else if (eleccion.isDenied) {
+        await _ejecutarImpresionFisica([obj], true);
+    }
+}
+
 async function _invImprimirFisico(encodedObj) {
     const obj = JSON.parse(decodeURIComponent(encodedObj));
     await _ejecutarImpresionFisica([obj], false);
@@ -211,7 +264,7 @@ async function _ejecutarImpresionFisica(items, porCantidad) {
         if (data.error) throw new Error(data.error);
 
         if (data.etiquetas && data.etiquetas.length > 0) {
-            imprimirEtiquetasMasivas(data.etiquetas);
+            imprimirEtiquetasMasivas(data.etiquetas, data.omitidos || []);
         } else {
             Swal.fire('Aviso', 'No se encontraron unidades físicas disponibles para los modelos seleccionados.', 'info');
         }
@@ -220,7 +273,7 @@ async function _ejecutarImpresionFisica(items, porCantidad) {
     }
 }
 
-function imprimirEtiquetasMasivas(lista) {
+function imprimirEtiquetasMasivas(lista, omitidos = []) {
     // Sin window.open. Todo en un modal inline dentro de la misma página.
     function _cargarJsBarcode(cb) {
         if (typeof JsBarcode !== 'undefined') { cb(); return; }
@@ -254,8 +307,11 @@ function imprimirEtiquetasMasivas(lista) {
             const nom = it.nombre.length > 30 ? it.nombre.substring(0, 30) + '…' : it.nombre;
             ctx.fillText(nom, canvas.width / 2, 74);
 
-            ctx.fillStyle = '#8a7560'; ctx.font = '17px Arial';
-            ctx.fillText(it.sede, canvas.width / 2, 98);
+            ctx.fillStyle = '#8a7560'; ctx.font = 'bold 17px Arial';
+            const skuVisible = (it.sku_maestro || '').length > 34
+                ? it.sku_maestro.substring(0, 34) + '…'
+                : (it.sku_maestro || '');
+            ctx.fillText(skuVisible ? `SKU: ${skuVisible}` : 'UNIDAD FISICA', canvas.width / 2, 98);
 
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(20, 116, 550, 184);
@@ -265,7 +321,7 @@ function imprimirEtiquetasMasivas(lista) {
             ctx.drawImage(bc, bcX, bcY);
 
             ctx.fillStyle = '#1e140a'; ctx.font = 'bold 24px Arial';
-            ctx.fillText(it.codigo, canvas.width / 2, 328);
+            ctx.fillText(`UNIDAD: ${it.codigo}`, canvas.width / 2, 328);
 
             return canvas.toDataURL('image/png');
         }
@@ -288,7 +344,7 @@ function imprimirEtiquetasMasivas(lista) {
             nomEl.style.cssText = 'font-size:11px;font-weight:700;color:#1e140a;margin-bottom:2px;';
 
             const codEl = document.createElement('div');
-            codEl.textContent = it.codigo;
+            codEl.textContent = `${it.sku_maestro || 'Sin SKU'} · ${it.codigo}`;
             codEl.style.cssText = 'font-size:10px;color:#8a7560;margin-bottom:8px;';
 
             const btnEl = document.createElement('button');
@@ -361,6 +417,9 @@ function imprimirEtiquetasMasivas(lista) {
         const aviso = document.createElement('div');
         aviso.id = '_aviso-masivo';
         aviso.style.cssText = 'background:#1e2a3a;color:#93c5fd;font-size:12px;text-align:center;padding:6px 16px;flex-shrink:0;min-height:28px;';
+        aviso.textContent = omitidos.length
+            ? `${omitidos.length} modelo(s) sin unidades disponibles fueron omitidos; no se generaron codigos falsos.`
+            : 'Cada etiqueta corresponde a una unidad fisica registrada.';
 
         // Grid de tarjetas
         const grid = document.createElement('div');

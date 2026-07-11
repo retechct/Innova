@@ -2058,26 +2058,36 @@ def agregar_ingrediente_receta():
 @produccion_bp.route('/api/inventario/etiquetas-disponibles', methods=['POST'])
 @requiere_login
 def obtener_etiquetas_disponibles():
-    datos = request.json
+    datos = request.get_json(silent=True) or {}
     items = datos.get('items', [])
     por_cantidad = datos.get('por_cantidad', False)
     
     etiquetas = []
+    omitidos = []
     try:
         conexion = get_db_connection()
         cursor = conexion.cursor()
+        cursor.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS sku_maestro TEXT")
+        cursor.execute("ALTER TABLE catalogo_productos ADD COLUMN IF NOT EXISTS sku_maestro TEXT")
+        conexion.commit()
         
         for item in items:
-            es_pieza = 'sku_maestro' in item
+            # Productos enteros y piezas comparten sku_maestro. Las piezas se
+            # distinguen por su identidad dimensional, no por tener un SKU.
+            es_pieza = all(
+                campo in item
+                for campo in ('forma', 'largo_cm', 'ancho_cm', 'alto_cm')
+            )
             
             if es_pieza:
                 # Filtrar stock_piezas por sus medidas exactas
                 query = """
-                    SELECT codigo_barra, (SELECT nombre FROM sedes WHERE id = sede_id)
+                    SELECT codigo_barra, (SELECT nombre FROM sedes WHERE id = sede_id), sku_maestro
                     FROM stock_piezas
                     WHERE sku_maestro = %(sku)s AND forma = %(forma)s
                       AND COALESCE(largo_cm, 0) = %(largo)s AND COALESCE(ancho_cm, 0) = %(ancho)s AND COALESCE(alto_cm, 0) = %(alto)s
                       AND estado = 'Disponible'
+                    ORDER BY id
                 """
                 cursor.execute(query, {
                     'sku': item.get('sku_maestro'),
@@ -2090,9 +2100,13 @@ def obtener_etiquetas_disponibles():
                 # Filtrar stock_productos enteros
                 if item.get('catalogo_id'):
                     query = """
-                        SELECT codigo_barra, (SELECT nombre FROM sedes WHERE id = sede_id)
-                        FROM stock_productos
-                        WHERE catalogo_id = %(cat_id)s AND estado = 'Disponible'
+                        SELECT sp.codigo_barra,
+                               (SELECT nombre FROM sedes WHERE id = sp.sede_id),
+                               COALESCE(NULLIF(sp.sku_maestro, ''), cp.sku_maestro, '')
+                        FROM stock_productos sp
+                        LEFT JOIN catalogo_productos cp ON cp.id = sp.catalogo_id
+                        WHERE sp.catalogo_id = %(cat_id)s AND sp.estado = 'Disponible'
+                        ORDER BY sp.id
                     """
                     cursor.execute(query, {'cat_id': item.get('catalogo_id')})
                 else:
@@ -2101,11 +2115,14 @@ def obtener_etiquetas_disponibles():
                     # los agrupa por nombre + observaciones, así que la etiqueta
                     # debe usar exactamente la misma identidad.
                     query = """
-                        SELECT codigo_barra, (SELECT nombre FROM sedes WHERE id = sede_id)
-                        FROM stock_productos
-                        WHERE LOWER(nombre_modelo) = LOWER(%(nombre)s)
-                          AND COALESCE(observaciones, '') = %(observaciones)s
-                          AND estado = 'Disponible'
+                        SELECT sp.codigo_barra,
+                               (SELECT nombre FROM sedes WHERE id = sp.sede_id),
+                               COALESCE(sp.sku_maestro, '')
+                        FROM stock_productos sp
+                        WHERE LOWER(sp.nombre_modelo) = LOWER(%(nombre)s)
+                          AND COALESCE(sp.observaciones, '') = %(observaciones)s
+                          AND sp.estado = 'Disponible'
+                        ORDER BY sp.id
                     """
                     cursor.execute(query, {
                         'nombre': item.get('nombre_modelo') or '',
@@ -2114,28 +2131,27 @@ def obtener_etiquetas_disponibles():
             
             filas = cursor.fetchall()
             nombre_etiqueta = item.get('nombreConMedida') or item.get('nombre_modelo')
+            if not filas:
+                omitidos.append(nombre_etiqueta or item.get('sku_maestro') or 'Modelo sin nombre')
+                continue
             
             if por_cantidad:
                 # Imprimir todas las unidades físicas disponibles
                 for r in filas:
-                    etiquetas.append({'codigo': r[0], 'nombre': nombre_etiqueta, 'sede': r[1] or 'Tienda'})
-                # Fallback: si pidieron todas pero no hay stock, imprimir 1 genérica de aviso
-                if not filas:
-                    fallback_code = item.get('sku_maestro') if es_pieza else (
-                        f"PROD-{item.get('catalogo_id')}" if item.get('catalogo_id') else 'SIN-STOCK'
-                    )
-                    etiquetas.append({'codigo': fallback_code, 'nombre': nombre_etiqueta, 'sede': 'Sin Stock Disp.'})
+                    etiquetas.append({
+                        'codigo': r[0], 'nombre': nombre_etiqueta,
+                        'sede': r[1] or 'Tienda',
+                        'sku_maestro': r[2] if len(r) > 2 else (item.get('sku_maestro') or '')
+                    })
             else:
                 # Imprimir solo 1 por modelo (la primera unidad física que encuentre)
-                if filas:
-                    etiquetas.append({'codigo': filas[0][0], 'nombre': nombre_etiqueta, 'sede': filas[0][1] or 'Tienda'})
-                else:
-                    fallback_code = item.get('sku_maestro') if es_pieza else (
-                        f"PROD-{item.get('catalogo_id')}" if item.get('catalogo_id') else 'SIN-STOCK'
-                    )
-                    etiquetas.append({'codigo': fallback_code, 'nombre': nombre_etiqueta, 'sede': 'Sin Stock Disp.'})
+                etiquetas.append({
+                    'codigo': filas[0][0], 'nombre': nombre_etiqueta,
+                    'sede': filas[0][1] or 'Tienda',
+                    'sku_maestro': filas[0][2] if len(filas[0]) > 2 else (item.get('sku_maestro') or '')
+                })
                     
-        return jsonify({'exito': True, 'etiquetas': etiquetas}), 200
+        return jsonify({'exito': True, 'etiquetas': etiquetas, 'omitidos': omitidos}), 200
     except Exception as e:
         import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500

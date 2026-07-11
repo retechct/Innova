@@ -14,6 +14,7 @@ import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto, cloudinary_upload
 from auth_middleware import requiere_login, requiere_rol
+from sku_utils import generar_sku_maestro, normalizar_sku_maestro
 
 catalogo_bp = Blueprint('catalogo', __name__)
 
@@ -397,8 +398,76 @@ def _asegurar_columnas_catalogo(cursor):
             ADD COLUMN IF NOT EXISTS fotos_urls TEXT DEFAULT '',
             ADD COLUMN IF NOT EXISTS config_json JSONB,
             ADD COLUMN IF NOT EXISTS requiere_tela BOOLEAN DEFAULT FALSE,
-            ADD COLUMN IF NOT EXISTS observaciones TEXT
+            ADD COLUMN IF NOT EXISTS observaciones TEXT,
+            ADD COLUMN IF NOT EXISTS sku_maestro TEXT,
+            ADD COLUMN IF NOT EXISTS modo_abastecimiento TEXT DEFAULT 'STOCK_DIRECTO'
     """)
+    cursor.execute("""
+        ALTER TABLE stock_productos
+            ADD COLUMN IF NOT EXISTS sku_maestro TEXT,
+            ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT
+    """)
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_catalogo_sku_maestro_unique
+        ON catalogo_productos (UPPER(sku_maestro))
+        WHERE sku_maestro IS NOT NULL AND sku_maestro != ''
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_sku ON stock_productos (UPPER(sku_maestro))")
+
+    # Complete legacy catalog identities and synchronize all linked units.
+    cursor.execute("""
+        SELECT cp.id, COALESCE(cp.categoria, 'Producto'), cp.nombre_modelo,
+               COALESCE(MAX(NULLIF(sp.sku_maestro, '')), '')
+        FROM catalogo_productos cp
+        LEFT JOIN stock_productos sp ON sp.catalogo_id = cp.id
+        WHERE COALESCE(cp.sku_maestro, '') = ''
+        GROUP BY cp.id, cp.categoria, cp.nombre_modelo
+        ORDER BY cp.id
+    """)
+    for catalogo_id, categoria, nombre, sku_stock in cursor.fetchall():
+        try:
+            sku = generar_sku_maestro(
+                cursor, categoria, nombre, sku_stock or None,
+                excluir_catalogo_id=catalogo_id,
+            )
+        except ValueError:
+            sku = generar_sku_maestro(
+                cursor, categoria, nombre, None,
+                excluir_catalogo_id=catalogo_id,
+            )
+        cursor.execute(
+            "UPDATE catalogo_productos SET sku_maestro = %s WHERE id = %s",
+            (sku, catalogo_id),
+        )
+        cursor.execute(
+            "UPDATE stock_productos SET sku_maestro = %s WHERE catalogo_id = %s",
+            (sku, catalogo_id),
+        )
+
+
+def _normalizar_modo_abastecimiento(valor):
+    modo = str(valor or 'STOCK_DIRECTO').strip().upper()
+    permitidos = {'STOCK_DIRECTO', 'COMPRA_EXTERNA', 'PRODUCCION', 'MIXTO'}
+    return modo if modo in permitidos else 'STOCK_DIRECTO'
+
+
+def _origen_desde_modo(modo):
+    return {
+        'STOCK_DIRECTO': 'Stock',
+        'COMPRA_EXTERNA': 'Externo',
+        'PRODUCCION': 'Produccion',
+        'MIXTO': 'Mixto',
+    }.get(modo, 'Stock')
+
+
+CATEGORIAS_OFICIALIZABLES_STOCK = {
+    'espejo', 'cuadro', 'cojin', 'mesa centro', 'esquinero',
+    'florero', 'manta', 'puff',
+}
+
+
+def _categoria_oficializable_stock(valor):
+    return str(valor or '').strip().lower() in CATEGORIAS_OFICIALIZABLES_STOCK
 
 
 # ==========================================
@@ -448,7 +517,9 @@ def obtener_catalogo():
                    COALESCE(fotos_urls, '') AS fotos_urls,
                    config_json,
                    requiere_tela,
-                   observaciones
+                   observaciones,
+                   COALESCE(sku_maestro, '') AS sku_maestro,
+                   COALESCE(modo_abastecimiento, 'STOCK_DIRECTO') AS modo_abastecimiento
             FROM catalogo_productos
             {where_sql}
             ORDER BY es_plantilla DESC, nombre_modelo ASC
@@ -479,7 +550,9 @@ def obtener_catalogo():
                 "categoria":      p[7] or 'Sofá',
                 "config_json":    p[9],
                 "requiere_tela":  bool(p[10]),
-                "observaciones":  p[11] or ''
+                "observaciones":  p[11] or '',
+                "sku_maestro":    p[12] or '',
+                "modo_abastecimiento": p[13] or 'STOCK_DIRECTO'
             })
         return jsonify(lista_productos)
     except Exception as ex:
@@ -520,14 +593,17 @@ def agregar_plantilla_catalogo():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         _asegurar_columnas_catalogo(cursor)
+        sku_maestro = generar_sku_maestro(cursor, categoria, nombre)
         cursor.execute("""
             INSERT INTO catalogo_productos
                 (nombre_modelo, precio_base, foto_url, fotos_urls, categoria, observaciones,
-                 config_json, es_plantilla, en_stock, origen_produccion, stock_cantidad)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, True, False, 'Producción', 0)
+                 config_json, es_plantilla, en_stock, origen_produccion, stock_cantidad,
+                 sku_maestro, modo_abastecimiento)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, True, False, 'Producción', 0,
+                    %s, 'PRODUCCION')
             RETURNING id
         """, (nombre, precio, foto_principal, fotos_urls_str, categoria, observaciones,
-              json.dumps(config_json) if config_json else None))
+              json.dumps(config_json) if config_json else None, sku_maestro))
         nuevo_id = cursor.fetchone()[0]
         conexion.commit()
         return jsonify({'exito': True, 'id': nuevo_id, 'mensaje': f'Modelo "{nombre}" añadido a la carta'}), 200
@@ -550,6 +626,10 @@ def editar_plantilla_catalogo(producto_id):
         categoria = request.form.get('categoria', 'Sofá').strip()
         observaciones = request.form.get('observaciones', '').strip()
         tipo_config = request.form.get('tipo_config', '').strip()
+        sku_solicitado = request.form.get('sku_maestro', '').strip()
+        modo_abastecimiento = _normalizar_modo_abastecimiento(
+            request.form.get('modo_abastecimiento', 'STOCK_DIRECTO')
+        )
         reemplazar_fotos = str(request.form.get('reemplazar_fotos', '')).lower() in ('1', 'true', 'si')
         precio = float(request.form.get('precio', 0) or 0)
 
@@ -561,7 +641,9 @@ def editar_plantilla_catalogo(producto_id):
         _asegurar_columnas_catalogo(cursor)
 
         cursor.execute("""
-            SELECT foto_url, COALESCE(fotos_urls, ''), config_json
+            SELECT foto_url, COALESCE(fotos_urls, ''), config_json,
+                   COALESCE(sku_maestro, ''),
+                   COALESCE(modo_abastecimiento, 'STOCK_DIRECTO')
             FROM catalogo_productos
             WHERE id = %s
         """, (producto_id,))
@@ -571,6 +653,16 @@ def editar_plantilla_catalogo(producto_id):
 
         foto_principal = actual[0] or ''
         fotos_urls_str = actual[1] or ''
+        sku_actual = normalizar_sku_maestro(actual[3])
+        sku_normalizado = normalizar_sku_maestro(sku_solicitado) or sku_actual
+        if not sku_normalizado:
+            sku_normalizado = generar_sku_maestro(
+                cursor, categoria, nombre, None, excluir_catalogo_id=producto_id
+            )
+        elif sku_normalizado != sku_actual:
+            sku_normalizado = generar_sku_maestro(
+                cursor, categoria, nombre, sku_normalizado, excluir_catalogo_id=producto_id
+            )
         fotos = [f for f in request.files.getlist('fotos') if f and f.filename]
         if fotos:
             urls_subidas = []
@@ -608,17 +700,35 @@ def editar_plantilla_catalogo(producto_id):
                 fotos_urls = %s,
                 categoria = %s,
                 observaciones = %s,
-                config_json = %s::jsonb
+                config_json = %s::jsonb,
+                sku_maestro = %s,
+                modo_abastecimiento = %s,
+                origen_produccion = %s
             WHERE id = %s
         """, (
             nombre, precio, foto_principal, fotos_urls_str,
             categoria, observaciones,
             config_json_final,
+            sku_normalizado or None,
+            modo_abastecimiento,
+            _origen_desde_modo(modo_abastecimiento),
             producto_id
         ))
+        cursor.execute("""
+            UPDATE stock_productos
+               SET nombre_modelo = %s,
+                   categoria = %s,
+                   observaciones = %s,
+                   sku_maestro = %s
+             WHERE catalogo_id = %s
+        """, (nombre, categoria, observaciones, sku_normalizado or None, producto_id))
         conexion.commit()
         return jsonify({'exito': True, 'mensaje': f'Modelo "{nombre}" actualizado'}), 200
 
+    except ValueError as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         if 'conexion' in locals() and conexion:
             conexion.rollback()
@@ -626,6 +736,181 @@ def editar_plantilla_catalogo(producto_id):
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)
+
+
+@catalogo_bp.route('/api/catalogo/oficializar-stock', methods=['POST'])
+@requiere_rol('Admin')
+def oficializar_producto_stock():
+    """Creates one catalog master and links every matching physical unit."""
+    conexion = None
+    cursor = None
+    try:
+        categoria_actual = request.form.get('categoria_actual', '').strip()
+        nombre_actual = request.form.get('nombre_actual', '').strip()
+        observaciones_actuales = request.form.get('observaciones_actuales', '').strip()
+        nombre = request.form.get('nombre', nombre_actual).strip()
+        categoria = request.form.get('categoria', categoria_actual).strip()
+        descripcion = request.form.get('descripcion', observaciones_actuales).strip()
+        precio = float(request.form.get('precio', 0) or 0)
+        modo = _normalizar_modo_abastecimiento(
+            request.form.get('modo_abastecimiento', 'STOCK_DIRECTO')
+        )
+
+        if not categoria_actual or not nombre_actual or not nombre or not categoria:
+            return jsonify({'error': 'Faltan los datos del producto de inventario'}), 400
+        if not _categoria_oficializable_stock(categoria_actual) or not _categoria_oficializable_stock(categoria):
+            return jsonify({
+                'error': 'Esta categoria requiere plantilla o tickets de produccion y no se puede oficializar como stock directo'
+            }), 400
+        if precio <= 0:
+            return jsonify({'error': 'El precio de venta debe ser mayor a cero'}), 400
+
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        _asegurar_columnas_catalogo(cursor)
+
+        cursor.execute("""
+            SELECT id, catalogo_id, COALESCE(sku_maestro, ''),
+                   COALESCE(foto_url, ''), COALESCE(fotos_adicionales, ''), estado
+            FROM stock_productos
+            WHERE LOWER(nombre_modelo) = LOWER(%s)
+              AND categoria = %s
+              AND COALESCE(observaciones, '') = %s
+            FOR UPDATE
+        """, (nombre_actual, categoria_actual, observaciones_actuales))
+        unidades = cursor.fetchall()
+        if not unidades:
+            conexion.rollback()
+            return jsonify({'error': 'No se encontraron unidades para oficializar'}), 404
+
+        catalogos_existentes = {r[1] for r in unidades if r[1]}
+        if len(catalogos_existentes) > 1:
+            conexion.rollback()
+            return jsonify({'error': 'El grupo contiene unidades enlazadas a fichas diferentes'}), 409
+        if catalogos_existentes:
+            catalogo_id = next(iter(catalogos_existentes))
+            conexion.rollback()
+            return jsonify({
+                'exito': True,
+                'ya_oficializado': True,
+                'catalogo_id': catalogo_id,
+                'mensaje': 'Este producto ya tiene una ficha de catalogo'
+            }), 200
+
+        skus_fuente = {normalizar_sku_maestro(r[2]) for r in unidades if r[2]}
+        if len(skus_fuente) > 1:
+            conexion.rollback()
+            return jsonify({'error': 'Las unidades tienen mas de un SKU maestro'}), 409
+
+        sku_fuente = next(iter(skus_fuente), '')
+        sku_solicitado = normalizar_sku_maestro(request.form.get('sku_maestro', ''))
+        sku_objetivo = sku_solicitado or sku_fuente
+
+        if sku_objetivo and sku_objetivo == sku_fuente:
+            cursor.execute("""
+                SELECT 1 FROM catalogo_productos
+                WHERE UPPER(COALESCE(sku_maestro, '')) = %s
+                LIMIT 1
+            """, (sku_objetivo,))
+            if cursor.fetchone():
+                conexion.rollback()
+                return jsonify({'error': f'El SKU maestro {sku_objetivo} ya esta publicado'}), 409
+            cursor.execute("""
+                SELECT 1 FROM stock_productos
+                WHERE UPPER(COALESCE(sku_maestro, '')) = %s
+                  AND NOT (
+                      LOWER(nombre_modelo) = LOWER(%s)
+                      AND categoria = %s
+                      AND COALESCE(observaciones, '') = %s
+                  )
+                LIMIT 1
+            """, (sku_objetivo, nombre_actual, categoria_actual, observaciones_actuales))
+            if cursor.fetchone():
+                conexion.rollback()
+                return jsonify({'error': f'El SKU maestro {sku_objetivo} pertenece a otro modelo'}), 409
+        else:
+            sku_objetivo = generar_sku_maestro(
+                cursor, categoria, nombre, sku_objetivo or None
+            )
+
+        fotos_combinadas = []
+
+        def agregar_fotos(valor):
+            for url in str(valor or '').split('|'):
+                url = url.strip()
+                if url and url not in fotos_combinadas and not url.startswith('data:'):
+                    fotos_combinadas.append(url)
+
+        agregar_fotos(request.form.get('fotos_existentes', ''))
+        for unidad in unidades:
+            agregar_fotos(unidad[3])
+            agregar_fotos(unidad[4])
+
+        for archivo in request.files.getlist('fotos'):
+            if archivo and archivo.filename:
+                subida = cloudinary_upload(archivo, folder='catalogo_stock')
+                agregar_fotos(subida.get('secure_url'))
+
+        if not fotos_combinadas:
+            conexion.rollback()
+            return jsonify({'error': 'Agrega al menos una foto para publicar el producto'}), 400
+
+        foto_principal = fotos_combinadas[0]
+        fotos_extra = '|'.join(fotos_combinadas[1:])
+        disponibles = sum(1 for r in unidades if r[5] == 'Disponible')
+
+        cursor.execute("""
+            INSERT INTO catalogo_productos
+                (nombre_modelo, precio_base, foto_url, fotos_urls, categoria,
+                 observaciones, es_plantilla, en_stock, origen_produccion,
+                 stock_cantidad, sku_maestro, modo_abastecimiento)
+            VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            nombre, precio, foto_principal, fotos_extra, categoria, descripcion,
+            disponibles > 0, _origen_desde_modo(modo), disponibles,
+            sku_objetivo, modo
+        ))
+        catalogo_id = cursor.fetchone()[0]
+
+        cursor.execute("""
+            UPDATE stock_productos
+               SET catalogo_id = %s,
+                   sku_maestro = %s,
+                   nombre_modelo = %s,
+                   categoria = %s,
+                   observaciones = %s
+             WHERE LOWER(nombre_modelo) = LOWER(%s)
+               AND categoria = %s
+               AND COALESCE(observaciones, '') = %s
+        """, (
+            catalogo_id, sku_objetivo, nombre, categoria, descripcion,
+            nombre_actual, categoria_actual, observaciones_actuales
+        ))
+        unidades_enlazadas = cursor.rowcount
+
+        conexion.commit()
+        return jsonify({
+            'exito': True,
+            'catalogo_id': catalogo_id,
+            'sku_maestro': sku_objetivo,
+            'unidades_enlazadas': unidades_enlazadas,
+            'mensaje': f'{nombre} fue oficializado con {unidades_enlazadas} unidad(es) enlazada(s)'
+        }), 201
+
+    except ValueError as e:
+        if conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        if conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conexion:
+            release_db_connection(conexion)
 
 
 @catalogo_bp.route('/api/catalogo/plantilla/<int:producto_id>', methods=['DELETE'])
@@ -657,10 +942,17 @@ def eliminar_plantilla_catalogo(producto_id):
 def agregar_producto_directo():
     """Agrega un producto ya terminado (en stock) directo al catálogo."""
     try:
-        nombre   = request.form.get('nombre')
+        nombre   = request.form.get('nombre', '').strip()
         precio   = float(request.form.get('precio', 0))
         cantidad = int(request.form.get('cantidad', 1))
         origen   = request.form.get('origen', 'Externo')
+        categoria = request.form.get('categoria', 'Producto').strip() or 'Producto'
+        modo = _normalizar_modo_abastecimiento(
+            request.form.get('modo_abastecimiento', 'STOCK_DIRECTO')
+        )
+
+        if not nombre:
+            return jsonify({'error': 'El nombre del producto es obligatorio'}), 400
 
         if 'foto' not in request.files or request.files['foto'].filename == '':
             return jsonify({'error': 'La foto del producto es obligatoria'}), 400
@@ -671,13 +963,24 @@ def agregar_producto_directo():
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
+        _asegurar_columnas_catalogo(cursor)
+        sku_maestro = generar_sku_maestro(cursor, categoria, nombre)
         cursor.execute("""
             INSERT INTO catalogo_productos
-                (nombre_modelo, precio_base, foto_url, es_plantilla, en_stock, origen_produccion, stock_cantidad)
-            VALUES (%s, %s, %s, False, %s, %s, %s)
-        """, (nombre, precio, foto_ruta, cantidad > 0, origen, cantidad))
+                (nombre_modelo, precio_base, foto_url, es_plantilla, en_stock,
+                 origen_produccion, stock_cantidad, categoria, sku_maestro,
+                 modo_abastecimiento)
+            VALUES (%s, %s, %s, False, %s, %s, %s, %s, %s, %s)
+        """, (
+            nombre, precio, foto_ruta, cantidad > 0, origen, cantidad,
+            categoria, sku_maestro, modo
+        ))
         conexion.commit()
-        return jsonify({'exito': True, 'mensaje': 'Producto añadido al catálogo'}), 200
+        return jsonify({
+            'exito': True,
+            'sku_maestro': sku_maestro,
+            'mensaje': 'Producto añadido al catálogo'
+        }), 200
 
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()

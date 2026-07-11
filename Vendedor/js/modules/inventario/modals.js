@@ -592,16 +592,18 @@ async function _invGuardarProducto() {
 
         // El backend devuelve unidades[] si se registraron múltiples, o codigo_barra si fue 1
         const unidades = d.unidades || (d.codigo_barra ? [{ codigo_barra: d.codigo_barra }] : []);
+        const skuMaestro = d.sku_maestro || unidades[0]?.sku_maestro || '';
 
         const codigosHTML = unidades.map(u => {
             const codigoHTML = escapeHTML(u.codigo_barra || '');
             const codigoJS = jsStringAttr(u.codigo_barra || '');
             const nombreJS = jsStringAttr(nombreProd);
             const sedeJS = jsStringAttr(sedeNombre);
+            const skuJS = jsStringAttr(skuMaestro);
             return `
             <div style="margin:6px 0;">
                 <b style="color:var(--accent);">${codigoHTML}</b>
-                <button onclick="imprimirEtiqueta(${codigoJS}, ${nombreJS}, ${sedeJS})"
+                <button onclick="imprimirEtiqueta(${codigoJS}, ${nombreJS}, ${sedeJS}, '', ${skuJS})"
                     style="margin-left:10px;background:var(--primary);color:white;border:none;
                            padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;">
                     🖨️ Imprimir
@@ -611,7 +613,8 @@ async function _invGuardarProducto() {
 
         Swal.fire({
             icon: 'success', title: `¡${unidades.length} unidad(es) registrada(s)!`,
-            html: `Códigos generados:<br>${codigosHTML}`,
+            html: `<div style="margin-bottom:8px;"><b>SKU maestro compartido:</b><br>${escapeHTML(skuMaestro)}</div>
+                   <div><b>Codigos fisicos por unidad:</b></div>${codigosHTML}`,
             confirmButtonText: 'Cerrar',
             confirmButtonColor: '#0f172a'
         });
@@ -717,10 +720,11 @@ async function _invGuardarPieza() {
             const codigoJS = jsStringAttr(u.codigo_barra || '');
             const nombreJS = jsStringAttr(nombrePieza);
             const sedeJS = jsStringAttr(sedeNombre);
+            const skuJS = jsStringAttr(sku);
             return `
             <div style="margin:6px 0;">
                 <b style="color:var(--accent);">${codigoHTML}</b>
-                <button onclick="imprimirEtiqueta(${codigoJS}, ${nombreJS}, ${sedeJS}, '')"
+                <button onclick="imprimirEtiqueta(${codigoJS}, ${nombreJS}, ${sedeJS}, '', ${skuJS})"
                     style="margin-left:10px;background:var(--primary);color:white;border:none;
                            padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;">
                     🖨️ Imprimir
