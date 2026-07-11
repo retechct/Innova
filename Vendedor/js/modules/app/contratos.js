@@ -144,6 +144,11 @@ tbody.innerHTML = lista.map((v, i) => `
                     style="background:#3b82f6; color:white; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
                 <i class="fa-solid fa-list-check"></i>
             </button>
+            ${(['Admin', 'Jefe_Taller'].includes(usuarioActivo?.rol)) ? `
+            <button onclick="abrirEditorFichaContrato(${jsStringAttr(v.codigo)})" title="Editar ficha / tela / notas"
+                    style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
+                <i class="fa-solid fa-pen-to-square"></i>
+            </button>` : ''}
             ${(usuarioActivo?.rol === 'Admin') ? `
             <button onclick="gestionarEstadoVenta(${Number(v.id || 0)}, ${jsStringAttr(v.estado || '')})" title="Cambiar Estado / Anular"
                     style="background:#fee2e2; color:#b91c1c; border:none; padding:6px 8px; border-radius:6px; font-size:11px; cursor:pointer;">
@@ -194,6 +199,11 @@ cards.innerHTML = lista.map(v => `
                 style="width:100%; background:#3b82f6; color:white; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; margin-bottom:8px; margin-top:8px;">
             <i class="fa-solid fa-list-check"></i> Ver progreso de fabricación
         </button>
+        ${(['Admin', 'Jefe_Taller'].includes(usuarioActivo?.rol)) ? `
+        <button onclick="abrirEditorFichaContrato(${jsStringAttr(v.codigo)})"
+                style="width:100%; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px; margin-bottom:8px;">
+            <i class="fa-solid fa-pen-to-square"></i> Editar ficha / tela / notas
+        </button>` : ''}
         ${(usuarioActivo?.rol === 'Vendedor' && v.estado !== 'Entregado' && v.estado !== 'Cancelado') ? `
         <button onclick="abrirModalCambioPrecio(${jsStringAttr(v.codigo)}, ${Number(v.total || 0)})"
                 style="width:100%; background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">
@@ -205,6 +215,104 @@ cards.innerHTML = lista.map(v => `
 function verDetalleContrato(codigo) {
     // Abre el modal de detalle de pedido que ya existe en el sistema
     abrirDetallePedido(codigo);
+}
+
+async function abrirEditorFichaContrato(codigo) {
+    if (!['Admin', 'Jefe_Taller'].includes(usuarioActivo?.rol)) {
+        return Swal.fire('Sin permiso', 'Solo Admin o Jefe de Taller puede editar la ficha del contrato.', 'warning');
+    }
+
+    try {
+        Swal.fire({ title: 'Cargando ficha...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res = await apiFetch(`${API_URL}/api/ventas/${codigo}/items-editables`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el contrato');
+        Swal.close();
+
+        const items = data.items || [];
+        if (!items.length) return Swal.fire('Sin productos', 'Este contrato no tiene productos para editar.', 'info');
+
+        let seleccionado = 0;
+        const renderForm = () => {
+            const it = items[seleccionado] || items[0];
+            const opciones = items.map((x, idx) =>
+                `<option value="${idx}" ${idx === seleccionado ? 'selected' : ''}>${escapeHTML(x.producto || 'Producto')}</option>`
+            ).join('');
+            return `
+                <div style="text-align:left;font-size:12px;color:#334155;">
+                    <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Producto del contrato</label>
+                    <select id="efc-item" class="swal2-input" style="margin:5px 0 12px;width:100%;"
+                        onchange="window._efcCambiarItemContrato(this.value)">
+                        ${opciones}
+                    </select>
+
+                    <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Nombre del mueble</label>
+                    <input id="efc-producto" class="swal2-input" style="margin:5px 0 12px;width:100%;" value="${escapeAttr(it.producto || '')}">
+
+                    <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Precio S/</label>
+                    <input id="efc-precio" type="number" step="0.01" min="0" class="swal2-input" style="margin:5px 0 12px;width:100%;" value="${Number(it.precio_unitario || 0).toFixed(2)}">
+
+                    <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Plantilla / tela / notas de casqueria</label>
+                    <textarea id="efc-detalles" class="swal2-textarea"
+                        style="margin:5px 0 0;width:100%;min-height:260px;font-size:12px;line-height:1.45;resize:vertical;"
+                        placeholder="Aqui puedes cambiar tela, medidas, notas de casqueria, zocalo, brazos, pinterest, etc.">${escapeHTML(it.detalles || '')}</textarea>
+                    <div style="font-size:10px;color:#64748b;margin-top:7px;">
+                        Esto actualiza la ficha tecnica del item del contrato. Las areas que lean la ficha del mueble veran este texto actualizado.
+                    </div>
+                </div>`;
+        };
+
+        window._efcCambiarItemContrato = (idx) => {
+            seleccionado = Number(idx) || 0;
+            const container = document.getElementById('efc-editor-wrap');
+            if (container) container.innerHTML = renderForm();
+        };
+
+        const { value: datos, isConfirmed } = await Swal.fire({
+            title: `Editar ficha #${escapeHTML(codigo)}`,
+            width: 760,
+            html: `<div id="efc-editor-wrap">${renderForm()}</div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar ficha',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#047857',
+            preConfirm: () => {
+                const it = items[seleccionado] || items[0];
+                const producto = document.getElementById('efc-producto')?.value.trim();
+                const precio = parseFloat(document.getElementById('efc-precio')?.value || 0);
+                const detalles = document.getElementById('efc-detalles')?.value.trim();
+                if (!producto) {
+                    Swal.showValidationMessage('El nombre del mueble es obligatorio');
+                    return false;
+                }
+                if (Number.isNaN(precio) || precio < 0) {
+                    Swal.showValidationMessage('Ingresa un precio valido');
+                    return false;
+                }
+                return { item_id: it.id, producto, precio_unitario: precio, detalles };
+            }
+        });
+        if (!isConfirmed || !datos) return;
+
+        const payload = {
+            producto: datos.producto,
+            precio_unitario: datos.precio_unitario,
+            detalles: datos.detalles,
+        };
+
+        const save = await apiFetch(`${API_URL}/api/ventas/${codigo}/items/${datos.item_id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const out = await save.json();
+        if (!save.ok || out.error) throw new Error(out.error || 'No se pudo guardar');
+
+        Swal.fire({ icon:'success', title:'Ficha actualizada', text: out.mensaje || 'Contrato actualizado.', timer:1800, showConfirmButton:false });
+        loadContratos();
+    } catch (e) {
+        Swal.fire('Error', e.message || 'No se pudo editar la ficha.', 'error');
+    }
 }
 
 async function verHistorialPrecios(codigo) {

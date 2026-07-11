@@ -152,9 +152,13 @@ function _logAnalizarMedidasTela(item) {
             for (const rx of patronesDim) {
                 const m = src.texto.match(rx);
                 if (m) {
-                    out.dimensiones = [m[1], m[2], m[3]].filter(Boolean).join(' x ');
-                    out.dimensionesFuente = src.fuente;
-                    break;
+                    const vals = [m[1], m[2], m[3]].filter(Boolean);
+                    const tieneValorReal = vals.some(v => Number(String(v).replace(',', '.')) > 0);
+                    if (tieneValorReal) {
+                        out.dimensiones = vals.join(' x ');
+                        out.dimensionesFuente = src.fuente;
+                        break;
+                    }
                 }
             }
         }
@@ -719,8 +723,9 @@ async function _abrirEditarLogistica(item, proveedores) {
 
                     <!-- Nota (solo Externo) -->
                     <div id="sl-nota-wrap" style="display:${tipoActual === 'Externo' ? 'block' : 'none'};">
-                        <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Nota para el proveedor (opcional)</label>
-                        <textarea id="sl-nota" class="swal2-textarea" placeholder="Ej: Necesitamos entrega urgente..." style="margin:0 0 4px;width:100%;font-size:13px;resize:vertical;min-height:60px;"></textarea>
+                        <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Medidas / nota para el proveedor (opcional)</label>
+                        <textarea id="sl-nota" class="swal2-textarea" placeholder="Ej: Tela: 8 mts. Medidas: largo 3m x fondo 2m..." style="margin:0 0 4px;width:100%;font-size:13px;resize:vertical;min-height:60px;">${item.notas_proveedor || ''}</textarea>
+                        <div style="font-size:10px;color:#64748b;margin:0 0 10px;">Si escribes aqui los metros, se mostraran en la tarjeta y saldran en el WhatsApp.</div>
                     </div>
 
                     <!-- Informal: nombre + celular libre -->
@@ -775,6 +780,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                     proveedor_id:        datos.proveedor_id || null,
                     cantidad:            datos.cantidad || null,
                     unidad:              datos.unidad || null,
+                    notas_proveedor:      datos.nota || null,
                     proveedor_informal:  datos.proveedor_informal || null,
                 })
             });
@@ -792,9 +798,15 @@ async function _abrirEditarLogistica(item, proveedores) {
                 const provData = proveedores.find(p => p.id == datos.proveedor_id) || {};
                 let tel = _normalizarTelWA(provData.telefono || '');
 
+                const infoTelaActual = _logAnalizarMedidasTela({
+                    ...item,
+                    cantidad: datos.cantidad || item.cantidad,
+                    unidad: datos.unidad || item.unidad,
+                    notas_proveedor: datos.nota || item.notas_proveedor,
+                });
                 const esTela = _logEsTela({ ...item, unidad: datos.unidad || item.unidad });
-                const metrosWsp = esTela && (datos.cantidad || infoTela.metros)
-                    ? (datos.cantidad || _logFormatoNumero(infoTela.metros))
+                const metrosWsp = esTela && (datos.cantidad || infoTelaActual.metros)
+                    ? (datos.cantidad || _logFormatoNumero(infoTelaActual.metros))
                     : null;
                 const msgWsp = [
                     `Hola *${provData.nombre || 'Proveedor'}* 👋, somos *Innova Möbili*.`,

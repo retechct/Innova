@@ -1632,6 +1632,63 @@ def items_editables_venta(codigo):
             cursor.close(); release_db_connection(conexion)
 
 
+@ventas_bp.route('/api/ventas/<codigo>/items/<int:item_id>', methods=['PUT'])
+@requiere_rol('Admin', 'Jefe_Taller')
+def editar_item_contrato(codigo, item_id):
+    """Edicion directa de ficha de contrato desde Reportes/Ventas."""
+    data = request.json or {}
+    producto = (data.get('producto') or '').strip()
+    detalles = (data.get('detalles') or '').strip()
+    precio = data.get('precio_unitario')
+
+    if not producto:
+        return jsonify({'error': 'El nombre del producto es obligatorio'}), 400
+    try:
+        precio = float(precio)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Ingresa un precio valido'}), 400
+    if precio < 0:
+        return jsonify({'error': 'El precio no puede ser negativo'}), 400
+
+    try:
+        conexion = get_db_connection()
+        cursor = conexion.cursor()
+        cursor.execute("SELECT id, estado_general FROM ventas WHERE codigo_venta = %s;", (codigo,))
+        venta = cursor.fetchone()
+        if not venta:
+            return jsonify({'error': 'Venta no encontrada'}), 404
+        venta_id, estado = venta
+        if estado == 'Cancelado':
+            return jsonify({'error': 'No se puede editar una venta cancelada'}), 400
+
+        cursor.execute("""
+            UPDATE items_venta
+            SET producto = %s,
+                color_tela = %s,
+                precio_unitario = %s
+            WHERE id = %s AND venta_id = %s
+            RETURNING id;
+        """, (producto, detalles, precio, item_id, venta_id))
+        if not cursor.fetchone():
+            conexion.rollback()
+            return jsonify({'error': 'El producto no pertenece a este contrato'}), 404
+
+        nuevo_total = _recalcular_total_venta(cursor, venta_id)
+        conexion.commit()
+        return jsonify({
+            'exito': True,
+            'mensaje': 'Ficha del contrato actualizada',
+            'monto_total': nuevo_total,
+        }), 200
+    except Exception as e:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'conexion' in locals() and conexion:
+            cursor.close(); release_db_connection(conexion)
+
+
 @ventas_bp.route('/api/ventas/<codigo>/proponer-cambio-precio', methods=['POST'])
 @requiere_login
 def proponer_cambio_precio(codigo):
