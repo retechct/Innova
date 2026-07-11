@@ -1,5 +1,48 @@
 // Inventario - generacion e impresion de etiquetas.
 
+/**
+ * Genera un canvas de codigo de barras al TAMAÑO EXACTO que necesita, en
+ * vez de generarlo con un ancho de barra fijo y luego "estirarlo" despues
+ * con ctx.drawImage(..., anchoDestino, altoDestino).
+ *
+ * Ese estirado posterior es justo lo que hacia que las barras se vieran
+ * nitidas en pantalla pero salieran borrosas/pegadas al imprimir en la
+ * Niimbot: el canvas original casi nunca calzaba 1:1 con el espacio
+ * destino (534px), asi que el navegador interpolaba (difuminaba) los
+ * pixeles al reescalar. Eso se "cocina" en el PNG final y el termico no
+ * perdona nada de eso — por eso el codigo escaneaba bien en pantalla
+ * pero no ya impreso en la etiqueta fisica.
+ *
+ * Aqui medimos primero cuantos "modulos" (barras minimas) tiene el
+ * codigo con un ancho de prueba de 1px, calculamos el mayor ancho de
+ * modulo ENTERO que cabe en maxWidthPx, y regeneramos el barcode ya a
+ * ese tamaño exacto. El resultado se dibuja despues a su tamaño NATIVO
+ * (sin escalar), lo que garantiza bordes de barra 100% nitidos.
+ */
+function _generarBarcodeAjustado(codigo, maxWidthPx, alturaPx, margin) {
+    // 1. Medir con el modulo mas angosto posible (1px) cuantos modulos tiene este codigo.
+    const medidor = document.createElement('canvas');
+    JsBarcode(medidor, codigo, {
+        format: 'CODE128', width: 1, height: alturaPx, displayValue: false, margin,
+        lineColor: '#000000', background: '#ffffff'
+    });
+    const totalModulos = medidor.width - margin * 2;
+
+    // 2. Calcular el mayor ancho de modulo ENTERO que cabe en el espacio disponible.
+    let anchoModulo = Math.floor((maxWidthPx - margin * 2) / totalModulos);
+    if (anchoModulo < 1) anchoModulo = 1;
+
+    // 3. Generar el barcode final ya al tamaño correcto (sin necesidad de reescalar despues).
+    const bcCanvas = document.createElement('canvas');
+    bcCanvas.style.display = 'none';
+    document.body.appendChild(bcCanvas);
+    JsBarcode(bcCanvas, codigo, {
+        format: 'CODE128', width: anchoModulo, height: alturaPx, displayValue: false, margin,
+        lineColor: '#000000', background: '#ffffff'
+    });
+    return bcCanvas;
+}
+
 function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
     // Inyectar JsBarcode si aún no está cargado
     function _cargarJsBarcode(cb) {
@@ -11,14 +54,8 @@ function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
     }
 
     _cargarJsBarcode(function() {
-        // 1. Renderizar barcode en canvas oculto
-        const bcCanvas = document.createElement('canvas');
-        bcCanvas.style.display = 'none';
-        document.body.appendChild(bcCanvas);
-        JsBarcode(bcCanvas, codigo, {
-            format: 'CODE128', width: 4, height: 120, displayValue: false, margin: 22,
-            lineColor: '#000000', background: '#ffffff'
-        });
+        // 1. Renderizar barcode ya al tamaño exacto que va a ocupar (sin reescalar despues)
+        const bcCanvas = _generarBarcodeAjustado(codigo, 534, 120, 22);
 
         // 2. Construir imagen final (590×354px — Niimbot B21 50×30mm a 300dpi)
         const canvas  = document.createElement('canvas');
@@ -63,10 +100,13 @@ function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
             ctx.fillText(obsCorto, canvas.width / 2, 114);
         }
 
-        // Barcode
+        // Barcode — se dibuja a su tamaño NATIVO (sin forzar w/h), centrado
+        // en el espacio disponible. Cero reescalado = cero difuminado.
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(20, barcodeY - 4, 550, barcodeHeight + 8);
-        ctx.drawImage(bcCanvas, 28, barcodeY, 534, barcodeHeight);
+        const bcX = 28 + Math.max(0, (534 - bcCanvas.width) / 2);
+        const bcY = barcodeY + Math.max(0, (barcodeHeight - bcCanvas.height) / 2);
+        ctx.drawImage(bcCanvas, bcX, bcY);
 
         // Código en texto
         ctx.fillStyle = '#1e140a';
@@ -191,22 +231,8 @@ function imprimirEtiquetasMasivas(lista) {
     }
 
     _cargarJsBarcode(function() {
-        // Pre-generar todos los canvas de barcode
-        const bcCanvases = lista.map(it => {
-            const c = document.createElement('canvas');
-            c.style.display = 'none';
-            document.body.appendChild(c);
-            JsBarcode(c, it.codigo, {
-                format: 'CODE128',
-                width: 4,
-                height: 120,
-                displayValue: false,
-                margin: 22,
-                lineColor: '#000000',
-                background: '#ffffff'
-            });
-            return c;
-        });
+        // Pre-generar todos los canvas de barcode ya al tamaño exacto (sin reescalar despues)
+        const bcCanvases = lista.map(it => _generarBarcodeAjustado(it.codigo, 534, 120, 22));
 
         function _generarPNG(i) {
             const it     = lista[i];
@@ -233,7 +259,10 @@ function imprimirEtiquetasMasivas(lista) {
 
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(20, 116, 550, 184);
-            ctx.drawImage(bcCanvases[i], 28, 120, 534, 176);
+            const bc = bcCanvases[i];
+            const bcX = 28 + Math.max(0, (534 - bc.width) / 2);
+            const bcY = 120 + Math.max(0, (176 - bc.height) / 2);
+            ctx.drawImage(bc, bcX, bcY);
 
             ctx.fillStyle = '#1e140a'; ctx.font = 'bold 24px Arial';
             ctx.fillText(it.codigo, canvas.width / 2, 328);
