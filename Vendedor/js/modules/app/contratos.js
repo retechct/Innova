@@ -217,6 +217,67 @@ function verDetalleContrato(codigo) {
     abrirDetallePedido(codigo);
 }
 
+function _efcTextoPlanoFicha(html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = String(html || '').replace(/<br\s*\/?>/gi, '\n');
+    return (tmp.textContent || '').replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim();
+}
+
+function _efcDatosDesdeFicha(it) {
+    const raw = String(it.detalles || '');
+    const texto = _efcTextoPlanoFicha(raw);
+    const lineas = texto.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    const urls = raw.match(/https?:\/\/[^\s<"')]+/g) || [];
+    const buscarLinea = (rx) => lineas.find(l => rx.test(l)) || '';
+    const limpiar = (linea, rx) => linea.replace(rx, '').replace(/^[:|\-\s]+/, '').trim();
+
+    const modelo = limpiar(buscarLinea(/\bMOD\b|MODELO/i), /\bMOD\b|MODELO/ig) || it.producto || '';
+    const medidas = limpiar(buscarLinea(/MEDIDAS|L\d|ANCHO|ALTO|FONDO|PROF/i), /MEDIDAS/ig);
+    const tela = limpiar(buscarLinea(/TELA PRINCIPAL|PANA|PRANA|MARFIL|CUERO|LINO|TELA/i), /TELA PRINCIPAL/ig);
+    const base = limpiar(buscarLinea(/BASE|INTERIOR|ESTRUCTURA|RESPALDO|BRAZO/i), /BASE|INTERIOR\/ESTRUCTURA|INTERIOR|ESTRUCTURA/ig);
+    const cojineria = limpiar(buscarLinea(/COJINER|CASQUER|ALMOHAD|ZOCALO|ZOCALO|PATA/i), /COJINERIA|COJINERÍA|CASQUERIA|CASQUERÍA/ig);
+    const usados = [modelo, medidas, tela, base, cojineria].filter(Boolean);
+    const notas = lineas
+        .filter(l => !usados.some(u => u && l.includes(u)))
+        .filter(l => !/MOD|MODELO|MEDIDAS|TELA PRINCIPAL|BASE|INTERIOR|ESTRUCTURA|COJINER|CASQUER|https?:\/\//i.test(l))
+        .join('\n');
+
+    return {
+        modelo,
+        medidas,
+        tela,
+        metros: '',
+        base,
+        cojineria,
+        notas,
+        referencias: urls.join('\n'),
+    };
+}
+
+function _efcGenerarFichaHTML(datos) {
+    const partes = [];
+    const add = (label, value) => {
+        const v = String(value || '').trim();
+        if (!v) return;
+        partes.push(`<b>${label}:</b> ${escapeHTML(v).replace(/\n/g, '<br>')}`);
+    };
+
+    add('MOD', datos.modelo || datos.producto);
+    add('MEDIDAS', datos.medidas);
+    add('TELA PRINCIPAL', datos.tela);
+    add('METROS DE TELA', datos.metros);
+    add('INTERIOR/ESTRUCTURA', datos.base);
+    add('COJINERIA/CASQUERIA', datos.cojineria);
+    add('NOTAS', datos.notas);
+
+    const refs = String(datos.referencias || '').split(/\n+/).map(r => r.trim()).filter(Boolean);
+    if (refs.length) {
+        partes.push(`<b>REFERENCIAS/FOTOS:</b><br>${refs.map(r => escapeHTML(r)).join('<br>')}`);
+    }
+
+    return partes.join('<br>');
+}
+
 async function abrirEditorFichaContrato(codigo) {
     if (!['Admin', 'Jefe_Taller'].includes(usuarioActivo?.rol)) {
         return Swal.fire('Sin permiso', 'Solo Admin o Jefe de Taller puede editar la ficha del contrato.', 'warning');
@@ -235,11 +296,14 @@ async function abrirEditorFichaContrato(codigo) {
         let seleccionado = 0;
         const renderForm = () => {
             const it = items[seleccionado] || items[0];
+            const ficha = _efcDatosDesdeFicha(it);
             const opciones = items.map((x, idx) =>
                 `<option value="${idx}" ${idx === seleccionado ? 'selected' : ''}>${escapeHTML(x.producto || 'Producto')}</option>`
             ).join('');
+            const inputStyle = 'margin:5px 0 12px;width:100%;height:38px;font-size:13px;';
+            const areaStyle = 'margin:5px 0 12px;width:100%;min-height:74px;font-size:12px;line-height:1.45;resize:vertical;';
             return `
-                <div style="text-align:left;font-size:12px;color:#334155;">
+                <div style="text-align:left;font-size:12px;color:#334155;max-height:68vh;overflow-y:auto;padding-right:4px;">
                     <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Producto del contrato</label>
                     <select id="efc-item" class="swal2-input" style="margin:5px 0 12px;width:100%;"
                         onchange="window._efcCambiarItemContrato(this.value)">
@@ -247,17 +311,47 @@ async function abrirEditorFichaContrato(codigo) {
                     </select>
 
                     <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Nombre del mueble</label>
-                    <input id="efc-producto" class="swal2-input" style="margin:5px 0 12px;width:100%;" value="${escapeAttr(it.producto || '')}">
+                    <input id="efc-producto" class="swal2-input" style="${inputStyle}" value="${escapeAttr(it.producto || '')}">
 
                     <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Precio S/</label>
-                    <input id="efc-precio" type="number" step="0.01" min="0" class="swal2-input" style="margin:5px 0 12px;width:100%;" value="${Number(it.precio_unitario || 0).toFixed(2)}">
+                    <input id="efc-precio" type="number" step="0.01" min="0" class="swal2-input" style="${inputStyle}" value="${Number(it.precio_unitario || 0).toFixed(2)}">
 
-                    <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Plantilla / tela / notas de casqueria</label>
-                    <textarea id="efc-detalles" class="swal2-textarea"
-                        style="margin:5px 0 0;width:100%;min-height:260px;font-size:12px;line-height:1.45;resize:vertical;"
-                        placeholder="Aqui puedes cambiar tela, medidas, notas de casqueria, zocalo, brazos, pinterest, etc.">${escapeHTML(it.detalles || '')}</textarea>
+                    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+                        <div>
+                            <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Modelo / plantilla</label>
+                            <input id="efc-modelo" class="swal2-input" style="${inputStyle}" placeholder="Ej: Juego de Sala (3-2-1)" value="${escapeAttr(ficha.modelo || it.producto || '')}">
+                        </div>
+                        <div>
+                            <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Medidas del mueble</label>
+                            <input id="efc-medidas" class="swal2-input" style="${inputStyle}" placeholder="Ej: 3C 200x90x80 / 2C..." value="${escapeAttr(ficha.medidas || '')}">
+                        </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
+                        <div>
+                            <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Tela principal / color / SKU</label>
+                            <input id="efc-tela" class="swal2-input" style="${inputStyle}" placeholder="Ej: REQ-PIN-151 - Prana Marfil claro" value="${escapeAttr(ficha.tela || '')}">
+                        </div>
+                        <div>
+                            <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Metros de tela</label>
+                            <input id="efc-metros" class="swal2-input" style="${inputStyle}" placeholder="Ej: 18 mts" value="${escapeAttr(ficha.metros || '')}">
+                        </div>
+                    </div>
+
+                    <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Interior / estructura / brazos / patas / zocalo</label>
+                    <textarea id="efc-base" class="swal2-textarea" style="${areaStyle}" placeholder="Ej: Con respaldo | Brazo encajado | Patas negras">${escapeHTML(ficha.base || '')}</textarea>
+
+                    <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Cojineria / casqueria</label>
+                    <textarea id="efc-cojineria" class="swal2-textarea" style="${areaStyle}" placeholder="Ej: Por confirmar al final / agregar casqueria / tipo de relleno">${escapeHTML(ficha.cojineria || '')}</textarea>
+
+                    <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Notas adicionales para taller</label>
+                    <textarea id="efc-notas" class="swal2-textarea" style="${areaStyle}" placeholder="Aqui escribe notas de casqueria, cambios de tela, Pinterest, indicaciones del cliente, etc.">${escapeHTML(ficha.notas || '')}</textarea>
+
+                    <label style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;">Links de fotos / referencias</label>
+                    <textarea id="efc-referencias" class="swal2-textarea" style="${areaStyle}" placeholder="Un link por linea">${escapeHTML(ficha.referencias || '')}</textarea>
+
                     <div style="font-size:10px;color:#64748b;margin-top:7px;">
-                        Esto actualiza la ficha tecnica del item del contrato. Las areas que lean la ficha del mueble veran este texto actualizado.
+                        Esto actualiza la ficha tecnica del item. Ya no necesitas escribir HTML: completa estos campos y el sistema arma la plantilla.
                     </div>
                 </div>`;
         };
@@ -280,7 +374,6 @@ async function abrirEditorFichaContrato(codigo) {
                 const it = items[seleccionado] || items[0];
                 const producto = document.getElementById('efc-producto')?.value.trim();
                 const precio = parseFloat(document.getElementById('efc-precio')?.value || 0);
-                const detalles = document.getElementById('efc-detalles')?.value.trim();
                 if (!producto) {
                     Swal.showValidationMessage('El nombre del mueble es obligatorio');
                     return false;
@@ -289,6 +382,18 @@ async function abrirEditorFichaContrato(codigo) {
                     Swal.showValidationMessage('Ingresa un precio valido');
                     return false;
                 }
+                const ficha = {
+                    producto,
+                    modelo: document.getElementById('efc-modelo')?.value.trim(),
+                    medidas: document.getElementById('efc-medidas')?.value.trim(),
+                    tela: document.getElementById('efc-tela')?.value.trim(),
+                    metros: document.getElementById('efc-metros')?.value.trim(),
+                    base: document.getElementById('efc-base')?.value.trim(),
+                    cojineria: document.getElementById('efc-cojineria')?.value.trim(),
+                    notas: document.getElementById('efc-notas')?.value.trim(),
+                    referencias: document.getElementById('efc-referencias')?.value.trim(),
+                };
+                const detalles = _efcGenerarFichaHTML(ficha);
                 return { item_id: it.id, producto, precio_unitario: precio, detalles };
             }
         });
