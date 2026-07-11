@@ -2,6 +2,9 @@
 
 let _html5QrcodeInv = null;
 let _scannerInvTorchOn = false;
+let _scannerInvNativeDetector = null;
+let _scannerInvNativeLoopActivo = false;
+let _scannerInvCodigoProcesado = false;
 
 function _abrirEscanerGlobal() {
     _iniciarEscaneoCamara();
@@ -43,7 +46,7 @@ function _ensureScannerInventarioModal() {
                         Centra el codigo dentro del recuadro
                     </div>
                 </div>
-                <p style="font-size:12px;color:gray;margin-top:10px;">Activa la linterna si esta oscuro y acerca la etiqueta hasta que el codigo llene el recuadro.</p>
+                <p id="scanner-inv-status" style="font-size:12px;color:gray;margin-top:10px;">Activa la linterna si esta oscuro y acerca la etiqueta hasta que el codigo llene el recuadro.</p>
                 <div id="scanner-inv-error" style="display:none;margin:10px 0;padding:9px;background:#fff7ed;color:#9a3412;border-radius:6px;font-size:12px;text-align:left;"></div>
                 <div style="display:flex;gap:8px;margin-top:12px;">
                     <input id="scanner-inv-codigo-manual" type="text" class="form-input"
@@ -61,10 +64,28 @@ function _ensureScannerInventarioModal() {
     return modal;
 }
 
+function _formatosHtml5Scanner() {
+    if (!window.Html5QrcodeSupportedFormats) return undefined;
+
+    return [
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.CODE_93,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.ITF,
+    ].filter(Boolean);
+}
+
 function _iniciarEscaneoCamara() {
     _ensureScannerInventarioModal().style.display = 'flex';
     _scannerInvTorchOn = false;
+    _scannerInvCodigoProcesado = false;
+    _scannerInvNativeLoopActivo = false;
     _actualizarBotonLinternaScanner(false);
+    _actualizarEstadoScanner('Buscando codigo... centra la etiqueta dentro del recuadro.');
     const aviso = document.getElementById('scanner-inv-error');
     if (aviso) aviso.style.display = 'none';
 
@@ -94,20 +115,12 @@ async function _iniciarLectorLibreria() {
     if (_html5QrcodeInv && _html5QrcodeInv.isScanning) {
         return;
     }
-    _html5QrcodeInv = new Html5Qrcode("reader-inv", { verbose: false });
+    const formatos = _formatosHtml5Scanner();
+    _html5QrcodeInv = new Html5Qrcode("reader-inv", {
+        verbose: false,
+        ...(formatos ? { formatsToSupport: formatos } : {}),
+    });
 
-    const formatos = window.Html5QrcodeSupportedFormats
-        ? [
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.CODE_93,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.ITF,
-        ].filter(Boolean)
-        : undefined;
     const config = {
         fps: 20,
         qrbox: (viewfinderWidth, viewfinderHeight) => {
@@ -120,11 +133,9 @@ async function _iniciarLectorLibreria() {
         experimentalFeatures: {
             useBarCodeDetectorIfSupported: true,
         },
-        ...(formatos ? { formatsToSupport: formatos } : {}),
     };
     const alLeer = (textoDecodificado) => {
-        _cerrarEscaneoCamara();
-        _procesarBarcodeEscaneado(String(textoDecodificado || '').trim());
+        _resolverCodigoScanner(textoDecodificado);
     };
     const alFallarLectura = () => { /* Ignorar mientras busca un codigo. */ };
 
@@ -133,6 +144,7 @@ async function _iniciarLectorLibreria() {
             await _html5QrcodeInv.start({ facingMode: "environment" }, config, alLeer, alFallarLectura);
             _prepararVideoScanner();
             _prepararLinternaScanner();
+            _iniciarDetectorNativoScanner();
         } catch (errorCamaraTrasera) {
             const camaras = await Html5Qrcode.getCameras();
         if (!camaras.length) throw new DOMException('No se detectaron cámaras', 'NotFoundError');
@@ -141,6 +153,7 @@ async function _iniciarLectorLibreria() {
             await _html5QrcodeInv.start(preferida.id, config, alLeer, alFallarLectura);
             _prepararVideoScanner();
             _prepararLinternaScanner();
+            _iniciarDetectorNativoScanner();
         }
     } catch (error) {
         console.warn('No se pudo iniciar el escáner:', error);
@@ -182,6 +195,59 @@ function _prepararVideoScanner() {
     aplicar();
     setTimeout(aplicar, 250);
     setTimeout(aplicar, 900);
+}
+
+async function _iniciarDetectorNativoScanner() {
+    if (!('BarcodeDetector' in window)) {
+        _actualizarEstadoScanner('Lector activo. Si no lee, acerca la etiqueta hasta llenar el recuadro.');
+        return;
+    }
+
+    try {
+        const formatosSoportados = typeof BarcodeDetector.getSupportedFormats === 'function'
+            ? await BarcodeDetector.getSupportedFormats()
+            : [];
+        const formatosPreferidos = [
+            'code_128',
+            'code_39',
+            'code_93',
+            'ean_13',
+            'ean_8',
+            'upc_a',
+            'upc_e',
+            'itf',
+        ].filter(f => !formatosSoportados.length || formatosSoportados.includes(f));
+
+        if (!formatosPreferidos.length) return;
+
+        _scannerInvNativeDetector = new BarcodeDetector({ formats: formatosPreferidos });
+        _scannerInvNativeLoopActivo = true;
+        _actualizarEstadoScanner('Lector activo. Manten el codigo quieto dentro del recuadro.');
+        _detectarBarcodeNativoLoop();
+    } catch (e) {
+        _scannerInvNativeDetector = null;
+        _scannerInvNativeLoopActivo = false;
+    }
+}
+
+async function _detectarBarcodeNativoLoop() {
+    if (!_scannerInvNativeLoopActivo || _scannerInvCodigoProcesado) return;
+
+    const video = document.querySelector('#reader-inv video');
+    if (video && video.readyState >= 2 && _scannerInvNativeDetector) {
+        try {
+            const codigos = await _scannerInvNativeDetector.detect(video);
+            const valor = codigos?.find(c => c.rawValue)?.rawValue;
+            if (valor) {
+                _resolverCodigoScanner(valor);
+                return;
+            }
+        } catch (e) {
+            // El detector nativo puede fallar en algunos frames; el siguiente frame reintenta.
+        }
+    }
+
+    setTimeout(_detectarBarcodeNativoLoop, 120);
 }
 
 function _prepararLinternaScanner() {
@@ -236,6 +302,22 @@ function _mostrarErrorScanner(mensaje) {
     aviso.style.display = 'block';
 }
 
+function _actualizarEstadoScanner(mensaje) {
+    const estado = document.getElementById('scanner-inv-status');
+    if (estado) estado.textContent = mensaje;
+}
+
+function _resolverCodigoScanner(textoDecodificado) {
+    const codigo = String(textoDecodificado || '').trim();
+    if (!codigo || _scannerInvCodigoProcesado) return;
+
+    _scannerInvCodigoProcesado = true;
+    _scannerInvNativeLoopActivo = false;
+    _actualizarEstadoScanner(`Codigo leido: ${codigo}`);
+    _cerrarEscaneoCamara();
+    _procesarBarcodeEscaneado(codigo);
+}
+
 function _usarCodigoManualScanner() {
     const input = document.getElementById('scanner-inv-codigo-manual');
     const codigo = (input?.value || '').trim();
@@ -249,6 +331,8 @@ function _usarCodigoManualScanner() {
 }
 
 function _cerrarEscaneoCamara() {
+    _scannerInvNativeLoopActivo = false;
+    _scannerInvNativeDetector = null;
     if (_html5QrcodeInv && _html5QrcodeInv.isScanning) {
         if (_scannerInvTorchOn && typeof _html5QrcodeInv.applyVideoConstraints === 'function') {
             try {
