@@ -1417,6 +1417,15 @@ def obtener_logistica():
                        (SELECT i2.producto FROM items_venta i2 WHERE i2.id = l.item_id LIMIT 1),
                        (SELECT i2.producto FROM items_venta i2 WHERE i2.venta_id = l.venta_id AND l.item_id IS NULL LIMIT 1)
                    ) AS producto_item,
+                   -- Ficha/notas del item: aqui suelen vivir medidas, notas de
+                   -- casqueria y textos largos del configurador. El frontend
+                   -- las usa para mostrar referencias y sugerir metros de tela
+                   -- cuando el vendedor los escribio en notas.
+                   COALESCE(
+                       (SELECT COALESCE(i2.color_tela, '') FROM items_venta i2 WHERE i2.id = l.item_id LIMIT 1),
+                       (SELECT COALESCE(i2.color_tela, '') FROM items_venta i2 WHERE i2.venta_id = l.venta_id AND l.item_id IS NULL LIMIT 1),
+                       ''
+                   ) AS especificaciones_item,
                    -- Detalles descriptivos del insumo según su tipo
                    COALESCE(
                        (SELECT CONCAT(coleccion, ' · ', color) FROM maestro_telas WHERE sku = l.sku LIMIT 1),
@@ -1437,9 +1446,9 @@ def obtener_logistica():
         """)
         items = []
         for r in cursor.fetchall():
-            # NOTA: se insertó producto_item entre foto_item y detalle_insumo
-            # en el SELECT de arriba, por eso los índices desde foto_maestro
-            # en adelante se corrieron una posición respecto a antes.
+            # NOTA: se insertaron producto_item y especificaciones_item entre
+            # foto_item y detalle_insumo, por eso los índices desde foto_maestro
+            # en adelante se corrieron respecto a la version original.
             foto_maestro = limpiar_foto(r[18]) if r[18] else ""
             foto_item    = limpiar_foto(r[19]) if r[19] else ""
             # Lista de fotos sin duplicar (si ambas apuntan a la misma URL,
@@ -1467,11 +1476,12 @@ def obtener_logistica():
                 # lugar del frontend que aún lo lea como foto única.
                 "foto_url":                fotos[0] if fotos else "",
                 "producto_item":           r[20] or "",
-                "detalle_insumo":          r[21] or "",
+                "especificaciones_item":   r[21] or "",
+                "detalle_insumo":          r[22] or "",
                 "url_cotizacion_adjunta":  r[17] if len(r) > 17 else None,
-                "categoria_insumo":        r[22] if len(r) > 22 else 'OTRO',
-                "estado_distribucion":     r[23] if len(r) > 23 else None,
-                "telefono_proveedor":      r[24] if len(r) > 24 else "",
+                "categoria_insumo":        r[23] if len(r) > 23 else 'OTRO',
+                "estado_distribucion":     r[24] if len(r) > 24 else None,
+                "telefono_proveedor":      r[25] if len(r) > 25 else "",
             })
         return jsonify(items), 200
     except Exception as e:

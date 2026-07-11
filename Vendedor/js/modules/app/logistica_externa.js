@@ -77,6 +77,116 @@ function _logFotoLabels(item) {
     return [];
 }
 
+function _logCleanText(raw) {
+    if (!raw) return '';
+    return String(raw)
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function _logEsTela(item) {
+    const unidad = String(item.unidad || '').toLowerCase();
+    const categoria = String(item.categoria_insumo || '').toUpperCase();
+    const nombre = `${item.insumo || ''} ${item.detalle_insumo || ''}`.toLowerCase();
+    return categoria === 'TELA' || ['mts', 'mt', 'metro', 'metros'].includes(unidad) || nombre.includes('tela');
+}
+
+function _logParseNumber(raw) {
+    const n = parseFloat(String(raw || '').replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+}
+
+function _logAnalizarMedidasTela(item) {
+    const textos = [
+        { fuente: 'cantidad registrada', texto: `${item.cantidad || ''} ${item.unidad || ''}` },
+        { fuente: 'notas del proveedor', texto: item.notas_proveedor },
+        { fuente: 'ficha del mueble', texto: item.especificaciones_item },
+        { fuente: 'detalle del insumo', texto: item.detalle_insumo },
+        { fuente: 'mueble', texto: item.producto_item },
+        { fuente: 'insumo', texto: item.insumo },
+    ].map(x => ({ fuente: x.fuente, texto: _logCleanText(x.texto) })).filter(x => x.texto);
+
+    const out = {
+        esTela: _logEsTela(item),
+        metros: null,
+        metrosFuente: '',
+        dimensiones: '',
+        dimensionesFuente: '',
+        modelo: '',
+    };
+
+    const unidad = String(item.unidad || '').toLowerCase();
+    const cantidad = _logParseNumber(item.cantidad);
+    if (cantidad && ['mts', 'mt', 'metro', 'metros'].includes(unidad)) {
+        out.metros = cantidad;
+        out.metrosFuente = 'cantidad registrada';
+    }
+
+    for (const src of textos) {
+        if (!out.metros) {
+            const patronesMetros = [
+                /(?:tela|metraje|metros?\s+requeridos?|mts?\s+requeridos?|comprar|cantidad|cant\.?)\D{0,35}(\d+(?:[.,]\d+)?)\s*(?:mts?\.?|metros?)\b/i,
+                /(\d+(?:[.,]\d+)?)\s*(?:mts?\.?|metros?)\b\D{0,35}(?:de\s+)?(?:tela|metraje|para\s+tela|comprar)/i,
+            ];
+            for (const rx of patronesMetros) {
+                const m = src.texto.match(rx);
+                const val = m ? _logParseNumber(m[1]) : null;
+                if (val) {
+                    out.metros = val;
+                    out.metrosFuente = src.fuente;
+                    break;
+                }
+            }
+        }
+
+        if (!out.dimensiones) {
+            const patronesDim = [
+                /\b(?:L|largo)\s*[:.]?\s*(\d+(?:[.,]\d+)?)\s*(?:cm|m)?\s*[xX×]\s*(?:A|ancho|P|prof|profundidad|fondo)?\s*[:.]?\s*(\d+(?:[.,]\d+)?)(?:\s*(?:cm|m)?\s*[xX×]\s*(?:H|alto|P|prof|profundidad|fondo)?\s*[:.]?\s*(\d+(?:[.,]\d+)?))?/i,
+                /\b(\d+(?:[.,]\d+)?)\s*(?:cm|m|mts?)?\s*[xX×]\s*(\d+(?:[.,]\d+)?)\s*(?:cm|m|mts?)(?:\s*[xX×]\s*(\d+(?:[.,]\d+)?)\s*(?:cm|m|mts?))?/i,
+                /\b(?:ancho|largo)\s*[:.]?\s*(\d+(?:[.,]\d+)?).{0,20}\b(?:fondo|profundidad|prof)\s*[:.]?\s*(\d+(?:[.,]\d+)?)(?:.{0,20}\b(?:alto|h)\s*[:.]?\s*(\d+(?:[.,]\d+)?))?/i,
+            ];
+            for (const rx of patronesDim) {
+                const m = src.texto.match(rx);
+                if (m) {
+                    out.dimensiones = [m[1], m[2], m[3]].filter(Boolean).join(' x ');
+                    out.dimensionesFuente = src.fuente;
+                    break;
+                }
+            }
+        }
+    }
+
+    const textoTotal = textos.map(x => x.texto).join(' ');
+    const modelo = textoTotal.match(/\b(?:juego\s+de\s+sala|sofa|sof[aá]|seccional|multifuncional)[^.;,\n]{0,45}?\(?\b(\d\s*-\s*\d(?:\s*-\s*\d)?)\b\)?/i);
+    if (modelo) out.modelo = modelo[0].replace(/\s+/g, ' ').trim();
+
+    return out;
+}
+
+function _logFormatoNumero(n) {
+    if (!Number.isFinite(Number(n))) return '';
+    const v = Number(n);
+    return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function _logMedidasTelaHTML(item) {
+    const info = _logAnalizarMedidasTela(item);
+    if (!info.esTela || (!info.metros && !info.dimensiones && !info.modelo)) return '';
+    const partes = [];
+    if (info.metros) partes.push(`<b>${_logFormatoNumero(info.metros)} mts de tela</b> <span style="color:#94a3b8;">(${escapeHTML(info.metrosFuente)})</span>`);
+    if (info.dimensiones) partes.push(`Medidas: <b>${escapeHTML(info.dimensiones)}</b> <span style="color:#94a3b8;">(${escapeHTML(info.dimensionesFuente)})</span>`);
+    if (info.modelo && !info.metros) partes.push(`Modelo detectado: <b>${escapeHTML(info.modelo)}</b>`);
+    return `
+        <div style="grid-column:1/-1;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:7px 8px;">
+            <div style="font-size:10px;color:#1d4ed8;font-weight:800;text-transform:uppercase;">Medidas / tela</div>
+            <div style="font-size:11px;color:#0f172a;line-height:1.45;">${partes.join('<br>')}</div>
+        </div>`;
+}
+
 window._logCarouselNav = function(idBase, fotos, labels, dir) {
     if (!fotos || fotos.length < 2) return;
     _logCarouselIdx[idBase] = ((_logCarouselIdx[idBase] || 0) + dir + fotos.length) % fotos.length;
@@ -230,6 +340,7 @@ async function cargarLogisticaExterna() {
         const _renderCardLogistica = (item, proveedores, esAdmin, coloresEstado) => {
             const c = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
             const fotoHTML = _logFotoHTMLCard(item, 'logc');
+            const medidasTelaHTML = _logMedidasTelaHTML(item);
             return `
             <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;
                         box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;">
@@ -269,6 +380,7 @@ async function cargarLogisticaExterna() {
                             <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Cantidad</div>
                             <div style="font-weight:600;">${escapeHTML(item.cantidad)} ${escapeHTML(item.unidad || '')}</div>
                         </div>` : ''}
+                        ${medidasTelaHTML}
                         ${item.tipo_gestion && item.tipo_gestion !== 'Externo' ? `
                         <div style="background:${item.tipo_gestion === 'Informal' ? '#fef9c3' : '#dcfce7'};border-radius:6px;padding:6px 8px;">
                             <div style="font-size:10px;color:${item.tipo_gestion === 'Informal' ? '#854d0e' : '#166534'};font-weight:700;text-transform:uppercase;">Gestión</div>
@@ -515,6 +627,21 @@ async function _abrirEditarLogistica(item, proveedores) {
 
         // Bloque de foto + detalles del insumo desde el maestro
         const fotoHTML = _logFotoHTML(item, 72, 'loge');
+        const infoTela = _logAnalizarMedidasTela(item);
+        const unidadActual = String(item.unidad || '').toLowerCase();
+        const debeUsarMetrosSugeridos = infoTela.metros
+            && (!item.cantidad || (Number(item.cantidad) === 1 && !['mts', 'mt', 'metro', 'metros'].includes(unidadActual)));
+        const cantidadInicial = debeUsarMetrosSugeridos ? _logFormatoNumero(infoTela.metros) : (item.cantidad || '');
+        const unidadInicial = debeUsarMetrosSugeridos ? 'mts' : (item.unidad || '');
+        const ayudaTelaHTML = infoTela.esTela && (infoTela.metros || infoTela.dimensiones || infoTela.modelo)
+            ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:9px 11px;margin:-4px 0 14px 0;font-size:11px;color:#1e3a8a;line-height:1.45;">
+                   <b>Buscador de medidas:</b>
+                   ${infoTela.metros ? ` detecte <b>${_logFormatoNumero(infoTela.metros)} mts</b> en ${escapeHTML(infoTela.metrosFuente)}.` : ''}
+                   ${infoTela.dimensiones ? ` Medidas del mueble: <b>${escapeHTML(infoTela.dimensiones)}</b> (${escapeHTML(infoTela.dimensionesFuente)}).` : ''}
+                   ${infoTela.modelo && !infoTela.metros ? ` Modelo detectado: <b>${escapeHTML(infoTela.modelo)}</b>.` : ''}
+                   ${!infoTela.metros ? ' Completa los metros manualmente si no estan escritos en la ficha.' : ''}
+               </div>`
+            : '';
 
         const { value: datos, isConfirmed } = await Swal.fire({
             title: `✏️ Editar insumo`,
@@ -541,7 +668,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                         <div>
                             <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Cantidad</label>
                             <input id="sl-cantidad" class="swal2-input" type="number" step="0.01" min="0"
-                                value="${item.cantidad || ''}" placeholder="Ej: 3.5"
+                                value="${cantidadInicial}" placeholder="Ej: 3.5"
                                 style="margin:0;width:100%;">
                         </div>
                         <div>
@@ -549,10 +676,11 @@ async function _abrirEditarLogistica(item, proveedores) {
                             <select id="sl-unidad" class="swal2-input" style="margin:0;width:100%;">
                                 <option value="">—</option>
                                 ${['mts','und','planchas','kg','rollos','piezas','juegos'].map(u =>
-                                    `<option value="${u}" ${item.unidad === u ? 'selected' : ''}>${u}</option>`
+                                    `<option value="${u}" ${unidadInicial === u ? 'selected' : ''}>${u}</option>`
                                 ).join('')}
                             </select>
                         </div>
+                        ${ayudaTelaHTML ? `<div style="grid-column:1/-1;">${ayudaTelaHTML}</div>` : ''}
                     </div>
 
                     <!-- Tipo de gestión -->
@@ -664,8 +792,10 @@ async function _abrirEditarLogistica(item, proveedores) {
                 const provData = proveedores.find(p => p.id == datos.proveedor_id) || {};
                 let tel = _normalizarTelWA(provData.telefono || '');
 
-                const esTela = (item.unidad || '').toLowerCase() === 'mts' ||
-                               (item.insumo  || '').toLowerCase().includes('tela');
+                const esTela = _logEsTela({ ...item, unidad: datos.unidad || item.unidad });
+                const metrosWsp = esTela && (datos.cantidad || infoTela.metros)
+                    ? (datos.cantidad || _logFormatoNumero(infoTela.metros))
+                    : null;
                 const msgWsp = [
                     `Hola *${provData.nombre || 'Proveedor'}* 👋, somos *Innova Möbili*.`,
                     ``,
@@ -674,8 +804,8 @@ async function _abrirEditarLogistica(item, proveedores) {
                     `📦 *Material:* ${item.insumo}`,
                     ...(item.sku            ? [`🔖 *SKU:* ${item.sku}`]                                    : []),
                     ...(item.detalle_insumo ? [`🎨 *Detalle:* ${item.detalle_insumo}`]                     : []),
-                    ...(esTela && datos.cantidad
-                                            ? [`📐 *Metros requeridos:* ${datos.cantidad} mts`]            : []),
+                    ...(esTela && metrosWsp
+                                            ? [`📐 *Metros requeridos:* ${metrosWsp} mts`]                 : []),
                     ...(!esTela && datos.cantidad
                                             ? [`🔢 *Cantidad:* ${datos.cantidad} ${datos.unidad || ''}`]   : []),
                     ...(item.foto_url       ? [`🔗 *Ref. visual:* ${item.foto_url}`]                       : []),

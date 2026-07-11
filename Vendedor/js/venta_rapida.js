@@ -9,12 +9,27 @@ async function _vrSubirFoto(file) {
     return data.url || '';
 }
 
-function _vrSedesOpciones() {
-    const sedeActual = usuarioActivo?.tienda || 'Sede Central';
-    const sedes = [sedeActual, 'Sede Central', 'Tienda Surco', 'Tienda San Miguel', 'Almacen', 'Otra']
+async function _vrSedesOpciones() {
+    const sedeActual = usuarioActivo?.tienda || usuarioActivo?.sede || '';
+    try {
+        const res = await apiFetch(`${API_URL}/api/sedes`);
+        const sedes = await res.json();
+        if (res.ok && Array.isArray(sedes) && sedes.length) {
+            return sedes
+                .map(s => s?.nombre)
+                .filter(Boolean)
+                .filter((s, i, arr) => arr.indexOf(s) === i)
+                .map(s => `<option value="${escapeAttr(s)}" ${s === sedeActual ? 'selected' : ''}>${escapeHTML(s)}</option>`)
+                .join('');
+        }
+    } catch (e) {
+        console.warn('No se pudieron cargar sedes para venta rapida:', e);
+    }
+
+    const sedesFallback = [sedeActual, 'Tienda de Plaza Vea', 'Tienda del Sol', 'Tienda del Medio', 'Tienda Grande', 'Taller']
         .filter(Boolean)
         .filter((s, i, arr) => arr.indexOf(s) === i);
-    return sedes.map(s => `<option value="${s}" ${s === sedeActual ? 'selected' : ''}>${s}</option>`).join('');
+    return sedesFallback.map(s => `<option value="${escapeAttr(s)}" ${s === sedeActual ? 'selected' : ''}>${escapeHTML(s)}</option>`).join('');
 }
 
 function _vrPreviewInput(input) {
@@ -27,7 +42,7 @@ function _vrPreviewInput(input) {
 }
 
 async function abrirModalVentaRapida() {
-    const sedesHtml = _vrSedesOpciones();
+    const sedesHtml = await _vrSedesOpciones();
     const { value: form } = await Swal.fire({
         title: '<i class="fa-solid fa-bolt" style="color:#d97706;"></i> Venta rapida',
         html: `
