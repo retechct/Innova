@@ -23,8 +23,8 @@ function _ensureScannerInventarioModal() {
     modal.setAttribute('data-global-scanner', 'true');
     modal.style.cssText = 'display:none;align-items:center;justify-content:center;z-index:99999;';
 
-    if (modal.dataset.scannerUiVersion !== '2') {
-        modal.dataset.scannerUiVersion = '2';
+    if (modal.dataset.scannerUiVersion !== '3') {
+        modal.dataset.scannerUiVersion = '3';
         modal.innerHTML = `
             <div class="modal-content" style="width:92%;max-width:520px;border-radius:18px;padding:20px;text-align:center;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;">
@@ -37,16 +37,16 @@ function _ensureScannerInventarioModal() {
                         <button onclick="_cerrarEscaneoCamara()" style="background:none;border:none;font-size:26px;line-height:1;cursor:pointer;">&times;</button>
                     </div>
                 </div>
-                <div id="reader-inv-wrap" style="position:relative;width:100%;background:#020617;border-radius:14px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08);">
+                <div id="reader-inv-wrap" onclick="_reintentarEnfoqueScanner()" style="cursor:pointer;position:relative;width:100%;background:#020617;border-radius:14px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08);">
                     <div id="reader-inv" style="width:100%;min-height:330px;background:#020617;overflow:hidden;"></div>
                     <div id="scanner-inv-frame" style="pointer-events:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(88%,430px);height:112px;border:3px solid rgba(255,255,255,0.98);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.32),0 0 24px rgba(251,191,36,0.35);">
                         <span style="position:absolute;left:50%;top:50%;width:92%;height:2px;transform:translate(-50%,-50%);background:rgba(251,191,36,0.95);box-shadow:0 0 12px rgba(251,191,36,0.7);"></span>
                     </div>
                     <div style="pointer-events:none;position:absolute;left:12px;right:12px;bottom:12px;background:rgba(15,23,42,0.72);color:white;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:800;">
-                        Centra el codigo dentro del recuadro
+                        Toca la pantalla para reenfocar
                     </div>
                 </div>
-                <p id="scanner-inv-status" style="font-size:12px;color:gray;margin-top:10px;">Activa la linterna si esta oscuro y acerca la etiqueta hasta que el codigo llene el recuadro.</p>
+                <p id="scanner-inv-status" style="font-size:12px;color:gray;margin-top:10px;">Acerca la etiqueta hasta que el codigo llene el recuadro y toca la pantalla si no enfoca.</p>
                 <div id="scanner-inv-error" style="display:none;margin:10px 0;padding:9px;background:#fff7ed;color:#9a3412;border-radius:6px;font-size:12px;text-align:left;"></div>
                 <div style="display:flex;gap:8px;margin-top:12px;">
                     <input id="scanner-inv-codigo-manual" type="text" class="form-input"
@@ -133,15 +133,14 @@ async function _iniciarLectorLibreria() {
         experimentalFeatures: {
             useBarCodeDetectorIfSupported: true,
         },
-        // Pedimos una resolución alta y enfoque continuo: esto es lo que
-        // realmente mejora la lectura (nitidez), no un filtro de color.
-        // Si el dispositivo no soporta focusMode el navegador ignora esa
-        // parte y sigue con el resto de constraints normalmente.
+        // Resolución moderada: pedir 1080p de entrada puede ser rechazado
+        // (OverconstrainedError) en equipos mas viejos y tumbar el arranque
+        // completo. 720p es soportado practicamente en cualquier equipo y
+        // es mas que suficiente para leer un codigo de barras.
         videoConstraints: {
             facingMode: "environment",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            advanced: [{ focusMode: "continuous" }],
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
         },
     };
     const alLeer = (textoDecodificado) => {
@@ -154,6 +153,7 @@ async function _iniciarLectorLibreria() {
             await _html5QrcodeInv.start({ facingMode: "environment" }, config, alLeer, alFallarLectura);
             _prepararVideoScanner();
             _prepararLinternaScanner();
+            await _optimizarEnfoqueYZoomScanner();
             _iniciarDetectorNativoScanner();
         } catch (errorCamaraTrasera) {
             const camaras = await Html5Qrcode.getCameras();
@@ -163,6 +163,7 @@ async function _iniciarLectorLibreria() {
             await _html5QrcodeInv.start(preferida.id, config, alLeer, alFallarLectura);
             _prepararVideoScanner();
             _prepararLinternaScanner();
+            await _optimizarEnfoqueYZoomScanner();
             _iniciarDetectorNativoScanner();
         }
     } catch (error) {
@@ -278,6 +279,57 @@ function _prepararLinternaScanner() {
 
     btn.style.display = tieneLinterna ? 'inline-flex' : 'none';
     _actualizarBotonLinternaScanner(false);
+}
+
+/**
+ * Aplica ajustes finos DESPUES de que la camara ya esta corriendo:
+ * - focusMode continuo (si el equipo lo soporta), para evitar que la
+ *   camara se quede "cazando" enfoque justo cuando se captura el frame.
+ * - Un zoom moderado (25% del rango disponible) para que el codigo de
+ *   barras ocupe mas espacio del cuadro: mientras mas chicas se ven las
+ *   barras, mas le cuesta a cualquier lector (nativo o ZXing) diferenciarlas.
+ * Todo esto va envuelto en try/catch y DESPUES del start() para que, si el
+ * equipo no lo soporta, simplemente no pase nada (no tumba el escaneo).
+ */
+async function _optimizarEnfoqueYZoomScanner() {
+    if (!_html5QrcodeInv || typeof _html5QrcodeInv.applyVideoConstraints !== 'function') return;
+
+    try {
+        const capacidades = _html5QrcodeInv.getRunningTrackCapabilities?.() || {};
+        const advanced = [];
+
+        if (Array.isArray(capacidades.focusMode) && capacidades.focusMode.includes('continuous')) {
+            advanced.push({ focusMode: 'continuous' });
+        }
+
+        if (capacidades.zoom && typeof capacidades.zoom.max === 'number') {
+            const zMin = typeof capacidades.zoom.min === 'number' ? capacidades.zoom.min : 1;
+            const zMax = capacidades.zoom.max;
+            const zoomIdeal = Math.min(zMax, zMin + (zMax - zMin) * 0.25);
+            if (zoomIdeal > zMin) advanced.push({ zoom: zoomIdeal });
+        }
+
+        if (advanced.length) {
+            await _html5QrcodeInv.applyVideoConstraints({ advanced });
+        }
+    } catch (e) {
+        // El equipo no soporta estos ajustes finos: seguimos con lo basico,
+        // sin interrumpir el escaneo.
+        console.warn('No se pudo optimizar enfoque/zoom del scanner:', e);
+    }
+}
+
+/**
+ * Se dispara al tocar el recuadro de la camara. Reintenta el enfoque/zoom
+ * y avisa al usuario, similar al "tap to focus" de cualquier app de camara.
+ */
+function _reintentarEnfoqueScanner() {
+    _actualizarEstadoScanner('Reenfocando... manten el codigo quieto y firme.');
+    _optimizarEnfoqueYZoomScanner().then(() => {
+        if (!_scannerInvCodigoProcesado) {
+            _actualizarEstadoScanner('Lector activo. Manten el codigo quieto dentro del recuadro.');
+        }
+    });
 }
 
 function _actualizarBotonLinternaScanner(encendida) {
