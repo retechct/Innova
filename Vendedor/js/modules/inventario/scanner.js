@@ -133,6 +133,16 @@ async function _iniciarLectorLibreria() {
         experimentalFeatures: {
             useBarCodeDetectorIfSupported: true,
         },
+        // Pedimos una resolución alta y enfoque continuo: esto es lo que
+        // realmente mejora la lectura (nitidez), no un filtro de color.
+        // Si el dispositivo no soporta focusMode el navegador ignora esa
+        // parte y sigue con el resto de constraints normalmente.
+        videoConstraints: {
+            facingMode: "environment",
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            advanced: [{ focusMode: "continuous" }],
+        },
     };
     const alLeer = (textoDecodificado) => {
         _resolverCodigoScanner(textoDecodificado);
@@ -185,7 +195,11 @@ function _prepararVideoScanner() {
             video.style.height = '100%';
             video.style.minHeight = '330px';
             video.style.objectFit = 'cover';
-            video.style.filter = 'brightness(1.32) contrast(1.2) saturate(1.08)';
+            // Sin filtros: el feed de la cámara se muestra tal cual (como
+            // Google Lens / el scanner nativo). El filtro anterior
+            // (brightness/contrast/saturate) era lo que daba el tono
+            // amarillento y además podía afectar la lectura del detector.
+            video.style.filter = 'none';
         });
         reader.querySelectorAll('img, canvas').forEach(el => {
             el.style.maxWidth = '100%';
