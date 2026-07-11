@@ -148,28 +148,13 @@ function _htmlEsqueleto() {
         </div>
     </div>
 
-    <!-- MODAL ESCANER CAMARA -->
-    <div id="modal-scanner-inv" class="modal-overlay" style="display:none;align-items:center;justify-content:center;z-index:99999;">
-        <div class="modal-content" style="width:92%;max-width:500px;border-radius:16px;padding:20px;text-align:center;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
-                <h3 style="margin:0;"><i class="fas fa-camera"></i> Escanear Código</h3>
-                <button onclick="_cerrarEscaneoCamara()" style="background:none;border:none;font-size:20px;cursor:pointer;">&times;</button>
-            </div>
-            <div id="reader-inv" style="width:100%; min-height:250px; background:#f1f5f9; border-radius:8px; overflow:hidden;"></div>
-            <p style="font-size:12px;color:gray;margin-top:10px;">Apunta la cámara del celular al código de barras impreso.</p>
-            <div id="scanner-inv-error" style="display:none;margin:10px 0;padding:9px;background:#fff7ed;color:#9a3412;border-radius:6px;font-size:12px;text-align:left;"></div>
-            <div style="display:flex;gap:8px;margin-top:12px;">
-                <input id="scanner-inv-codigo-manual" type="text" class="form-input"
-                       placeholder="Escribir o pegar código"
-                       onkeydown="if(event.key === 'Enter') _usarCodigoManualScanner()"
-                       style="flex:1;min-width:0;">
-                <button type="button" class="btn-action btn-primary" onclick="_usarCodigoManualScanner()"
-                        title="Buscar código" style="width:auto;white-space:nowrap;">
-                    <i class="fas fa-search"></i> Buscar
-                </button>
-            </div>
-        </div>
-    </div>
+    <!-- El modal de escaner de camara (#modal-scanner-inv) ya NO se declara
+         aqui de forma estatica. scanner.js lo crea/gestiona dinamicamente
+         via _ensureScannerInventarioModal() con id global unico. Tener dos
+         elementos con el mismo id="modal-scanner-inv" en el DOM (este mas
+         el que agrega scanner.js) causaba que document.getElementById
+         devolviera uno u otro segun el orden de insercion, dando look y
+         comportamiento inconsistentes entre sesiones/dispositivos. -->
     `;
 }
 
