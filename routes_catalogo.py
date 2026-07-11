@@ -119,6 +119,17 @@ def _leer_voucher_automatico(archivo):
         errores.append(f"{nombre_proveedor}: {resultado.get('error', 'sin detalle')}")
 
     print(f"Voucher OCR sin resultado: {' | '.join(errores)}")
+    detalle_errores = ' | '.join(errores).lower()
+    if any(p in detalle_errores for p in ('quota', 'cuota', 'free_tier', 'billing', 'rate limit')):
+        return {
+            'ok': False,
+            'error': 'El lector automatico no tiene cuota disponible en Gemini; registra el voucher manualmente'
+        }
+    if any(p in detalle_errores for p in ('timed out', 'timeout', 'tardo demasiado')):
+        return {
+            'ok': False,
+            'error': 'El lector automatico tardo demasiado; registra el voucher manualmente'
+        }
 
     return {
         'ok': False,
@@ -267,7 +278,7 @@ def _leer_voucher_con_gemini(archivo):
         print(f"Gemini voucher OCR modelos no disponibles: {' | '.join(errores_modelo)[:500]}")
         if any("timed out" in e.lower() or "timeout" in e.lower() for e in errores_modelo):
             return {'ok': False, 'error': 'El lector automatico tardo demasiado; registra el voucher manualmente'}
-        if any("quota" in e.lower() or "rate" in e.lower() for e in errores_modelo):
+        if any("quota" in e.lower() or "free_tier" in e.lower() or "rate" in e.lower() for e in errores_modelo):
             return {'ok': False, 'error': 'Gemini API no tiene cuota disponible para los modelos de tu key'}
         return {'ok': False, 'error': 'No hay un modelo Gemini disponible para leer imágenes'}
 
@@ -276,6 +287,8 @@ def _leer_voucher_con_gemini(archivo):
         extraido = _parse_json_modelo(texto)
     except Exception as e:
         print(f"No se pudo parsear OCR Gemini: {e}; data={str(data)[:300]}")
+        if any("quota" in err.lower() or "free_tier" in err.lower() or "rate" in err.lower() for err in errores_modelo):
+            return {'ok': False, 'error': 'Gemini no tiene cuota disponible para leer vouchers; registra el pago manualmente'}
         return {'ok': False, 'error': 'Gemini no devolvió datos legibles'}
 
     resultado = _datos_voucher_desde_json(extraido)

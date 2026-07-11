@@ -16,7 +16,8 @@ function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
         bcCanvas.style.display = 'none';
         document.body.appendChild(bcCanvas);
         JsBarcode(bcCanvas, codigo, {
-            format: 'CODE128', width: 3, height: 80, displayValue: false, margin: 6
+            format: 'CODE128', width: 4, height: 120, displayValue: false, margin: 22,
+            lineColor: '#000000', background: '#ffffff'
         });
 
         // 2. Construir imagen final (590×354px — Niimbot B21 50×30mm a 300dpi)
@@ -31,45 +32,45 @@ function imprimirEtiqueta(codigo, nombre, sede, observaciones) {
 
         // Borde
         ctx.strokeStyle = '#1e140a';
-        ctx.lineWidth   = 5;
+        ctx.lineWidth   = 3;
         ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
 
         ctx.textAlign = 'center';
 
         // Marca dorada
         ctx.fillStyle = '#c9a84c';
-        ctx.font      = 'bold 20px Arial';
+        ctx.font      = 'bold 18px Arial';
         ctx.fillText('INNOVA MÖBILI', canvas.width / 2, 46);
 
         // Nombre del producto
         ctx.fillStyle = '#1e140a';
-        ctx.font      = 'bold 26px Arial';
+        ctx.font      = 'bold 23px Arial';
         const nomCorto = nombre.length > 30 ? nombre.substring(0, 30) + '…' : nombre;
-        ctx.fillText(nomCorto, canvas.width / 2, 82);
+        ctx.fillText(nomCorto, canvas.width / 2, 74);
 
         // Sede
         ctx.fillStyle = '#8a7560';
-        ctx.font      = '19px Arial';
-        ctx.fillText(sede, canvas.width / 2, 110);
+        ctx.font      = '17px Arial';
+        ctx.fillText(sede, canvas.width / 2, 98);
 
         // NEW: Observaciones (si existen)
-        let barcodeY = 118;
-        let barcodeHeight = 180;
+        let barcodeY = 120;
+        let barcodeHeight = 176;
         if (observaciones) {
             ctx.fillStyle = '#1e140a';
-            ctx.font = 'italic 18px Arial';
+            ctx.font = 'italic 15px Arial';
             const obsCorto = observaciones.length > 40 ? observaciones.substring(0, 40) + '…' : observaciones;
-            ctx.fillText(obsCorto, canvas.width / 2, 130);
-            barcodeY = 140;
-            barcodeHeight = 150;
+            ctx.fillText(obsCorto, canvas.width / 2, 114);
         }
 
         // Barcode
-        ctx.drawImage(bcCanvas, 75, barcodeY, 440, barcodeHeight);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(20, barcodeY - 4, 550, barcodeHeight + 8);
+        ctx.drawImage(bcCanvas, 28, barcodeY, 534, barcodeHeight);
 
         // Código en texto
         ctx.fillStyle = '#1e140a';
-        ctx.font      = 'bold 23px Arial';
+        ctx.font      = 'bold 24px Arial';
         ctx.fillText(codigo, canvas.width / 2, 328);
 
         // Limpiar canvas temporal
@@ -195,7 +196,15 @@ function imprimirEtiquetasMasivas(lista) {
             const c = document.createElement('canvas');
             c.style.display = 'none';
             document.body.appendChild(c);
-            JsBarcode(c, it.codigo, { format: 'CODE128', width: 3, height: 80, displayValue: false, margin: 6 });
+            JsBarcode(c, it.codigo, {
+                format: 'CODE128',
+                width: 4,
+                height: 120,
+                displayValue: false,
+                margin: 22,
+                lineColor: '#000000',
+                background: '#ffffff'
+            });
             return c;
         });
 
@@ -208,23 +217,25 @@ function imprimirEtiquetasMasivas(lista) {
 
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#1e140a'; ctx.lineWidth = 5;
+            ctx.strokeStyle = '#1e140a'; ctx.lineWidth = 3;
             ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
             ctx.textAlign = 'center';
 
-            ctx.fillStyle = '#c9a84c'; ctx.font = 'bold 20px Arial';
+            ctx.fillStyle = '#c9a84c'; ctx.font = 'bold 18px Arial';
             ctx.fillText('INNOVA MÖBILI', canvas.width / 2, 46);
 
-            ctx.fillStyle = '#1e140a'; ctx.font = 'bold 26px Arial';
-            const nom = it.nombre.length > 30 ? it.nombre.substring(0, 30) + '…' : it.nombre;
-            ctx.fillText(nom, canvas.width / 2, 82);
-
-            ctx.fillStyle = '#8a7560'; ctx.font = '19px Arial';
-            ctx.fillText(it.sede, canvas.width / 2, 110);
-
-            ctx.drawImage(bcCanvases[i], 75, 118, 440, 180);
-
             ctx.fillStyle = '#1e140a'; ctx.font = 'bold 23px Arial';
+            const nom = it.nombre.length > 30 ? it.nombre.substring(0, 30) + '…' : it.nombre;
+            ctx.fillText(nom, canvas.width / 2, 74);
+
+            ctx.fillStyle = '#8a7560'; ctx.font = '17px Arial';
+            ctx.fillText(it.sede, canvas.width / 2, 98);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(20, 116, 550, 184);
+            ctx.drawImage(bcCanvases[i], 28, 120, 534, 176);
+
+            ctx.fillStyle = '#1e140a'; ctx.font = 'bold 24px Arial';
             ctx.fillText(it.codigo, canvas.width / 2, 328);
 
             return canvas.toDataURL('image/png');

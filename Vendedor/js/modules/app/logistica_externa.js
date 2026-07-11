@@ -1349,7 +1349,11 @@ async function _leerVoucherLogisticaAutomatico(file) {
         const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo leer el comprobante');
-        if (data.ok === false) throw new Error(data.error || 'No se pudo leer el comprobante');
+        if (data.ok === false) {
+            window._ultimoVoucherLogisticaOCR = null;
+            _voucherLogisticaStatus(`Voucher subido. ${data.error || 'No se pudo autoleer'}. Puedes continuar manualmente.`, 'warn');
+            return;
+        }
         window._ultimoVoucherLogisticaOCR = data;
         const partes = [];
         if (data.entidad) partes.push(data.entidad);
