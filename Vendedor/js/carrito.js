@@ -387,9 +387,9 @@ async function leerVoucherAutomatico(file) {
     _voucherSetStatus('Leyendo voucher automáticamente...', 'info');
     try {
         let archivoOCR = file;
-        if (typeof _comprimirImagen === 'function' && file.size > 4 * 1024 * 1024) {
+        if (typeof _comprimirImagen === 'function') {
             try {
-                archivoOCR = await _comprimirImagen(file, 1800, 0.9);
+                archivoOCR = await _comprimirImagen(file, 1000, 0.82);
             } catch (e) {
                 console.warn('No se pudo comprimir el voucher para OCR; se usará el original.', e);
             }

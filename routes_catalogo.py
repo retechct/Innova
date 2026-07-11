@@ -131,6 +131,9 @@ def _prompt_voucher_json():
         "Lee este voucher/comprobante de pago peruano. Devuelve SOLO JSON válido con estas claves: "
         "tipo_pago, entidad, monto_bruto, comision_pos, monto_neto, numero_operacion, fecha_pago, contacto_destino, "
         "moneda, confianza, notas. Reglas: monto_bruto es el total cobrado al cliente; "
+        "si el comprobante es de POS/Culqi/Izipay/Niubiz/Openpay y muestra VISA, Mastercard, lote, AP, TC, "
+        "PIN verificado o total en voucher impreso, tipo_pago debe ser POS; entidad debe ser Culqi, Izipay, "
+        "Niubiz, Openpay o el banco visible; numero_operacion puede ser Ref, Venta ID, ID unico, lote o AP. "
         "si ves comisión POS o merchant discount ponla en comision_pos; monto_neto = monto_bruto - comision_pos. "
         "contacto_destino es la persona/cuenta que recibe el dinero, por ejemplo el valor junto a Contacto, "
         "Destinatario, Beneficiario o Titular; no lo confundas con la app o banco. "
@@ -142,12 +145,13 @@ def _prompt_voucher_json():
 
 def _modelos_gemini_voucher(api_key):
     preferidos = [
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+        "gemini-flash-latest",
         "gemini-3.5-flash",
         "gemini-3-flash",
         "gemini-3.1-flash-lite",
-        "gemini-flash-latest",
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
     ]
     req = urllib.request.Request(
         "https://generativelanguage.googleapis.com/v1beta/models",
@@ -205,15 +209,16 @@ def _leer_voucher_con_gemini(archivo):
         }],
         "generationConfig": {
             "response_mime_type": "application/json",
-            "temperature": 0
+            "temperature": 0,
+            "maxOutputTokens": 250
         }
     }
     data = None
     errores_modelo = []
     try:
         # Mantener toda la lectura por debajo del timeout del worker.
-        limite = time.monotonic() + 18
-        for model in modelos[:2]:
+        limite = time.monotonic() + 26
+        for model in modelos[:4]:
             restante = limite - time.monotonic()
             if restante < 2:
                 break
@@ -228,7 +233,7 @@ def _leer_voucher_con_gemini(archivo):
                 method="POST",
             )
             try:
-                with urllib.request.urlopen(req, timeout=min(12, restante)) as resp:
+                with urllib.request.urlopen(req, timeout=min(8, restante)) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     break
             except urllib.error.HTTPError as e:
@@ -236,6 +241,12 @@ def _leer_voucher_con_gemini(archivo):
                 print(f"Gemini voucher OCR HTTPError ({model}): {detalle}")
                 errores_modelo.append(f"{model}: {detalle}")
                 if e.code in (404, 429) and not model_env:
+                    continue
+                raise
+            except Exception as e:
+                print(f"Gemini voucher OCR error ({model}): {e}")
+                errores_modelo.append(f"{model}: {e}")
+                if not model_env:
                     continue
                 raise
     except urllib.error.HTTPError as e:
@@ -254,6 +265,8 @@ def _leer_voucher_con_gemini(archivo):
 
     if data is None:
         print(f"Gemini voucher OCR modelos no disponibles: {' | '.join(errores_modelo)[:500]}")
+        if any("timed out" in e.lower() or "timeout" in e.lower() for e in errores_modelo):
+            return {'ok': False, 'error': 'El lector automatico tardo demasiado; registra el voucher manualmente'}
         if any("quota" in e.lower() or "rate" in e.lower() for e in errores_modelo):
             return {'ok': False, 'error': 'Gemini API no tiene cuota disponible para los modelos de tu key'}
         return {'ok': False, 'error': 'No hay un modelo Gemini disponible para leer imágenes'}
