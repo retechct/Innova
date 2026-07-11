@@ -1670,6 +1670,20 @@ def actualizar_logistica():
         # funcione tanto si ambos campos llegan juntos en un solo POST,
         # como si "Interno" se eligió antes y "Recibido" se marca después
         # desde el selector de etapa final (que solo manda `estado`).
+        #
+        # FIX-2 (julio 2026): el bloque anterior desbloqueaba Tapicería
+        # inmediatamente para CUALQUIER insumo Interno, incluida la TELA.
+        # Eso saltaba por completo la bandeja compartida de Telas (donde
+        # todos los operarios del área ven el insumo en 'En espera' y
+        # confirman la distribución) — la tela pasaba de 'Pendiente' a
+        # 'Distribuido' sin que ningún operario de Telas la viera nunca.
+        # Ahora: si la categoría del insumo es 'TELA', Interno+Recibido solo
+        # la deja en 'En espera' (igual que una tela comprada a proveedor)
+        # para que aparezca en la bandeja de Telas; el desbloqueo real de
+        # Tapicería/Cojines ocurre recién cuando un operario confirma la
+        # distribución vía /api/logistica/<id>/confirmar-distribucion (ya
+        # existente). Para insumos que NO son tela (estructurales/otros, sin
+        # bandeja compartida equivalente) se mantiene el desbloqueo inmediato.
         cursor.execute("""
             UPDATE logistica_externa
             SET proveedor_id             = COALESCE(%s, proveedor_id),
@@ -1683,7 +1697,7 @@ def actualizar_logistica():
                 url_cotizacion_adjunta   = COALESCE(%s, url_cotizacion_adjunta),
                 estado                   = COALESCE(%s, estado)
             WHERE id = %s
-            RETURNING venta_id, tipo_gestion, estado;
+            RETURNING venta_id, tipo_gestion, estado, COALESCE(categoria_insumo, 'OTRO');
         """, (proveedor_id, precio_cotizado, fecha_entrega_proveedor,
               tipo_gestion, cantidad, unidad, proveedor_informal,
               notas_proveedor, url_cotizacion_adjunta,
@@ -1694,21 +1708,33 @@ def actualizar_logistica():
         if not row:
             conexion.rollback()
             return jsonify({'error': 'Ítem de logística no encontrado'}), 404
-        venta_id, tipo_gestion_final, estado_final = row
+        venta_id, tipo_gestion_final, estado_final, categoria_insumo_final = row
 
-        marcar_interno = (tipo_gestion_final == 'Interno' and estado_final == 'Recibido')
-        if marcar_interno:
+        marcar_interno    = (tipo_gestion_final == 'Interno' and estado_final == 'Recibido')
+        interno_es_tela   = (marcar_interno and categoria_insumo_final == 'TELA')
+        interno_no_tela   = (marcar_interno and categoria_insumo_final != 'TELA')
+
+        if interno_es_tela:
+            # Entra a la bandeja compartida de Telas, tal cual una tela
+            # comprada a proveedor — todavía NO se desbloquea nada aquí.
+            cursor.execute("""
+                UPDATE logistica_externa
+                SET estado_distribucion = 'En espera'
+                WHERE id = %s
+            """, (logistica_id,))
+        elif interno_no_tela:
             cursor.execute("""
                 UPDATE logistica_externa
                 SET estado_distribucion = 'Distribuido'
                 WHERE id = %s
             """, (logistica_id,))
 
-        # Si quedó Interno + Recibido, desbloquear Tapicería/Cojines de esa
-        # venta que estuvieran esperando esta tela — misma lógica que ya
-        # usa /api/logistica/<id>/confirmar-distribucion.
+        # Desbloqueo inmediato de Tapicería/Cojines: solo para insumos
+        # Internos que NO son tela (no tienen bandeja compartida a la que
+        # esperar). La tela Interna se desbloquea después, cuando un
+        # operario confirma la distribución desde la bandeja de Telas.
         desbloqueados = 0
-        if marcar_interno and venta_id:
+        if interno_no_tela and venta_id:
             cursor.execute("""
                 SELECT t.id, t.area_trabajo, t.item_id
                 FROM tickets_produccion t
@@ -1742,7 +1768,11 @@ def actualizar_logistica():
         conexion.commit()
 
         mensaje = 'Guardado correctamente'
-        if marcar_interno:
+        if interno_es_tela:
+            mensaje = ('Tela de producción interna enviada a la bandeja de Telas. '
+                       'Cuando un operario del área confirme la distribución, '
+                       'se desbloqueará Tapicería/Cojines.')
+        elif interno_no_tela:
             mensaje = (f'Insumo de producción interna marcado como recibido. '
                        f'{desbloqueados} ticket(s) de Tapicería/Cojines desbloqueado(s).')
         return jsonify({'exito': True, 'mensaje': mensaje, 'desbloqueados': desbloqueados}), 200

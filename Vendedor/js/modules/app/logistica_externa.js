@@ -272,8 +272,21 @@ async function cargarLogisticaExterna() {
         const proveedores = await resProv.json();
 
         const ESTADOS_COMPLETADOS = ['Recibido', 'Cancelado'];
-        const itemsActivos     = items.filter(i => !ESTADOS_COMPLETADOS.includes(i.estado));
-        const itemsCompletados = items.filter(i =>  ESTADOS_COMPLETADOS.includes(i.estado));
+        // FIX (julio 2026): la tela Interna queda con estado='Recibido' en
+        // cuanto el jefe la marca "lista", pero estado_distribucion se
+        // queda en 'En espera' hasta que un operario de Telas confirme la
+        // distribución (ver /api/logistica/actualizar y /confirmar-distribucion
+        // en routes_produccion.py). Si se la trata como "completada" solo
+        // por su `estado`, cae en la sección colapsada de Completados y el
+        // jefe de taller pierde de vista que todavía falta ese paso — sigue
+        // pendiente aunque parezca cerrada. Por eso solo se considera
+        // realmente completado un 'Recibido' cuya distribución también
+        // llegó a 'Distribuido' (o que no aplica distribución, ej. insumos
+        // no-tela, donde ambos campos se cierran juntos).
+        const esperandoDistribucion = i =>
+            i.estado === 'Recibido' && i.estado_distribucion && i.estado_distribucion !== 'Distribuido';
+        const itemsActivos     = items.filter(i => !ESTADOS_COMPLETADOS.includes(i.estado) || esperandoDistribucion(i));
+        const itemsCompletados = items.filter(i =>  ESTADOS_COMPLETADOS.includes(i.estado) && !esperandoDistribucion(i));
 
         if (!items.length) {
             tabla.innerHTML = `<div style="text-align:center;padding:40px;color:#94a3b8;">
@@ -427,6 +440,17 @@ async function cargarLogisticaExterna() {
             { id:'recibir', titulo:'5. Recibir / juntar', icono:'fa-box-circle-check', color:'#0f766e', bg:'#f0fdfa',
               desc:'Material listo para entrar al contrato: recibir, distribuir o liberar despacho.',
               match:i => i.estado_distribucion === 'Recogido' },
+            // FIX (julio 2026): la tela Interna queda con estado='Recibido'
+            // (columna `estado`, ya cerrada de este lado) pero
+            // estado_distribucion='En espera' — todavía no la confirmó
+            // ningún operario de Telas. Antes de este carril, ese combo no
+            // encajaba en ningún match() de arriba, así que el filtro de
+            // itemsActivos/itemsCompletados (ver cargarLogisticaExterna)
+            // igual la mandaba a la sección "Completados" colapsada,
+            // aunque en la práctica siguiera pendiente de distribución.
+            { id:'bandeja_telas', titulo:'5b. En bandeja de Telas', icono:'fa-scissors', color:'#b45309', bg:'#fffbeb',
+              desc:'Tela de producción interna esperando que un operario de Telas confirme la distribución.',
+              match:i => i.categoria_insumo === 'TELA' && i.estado_distribucion === 'En espera' },
         ];
         let _filtroBusqueda = '';
 
@@ -746,7 +770,9 @@ async function _abrirEditarLogistica(item, proveedores) {
                     <div id="sl-interno-info" style="display:${tipoActual === 'Interno' ? 'block' : 'none'};
                         background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:10px 12px;font-size:12px;color:#166534;">
                         <b>Fabricación interna:</b> El taller produce este insumo.
-                        Marca como <b>"Recibido"</b> cuando esté listo para usar y los tickets se desbloquearán automáticamente.
+                        ${_logEsTela(item)
+                            ? 'Marca como <b>"Recibido"</b> cuando esté listo — pasará a la bandeja de Telas para que cualquier operario del área confirme la distribución y recién ahí se desbloquee Tapicería/Cojines.'
+                            : 'Marca como <b>"Recibido"</b> cuando esté listo para usar y los tickets se desbloquearán automáticamente.'}
                     </div>
                 </div>`,
             showCancelButton: true,
@@ -872,10 +898,13 @@ async function _abrirEditarLogistica(item, proveedores) {
             }
 
             // ── INTERNO ────────────────────────────────────────────────────
+            const esTelaInterna = _logEsTela({ ...item, unidad: datos.unidad || item.unidad });
             const { isConfirmed: marcarListo } = await Swal.fire({
                 icon: 'info',
                 title: 'Insumo interno guardado',
-                html: 'Cuando el taller termine físicamente este insumo, márcalo como <b>listo para usar</b> para desbloquear las tareas que dependen de él.',
+                html: esTelaInterna
+                    ? 'Cuando el taller termine físicamente esta tela, márcala como <b>lista para usar</b>. Pasará a la bandeja de Telas para que cualquier operario del área confirme la distribución — recién ahí se desbloquea Tapicería/Cojines.'
+                    : 'Cuando el taller termine físicamente este insumo, márcalo como <b>listo para usar</b> para desbloquear las tareas que dependen de él.',
                 confirmButtonText: 'Marcar listo para usar',
                 showCancelButton: true,
                 cancelButtonText: 'Lo haré después',
@@ -891,9 +920,9 @@ async function _abrirEditarLogistica(item, proveedores) {
                 if (!resListo.ok || !dListo.exito) throw new Error(dListo.error || 'Error al marcar el insumo como listo');
                 Swal.fire({
                     icon: 'success',
-                    title: 'Insumo listo',
+                    title: esTelaInterna ? 'Tela enviada a la bandeja de Telas' : 'Insumo listo',
                     text: dListo.mensaje || `Se desbloquearon ${dListo.desbloqueados || 0} tarea(s).`,
-                    timer: 2500,
+                    timer: 3000,
                     showConfirmButton: false,
                 });
             } else {
@@ -1561,4 +1590,3 @@ function _previewCotizacion(inputEl) {
         previewDiv.style.display = 'block';
     }
 }
-
