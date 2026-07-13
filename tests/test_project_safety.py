@@ -38,10 +38,18 @@ class ProjectSafetyTests(unittest.TestCase):
         self.assertIn("if (!tieneSesionERP) cargarDatosInicialesLogin()", bootstrap_js)
         self.assertIn("Cargando catálogo", nav_js)
         self.assertIn("window._datosVentaInicialesCargados", nav_js)
+        self.assertNotIn("gmPopularSelect();", nav_js)
         self.assertNotIn('<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas', index_html)
         self.assertNotIn('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf', index_html)
         self.assertIn("_asegurarLibreriasOrdenPDF", orden_js)
         self.assertIn("data-pdf-lib", orden_js)
+        self.assertIn("async function gmPopularSelect(force = false)", index_html)
+        self.assertIn("window._sofaModelosCargados", index_html)
+        self.assertIn("await gmPopularSelect(true)", index_html)
+        self.assertIn('id="modal-gestor-modelos"', index_html)
+        catalogo_js = read("Vendedor/js/catalogo.js")
+        self.assertIn("async function openConfig", catalogo_js)
+        self.assertIn("await gmPopularSelect()", catalogo_js)
 
     def test_staff_login_uses_password_hash_path(self):
         usuarios_py = read("routes_usuarios.py")

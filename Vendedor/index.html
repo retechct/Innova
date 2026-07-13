@@ -2198,7 +2198,7 @@
 <!-- ═══════════════════════════════════════════════════════════
      MODAL — GESTIÓN DE MODELOS DE SOFÁ
      ═══════════════════════════════════════════════════════════ -->
-<div id="modal-gestор-modelos" style="display:none;position:fixed;inset:0;z-index:99999;
+<div id="modal-gestor-modelos" style="display:none;position:fixed;inset:0;z-index:99999;
      background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;">
   <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:90vh;
               overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
@@ -2319,9 +2319,10 @@ async function gmGetCustom() {
 }
 
 // ─── Poblar el select #sofa-modelo con base + custom ──────────
-async function gmPopularSelect() {
+async function gmPopularSelect(force = false) {
   const sel = document.getElementById('sofa-modelo');
   if (!sel) return;
+  if (!force && window._sofaModelosCargados && sel.options.length > 0) return;
   const valAnterior = sel.value;
   sel.innerHTML = '';
   const custom = await gmGetCustom();
@@ -2348,15 +2349,16 @@ async function gmPopularSelect() {
 
   // Restaurar selección previa si existe
   if ([...sel.options].some(o => o.value === valAnterior)) sel.value = valAnterior;
+  window._sofaModelosCargados = true;
 }
 
 // ─── Abrir/cerrar modal ────────────────────────────────────────
 async function abrirGestorModelos() {
   await gmRenderListas();
-  document.getElementById('modal-gestор-modelos').style.display = 'flex';
+  document.getElementById('modal-gestor-modelos').style.display = 'flex';
 }
 function cerrarGestorModelos() {
-  document.getElementById('modal-gestор-modelos').style.display = 'none';
+  document.getElementById('modal-gestor-modelos').style.display = 'none';
   // Si fue abierto desde el modal de stock, refrescar el select de modelo base
   if (window._gestorAbiertoDesdeStock) {
     window._gestorAbiertoDesdeStock = false;
@@ -2525,7 +2527,7 @@ async function gmAgregarModelo() {
     document.getElementById('gm-foto-preview').style.display = 'none';
 
     // Actualizar UI
-    await gmPopularSelect();
+    await gmPopularSelect(true);
     await gmRenderListas();
 
     // Seleccionar el nuevo modelo en el dropdown
@@ -2620,7 +2622,7 @@ async function gmCambiarFotoCustom(modeloId, inputEl) {
         throw new Error(data.error || 'No se pudo cambiar la foto');
     }
     inputEl.value = '';
-    await gmPopularSelect();
+    await gmPopularSelect(true);
     await gmRenderListas();
   } catch (e) {
     Swal.fire('Error', e.message, 'error');
@@ -2636,7 +2638,7 @@ async function gmEliminarModelo(modeloId) {
         const data = await res.json();
         throw new Error(data.error || 'No se pudo eliminar');
     }
-    await gmPopularSelect();
+    await gmPopularSelect(true);
     await gmRenderListas();
   } catch (e) {
     Swal.fire('Error', e.message, 'error');
@@ -2658,9 +2660,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // mostraba "Sesión expirada" y no dejaba llegar a la pantalla de login.
   // Ahora solo se puebla aquí si ya hay un token guardado (sesión persistida
   // al recargar); si no, se puebla justo después del login (ver modules/app/session_ui.js y landing.js).
-  if (localStorage.getItem('innova_token')) {
-    await gmPopularSelect();
-  }
 });
 
 </script>

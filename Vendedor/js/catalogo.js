@@ -542,7 +542,7 @@ async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false,
 }
 /* --- LÓGICA DEL NUEVO MODAL DE SOFÁS --- */
 /* --- REEMPLAZA TU FUNCIÓN openConfig COMPLETA --- */
-function openConfig(name, img) {
+async function openConfig(name, img) {
     if (!_cartaAbriendoPlantilla) _cartaPlantillaActiva = null;
     tempItem = { name, img };
     const modal = document.getElementById('modal-config');
@@ -592,6 +592,7 @@ function openConfig(name, img) {
     const nombreLibreEl = document.getElementById('sofa-nombre-libre');
     if (nombreLibreEl) nombreLibreEl.value = '';
 
+    if (typeof gmPopularSelect === 'function') await gmPopularSelect();
     document.getElementById('modal-config').style.display = 'flex';
     document.getElementById('sofa-modelo').value = 'multi3'; 
     actualizarVistaSofa(); 

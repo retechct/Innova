@@ -272,10 +272,6 @@ async function entrarAlSistema() {
             // Guardamos todo junto en la memoria del navegador
             localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
 
-            // FIX-401-LOOP: recién aquí, con token ya guardado, es seguro
-            // pedir /api/sofa-modelos (requiere login).
-            if (typeof gmPopularSelect === 'function') gmPopularSelect();
-            
             // Ocultamos el login
             document.getElementById('pantalla-login').style.display = 'none';
             
