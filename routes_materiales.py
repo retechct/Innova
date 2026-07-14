@@ -17,10 +17,9 @@ MIGRACIÓN SQL REQUERIDA (solo una vez):
 """
 
 import json
-import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto, cloudinary_upload
-from auth_middleware import requiere_login, requiere_rol
+from auth_middleware import get_usuario_actual, requiere_login, requiere_rol
 
 materiales_bp = Blueprint('materiales', __name__)
 
@@ -393,7 +392,6 @@ def actualizar_foto_aprobacion():
         id   : id del registro (creaciones_vendedores / sugerencias_insumos / disenos_referencia)
         foto : archivo de imagen (obligatorio)
     """
-    import cloudinary.uploader
     tipo    = (request.form.get('tipo') or '').strip()
     item_id = request.form.get('id')
 
@@ -430,7 +428,6 @@ def actualizar_foto_aprobacion():
             cursor.execute("UPDATE sugerencias_insumos SET foto_ref = %s WHERE id = %s;", (foto_url, item_id))
 
         elif tipo == 'diseno':
-            _ensure_disenos_referencia(cursor)
             cursor.execute("UPDATE disenos_referencia SET foto_url = %s WHERE id = %s;", (foto_url, item_id))
 
         conexion.commit()
@@ -445,10 +442,10 @@ def actualizar_foto_aprobacion():
 
 
 @materiales_bp.route('/api/creaciones', methods=['POST'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller', 'Vendedor')
 def guardar_creacion():
     try:
-        vendedor_id       = request.form.get('vendedor_id', 1)
+        vendedor_id       = int(get_usuario_actual()['id'])
         nombre_modelo     = request.form.get('nombre_modelo')
         categoria         = request.form.get('categoria', 'Personalizado')
         detalles_tecnicos = request.form.get('detalles_tecnicos', '')
@@ -477,7 +474,7 @@ def guardar_creacion():
         conexion.commit()
         return jsonify({'mensaje': '¡Creación guardada con éxito!', 'creacion_id': creacion_id}), 200
 
-    except Exception as e:
+    except Exception:
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
@@ -487,7 +484,7 @@ def guardar_creacion():
 
 
 @materiales_bp.route('/api/creaciones', methods=['GET'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def obtener_creaciones():
     try:
         conexion = get_db_connection()
@@ -508,7 +505,7 @@ def obtener_creaciones():
             "foto_url": limpiar_foto(r[5]), "config_json": r[6], "estado": r[7], "vendedor": r[8]
         } for r in cursor.fetchall()]
         return jsonify(creaciones), 200
-    except Exception as e:
+    except Exception:
         return jsonify({'error': 'Error al cargar creaciones'}), 500
     finally:
         if 'conexion' in locals() and conexion:
@@ -541,14 +538,6 @@ def aprobar_creacion():
         # Unir fotos en un string separado por |
         fotos_urls = '|'.join(fotos_array[1:]) if fotos_array and len(fotos_array) > 1 else ''
         foto_principal = fotos_array[0] if fotos_array and fotos_array[0] else ''
-
-        # Asegurar que las columnas existen (auto-migración)
-        try:
-            cursor.execute("ALTER TABLE catalogo_productos ADD COLUMN IF NOT EXISTS config_json JSONB;")
-            cursor.execute("ALTER TABLE catalogo_productos ADD COLUMN IF NOT EXISTS fotos_urls TEXT;")
-            conexion.commit()
-        except Exception:
-            conexion.rollback()
 
         cursor.execute("""
             INSERT INTO catalogo_productos (nombre_modelo, precio_base, foto_url, fotos_urls, es_plantilla, en_stock, origen_produccion, categoria, config_json)
@@ -606,11 +595,6 @@ def rechazar_creacion():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        # Añadir columna motivo_rechazo si no existe (migración segura)
-        cursor.execute("""
-            ALTER TABLE creaciones_vendedores
-            ADD COLUMN IF NOT EXISTS motivo_rechazo TEXT;
-        """)
         cursor.execute("""
             UPDATE creaciones_vendedores
             SET estado = 'Rechazado', motivo_rechazo = %s
@@ -686,7 +670,7 @@ def _eliminar_material_tabla(tabla: str, sku_columna: str, sku: str) -> tuple:
 
 
 @materiales_bp.route('/api/materiales/telas/<string:sku>', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def editar_tela(sku):
     """B3: Actualiza una tela por SKU. Campos: proveedor, coleccion, color, foto_url, estado, proveedor_id"""
     resp, status = _actualizar_tabla(
@@ -697,7 +681,7 @@ def editar_tela(sku):
 
 
 @materiales_bp.route('/api/materiales/cojines/<string:sku>', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def editar_cojin(sku):
     """B3: Actualiza un diseño de cojín por SKU. Campos: nombre_diseno, tipo_tela, foto_url, estado"""
     resp, status = _actualizar_tabla(
@@ -708,7 +692,7 @@ def editar_cojin(sku):
 
 
 @materiales_bp.route('/api/materiales/bases/<string:sku>', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def editar_base(sku):
     """
     B3: Actualiza una base de sofá por SKU.
@@ -728,7 +712,7 @@ def editar_base(sku):
 
 
 @materiales_bp.route('/api/materiales/bases-comedor/<string:sku>', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def editar_base_comedor(sku):
     """
     B3: Actualiza una base de comedor por SKU.
@@ -742,7 +726,7 @@ def editar_base_comedor(sku):
 
 
 @materiales_bp.route('/api/materiales/tableros/<string:sku>', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def editar_tablero(sku):
     """B3: Actualiza un tablero por SKU. Campos: material_base, nombre_modelo, color_veta, acabado, foto_url, estado"""
     resp, status = _actualizar_tabla(
@@ -754,7 +738,7 @@ def editar_tablero(sku):
 
 
 @materiales_bp.route('/api/materiales/sillas/<string:sku>', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def editar_silla(sku):
     """
     B3: Actualiza una estructura de silla por SKU.
@@ -772,7 +756,7 @@ def editar_silla(sku):
 
 
 @materiales_bp.route('/api/materiales/butacas/<string:sku>', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def editar_butaca(sku):
     """
     B3: Actualiza una estructura de butaca por SKU.
@@ -818,26 +802,8 @@ def eliminar_material_por_sku(sku):
 # DISEÑOS DE REFERENCIA (Pinterest / Inspiración)
 # ══════════════════════════════════════════════════════════════════
 
-def _ensure_disenos_referencia(cursor):
-    """Auto-crea la tabla si no existe (migración segura)."""
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS disenos_referencia (
-            id              SERIAL PRIMARY KEY,
-            nombre          VARCHAR(200) NOT NULL,
-            categoria       VARCHAR(100),
-            descripcion     TEXT,
-            foto_url        TEXT,
-            url_pinterest   TEXT,
-            vendedor        VARCHAR(150),
-            estado          VARCHAR(20) DEFAULT 'Pendiente',
-            motivo_rechazo  TEXT,
-            fecha_creacion  TIMESTAMP DEFAULT NOW()
-        );
-    """)
-
-
 @materiales_bp.route('/api/disenos-referencia', methods=['POST'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller', 'Vendedor')
 def subir_diseno_referencia():
     """
     Vendedor sube un diseño de referencia (foto de Pinterest u otra fuente).
@@ -849,8 +815,6 @@ def subir_diseno_referencia():
       - vendedor      (str)
       - foto          (file, obligatorio)
     """
-    import cloudinary.uploader
-    from auth_middleware import get_usuario_actual
     try:
         nombre        = (request.form.get('nombre') or '').strip()
         categoria     = (request.form.get('categoria') or 'General').strip()
@@ -870,7 +834,6 @@ def subir_diseno_referencia():
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _ensure_disenos_referencia(cursor)
         cursor.execute("""
             INSERT INTO disenos_referencia
                 (nombre, categoria, descripcion, foto_url, url_pinterest, vendedor, estado)
@@ -900,7 +863,6 @@ def listar_disenos_referencia():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _ensure_disenos_referencia(cursor)
         if estado_filtro:
             cursor.execute("""
                 SELECT id, nombre, categoria, descripcion, foto_url,
@@ -949,7 +911,6 @@ def aprobar_diseno_referencia():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _ensure_disenos_referencia(cursor)
         cursor.execute("""
             UPDATE disenos_referencia
             SET estado = 'Aprobado', motivo_rechazo = NULL
@@ -984,7 +945,6 @@ def rechazar_diseno_referencia():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _ensure_disenos_referencia(cursor)
         cursor.execute("""
             UPDATE disenos_referencia
             SET estado = 'Rechazado', motivo_rechazo = %s

@@ -3,136 +3,405 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cotización — Innova Möbili</title>
+  <title>Cotización | Innova Móbili</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #f1f5f9;
-           display: flex; justify-content: center; padding: 30px 16px; }
-    .card { background: #fff; border-radius: 16px; padding: 30px;
-            max-width: 480px; width: 100%;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    h1 { font-size: 20px; color: #0f172a; margin-bottom: 4px; }
-    .sub { font-size: 13px; color: #64748b; margin-bottom: 24px; }
-    .field { margin-bottom: 18px; }
-    label { display: block; font-size: 11px; font-weight: 700;
-            color: #475569; text-transform: uppercase; margin-bottom: 5px; }
-    input, textarea { width: 100%; padding: 11px 14px; border: 1.5px solid #cbd5e1;
-                      border-radius: 8px; font-size: 14px; outline: none; }
-    input:focus, textarea:focus { border-color: #3b82f6; }
-    textarea { min-height: 80px; resize: vertical; }
-    button { width: 100%; padding: 14px; background: #0f172a; color: #fff;
-             border: none; border-radius: 10px; font-size: 15px;
-             font-weight: 800; cursor: pointer; margin-top: 8px; }
-    button:disabled { background: #94a3b8; cursor: not-allowed; }
-    .info-box { background: #f8fafc; border-left: 4px solid #3b82f6;
-                border-radius: 0 8px 8px 0; padding: 12px 16px;
-                margin-bottom: 22px; font-size: 13px; color: #374151; }
-    .info-box b { color: #1e40af; }
-    .success { text-align: center; padding: 40px 20px; }
-    .success h2 { color: #15803d; font-size: 22px; margin-bottom: 10px; }
-    .success p  { color: #64748b; font-size: 14px; }
-    #loading { text-align: center; color: #64748b; padding: 60px 0; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f4f6f8;
+      color: #172033;
+      font-family: Arial, sans-serif;
+    }
+    .shell {
+      width: min(720px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+    .brand {
+      margin-bottom: 24px;
+      color: #111827;
+      font-size: 18px;
+      font-weight: 800;
+    }
+    h1 { margin: 0 0 6px; font-size: 24px; }
+    .sub { margin: 0 0 24px; color: #64748b; font-size: 14px; }
+    .quote-item {
+      padding: 22px 0;
+      border-top: 1px solid #dbe1e8;
+    }
+    .item-head {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .item-head.no-image { grid-template-columns: minmax(0, 1fr); }
+    .item-image {
+      width: 64px;
+      height: 64px;
+      border: 1px solid #dbe1e8;
+      border-radius: 6px;
+      background: #fff;
+      object-fit: cover;
+    }
+    .item-title {
+      overflow-wrap: anywhere;
+      margin: 0 0 5px;
+      font-size: 16px;
+    }
+    .item-meta { color: #64748b; font-size: 12px; line-height: 1.5; }
+    .fields {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+    .field { min-width: 0; }
+    .field.notes { grid-column: 1 / -1; }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #b9c3cf;
+      border-radius: 6px;
+      background: #fff;
+      color: #172033;
+      font: inherit;
+      outline: none;
+    }
+    input:focus, textarea:focus {
+      border-color: #176b5b;
+      box-shadow: 0 0 0 3px rgba(23, 107, 91, 0.12);
+    }
+    textarea { min-height: 76px; resize: vertical; }
+    .actions {
+      padding: 14px 0;
+      border-top: 1px solid #dbe1e8;
+    }
+    button {
+      width: 100%;
+      min-height: 46px;
+      border: 0;
+      border-radius: 6px;
+      background: #176b5b;
+      color: #fff;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    button:disabled { background: #94a3b8; cursor: wait; }
+    .error {
+      display: none;
+      margin: 12px 0 0;
+      color: #b42318;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .state { padding: 72px 12px; text-align: center; }
+    .state h2 { margin: 0 0 10px; font-size: 22px; }
+    .state p { margin: 0; color: #64748b; font-size: 14px; line-height: 1.5; }
+    .success h2 { color: #157347; }
+    [hidden] { display: none !important; }
+    @media (max-width: 520px) {
+      .shell { width: min(100% - 24px, 720px); padding-top: 22px; }
+      .fields { grid-template-columns: 1fr; }
+      .field.notes { grid-column: auto; }
+      h1 { font-size: 21px; }
+    }
   </style>
 </head>
 <body>
-<div class="card">
-  <div id="loading">Cargando pedido...</div>
+  <main class="shell">
+    <div class="brand">Innova Móbili</div>
 
-  <div id="form-container" style="display:none;">
-    <h1>Solicitud de Cotización</h1>
-    <p class="sub">Complete los datos para confirmar su propuesta</p>
+    <section id="loading" class="state" aria-live="polite">
+      <p>Cargando solicitud...</p>
+    </section>
 
-    <div class="info-box">
-      <b>Material:</b> <span id="txt-insumo"></span><br>
-      <b>SKU:</b> <span id="txt-sku"></span><br>
-      <b>Referencia:</b> <span id="txt-ref"></span>
-    </div>
+    <section id="form-container" hidden>
+      <h1 id="form-title">Solicitud de cotización</h1>
+      <p id="form-subtitle" class="sub"></p>
+      <form id="quote-form" novalidate>
+        <div id="items-container"></div>
+        <div class="actions">
+          <button id="btn-enviar" type="submit">Enviar cotización</button>
+          <p id="error-msg" class="error" role="alert"></p>
+        </div>
+      </form>
+    </section>
 
-    <div class="field">
-      <label>Precio en S/ *</label>
-      <input type="number" id="precio" placeholder="Ej: 250.00" step="0.01" min="0">
-    </div>
-    <div class="field">
-      <label>Fecha de entrega disponible *</label>
-      <input type="date" id="fecha">
-    </div>
-    <div class="field">
-      <label>Observaciones (opcional)</label>
-      <textarea id="notas" placeholder="Tiempo de fabricación, condiciones, etc."></textarea>
-    </div>
+    <section id="ya-respondido" class="state success" hidden>
+      <h2>Cotización registrada</h2>
+      <p>Esta solicitud ya fue respondida. Gracias.</p>
+    </section>
 
-    <button id="btn-enviar" onclick="enviar()">Enviar Cotización</button>
-    <p id="error-msg" style="color:#dc2626;font-size:13px;margin-top:12px;display:none;"></p>
-  </div>
+    <section id="exito" class="state success" hidden>
+      <h2>Cotización enviada</h2>
+      <p>Hemos recibido la propuesta correctamente.</p>
+    </section>
 
-  <div id="ya-respondido" class="success" style="display:none;">
-    <h2>✅ Ya enviaste tu cotización</h2>
-    <p>Gracias. Nuestro equipo revisará tu propuesta y te contactará pronto.</p>
-  </div>
+    <section id="error-page" class="state" hidden>
+      <h2>No se pudo abrir el enlace</h2>
+      <p id="error-page-message">El enlace no es válido. Contacta a Innova Móbili.</p>
+    </section>
+  </main>
 
-  <div id="exito" class="success" style="display:none;">
-    <h2>🎉 ¡Cotización enviada!</h2>
-    <p>Hemos recibido tu propuesta. Gracias por tu rápida respuesta.</p>
-  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const tokenIndividual = params.get('token');
+    const tokenLote = params.get('lote');
+    const esLote = Boolean(tokenLote);
+    const tokenActivo = tokenLote || tokenIndividual;
+    const hoy = new Date();
+    const fechaMinima = [
+      hoy.getFullYear(),
+      String(hoy.getMonth() + 1).padStart(2, '0'),
+      String(hoy.getDate()).padStart(2, '0')
+    ].join('-');
+    let itemsActivos = [];
 
-  <div id="error-page" class="success" style="display:none;">
-    <h2 style="color:#dc2626;">Link inválido</h2>
-    <p>Este enlace no es válido o ya expiró. Contacta a Innova Möbili.</p>
-  </div>
-</div>
-
-<script>
-  const API   = '';  // mismo origen — Flask sirve este HTML
-  const token = new URLSearchParams(window.location.search).get('token');
-
-  async function init() {
-    if (!token) { show('error-page'); hide('loading'); return; }
-    try {
-      const r = await fetch(`${API}/api/cotizar/${token}`);
-      const d = await r.json();
-      hide('loading');
-      if (d.ya_respondido)    { show('ya-respondido'); return; }
-      if (!r.ok || d.error)   { show('error-page');    return; }
-      document.getElementById('txt-insumo').textContent = d.insumo;
-      document.getElementById('txt-sku').textContent    = d.sku || 'N/A';
-      document.getElementById('txt-ref').textContent    = d.codigo_venta;
-      show('form-container');
-    } catch(e) { hide('loading'); show('error-page'); }
-  }
-
-  async function enviar() {
-    const precio = document.getElementById('precio').value;
-    const fecha  = document.getElementById('fecha').value;
-    const notas  = document.getElementById('notas').value;
-    const errEl  = document.getElementById('error-msg');
-
-    if (!precio || !fecha) {
-      errEl.textContent = 'Precio y fecha son obligatorios.';
-      errEl.style.display = 'block'; return;
+    function mostrar(id) {
+      document.getElementById(id).hidden = false;
     }
-    errEl.style.display = 'none';
-    document.getElementById('btn-enviar').disabled = true;
 
-    try {
-      const r = await fetch(`${API}/api/cotizar/${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ precio: parseFloat(precio), fecha_entrega: fecha, notas })
-      });
-      const d = await r.json();
-      if (d.exito) { hide('form-container'); show('exito'); }
-      else { errEl.textContent = d.error || 'Error al enviar.'; errEl.style.display = 'block'; }
-    } catch(e) {
-      errEl.textContent = 'Error de conexión. Intenta de nuevo.';
-      errEl.style.display = 'block';
+    function ocultar(id) {
+      document.getElementById(id).hidden = true;
     }
-    document.getElementById('btn-enviar').disabled = false;
-  }
 
-  function show(id) { document.getElementById(id).style.display = ''; }
-  function hide(id) { document.getElementById(id).style.display = 'none'; }
+    function mostrarErrorPagina(mensaje) {
+      ocultar('loading');
+      ocultar('form-container');
+      document.getElementById('error-page-message').textContent =
+        mensaje || 'El enlace no es válido. Contacta a Innova Móbili.';
+      mostrar('error-page');
+    }
 
-  init();
-</script>
+    async function leerJson(respuesta) {
+      try {
+        return await respuesta.json();
+      } catch (_error) {
+        return {};
+      }
+    }
+
+    function urlImagenSegura(valor) {
+      if (!valor) return '';
+      try {
+        const url = new URL(valor, window.location.origin);
+        return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+      } catch (_error) {
+        return '';
+      }
+    }
+
+    function agregarTextoMeta(contenedor, etiqueta, valor) {
+      if (valor === null || valor === undefined || valor === '') return;
+      const linea = document.createElement('div');
+      linea.textContent = `${etiqueta}: ${valor}`;
+      contenedor.appendChild(linea);
+    }
+
+    function crearCampo(etiqueta, tipo, nombre, opciones = {}) {
+      const grupo = document.createElement('div');
+      grupo.className = `field${opciones.notas ? ' notes' : ''}`;
+
+      const label = document.createElement('label');
+      label.textContent = etiqueta;
+      label.htmlFor = nombre;
+
+      const control = opciones.notas
+        ? document.createElement('textarea')
+        : document.createElement('input');
+      control.id = nombre;
+      control.className = tipo;
+      control.required = !opciones.notas;
+      if (!opciones.notas) control.type = opciones.inputType || 'text';
+      if (opciones.placeholder) control.placeholder = opciones.placeholder;
+      if (opciones.min) control.min = opciones.min;
+      if (opciones.step) control.step = opciones.step;
+      if (opciones.maxLength) control.maxLength = opciones.maxLength;
+
+      grupo.append(label, control);
+      return grupo;
+    }
+
+    function renderizarItem(item, indice) {
+      const bloque = document.createElement('section');
+      bloque.className = 'quote-item';
+      bloque.dataset.itemId = String(item.id);
+
+      const cabecera = document.createElement('div');
+      cabecera.className = 'item-head';
+      const imagenUrl = urlImagenSegura(item.foto_url);
+      if (imagenUrl) {
+        const imagen = document.createElement('img');
+        imagen.className = 'item-image';
+        imagen.src = imagenUrl;
+        imagen.alt = '';
+        imagen.addEventListener('error', () => {
+          imagen.remove();
+          cabecera.classList.add('no-image');
+        });
+        cabecera.appendChild(imagen);
+      } else {
+        cabecera.classList.add('no-image');
+      }
+
+      const resumen = document.createElement('div');
+      const titulo = document.createElement('h2');
+      titulo.className = 'item-title';
+      titulo.textContent = item.insumo_nombre || item.insumo || 'Material';
+      const meta = document.createElement('div');
+      meta.className = 'item-meta';
+      agregarTextoMeta(meta, 'SKU', item.sku || 'N/A');
+      agregarTextoMeta(meta, 'Cantidad', item.cantidad == null
+        ? ''
+        : `${item.cantidad} ${item.unidad || ''}`.trim());
+      agregarTextoMeta(meta, 'Referencia', item.codigo_venta || '');
+      resumen.append(titulo, meta);
+      cabecera.appendChild(resumen);
+
+      const campos = document.createElement('div');
+      campos.className = 'fields';
+      campos.append(
+        crearCampo('Precio unitario sin IGV (S/) *', 'precio', `precio-${indice}`, {
+          inputType: 'number', min: '0.01', step: '0.01', placeholder: 'Ej: 250.00'
+        }),
+        crearCampo('Fecha de entrega *', 'fecha', `fecha-${indice}`, {
+          inputType: 'date', min: fechaMinima
+        }),
+        crearCampo('Observaciones', 'notas', `notas-${indice}`, {
+          notas: true, maxLength: 2000, placeholder: 'Condiciones, disponibilidad u otro detalle'
+        })
+      );
+      bloque.append(cabecera, campos);
+      return bloque;
+    }
+
+    async function iniciar() {
+      if (!tokenActivo || (tokenIndividual && tokenLote)) {
+        mostrarErrorPagina('El enlace de cotización está incompleto o es inválido.');
+        return;
+      }
+
+      const endpoint = esLote
+        ? `/api/cotizar-lote/${encodeURIComponent(tokenActivo)}`
+        : `/api/cotizar/${encodeURIComponent(tokenActivo)}`;
+      try {
+        const respuesta = await fetch(endpoint, {
+          headers: { Accept: 'application/json' },
+          cache: 'no-store'
+        });
+        const datos = await leerJson(respuesta);
+        ocultar('loading');
+
+        if (datos.ya_respondido) {
+          mostrar('ya-respondido');
+          return;
+        }
+        if (!respuesta.ok || datos.error) {
+          mostrarErrorPagina(datos.error || 'No se pudo cargar la solicitud.');
+          return;
+        }
+
+        itemsActivos = esLote ? datos.items : [{
+          id: datos.id,
+          insumo: datos.insumo,
+          sku: datos.sku,
+          codigo_venta: datos.codigo_venta
+        }];
+        if (!itemsActivos.length) {
+          mostrarErrorPagina('La solicitud no contiene materiales.');
+          return;
+        }
+
+        document.getElementById('form-title').textContent = esLote
+          ? 'Solicitud de cotización por lote'
+          : 'Solicitud de cotización';
+        document.getElementById('form-subtitle').textContent = esLote && datos.proveedor
+          ? `${datos.proveedor}, completa una propuesta por cada material.`
+          : datos.proveedor
+            ? `${datos.proveedor}, completa el precio unitario y la fecha de entrega.`
+            : 'Completa el precio unitario y la fecha de entrega.';
+        const contenedor = document.getElementById('items-container');
+        itemsActivos.forEach((item, indice) => {
+          contenedor.appendChild(renderizarItem(item, indice));
+        });
+        mostrar('form-container');
+      } catch (_error) {
+        mostrarErrorPagina('No se pudo conectar con Innova. Intenta nuevamente.');
+      }
+    }
+
+    document.getElementById('quote-form').addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      const errorEl = document.getElementById('error-msg');
+      const boton = document.getElementById('btn-enviar');
+      const respuestas = [];
+
+      for (let indice = 0; indice < itemsActivos.length; indice += 1) {
+        const precio = Number(document.getElementById(`precio-${indice}`).value);
+        const fechaEntrega = document.getElementById(`fecha-${indice}`).value;
+        const notas = document.getElementById(`notas-${indice}`).value.trim();
+        if (!Number.isFinite(precio) || precio <= 0 || !fechaEntrega) {
+          errorEl.textContent = 'Completa un precio mayor que cero y una fecha para cada material.';
+          errorEl.style.display = 'block';
+          return;
+        }
+        respuestas.push({
+          item_id: itemsActivos[indice].id,
+          precio,
+          fecha_entrega: fechaEntrega,
+          notas
+        });
+      }
+
+      errorEl.style.display = 'none';
+      boton.disabled = true;
+      boton.textContent = 'Enviando...';
+      const endpoint = esLote
+        ? `/api/cotizar-lote/${encodeURIComponent(tokenActivo)}`
+        : `/api/cotizar/${encodeURIComponent(tokenActivo)}`;
+      const cuerpo = esLote
+        ? { respuestas }
+        : {
+            precio: respuestas[0].precio,
+            fecha_entrega: respuestas[0].fecha_entrega,
+            notas: respuestas[0].notas
+          };
+
+      try {
+        const respuesta = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(cuerpo)
+        });
+        const datos = await leerJson(respuesta);
+        if (respuesta.ok && datos.exito) {
+          ocultar('form-container');
+          mostrar('exito');
+          return;
+        }
+        errorEl.textContent = datos.error || 'No se pudo enviar la cotización.';
+        errorEl.style.display = 'block';
+      } catch (_error) {
+        errorEl.textContent = 'No se pudo conectar con Innova. Intenta nuevamente.';
+        errorEl.style.display = 'block';
+      } finally {
+        boton.disabled = false;
+        boton.textContent = 'Enviar cotización';
+      }
+    });
+
+    iniciar();
+  </script>
 </body>
 </html>

@@ -148,6 +148,8 @@ def notificar_contrato_creado(cursor, venta_id, datos, cantidad_items=None):
     total = datos.get("total")
     if total is None:
         total = datos.get("total_venta")
+    if total is None:
+        total = datos.get("monto_total")
 
     resumen = [
         f"Contrato: {codigo}",
@@ -197,7 +199,7 @@ def notificar_estado_contrato(cursor, venta_id, nuevo_estado):
     cursor.execute(
         """
         SELECT codigo_venta, nombre_cliente, vendedor_id, vendedor_nombre,
-               sede, total_venta, fecha_entrega
+               sede, monto_total, fecha_entrega
         FROM ventas
         WHERE id = %s;
         """,

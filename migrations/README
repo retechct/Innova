@@ -23,15 +23,27 @@ Comandos
 
 Ver migracion actual:
 
-    alembic current
+    alembic -c migrations/alembic.ini current
 
 Aplicar pendientes:
 
-    alembic upgrade head
+    alembic -c migrations/alembic.ini upgrade head
+
+Despliegue en Render
+--------------------
+
+Usar este Start Command para aplicar las migraciones antes de abrir el servicio:
+
+    bash render-start.sh
+
+`migrations/bootstrap.py` detecta la base heredada de Innova cuando todavia no
+existe `alembic_version`, la marca en la revision compatible y luego ejecuta
+`upgrade head`. Si faltan tablas base, falla de forma explicita y no inicia una
+aplicacion con esquema incompleto.
 
 Crear una revision manual:
 
-    alembic revision -m "descripcion_del_cambio"
+    alembic -c migrations/alembic.ini revision -m "descripcion_del_cambio"
 
 Reglas
 ------

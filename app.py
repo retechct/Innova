@@ -33,12 +33,13 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_jwt_extended import JWTManager
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, NotFound
+from frontend_rules import es_ruta_frontend
 try:
     from flask_compress import Compress
 except ImportError:
@@ -71,7 +72,10 @@ cloudinary.config(
 )
 
 # ─── Aplicación Flask ─────────────────────────────────────────────────────────
-app = Flask(__name__, static_folder='Vendedor', static_url_path='')
+# Los archivos se sirven con rutas explicitas al final del modulo. Desactivar la
+# ruta estatica automatica evita que Flask capture primero URLs SPA como /contacto.
+app = Flask(__name__, static_folder=None)
+app.config['MAX_CONTENT_LENGTH'] = 12 * 1024 * 1024
 app.config['COMPRESS_MIMETYPES'] = [
     'text/html',
     'text/css',
@@ -85,19 +89,41 @@ if Compress:
     Compress(app)
 
 
+_CANONICAL_HOST = os.getenv('CANONICAL_HOST', 'innovamobili.com').strip().lower()
+_CANONICAL_HOST = _CANONICAL_HOST.removeprefix('https://').removeprefix('http://').strip('/')
+
+
+@app.before_request
+def redirigir_render_al_dominio_canonico():
+    """Evita dos sesiones separadas entre onrender.com y el dominio propio."""
+    host = request.host.split(':', 1)[0].lower()
+    if (
+        _CANONICAL_HOST
+        and host.endswith('.onrender.com')
+        and host != _CANONICAL_HOST
+        and request.method in ('GET', 'HEAD')
+        and not request.path.startswith('/api/')
+    ):
+        query = f'?{request.query_string.decode("utf-8")}' if request.query_string else ''
+        return redirect(f'https://{_CANONICAL_HOST}{request.path}{query}', code=308)
+
+
 @app.errorhandler(Exception)
 def manejar_error_api(ex):
+    if isinstance(ex, HTTPException):
+        if request.path.startswith('/api/'):
+            return jsonify({'error': ex.description}), ex.code
+        return ex
     if request.path.startswith('/api/'):
         app.logger.exception("Error no controlado en %s", request.path)
         if os.getenv('DEBUG_API_ERRORS', '').lower() in ('1', 'true', 'yes'):
             return jsonify({'error': str(ex), 'tipo': type(ex).__name__}), 500
         return jsonify({'error': 'Error interno del servidor'}), 500
-    if isinstance(ex, HTTPException):
-        return ex
     raise ex
 
-# Restringir CORS al dominio de producción.
-# En desarrollo local, agregar también: 'http://localhost:5000'
+# Restringir CORS a los dominios configurados.
+# FRONTEND_URLS acepta varios orígenes separados por coma; FRONTEND_URL queda
+# como compatibilidad con la configuración anterior.
 #
 # expose_headers: por defecto el navegador NO deja leer con fetch() ningún
 # header de respuesta que no sea uno de la lista "simple" del spec CORS
@@ -106,9 +132,20 @@ def manejar_error_api(ex):
 # para avisar cuando el LIMIT 150 de seguridad está cortando pedidos
 # activos de verdad — si no se exponen acá, ese aviso llega al navegador
 # pero JavaScript jamás puede verlo.
-CORS(app, origins=[
-    os.getenv('FRONTEND_URL', 'https://innova-4cnn.onrender.com'),
-], expose_headers=['X-Ordenes-Truncado', 'X-Ordenes-Activas-Total'])
+_cors_origins = [
+    origin.strip()
+    for origin in (
+        os.getenv('FRONTEND_URLS')
+        or os.getenv('FRONTEND_URL')
+        or (
+            'https://innovamobili.com,'
+            'https://www.innovamobili.com,'
+            'https://innova-4cnn.onrender.com'
+        )
+    ).split(',')
+    if origin.strip()
+]
+CORS(app, origins=_cors_origins, expose_headers=['X-Ordenes-Truncado', 'X-Ordenes-Activas-Total'])
 
 app.config['JWT_SECRET_KEY']                 = _JWT_SECRET_KEY
 app.config['JWT_ACCESS_TOKEN_EXPIRES']       = timedelta(hours=8)   # jornada laboral completa
@@ -161,6 +198,14 @@ app.register_blueprint(clientes_bp)           # ← sin aprobación
 
 # Aplicar rate limit al endpoint de login
 limiter.limit("10 per minute")(app.view_functions['usuarios.verificar_pin'])
+limiter.limit("10 per minute")(app.view_functions['usuarios.verificar_email_pin'])
+limiter.limit("5 per hour")(app.view_functions['usuarios.registrar_usuario_web'])
+limiter.limit("12 per minute")(app.view_functions['catalogo.leer_voucher'])
+limiter.limit("20 per minute")(app.view_functions['catalogo.upload_voucher'])
+limiter.limit("30 per minute")(app.view_functions['produccion.cotizar_lote'])
+limiter.limit("30 per minute")(app.view_functions['produccion.ver_formulario_cotizacion'])
+limiter.limit("10 per minute")(app.view_functions['produccion.responder_cotizacion'])
+limiter.limit("30 per minute")(app.view_functions['produccion.servir_pdf_oc_publico'])
 
 # ─── Blueprints externos (ya existían antes de la refactorización) ────────────
 # NOTA: routes_kardex.py fue eliminado (julio 2026) — era un blueprint
@@ -173,9 +218,8 @@ app.register_blueprint(inventario_bp)
 init_taller_pool()
 
 # ─── Rutas de infraestructura (sedes, archivos estáticos) ────────────────────
-from flask import jsonify, request
 from database import get_db_connection, release_db_connection
-from auth_middleware import requiere_login, requiere_rol
+from auth_middleware import requiere_rol
 
 
 @app.route('/api/sedes', methods=['GET'])
@@ -186,7 +230,7 @@ def obtener_sedes():
         cursor.execute("SELECT id, nombre, tipo FROM sedes ORDER BY id;")
         sedes = [{'id': s[0], 'nombre': s[1], 'tipo': s[2]} for s in cursor.fetchall()]
         return jsonify(sedes), 200
-    except Exception as e:
+    except Exception:
         app.logger.exception("Error al obtener sedes")
         return jsonify({'error': 'Error al cargar sedes'}), 500
     finally:
@@ -214,7 +258,7 @@ def inicializar_sedes():
             cursor.execute("INSERT INTO sedes (nombre, tipo) VALUES (%s, %s);", (nombre, tipo))
         conexion.commit()
         return jsonify({'mensaje': 'Las 5 sedes operativas han sido creadas con éxito.'}), 201
-    except Exception as e:
+    except Exception:
         if 'conexion' in locals() and conexion: conexion.rollback()
         app.logger.exception("Error al inicializar sedes")
         return jsonify({'error': 'Error al inicializar sedes'}), 500
@@ -239,7 +283,12 @@ def favicon():
 # ← AGREGAR AQUÍ
 @app.route('/<path:filename>')
 def serve_frontend(filename):
-    return send_from_directory('Vendedor', filename)
+    try:
+        return send_from_directory('Vendedor', filename)
+    except NotFound:
+        if es_ruta_frontend(filename):
+            return send_from_directory('Vendedor', 'index.html')
+        raise
 
 
 @app.before_request

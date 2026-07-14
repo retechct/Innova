@@ -67,7 +67,7 @@ async function buscarPedidos() {
   // Si contiene un "@", asumimos que busca por correo como antes
   if (inputVal.includes('@')) {
     try {
-      const res = await fetch(`${API_URL}/api/seguimiento/mis-pedidos?email=${encodeURIComponent(inputVal)}`);
+      const res = await apiFetch(`${API_URL}/api/seguimiento/mis-pedidos`);
       const data = await res.json();
       document.getElementById('ps-loader').style.display = 'none';
   
@@ -172,9 +172,7 @@ async function verDetallePedido(codigo, isDirectSearch = false) {
   document.getElementById('ps-loader').style.display = 'flex';
 
   try {
-    const res = await fetch(
-      `${API_URL}/api/seguimiento/pedido/${codigo}?email=${encodeURIComponent(_psEmailActual)}`
-    );
+    const res = await apiFetch(`${API_URL}/api/seguimiento/pedido/${codigo}`);
     const d = await res.json();
     document.getElementById('ps-loader').style.display = 'none';
 

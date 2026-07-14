@@ -14,8 +14,12 @@ target_metadata = None
 
 
 def _database_url():
-    direct_url = os.getenv("DATABASE_URL")
+    direct_url = (os.getenv("DATABASE_URL") or "").strip()
     if direct_url:
+        if direct_url.startswith("postgres://"):
+            return "postgresql+psycopg2://" + direct_url[len("postgres://"):]
+        if direct_url.startswith("postgresql://"):
+            return "postgresql+psycopg2://" + direct_url[len("postgresql://"):]
         return direct_url
 
     host = os.getenv("DB_HOST")

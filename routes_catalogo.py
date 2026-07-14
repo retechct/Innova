@@ -10,13 +10,19 @@ import re
 import time
 import urllib.error
 import urllib.request
-import cloudinary.uploader
 from flask import Blueprint, jsonify, request
 from database import get_db_connection, release_db_connection, limpiar_foto, cloudinary_upload
 from auth_middleware import requiere_login, requiere_rol
 from sku_utils import generar_sku_maestro, normalizar_sku_maestro
+from voucher_rules import (
+    clasificar_error_gemini,
+    normalizar_montos_pago,
+    validar_clasificacion_pago,
+)
 
 catalogo_bp = Blueprint('catalogo', __name__)
+_gemini_modelos_cache = []
+_gemini_modelos_cache_hasta = 0.0
 
 
 def _parse_json_modelo(texto):
@@ -32,56 +38,25 @@ def _parse_json_modelo(texto):
         return json.loads(match.group(0))
 
 
-def _normalizar_monto(valor):
-    if valor in (None, ''):
-        return None
-    try:
-        return round(float(str(valor).replace(',', '.')), 2)
-    except (TypeError, ValueError):
-        return None
-
-
-def _extraer_texto_responses(data):
-    texto = data.get("output_text")
-    if texto:
-        return texto
-    partes = []
-    for item in data.get("output", []):
-        for content in item.get("content", []):
-            if content.get("type") in ("output_text", "text"):
-                partes.append(content.get("text", ""))
-    return "\n".join(partes)
-
-
-def _llamar_openai_voucher(api_key, payload):
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/responses",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    # Devolver control antes del timeout del worker de Gunicorn en Render.
-    with urllib.request.urlopen(req, timeout=12) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
 def _datos_voucher_desde_json(extraido):
-    monto_bruto = _normalizar_monto(extraido.get('monto_bruto'))
-    comision = _normalizar_monto(extraido.get('comision_pos')) or 0
-    monto_neto = _normalizar_monto(extraido.get('monto_neto'))
-    if monto_bruto is not None and (monto_neto is None or monto_neto > monto_bruto):
-        monto_neto = round(monto_bruto - comision, 2)
-    if monto_bruto is not None and comision > monto_bruto:
-        comision = 0
-        monto_neto = monto_bruto
+    monto_bruto, comision, monto_neto = normalizar_montos_pago(
+        extraido.get('monto_bruto'),
+        extraido.get('comision_pos'),
+        extraido.get('monto_neto'),
+    )
+
+    tipo_pago, confianza, notas = validar_clasificacion_pago(
+        extraido.get('tipo_pago'),
+        extraido.get('entidad'),
+        extraido.get('numero_operacion'),
+        extraido.get('notas'),
+        extraido.get('confianza'),
+    )
 
     return {
         'ok': True,
         'datos': {
-            'tipo_pago': extraido.get('tipo_pago') or None,
+            'tipo_pago': tipo_pago,
             'entidad': extraido.get('entidad') or None,
             'monto_bruto': monto_bruto,
             'comision_pos': comision,
@@ -90,52 +65,18 @@ def _datos_voucher_desde_json(extraido):
             'fecha_pago': extraido.get('fecha_pago') or None,
             'contacto_destino': extraido.get('contacto_destino') or extraido.get('destinatario') or None,
             'moneda': extraido.get('moneda') or 'PEN',
-            'confianza': _normalizar_monto(extraido.get('confianza')),
-            'notas': extraido.get('notas') or '',
+            'confianza': confianza,
+            'notas': notas,
         }
     }
 
 
 def _leer_voucher_automatico(archivo):
-    lectores = {
-        'openai': _leer_voucher_con_openai,
-        'gemini': _leer_voucher_con_gemini,
-    }
-    proveedor = os.getenv('VOUCHER_OCR_PROVIDER', '').strip().lower()
-    if proveedor not in lectores:
-        proveedor = 'gemini' if os.getenv('GEMINI_API_KEY') else 'openai'
-
-    proveedores = [proveedor]
-    alterno = 'gemini' if proveedor == 'openai' else 'openai'
-    clave_alterno = 'GEMINI_API_KEY' if alterno == 'gemini' else 'OPENAI_API_KEY'
-    if os.getenv(clave_alterno):
-        proveedores.append(alterno)
-
-    errores = []
-    for nombre_proveedor in proveedores:
-        archivo.seek(0)
-        resultado = lectores[nombre_proveedor](archivo)
-        if resultado.get('ok'):
-            return resultado
-        errores.append(f"{nombre_proveedor}: {resultado.get('error', 'sin detalle')}")
-
-    print(f"Voucher OCR sin resultado: {' | '.join(errores)}")
-    detalle_errores = ' | '.join(errores).lower()
-    if any(p in detalle_errores for p in ('quota', 'cuota', 'free_tier', 'billing', 'rate limit')):
-        return {
-            'ok': False,
-            'error': 'El lector automatico no tiene cuota disponible en Gemini; registra el voucher manualmente'
-        }
-    if any(p in detalle_errores for p in ('timed out', 'timeout', 'tardo demasiado')):
-        return {
-            'ok': False,
-            'error': 'El lector automatico tardo demasiado; registra el voucher manualmente'
-        }
-
-    return {
-        'ok': False,
-        'error': 'El lector automático no pudo reconocer este comprobante'
-    }
+    archivo.seek(0)
+    resultado = _leer_voucher_con_gemini(archivo)
+    if not resultado.get('ok'):
+        print(f"Voucher OCR Gemini sin resultado: {resultado.get('error', 'sin detalle')}")
+    return resultado
 
 
 def _prompt_voucher_json():
@@ -143,27 +84,33 @@ def _prompt_voucher_json():
         "Lee este voucher/comprobante de pago peruano. Devuelve SOLO JSON válido con estas claves: "
         "tipo_pago, entidad, monto_bruto, comision_pos, monto_neto, numero_operacion, fecha_pago, contacto_destino, "
         "moneda, confianza, notas. Reglas: monto_bruto es el total cobrado al cliente; "
-        "si el comprobante es de POS/Culqi/Izipay/Niubiz/Openpay y muestra VISA, Mastercard, lote, AP, TC, "
-        "PIN verificado o total en voucher impreso, tipo_pago debe ser POS; entidad debe ser Culqi, Izipay, "
+        "si el comprobante es de POS/Culqi/Izipay/Niubiz/Openpay y muestra una señal operativa como lote, "
+        "AP, terminal, PIN verificado o merchant discount, tipo_pago debe ser POS; entidad debe ser Culqi, Izipay, "
         "Niubiz, Openpay o el banco visible; numero_operacion puede ser Ref, Venta ID, ID unico, lote o AP. "
         "si ves comisión POS o merchant discount ponla en comision_pos; monto_neto = monto_bruto - comision_pos. "
         "contacto_destino es la persona/cuenta que recibe el dinero, por ejemplo el valor junto a Contacto, "
         "Destinatario, Beneficiario o Titular; no lo confundas con la app o banco. "
         "Si el nombre del contacto está truncado o enmascarado, igual devuelve el texto visible, por ejemplo Inn **** L. "
-        "Si un campo no se ve, usa null. tipo_pago debe ser POS, Transferencia, Yape, Plin, Efectivo u Otro. "
+        "No clasifiques como POS solo porque aparezca Visa, Mastercard o el nombre de un banco: si es una captura de banca movil, "
+        "Yape, Plin o transferencia, usa Transferencia/Yape/Plin. Si un campo no se ve, usa null. "
+        "tipo_pago debe ser POS, Transferencia, Yape, Plin, Efectivo u Otro. "
         "confianza debe ser número de 0 a 1."
     )
 
 
 def _modelos_gemini_voucher(api_key):
+    global _gemini_modelos_cache, _gemini_modelos_cache_hasta
+    ahora = time.monotonic()
+    if _gemini_modelos_cache and ahora < _gemini_modelos_cache_hasta:
+        return list(_gemini_modelos_cache)
+
     preferidos = [
-        "gemini-2.0-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-2.5-flash",
-        "gemini-flash-latest",
         "gemini-3.5-flash",
-        "gemini-3-flash",
+        "gemini-flash-latest",
         "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3-flash",
     ]
     req = urllib.request.Request(
         "https://generativelanguage.googleapis.com/v1beta/models",
@@ -171,7 +118,7 @@ def _modelos_gemini_voucher(api_key):
         method="GET",
     )
     try:
-        with urllib.request.urlopen(req, timeout=4) as resp:
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
         print(f"No se pudo listar modelos Gemini: {e}")
@@ -187,13 +134,20 @@ def _modelos_gemini_voucher(api_key):
     ordenados = [m for m in preferidos if m in disponibles]
     ordenados += [m for m in disponibles if "flash" in m and m not in ordenados]
     ordenados += [m for m in disponibles if m not in ordenados]
-    return ordenados or preferidos
+    resultado = ordenados or preferidos
+    _gemini_modelos_cache = list(resultado)
+    _gemini_modelos_cache_hasta = ahora + 3600
+    return resultado
 
 
 def _leer_voucher_con_gemini(archivo):
     api_key = os.getenv('GEMINI_API_KEY')
     if not api_key:
-        return {'ok': False, 'error': 'GEMINI_API_KEY no configurada'}
+        return {
+            'ok': False,
+            'error': 'El lector Gemini no esta configurado en el servidor (falta GEMINI_API_KEY)',
+            'status': 503,
+        }
 
     mime = archivo.mimetype or 'image/jpeg'
     if not mime.startswith('image/'):
@@ -203,7 +157,10 @@ def _leer_voucher_con_gemini(archivo):
     archivo.seek(0)
     if not contenido:
         return {'ok': False, 'error': 'Archivo vacío'}
+    if len(contenido) > 8 * 1024 * 1024:
+        return {'ok': False, 'error': 'La imagen supera el limite de 8 MB'}
 
+    limite = time.monotonic() + 12
     model_env = os.getenv("GEMINI_VOUCHER_MODEL", "").strip()
     modelos = [model_env] if model_env else _modelos_gemini_voucher(api_key)
     payload = {
@@ -220,19 +177,17 @@ def _leer_voucher_con_gemini(archivo):
             ]
         }],
         "generationConfig": {
-            "response_mime_type": "application/json",
-            "temperature": 0,
-            "maxOutputTokens": 250
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 512
         }
     }
     data = None
     errores_modelo = []
     try:
         # Mantener toda la lectura por debajo del timeout del worker.
-        limite = time.monotonic() + 26
-        for model in modelos[:4]:
+        for model in modelos[:2]:
             restante = limite - time.monotonic()
-            if restante < 2:
+            if restante < 1.5:
                 break
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             req = urllib.request.Request(
@@ -245,16 +200,20 @@ def _leer_voucher_con_gemini(archivo):
                 method="POST",
             )
             try:
-                with urllib.request.urlopen(req, timeout=min(8, restante)) as resp:
+                with urllib.request.urlopen(req, timeout=min(6, restante)) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     break
             except urllib.error.HTTPError as e:
                 detalle = e.read().decode("utf-8", errors="ignore")[:500]
                 print(f"Gemini voucher OCR HTTPError ({model}): {detalle}")
                 errores_modelo.append(f"{model}: {detalle}")
-                if e.code in (404, 429) and not model_env:
+                detalle_lower = detalle.lower()
+                if e.code == 404 and not model_env:
                     continue
-                raise
+                mensaje, status, reintentar = clasificar_error_gemini(e.code, detalle_lower)
+                if reintentar and not model_env:
+                    continue
+                return {'ok': False, 'error': mensaje, 'status': status}
             except Exception as e:
                 print(f"Gemini voucher OCR error ({model}): {e}")
                 errores_modelo.append(f"{model}: {e}")
@@ -264,24 +223,35 @@ def _leer_voucher_con_gemini(archivo):
     except urllib.error.HTTPError as e:
         detalle = e.read().decode("utf-8", errors="ignore")[:500]
         print(f"Gemini voucher OCR HTTPError: {detalle}")
-        if "API_KEY_INVALID" in detalle or "API key not valid" in detalle:
-            return {'ok': False, 'error': 'GEMINI_API_KEY inválida o revocada'}
-        if "quota" in detalle.lower() or "billing" in detalle.lower():
-            return {'ok': False, 'error': 'Gemini API no tiene cuota o billing disponible'}
-        if "not found" in detalle.lower() or "not supported" in detalle.lower():
-            return {'ok': False, 'error': 'El modelo configurado en GEMINI_VOUCHER_MODEL no está disponible'}
-        return {'ok': False, 'error': 'No se pudo leer el voucher con Gemini'}
+        mensaje, status, _ = clasificar_error_gemini(e.code, detalle)
+        return {'ok': False, 'error': mensaje, 'status': status}
     except Exception as e:
         print(f"Gemini voucher OCR error: {e}")
-        return {'ok': False, 'error': 'No se pudo conectar al lector Gemini'}
+        return {
+            'ok': False,
+            'error': 'No se pudo conectar al lector Gemini; completa el voucher manualmente',
+            'status': 503,
+        }
 
     if data is None:
         print(f"Gemini voucher OCR modelos no disponibles: {' | '.join(errores_modelo)[:500]}")
         if any("timed out" in e.lower() or "timeout" in e.lower() for e in errores_modelo):
-            return {'ok': False, 'error': 'El lector automatico tardo demasiado; registra el voucher manualmente'}
+            return {
+                'ok': False,
+                'error': 'El lector automatico tardo demasiado; registra el voucher manualmente',
+                'status': 504,
+            }
         if any("quota" in e.lower() or "free_tier" in e.lower() or "rate" in e.lower() for e in errores_modelo):
-            return {'ok': False, 'error': 'Gemini API no tiene cuota disponible para los modelos de tu key'}
-        return {'ok': False, 'error': 'No hay un modelo Gemini disponible para leer imágenes'}
+            return {
+                'ok': False,
+                'error': 'Gemini no tiene cuota disponible para los modelos de tu clave',
+                'status': 429,
+            }
+        return {
+            'ok': False,
+            'error': 'No hay un modelo Gemini disponible para leer imagenes',
+            'status': 503,
+        }
 
     try:
         texto = data["candidates"][0]["content"]["parts"][0].get("text", "")
@@ -289,160 +259,16 @@ def _leer_voucher_con_gemini(archivo):
     except Exception as e:
         print(f"No se pudo parsear OCR Gemini: {e}; data={str(data)[:300]}")
         if any("quota" in err.lower() or "free_tier" in err.lower() or "rate" in err.lower() for err in errores_modelo):
-            return {'ok': False, 'error': 'Gemini no tiene cuota disponible para leer vouchers; registra el pago manualmente'}
-        return {'ok': False, 'error': 'Gemini no devolvió datos legibles'}
+            return {
+                'ok': False,
+                'error': 'Gemini no tiene cuota disponible para leer vouchers; registra el pago manualmente',
+                'status': 429,
+            }
+        return {'ok': False, 'error': 'Gemini no devolvio datos legibles', 'status': 422}
 
     resultado = _datos_voucher_desde_json(extraido)
     resultado['datos']['proveedor_ocr'] = 'gemini'
     return resultado
-
-
-def _leer_voucher_con_openai(archivo):
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        return {'ok': False, 'error': 'OPENAI_API_KEY no configurada'}
-
-    mime = archivo.mimetype or 'image/jpeg'
-    if not mime.startswith('image/'):
-        return {'ok': False, 'error': 'Por ahora la lectura automática acepta imágenes. Para PDF, registra manualmente.'}
-
-    contenido = archivo.read()
-    archivo.seek(0)
-    if not contenido:
-        return {'ok': False, 'error': 'Archivo vacío'}
-
-    data_url = f"data:{mime};base64,{base64.b64encode(contenido).decode('ascii')}"
-    voucher_schema = {
-        "type": "object",
-        "properties": {
-            "tipo_pago": {"type": ["string", "null"]},
-            "entidad": {"type": ["string", "null"]},
-            "monto_bruto": {"type": ["number", "null"]},
-            "comision_pos": {"type": ["number", "null"]},
-            "monto_neto": {"type": ["number", "null"]},
-            "numero_operacion": {"type": ["string", "null"]},
-            "fecha_pago": {"type": ["string", "null"]},
-            "contacto_destino": {"type": ["string", "null"]},
-            "moneda": {"type": ["string", "null"]},
-            "confianza": {"type": ["number", "null"]},
-            "notas": {"type": ["string", "null"]},
-        },
-        "required": [
-            "tipo_pago", "entidad", "monto_bruto", "comision_pos", "monto_neto",
-            "numero_operacion", "fecha_pago", "contacto_destino", "moneda", "confianza", "notas"
-        ],
-        "additionalProperties": False,
-    }
-    payload = {
-        "model": os.getenv("OPENAI_VOUCHER_MODEL", "gpt-4.1-mini"),
-        "input": [{
-            "role": "user",
-            "content": [
-                {"type": "input_text", "text": _prompt_voucher_json()},
-                {"type": "input_image", "image_url": data_url}
-            ]
-        }],
-        "text": {
-            "format": {
-                "type": "json_schema",
-                "name": "voucher_pago",
-                "strict": True,
-                "schema": voucher_schema,
-            }
-        },
-        "max_output_tokens": 500,
-    }
-
-    payload_fallback = dict(payload)
-    payload_fallback["text"] = {"format": {"type": "json_object"}}
-
-    try:
-        data = _llamar_openai_voucher(api_key, payload)
-    except urllib.error.HTTPError as e:
-        detalle = e.read().decode("utf-8", errors="ignore")[:500]
-        print(f"OpenAI voucher OCR schema HTTPError: {detalle}")
-        try:
-            data = _llamar_openai_voucher(api_key, payload_fallback)
-        except urllib.error.HTTPError as e2:
-            detalle2 = e2.read().decode("utf-8", errors="ignore")[:500]
-            print(f"OpenAI voucher OCR fallback HTTPError: {detalle2}")
-            if "insufficient_quota" in detalle2 or "billing" in detalle2.lower():
-                return {'ok': False, 'error': 'La API key de OpenAI no tiene saldo o cuota disponible'}
-            if "invalid_api_key" in detalle2 or "Incorrect API key" in detalle2:
-                return {'ok': False, 'error': 'OPENAI_API_KEY inválida o revocada'}
-            return {'ok': False, 'error': 'No se pudo leer el voucher con IA'}
-        except Exception as e2:
-            print(f"OpenAI voucher OCR fallback error: {e2}")
-            return {'ok': False, 'error': 'No se pudo conectar al lector automático'}
-    except Exception as e:
-        print(f"OpenAI voucher OCR error: {e}")
-        return {'ok': False, 'error': 'No se pudo conectar al lector automático'}
-
-    texto = _extraer_texto_responses(data)
-
-    try:
-        extraido = _parse_json_modelo(texto)
-    except Exception as e:
-        print(f"No se pudo parsear OCR voucher: {e}; texto={texto[:300] if texto else ''}")
-        return {'ok': False, 'error': 'La IA no devolvió datos legibles'}
-
-    resultado = _datos_voucher_desde_json(extraido)
-    resultado['datos']['proveedor_ocr'] = 'openai'
-    return resultado
-
-
-def _asegurar_columnas_catalogo(cursor):
-    cursor.execute("""
-        ALTER TABLE catalogo_productos
-            ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'Sofá',
-            ADD COLUMN IF NOT EXISTS fotos_urls TEXT DEFAULT '',
-            ADD COLUMN IF NOT EXISTS config_json JSONB,
-            ADD COLUMN IF NOT EXISTS requiere_tela BOOLEAN DEFAULT FALSE,
-            ADD COLUMN IF NOT EXISTS observaciones TEXT,
-            ADD COLUMN IF NOT EXISTS sku_maestro TEXT,
-            ADD COLUMN IF NOT EXISTS modo_abastecimiento TEXT DEFAULT 'STOCK_DIRECTO'
-    """)
-    cursor.execute("""
-        ALTER TABLE stock_productos
-            ADD COLUMN IF NOT EXISTS sku_maestro TEXT,
-            ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT
-    """)
-    cursor.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_catalogo_sku_maestro_unique
-        ON catalogo_productos (UPPER(sku_maestro))
-        WHERE sku_maestro IS NOT NULL AND sku_maestro != ''
-    """)
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_sku ON stock_productos (UPPER(sku_maestro))")
-
-    # Complete legacy catalog identities and synchronize all linked units.
-    cursor.execute("""
-        SELECT cp.id, COALESCE(cp.categoria, 'Producto'), cp.nombre_modelo,
-               COALESCE(MAX(NULLIF(sp.sku_maestro, '')), '')
-        FROM catalogo_productos cp
-        LEFT JOIN stock_productos sp ON sp.catalogo_id = cp.id
-        WHERE COALESCE(cp.sku_maestro, '') = ''
-        GROUP BY cp.id, cp.categoria, cp.nombre_modelo
-        ORDER BY cp.id
-    """)
-    for catalogo_id, categoria, nombre, sku_stock in cursor.fetchall():
-        try:
-            sku = generar_sku_maestro(
-                cursor, categoria, nombre, sku_stock or None,
-                excluir_catalogo_id=catalogo_id,
-            )
-        except ValueError:
-            sku = generar_sku_maestro(
-                cursor, categoria, nombre, None,
-                excluir_catalogo_id=catalogo_id,
-            )
-        cursor.execute(
-            "UPDATE catalogo_productos SET sku_maestro = %s WHERE id = %s",
-            (sku, catalogo_id),
-        )
-        cursor.execute(
-            "UPDATE stock_productos SET sku_maestro = %s WHERE catalogo_id = %s",
-            (sku, catalogo_id),
-        )
 
 
 def _normalizar_modo_abastecimiento(valor):
@@ -487,8 +313,6 @@ def obtener_catalogo():
 
         conexion = get_db_connection()
         cursor = conexion.cursor()
-        # Asegurar columnas categoria y fotos_urls existen (migración lazy)
-        _asegurar_columnas_catalogo(cursor)
         conexion.commit()
         where, params = [], []
         if q:
@@ -563,7 +387,7 @@ def obtener_catalogo():
 
 
 @catalogo_bp.route('/api/catalogo/plantilla', methods=['POST'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def agregar_plantilla_catalogo():
     """Registra un modelo de la carta (es_plantilla=True) con múltiples fotos y categoría."""
     try:
@@ -592,7 +416,6 @@ def agregar_plantilla_catalogo():
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columnas_catalogo(cursor)
         sku_maestro = generar_sku_maestro(cursor, categoria, nombre)
         cursor.execute("""
             INSERT INTO catalogo_productos
@@ -638,7 +461,6 @@ def editar_plantilla_catalogo(producto_id):
 
         conexion = get_db_connection()
         cursor = conexion.cursor()
-        _asegurar_columnas_catalogo(cursor)
 
         cursor.execute("""
             SELECT foto_url, COALESCE(fotos_urls, ''), config_json,
@@ -767,7 +589,6 @@ def oficializar_producto_stock():
 
         conexion = get_db_connection()
         cursor = conexion.cursor()
-        _asegurar_columnas_catalogo(cursor)
 
         cursor.execute("""
             SELECT id, catalogo_id, COALESCE(sku_maestro, ''),
@@ -938,7 +759,7 @@ def eliminar_plantilla_catalogo(producto_id):
 
 
 @catalogo_bp.route('/api/catalogo/nuevo', methods=['POST'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def agregar_producto_directo():
     """Agrega un producto ya terminado (en stock) directo al catálogo."""
     try:
@@ -963,7 +784,6 @@ def agregar_producto_directo():
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columnas_catalogo(cursor)
         sku_maestro = generar_sku_maestro(cursor, categoria, nombre)
         cursor.execute("""
             INSERT INTO catalogo_productos
@@ -1023,12 +843,17 @@ def upload_voucher():
         return jsonify({'error': 'No se recibió ningún archivo'}), 400
     try:
         archivo = request.files['archivo']
+        if not (archivo.mimetype or '').startswith(('image/', 'application/pdf')):
+            return jsonify({'error': 'Formato no permitido. Usa imagen o PDF.'}), 415
         respuesta_nube = cloudinary_upload(archivo, folder="vouchers_pagos", max_width=1600)
         url = respuesta_nube.get('secure_url')
         return jsonify({'url': url}), 200
     except Exception as e:
         print(f"Error al subir voucher: {e}")
-        return jsonify({'error': str(e)}), 500
+        detalle = str(e).lower()
+        if 'timeout' in detalle or 'timed out' in detalle:
+            return jsonify({'error': 'Cloudinary tardó demasiado al subir el voucher. Intenta nuevamente.'}), 504
+        return jsonify({'error': 'No se pudo subir el voucher a Cloudinary.'}), 502
 
 
 @catalogo_bp.route('/api/voucher/leer', methods=['POST'])
@@ -1036,13 +861,18 @@ def upload_voucher():
 def leer_voucher():
     if 'archivo' not in request.files or request.files['archivo'].filename == '':
         return jsonify({'error': 'No se recibió ningún archivo'}), 400
-    resultado = _leer_voucher_automatico(request.files['archivo'])
+    archivo = request.files['archivo']
+    if not (archivo.mimetype or '').startswith('image/'):
+        return jsonify({'ok': False, 'error': 'Gemini solo puede leer imagenes en este flujo.', 'modo': 'manual'}), 415
+    if request.content_length and request.content_length > 8 * 1024 * 1024:
+        return jsonify({'ok': False, 'error': 'La imagen supera el limite de 8 MB.', 'modo': 'manual'}), 413
+    resultado = _leer_voucher_automatico(archivo)
     if not resultado.get('ok'):
         return jsonify({
             'ok': False,
             'error': resultado.get('error', 'No se pudo leer el voucher'),
             'modo': 'manual'
-        }), 200
+        }), int(resultado.get('status') or 422)
     return jsonify({'ok': True, **resultado['datos']}), 200
 
 # ==========================================

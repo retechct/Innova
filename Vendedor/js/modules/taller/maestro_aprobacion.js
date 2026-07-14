@@ -1,38 +1,41 @@
 // Taller - inventario maestro y aprobaciones
 const _maestroRenderState = {};
-const _MAESTRO_BATCH = 40;
+const _MAESTRO_BATCH = 10;
 let _gestorSugerenciasPorId = {};
 
 function _setMaestroSeccion(id, items, tipoResolver, key) {
     _maestroRenderState[key] = {
         id,
         items: items || [],
+        itemsFiltrados: null,
         tipoResolver,
         offset: 0,
     };
     _renderMaestroSeccion(key, true);
 }
 
-function _renderMaestroSeccion(key, reset = false, filtrados = null) {
+function _renderMaestroSeccion(key, reset = false, filtrados = undefined) {
     const state = _maestroRenderState[key];
     if (!state) return;
     const el = document.getElementById(state.id);
     if (!el) return;
 
-    const lista = filtrados || state.items;
+    if (filtrados !== undefined) state.itemsFiltrados = filtrados;
+    const lista = state.itemsFiltrados || state.items;
     if (reset) state.offset = 0;
-    const nextOffset = filtrados ? lista.length : Math.min(state.offset + _MAESTRO_BATCH, lista.length);
+    const nextOffset = Math.min(state.offset + _MAESTRO_BATCH, lista.length);
     const visibles = lista.slice(0, nextOffset);
 
     el.innerHTML = visibles.map(i => dibujarTarjetaMaterial(i, state.tipoResolver(i))).join('');
     state.offset = nextOffset;
 
-    if (!filtrados && nextOffset < lista.length) {
+    if (nextOffset < lista.length) {
+        const siguienteLote = Math.min(_MAESTRO_BATCH, lista.length - nextOffset);
         el.insertAdjacentHTML('beforeend', `
             <button type="button" onclick="_verMasMaestro('${key}')"
                 style="grid-column:1/-1;border:1.5px dashed #94a3b8;background:#f8fafc;color:#475569;
-                       border-radius:10px;padding:12px;font-size:12px;font-weight:800;cursor:pointer;">
-                Ver mas (${lista.length - nextOffset} restantes)
+                       border-radius:8px;padding:12px;font-size:12px;font-weight:800;cursor:pointer;">
+                Ver ${siguienteLote} más (${lista.length - nextOffset} restantes)
             </button>
         `);
     }
@@ -53,8 +56,10 @@ function _textoMaestroItem(item) {
 async function cargarInventarioTaller() {
     try {
         // Usar los datos del maestro en memoria para asegurar que tengan sku y foto_url
-        if (!maestroMateriales || !maestroMateriales.telas) {
-            if (typeof _refreshMaestro === 'function') await _refreshMaestro();
+        if (!window._maestroMaterialesCargado) {
+            if (typeof _refreshMaestro !== 'function') return;
+            const cargado = await _refreshMaestro({ renderizar: false });
+            if (!cargado) return;
         }
 
         const telas = maestroMateriales.telas || [];

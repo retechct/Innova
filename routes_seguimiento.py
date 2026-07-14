@@ -3,8 +3,9 @@ routes_seguimiento.py — Portal de seguimiento para clientes finales.
 """
 
 import traceback
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 from database import get_db_connection, release_db_connection, limpiar_foto
+from auth_middleware import get_usuario_actual, requiere_rol
 
 seguimiento_bp = Blueprint('seguimiento', __name__)
 
@@ -30,7 +31,7 @@ def _progreso_tickets(cursor, venta_id):
         cursor.execute("""
             SELECT
                 SUM(CASE WHEN t.area_trabajo != 'DESPACHO_CENTRAL' THEN 1 ELSE 0 END),
-                SUM(CASE WHEN t.estado_ticket IN ('Terminado', 'Recogido', 'Listo para Recojo')
+                SUM(CASE WHEN t.estado_ticket IN ('Terminado', 'Recogido', 'Cancelado')
                           AND t.area_trabajo != 'DESPACHO_CENTRAL' THEN 1 ELSE 0 END)
             FROM items_venta i
             LEFT JOIN tickets_produccion t ON i.id = t.item_id
@@ -45,76 +46,102 @@ def _progreso_tickets(cursor, venta_id):
         return {'total': 0, 'terminados': 0, 'porcentaje': 0}
 
 
-@seguimiento_bp.route('/api/seguimiento/mis-pedidos', methods=['GET'])
-def mis_pedidos():
-    email = (request.args.get('email') or '').strip().lower()
-    if not email or '@' not in email:
-        return jsonify({'error': 'Ingresa un correo válido'}), 400
+def _cliente_autenticado(cursor):
+    actor = get_usuario_actual()
+    cursor.execute("""
+        SELECT id, nombre, email, COALESCE(telefono, ''), COALESCE(dni, '')
+        FROM clientes WHERE id = %s
+    """, (int(actor['id']),))
+    return cursor.fetchone()
 
+
+def _filtro_propiedad_cliente():
+    coincidencia_legacy = """
+        ((%s <> '' AND COALESCE(dni_cliente, '') = %s)
+         OR (%s <> '' AND COALESCE(celular_cliente, '') = %s))
+    """
+    return f"(cliente_id = %s OR (cliente_id IS NULL AND {coincidencia_legacy}))"
+
+
+@seguimiento_bp.route('/api/seguimiento/mis-pedidos', methods=['GET'])
+@requiere_rol('Cliente')
+def mis_pedidos():
     conexion = None
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        # Buscar nombre: primero en usuarios (ERP), luego en clientes (landing)
-        nombre_cliente = None
-        cursor.execute(
-            "SELECT nombre FROM usuarios WHERE LOWER(email) = %s LIMIT 1;",
-            (email,)
-        )
-        row = cursor.fetchone()
-        if row:
-            nombre_cliente = row[0]
+        cliente = _cliente_autenticado(cursor)
+        if not cliente:
+            return jsonify({'error': 'Cuenta de cliente no encontrada'}), 404
+        cliente_id, nombre_cliente, email, telefono, dni = cliente
+        filtro = _filtro_propiedad_cliente()
+        params_propiedad = [cliente_id, dni, dni, telefono, telefono]
 
-        if not nombre_cliente:
-            try:
-                cursor.execute(
-                    "SELECT nombre FROM clientes WHERE LOWER(email) = %s LIMIT 1;",
-                    (email,)
-                )
-                row = cursor.fetchone()
-                if row:
-                    nombre_cliente = row[0]
-            except Exception:
-                pass  # la tabla clientes puede no existir aún
-
-        # Buscar ventas por nombre (coincidencia exacta o parcial)
-        ventas = []
-        if nombre_cliente:
-            cursor.execute("""
+        cursor.execute(f"""
                 SELECT id, codigo_venta, nombre_cliente, fecha_emision,
                        fecha_entrega, monto_total, monto_adelanto,
                        COALESCE(estado_general, 'En Producción'), sede
                 FROM ventas
-                WHERE LOWER(nombre_cliente) LIKE LOWER(%s)
+                WHERE {filtro}
                 ORDER BY fecha_emision DESC
                 LIMIT 20;
-            """, (f'%{nombre_cliente}%',))
-            ventas = cursor.fetchall()
+            """, params_propiedad)
+        ventas = cursor.fetchall()
+
+        venta_ids = [v[0] for v in ventas]
+        progreso_por_venta = {}
+        primer_item_por_venta = {}
+        if venta_ids:
+            cursor.execute("""
+                SELECT i.venta_id,
+                       COUNT(t.id) FILTER (WHERE t.area_trabajo != 'DESPACHO_CENTRAL') AS total,
+                       COUNT(t.id) FILTER (
+                           WHERE t.area_trabajo != 'DESPACHO_CENTRAL'
+                             AND t.estado_ticket IN ('Terminado', 'Recogido', 'Cancelado')
+                       ) AS terminados
+                FROM items_venta i
+                LEFT JOIN tickets_produccion t ON t.item_id = i.id
+                WHERE i.venta_id = ANY(%s)
+                GROUP BY i.venta_id
+            """, (venta_ids,))
+            for venta_ref, total, terminados in cursor.fetchall():
+                total = int(total or 0)
+                terminados = int(terminados or 0)
+                progreso_por_venta[venta_ref] = {
+                    'total': total,
+                    'terminados': terminados,
+                    'porcentaje': round(terminados / total * 100) if total else 0,
+                }
+
+            cursor.execute("""
+                SELECT DISTINCT ON (venta_id) venta_id, producto, foto_url
+                FROM items_venta
+                WHERE venta_id = ANY(%s)
+                ORDER BY venta_id, id
+            """, (venta_ids,))
+            primer_item_por_venta = {
+                r[0]: (r[1], r[2]) for r in cursor.fetchall()
+            }
 
         resultado = []
         for v in ventas:
             venta_id = v[0]
-            progreso = _progreso_tickets(cursor, venta_id)
+            progreso = progreso_por_venta.get(
+                venta_id, {'total': 0, 'terminados': 0, 'porcentaje': 0}
+            )
             estado   = _estado_para_cliente(v[7])
             total    = float(v[5] or 0)
             adelanto = float(v[6] or 0)
             saldo    = max(0, total - adelanto)
 
-            thumbnail       = 'imagenes/sin_foto.jpg'
+            thumbnail = 'imagenes/sin_foto.jpg'
             primer_producto = '—'
-            try:
-                cursor.execute(
-                    "SELECT producto, foto_url FROM items_venta WHERE venta_id = %s ORDER BY id LIMIT 1;",
-                    (venta_id,)
-                )
-                item_row = cursor.fetchone()
-                if item_row:
-                    primer_producto = item_row[0] or '—'
-                    thumbnail_raw = limpiar_foto(item_row[1])
-                    thumbnail = thumbnail_raw.split('|')[0] if thumbnail_raw else 'imagenes/sin_foto.jpg'
-            except Exception:
-                pass
+            item_row = primer_item_por_venta.get(venta_id)
+            if item_row:
+                primer_producto = item_row[0] or '—'
+                thumbnail_raw = limpiar_foto(item_row[1])
+                thumbnail = thumbnail_raw.split('|')[0] if thumbnail_raw else 'imagenes/sin_foto.jpg'
 
             resultado.append({
                 'codigo':          v[1],
@@ -138,17 +165,17 @@ def mis_pedidos():
             'total_pedidos':  len(resultado),
         }), 200
 
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No se pudieron cargar tus pedidos'}), 500
     finally:
         if conexion:
             cursor.close(); release_db_connection(conexion)
 
 
 @seguimiento_bp.route('/api/seguimiento/pedido/<codigo>', methods=['GET'])
+@requiere_rol('Cliente')
 def detalle_pedido_cliente(codigo):
-    email  = (request.args.get('email') or '').strip().lower()
     codigo = codigo.upper().strip()
 
     conexion = None
@@ -156,12 +183,19 @@ def detalle_pedido_cliente(codigo):
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        cursor.execute("""
+        cliente = _cliente_autenticado(cursor)
+        if not cliente:
+            return jsonify({'error': 'Cuenta de cliente no encontrada'}), 404
+        cliente_id, _nombre, _email, telefono, dni = cliente
+        filtro = _filtro_propiedad_cliente()
+        params_propiedad = [cliente_id, dni, dni, telefono, telefono]
+
+        cursor.execute(f"""
             SELECT id, codigo_venta, nombre_cliente, fecha_emision, fecha_entrega,
                    monto_total, monto_adelanto, COALESCE(estado_general, 'En Producción'),
                    sede, vendedor_nombre
-            FROM ventas WHERE codigo_venta = %s;
-        """, (codigo,))
+            FROM ventas WHERE codigo_venta = %s AND {filtro};
+        """, [codigo, *params_propiedad])
         venta = cursor.fetchone()
         if not venta:
             return jsonify({'error': 'Pedido no encontrado'}), 404
@@ -273,9 +307,9 @@ def detalle_pedido_cliente(codigo):
             'areas':         areas,
         }), 200
 
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'No se pudo cargar el detalle del pedido'}), 500
     finally:
         if conexion:
             cursor.close(); release_db_connection(conexion)

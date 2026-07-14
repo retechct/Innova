@@ -1,7 +1,8 @@
 // =============================================================
 // INNOVA MOBILI ERP — Configuración Global
-// Para subir a producción, cambia SOLO esta línea:
-const API_URL = "https://innova-4cnn.onrender.com";
+// Usa el mismo dominio desde donde se abre la app. Así funciona igual en
+// Render y en el dominio propio, sin depender de CORS entre dominios.
+const API_URL = window.location.origin;
 // =============================================================
 
 const imagenesSofa = {

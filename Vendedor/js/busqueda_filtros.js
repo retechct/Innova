@@ -430,13 +430,31 @@ async function _entCargarPagina() {
 function _entTarjetasHTML(entregas) {
     let html = '';
     for (const e of entregas) {
-        const saldoCobrado = e.saldo === 0
+        const saldoNumero = Number(e.saldo || 0);
+        const saldo = Number.isFinite(saldoNumero) ? Math.max(0, saldoNumero) : 0;
+        const saldoCobrado = saldo === 0
             ? `<span style="color:#15803d; font-weight:800;">✓ Pagado</span>`
             : `<span style="color:#dc2626; font-weight:800;">
-                S/ ${e.saldo.toFixed(2)} pendiente</span>`;
+                S/ ${saldo.toFixed(2)} pendiente</span>`;
+        const producto = escapeHTML(e.producto || 'Producto sin nombre');
+        const codigo = escapeHTML(e.codigo_venta || 'S/C');
+        const cliente = escapeHTML(e.cliente || 'Cliente sin nombre');
+        const fecha = escapeHTML(e.fecha_entrega_real || 'S/F');
+        const chofer = escapeHTML(e.chofer || 'Sin asignar');
+        const sede = escapeHTML(e.sede || '—');
+        const direccion = escapeHTML(e.direccion || '—');
+        let foto = '';
+        try {
+            const fotoUrl = new URL(String(e.foto_evidencia || ''), window.location.origin);
+            if (['http:', 'https:'].includes(fotoUrl.protocol)) foto = fotoUrl.href;
+        } catch (_error) {
+            foto = '';
+        }
+        const fotoAttr = escapeAttr(foto);
+        const fotoJS = jsStringAttr(foto);
 
         html += `
-        <div style="background:#fff; border:2px solid #86efac; border-radius:14px;
+        <div style="background:#fff; border:2px solid #86efac; border-radius:8px;
             margin-bottom:16px; overflow:hidden;
             box-shadow:0 2px 8px rgba(0,0,0,0.06);">
             <!-- Cabecera verde -->
@@ -447,9 +465,9 @@ function _entTarjetasHTML(entregas) {
                     <div style="font-size:10px; font-weight:900; color:#166534;
                         text-transform:uppercase; letter-spacing:1px;">Entregado</div>
                     <div style="font-size:14px; font-weight:800; color:#0f172a;
-                        margin-top:2px;">${e.producto}</div>
+                        margin-top:2px;">${producto}</div>
                     <div style="font-size:11px; color:#475569; margin-top:1px;">
-                        ${e.codigo_venta} · ${e.cliente}
+                        ${codigo} · ${cliente}
                     </div>
                 </div>
                 <div style="text-align:right;">
@@ -457,7 +475,7 @@ function _entTarjetasHTML(entregas) {
                         font-weight:800; padding:4px 10px; border-radius:20px;
                         margin-bottom:4px;">🎉 ENTREGADO</div>
                     <div style="font-size:10px; color:#64748b;">
-                        ${e.fecha_entrega_real}</div>
+                        ${fecha}</div>
                 </div>
             </div>
 
@@ -468,19 +486,19 @@ function _entTarjetasHTML(entregas) {
                     <div style="color:#64748b; font-size:10px; font-weight:700;
                         text-transform:uppercase;">Chofer</div>
                     <div style="font-weight:700; color:#0f172a;">
-                        ${e.chofer}</div>
+                        ${chofer}</div>
                 </div>
                 <div>
                     <div style="color:#64748b; font-size:10px; font-weight:700;
                         text-transform:uppercase;">Sede</div>
                     <div style="font-weight:700; color:#0f172a;">
-                        ${e.sede || '—'}</div>
+                        ${sede}</div>
                 </div>
                 <div>
                     <div style="color:#64748b; font-size:10px; font-weight:700;
                         text-transform:uppercase;">Dirección</div>
                     <div style="font-weight:600; color:#374151;">
-                        ${e.direccion || '—'}</div>
+                        ${direccion}</div>
                 </div>
                 <div>
                     <div style="color:#64748b; font-size:10px; font-weight:700;
@@ -489,15 +507,15 @@ function _entTarjetasHTML(entregas) {
                 </div>
             </div>
 
-            ${e.foto_evidencia ? `
+            ${foto ? `
             <div style="padding:0 16px 12px;">
                 <div style="font-size:10px; font-weight:700; color:#64748b;
                     text-transform:uppercase; margin-bottom:6px;">
                     📷 Foto de entrega</div>
-                <img src="${e.foto_evidencia}" alt="Evidencia"
+                <img src="${fotoAttr}" alt="Evidencia"
                     style="width:100%; max-width:280px; border-radius:8px;
                         border:1px solid #e2e8f0; cursor:pointer;"
-                    onclick="window.open('${e.foto_evidencia}','_blank')">
+                    onclick="window.open(${fotoJS}, '_blank', 'noopener')">
             </div>` : ''}
         </div>`;
     }
@@ -521,6 +539,14 @@ let _opTodos = [];
 // en un banner visible, para que el corte nunca sea silencioso.
 let _opTruncado         = false;
 let _opTotalActivasReal = 0;
+
+function _opCodigoOrden(orden) {
+    return String(orden?.codigo || orden?.codigo_venta || '');
+}
+
+function _opEstadoOrden(orden) {
+    return String(orden?.estado_general || orden?.estado || '');
+}
 
 async function cargarOrdenesProduccion(contenedor) {
     contenedor.innerHTML = `
@@ -553,9 +579,9 @@ async function cargarOrdenesProduccion(contenedor) {
 }
 
 function _opRenderUI(contenedor) {
-    const estadosDisponibles = [...new Set(_opTodos.map(o => o.estado_general).filter(Boolean))].sort();
+    const estadosDisponibles = [...new Set(_opTodos.map(_opEstadoOrden).filter(Boolean))].sort();
     const opsEstado = estadosDisponibles.map(s =>
-        `<option value="${s}">${s}</option>`
+        `<option value="${escapeAttr(s)}">${escapeHTML(s)}</option>`
     ).join('');
 
     const htmlAvisoTruncado = _opTruncado ? `
@@ -635,10 +661,11 @@ function _opFiltrar() {
     if (!lista) return;
 
     let filtrados = _opTodos.filter(o => {
+        const codigo = _opCodigoOrden(o).toLowerCase();
+        const cliente = String(o.cliente || '').toLowerCase();
         const matchQ = !q ||
-            (o.codigo_venta   || '').toLowerCase().includes(q) ||
-            (o.cliente        || '').toLowerCase().includes(q);
-        const matchE = !estado || o.estado_general === estado;
+            codigo.includes(q) || cliente.includes(q);
+        const matchE = !estado || _opEstadoOrden(o) === estado;
         return matchQ && matchE;
     });
 
@@ -679,21 +706,26 @@ function _opRenderOrdenes(wrapper, ordenes) {
         'DESPACHO_CENTRAL':        'Despacho',
     };
     const ESTADO_BADGE = {
-        'Pendiente':  { bg:'#fef3c7', color:'#b45309', icon:'🟡' },
-        'Bloqueado':  { bg:'#e2e8f0', color:'#64748b', icon:'🔒' },
-        'En Proceso': { bg:'#dbeafe', color:'#1e40af', icon:'🔵' },
-        'Terminado':  { bg:'#dcfce7', color:'#166534', icon:'✅' },
+        'Pendiente':          { bg:'#fef3c7', color:'#b45309', icon:'🟡' },
+        'Pendiente en Telas': { bg:'#fef3c7', color:'#b45309', icon:'🟡' },
+        'En Recojo':          { bg:'#fef9c3', color:'#854d0e', icon:'🚛' },
+        'Recogido':           { bg:'#e0f2fe', color:'#0369a1', icon:'📦' },
+        'Distribuido':        { bg:'#dcfce7', color:'#166534', icon:'✅' },
+        'Bloqueado':          { bg:'#e2e8f0', color:'#64748b', icon:'🔒' },
+        'En Proceso':         { bg:'#dbeafe', color:'#1e40af', icon:'🔵' },
+        'Terminado':          { bg:'#dcfce7', color:'#166534', icon:'✅' },
     };
 
     let html = '';
     for (const orden of ordenes) {
         const pct         = orden.progreso || 0;
         const progresoColor = pct >= 100 ? '#22c55e' : (pct >= 50 ? '#3b82f6' : '#f59e0b');
+        const estadoOrden = _opEstadoOrden(orden);
         const estadoBadge = {
             'Listo':         { bg:'#dcfce7', color:'#166534' },
             'En Producción': { bg:'#dbeafe', color:'#1e40af' },
             'Pendiente':     { bg:'#fef3c7', color:'#b45309' },
-        }[orden.estado_general] || { bg:'#f1f5f9', color:'#475569' };
+        }[estadoOrden] || { bg:'#f1f5f9', color:'#475569' };
 
         let itemsHTML = '';
         (orden.items || []).forEach(item => {
@@ -701,19 +733,27 @@ function _opRenderOrdenes(wrapper, ordenes) {
                 .filter(t => t.area !== 'DESPACHO_CENTRAL')
                 .map(t => {
                     const b = ESTADO_BADGE[t.estado] || { bg:'#f1f5f9', color:'#64748b', icon:'?' };
-                    const nombre = AREA_NOMBRES[t.area] || t.area.replace(/_/g,' ');
+                    const area = String(t.area || 'Sin área');
+                    const nombre = AREA_NOMBRES[area] || area.replace(/_/g,' ');
+                    if (t.es_logistica) {
+                        const insumo = t.insumo_nombre ? ` · ${escapeHTML(t.insumo_nombre)}` : '';
+                        return `<span title="Trazabilidad de tela" style="font-size:10px; background:${b.bg}; color:${b.color}; padding:5px 8px; border-radius:8px; font-weight:800; white-space:normal; display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px; line-height:1.4;">
+                                    ${b.icon} Tela${insumo}
+                                    <span style="font-weight:500; opacity:0.9;">${renderTrazabilidadTela(t)}</span>
+                                </span>`;
+                    }
                     return `<span style="font-size:10px; background:${b.bg}; color:${b.color}; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap;">
-                                ${b.icon} ${nombre}
-                                ${t.trabajador !== 'Sin asignar' ? `<span style="opacity:0.7">· ${t.trabajador}</span>` : ''}
+                                ${b.icon} ${escapeHTML(nombre)}
+                                ${t.trabajador && t.trabajador !== 'Sin asignar' ? `<span style="opacity:0.7">· ${escapeHTML(t.trabajador)}</span>` : ''}
                             </span>`;
                 }).join('');
 
             const hayTickets = item.tickets && item.tickets.filter(t => t.area !== 'DESPACHO_CENTRAL').length > 0;
             itemsHTML += `
                 <div style="border-bottom:1px solid #f1f5f9; padding:8px 0; display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
-                    <img src="${item.foto}" alt="" style="width:40px; height:40px; border-radius:6px; object-fit:cover; border:1px solid #e2e8f0; flex-shrink:0;" onerror="this.src='imagenes/sin_foto.jpg'">
+                    <img src="${escapeAttr(item.foto || 'imagenes/sin_foto.jpg')}" alt="" style="width:40px; height:40px; border-radius:6px; object-fit:cover; border:1px solid #e2e8f0; flex-shrink:0;" onerror="this.src='imagenes/sin_foto.jpg'">
                     <div style="flex:1; min-width:0;">
-                        <div style="font-size:12px; font-weight:800; color:#0f172a; margin-bottom:5px;">${item.producto}</div>
+                        <div style="font-size:12px; font-weight:800; color:#0f172a; margin-bottom:5px;">${escapeHTML(item.producto)}</div>
                         ${hayTickets ? `<div style="display:flex; gap:5px; flex-wrap:wrap;">${ticketsHTML}</div>` : `<span style="font-size:11px; color:#94a3b8;">Sin tickets de producción</span>`}
                     </div>
                     <button onclick="abrirNotaOrden(${item.tickets && item.tickets[0] ? item.tickets[0].id : 0})"
@@ -729,14 +769,14 @@ function _opRenderOrdenes(wrapper, ordenes) {
             <div style="background:#f8fafc; padding:14px 18px; border-bottom:1px solid #e2e8f0; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
                 <div style="flex:1; min-width:0;">
                     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
-                        <span style="font-size:13px; font-weight:900; color:#0f172a;">${orden.codigo || orden.codigo_venta}</span>
-                        <span style="font-size:11px; background:${estadoBadge.bg}; color:${estadoBadge.color}; padding:2px 8px; border-radius:20px; font-weight:800;">${orden.estado_general || '—'}</span>
+                        <span style="font-size:13px; font-weight:900; color:#0f172a;">${escapeHTML(_opCodigoOrden(orden))}</span>
+                        <span style="font-size:11px; background:${estadoBadge.bg}; color:${estadoBadge.color}; padding:2px 8px; border-radius:20px; font-weight:800;">${escapeHTML(estadoOrden || '—')}</span>
                     </div>
                     <div style="font-size:12px; color:#475569;">
-                        <b>${orden.cliente}</b> &nbsp;·&nbsp;
-                        <i class="fa-solid fa-calendar-days" style="color:#94a3b8;"></i> Entrega: <b>${orden.fecha_entrega || orden.entrega || 'S/F'}</b>
-                        ${orden.vendedor ? `&nbsp;·&nbsp; <i class="fa-solid fa-user" style="color:#94a3b8;"></i> ${orden.vendedor}` : ''}
-                        ${orden.sede ? `&nbsp;·&nbsp; <i class="fa-solid fa-store" style="color:#94a3b8;"></i> ${orden.sede}` : ''}
+                        <b>${escapeHTML(orden.cliente)}</b> &nbsp;·&nbsp;
+                        <i class="fa-solid fa-calendar-days" style="color:#94a3b8;"></i> Entrega: <b>${escapeHTML(orden.fecha_entrega || orden.entrega || 'S/F')}</b>
+                        ${orden.vendedor ? `&nbsp;·&nbsp; <i class="fa-solid fa-user" style="color:#94a3b8;"></i> ${escapeHTML(orden.vendedor)}` : ''}
+                        ${orden.sede ? `&nbsp;·&nbsp; <i class="fa-solid fa-store" style="color:#94a3b8;"></i> ${escapeHTML(orden.sede)}` : ''}
                     </div>
                 </div>
                 <div style="min-width:160px; flex-shrink:0;">

@@ -14,21 +14,18 @@ Rutas:
   GET  /api/inventario/exportar          → Excel (.xlsx) completo, productos y piezas juntos
 """
 
-import os
-import csv
 import io
 from datetime import datetime
 import pytz
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from flask import Blueprint, request, jsonify, Response, send_file
+from flask import Blueprint, request, jsonify, send_file
 from database import get_db_connection, release_db_connection
-from auth_middleware import requiere_login, requiere_rol
+from auth_middleware import get_usuario_actual, requiere_login, requiere_rol
 from sku_utils import generar_sku_maestro, normalizar_sku_maestro
 
 inventario_bp = Blueprint('inventario', __name__)
 tz_peru = pytz.timezone('America/Lima')
-_schema_fotos_adicionales_listo = False
 
 # Roles autorizados para modificar stock
 ROLES_INVENTARIO = ('Admin', 'Jefe_Taller')
@@ -81,64 +78,14 @@ def _verificar_rol(rol):
     return rol in ROLES_INVENTARIO
 
 
-def _asegurar_columna_fotos_adicionales():
-    """Añade fotos_adicionales a stock_productos y stock_piezas si no existen."""
-    global _schema_fotos_adicionales_listo
-    if _schema_fotos_adicionales_listo:
-        return
-    conn = None
-    cur = None
-    try:
-        conn = get_db_connection()
-        conn.autocommit = True
-        cur = conn.cursor()
-        cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
-        cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS observaciones TEXT;")
-        cur.execute("ALTER TABLE stock_productos ADD COLUMN IF NOT EXISTS sku_maestro TEXT;")
-        cur.execute("ALTER TABLE stock_piezas ADD COLUMN IF NOT EXISTS fotos_adicionales TEXT;")
-        cur.execute("ALTER TABLE stock_piezas ADD COLUMN IF NOT EXISTS foto_url TEXT;")
-        cur.execute("ALTER TABLE catalogo_productos ADD COLUMN IF NOT EXISTS sku_maestro TEXT;")
-        cur.execute("ALTER TABLE catalogo_productos ADD COLUMN IF NOT EXISTS modo_abastecimiento TEXT DEFAULT 'STOCK_DIRECTO';")
-        # Índices de performance para queries frecuentes
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_nombre ON stock_productos (LOWER(nombre_modelo));")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_sede ON stock_productos (sede_id);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_prod_sku ON stock_productos (UPPER(sku_maestro));")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_piezas_sku ON stock_piezas (sku_maestro);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_stock_piezas_sede ON stock_piezas (sede_id);")
-
-        # Backfill legacy whole products once. Existing unit barcodes remain intact.
-        cur.execute("""
-            SELECT DISTINCT categoria, nombre_modelo, COALESCE(observaciones, ''), catalogo_id
-            FROM stock_productos
-            WHERE COALESCE(sku_maestro, '') = ''
-            ORDER BY categoria, nombre_modelo
-        """)
-        grupos_sin_sku = cur.fetchall()
-        for categoria, nombre_modelo, observaciones, catalogo_id in grupos_sin_sku:
-            datos_sku = {
-                'categoria': categoria,
-                'nombre_modelo': nombre_modelo,
-                'observaciones': observaciones,
-                'catalogo_id': catalogo_id,
-            }
-            sku_maestro = _resolver_sku_producto(cur, datos_sku)
-            cur.execute("""
-                UPDATE stock_productos
-                   SET sku_maestro = %s
-                 WHERE categoria = %s
-                   AND LOWER(nombre_modelo) = LOWER(%s)
-                   AND COALESCE(observaciones, '') = %s
-                   AND COALESCE(sku_maestro, '') = ''
-            """, (sku_maestro, categoria, nombre_modelo, observaciones))
-        _schema_fotos_adicionales_listo = True
-    except Exception as e:
-        print(f"⚠️  _asegurar_columna_fotos_adicionales: {e}")
-        _schema_fotos_adicionales_listo = True # Don't retry
-    finally:
-        if cur: cur.close()
-        if conn:
-            conn.autocommit = False
-            release_db_connection(conn)
+def _datos_con_actor(datos):
+    """Ignora cualquier identidad enviada por el cliente y usa el JWT."""
+    actor = get_usuario_actual()
+    resultado = dict(datos or {})
+    resultado['usuario_id'] = int(actor['id'])
+    resultado['usuario_nombre'] = actor.get('nombre', '')
+    resultado['usuario_rol'] = actor.get('rol', '')
+    return resultado
 
 
 def _generar_codigo(cur, prefijo, tabla_col):
@@ -263,7 +210,6 @@ def _obtener_foto_maestro(cur, categoria, nombre_modelo):
 @inventario_bp.route('/api/inventario/resumen', methods=['GET'])
 @requiere_login
 def resumen_productos():
-    _asegurar_columna_fotos_adicionales()
     categoria = request.args.get('categoria', '')
     q         = request.args.get('q', '').strip().lower()
     sede_id   = request.args.get('sede_id', '')
@@ -630,7 +576,6 @@ def unidades_piezas_disponibles_por_sku(sku_maestro):
 @inventario_bp.route('/api/inventario/buscar/<barcode>', methods=['GET'])
 @requiere_login
 def buscar_por_barcode(barcode):
-    _asegurar_columna_fotos_adicionales()
     conn = None
     try:
         conn = _conn(); cur = conn.cursor()
@@ -848,15 +793,11 @@ def buscar_por_barcode(barcode):
 # 4. REGISTRAR PRODUCTO ENTERO
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/producto/nuevo', methods=['POST'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def registrar_producto():
-    _asegurar_columna_fotos_adicionales()
-    data = request.json or {}
+    data = _datos_con_actor(request.json)
 
-    if not _verificar_rol(data.get('usuario_rol', '')):
-        return jsonify({'error': 'Sin permisos. Solo Admin o Jefe de Taller.'}), 403
-
-    required = ['nombre_modelo', 'categoria', 'sede_id', 'usuario_id']
+    required = ['nombre_modelo', 'categoria', 'sede_id']
     missing  = [f for f in required if not data.get(f)]
     if missing:
         return jsonify({'error': f'Campos faltantes: {", ".join(missing)}'}), 400
@@ -952,15 +893,11 @@ def registrar_producto():
 # 5. REGISTRAR PIEZA A MEDIDA
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/pieza/nueva', methods=['POST'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def registrar_pieza():
-    _asegurar_columna_fotos_adicionales()
-    data = request.json or {}
+    data = _datos_con_actor(request.json)
 
-    if not _verificar_rol(data.get('usuario_rol', '')):
-        return jsonify({'error': 'Sin permisos. Solo Admin o Jefe de Taller.'}), 403
-
-    required = ['sku_maestro', 'nombre_modelo', 'categoria', 'forma', 'sede_id', 'usuario_id']
+    required = ['sku_maestro', 'nombre_modelo', 'categoria', 'forma', 'sede_id']
     missing  = [f for f in required if not data.get(f)]
     if missing:
         return jsonify({'error': f'Campos faltantes: {", ".join(missing)}'}), 400
@@ -1025,7 +962,7 @@ def registrar_pieza():
 # 6. CAMBIAR ESTADO (Traslado, Venta, Baja, Reserva, etc.)
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/<tipo>/<int:reg_id>/estado', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def cambiar_estado(tipo, reg_id):
     """
     tipo: 'producto' o 'pieza'
@@ -1045,9 +982,7 @@ def cambiar_estado(tipo, reg_id):
     if tipo not in ('producto', 'pieza'):
         return jsonify({'error': 'tipo debe ser producto o pieza'}), 400
 
-    data = request.json or {}
-    if not _verificar_rol(data.get('usuario_rol', '')):
-        return jsonify({'error': 'Sin permisos. Solo Admin o Jefe de Taller.'}), 403
+    data = _datos_con_actor(request.json)
 
     tabla = 'stock_productos' if tipo == 'producto' else 'stock_piezas'
     conn  = None
@@ -1277,7 +1212,6 @@ def unidades_disponibles_por_catalogo(catalogo_id):
 
     Query param opcional:  ?sede_id=3  → filtrar por tienda
     """
-    _asegurar_columna_fotos_adicionales()
     sede_id = request.args.get('sede_id', '')
     conn = None
     try:
@@ -1419,29 +1353,8 @@ def unidades_modelo():
 # VENTA DIRECTA DESDE STOCK EN TIENDA
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _asegurar_tabla_ventas_tienda(cur):
-    """Crea la tabla ventas_tienda si no existe (migración lazy)."""
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS ventas_tienda (
-            id              SERIAL PRIMARY KEY,
-            fecha           TIMESTAMP DEFAULT NOW(),
-            usuario_id      INTEGER,
-            usuario_nombre  VARCHAR(120),
-            tipo_registro   VARCHAR(20) DEFAULT 'producto',  -- 'producto' o 'pieza'
-            registro_id     INTEGER NOT NULL,                -- id en stock_productos o stock_piezas
-            codigo_barra    VARCHAR(80),
-            nombre_producto VARCHAR(200),
-            categoria       VARCHAR(80),
-            foto_url        TEXT,
-            sede_nombre     VARCHAR(120),
-            precio_venta    NUMERIC(10,2) NOT NULL,
-            observaciones   TEXT
-        );
-    """)
-
-
 @inventario_bp.route('/api/inventario/venta-directa', methods=['POST'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller', 'Vendedor')
 def venta_directa_tienda():
     """
     Registra una venta directa de un producto de stock de tienda.
@@ -1462,7 +1375,7 @@ def venta_directa_tienda():
         "observaciones":   ""
     }
     """
-    data = request.json or {}
+    data = _datos_con_actor(request.json)
 
     tipo         = data.get('tipo', 'producto')
     registro_id  = data.get('registro_id')
@@ -1487,7 +1400,7 @@ def venta_directa_tienda():
 
         # Verificar que la unidad existe y está disponible
         cur.execute(
-            f"SELECT estado, sede_id, codigo_barra FROM {tabla} WHERE id = %s",
+            f"SELECT estado, sede_id, codigo_barra FROM {tabla} WHERE id = %s FOR UPDATE",
             (registro_id,)
         )
         row = cur.fetchone()
@@ -1502,9 +1415,14 @@ def venta_directa_tienda():
 
         # Marcar como Vendido en la tabla de stock
         cur.execute(
-            f"UPDATE {tabla} SET estado = 'Vendido', actualizado_en = NOW() WHERE id = %s",
+            f"""UPDATE {tabla}
+                   SET estado = 'Vendido', actualizado_en = NOW()
+                 WHERE id = %s AND estado = 'Disponible'""",
             (registro_id,)
         )
+        if cur.rowcount != 1:
+            conn.rollback()
+            return jsonify({'error': 'La unidad fue tomada por otra venta. Actualiza el inventario.'}), 409
 
         # Registrar en historial_inventario (para trazabilidad)
         _registrar_historial(
@@ -1518,7 +1436,6 @@ def venta_directa_tienda():
         )
 
         # Guardar en ventas_tienda
-        _asegurar_tabla_ventas_tienda(cur)
         cur.execute("""
             INSERT INTO ventas_tienda
                 (usuario_id, usuario_nombre, tipo_registro, registro_id,
@@ -1555,7 +1472,7 @@ def venta_directa_tienda():
 # AJUSTAR CANTIDAD DE STOCK (agregar o quitar unidades de un modelo/sede)
 # ─────────────────────────────────────────────────────────────────────────────
 @inventario_bp.route('/api/inventario/stock-producto/cantidad', methods=['PATCH'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def ajustar_cantidad_stock():
     """
     Ajusta la cantidad disponible de un modelo en una sede.
@@ -1574,9 +1491,8 @@ def ajustar_cantidad_stock():
         "usuario_nombre": "Carlos"
     }
     """
-    _asegurar_columna_fotos_adicionales()
-    data = request.json or {}
-    required = ['nombre_modelo', 'categoria', 'sede_id', 'cantidad_nueva', 'usuario_id']
+    data = _datos_con_actor(request.json)
+    required = ['nombre_modelo', 'categoria', 'sede_id', 'cantidad_nueva']
     missing  = [f for f in required if data.get(f) is None]
     if missing:
         return jsonify({'error': f'Campos faltantes: {", ".join(missing)}'}), 400
@@ -1783,7 +1699,7 @@ def ajustar_cantidad_stock():
 
 
 @inventario_bp.route('/api/inventario/producto/editar', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def editar_producto_inventario():
     """
     Edita los datos (nombre, categoría, observaciones) de un modelo agrupado
@@ -1821,9 +1737,9 @@ def editar_producto_inventario():
     sedes, y también a catalogo_productos si el modelo está enlazado a la
     carta (catalogo_id).
     """
-    data = request.json or {}
+    data = _datos_con_actor(request.json)
 
-    required = ['categoria', 'nombre_modelo', 'nuevo_nombre', 'nueva_categoria', 'usuario_id']
+    required = ['categoria', 'nombre_modelo', 'nuevo_nombre', 'nueva_categoria']
     missing  = [f for f in required if data.get(f) in (None, '')]
     if missing:
         return jsonify({'error': f'Campos faltantes: {", ".join(missing)}'}), 400
@@ -1915,7 +1831,6 @@ def listar_ventas_tienda():
     try:
         conn = _conn()
         cur  = conn.cursor()
-        _asegurar_tabla_ventas_tienda(cur)
         conn.commit()
 
         conds  = []

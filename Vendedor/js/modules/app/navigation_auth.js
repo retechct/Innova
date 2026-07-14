@@ -161,59 +161,26 @@ function changeView(view) {
     }
 }
 
-/**
- * NUEVO: Carga las sedes y usuarios directamente desde Neon SQL
- */
-async function cargarDatosInicialesLogin() {
-    try {
-        // 1. Cargar Sedes (fetch directo: se llama antes del login, sin token)
-        const resSedes = await fetch(`${API_URL}/api/sedes`);
-        const sedes = await resSedes.json();
-        const selectSede = document.getElementById('login-tienda');
-        
-        if (selectSede) {
-            selectSede.innerHTML = '<option value="">-- Selecciona Sede --</option>';
-            sedes.forEach(s => {
-                selectSede.innerHTML += `<option value="${s.id}">${s.nombre}</option>`;
-            });
-        }
-
-        // 2. Cargar Usuarios (fetch directo: se llama antes del login, sin token)
-        const resUser = await fetch(`${API_URL}/api/usuarios`);
-        const usuarios = await resUser.json();
-        const selectUser = document.getElementById('login-usuario');
-        if (selectUser) {
-            selectUser.innerHTML = '<option value="">-- Elige tu nombre --</option>';
-            usuarios.forEach(u => {
-                selectUser.innerHTML += `<option value="${u.id}">${u.nombre} (${u.rol})</option>`;
-            });
-            
-            // Ocultar selector de tienda si no es Vendedor
-            selectUser.addEventListener('change', (e) => {
-                const selectedOpt = e.target.options[e.target.selectedIndex];
-                const selectTienda = document.getElementById('login-tienda');
-                if (selectTienda) {
-                    if (selectedOpt.text.includes('(Vendedor)')) {
-                        selectTienda.style.display = '';
-                    } else {
-                        selectTienda.style.display = 'none';
-                        selectTienda.value = '';
-                    }
-                }
-            });
-        }
-    } catch (error) {
-        console.error("No hay conexión con el servidor para cargar usuarios", error);
-    }
-}
-
 // ROLES_ERP definido en config.js
 
 function verificarSesionExistente() {
     const sesionGuardada = localStorage.getItem('usuarioInnova');
-    if (!sesionGuardada) return;
+    const tokenGuardado = localStorage.getItem('innova_token');
+    if (!sesionGuardada || !tokenGuardado) {
+        if (sesionGuardada && !tokenGuardado) localStorage.removeItem('usuarioInnova');
+        usuarioActivo = null;
+        return;
+    }
 
-    usuarioActivo = JSON.parse(sesionGuardada);
+    try {
+        usuarioActivo = JSON.parse(sesionGuardada);
+    } catch (_error) {
+        localStorage.removeItem('usuarioInnova');
+        localStorage.removeItem('innova_token');
+        localStorage.removeItem('innova_refresh_token');
+        usuarioActivo = null;
+        return;
+    }
 
     // Clientes y roles no autorizados NO entran al panel ERP
     if (!ROLES_ERP.includes(usuarioActivo.rol)) {
@@ -224,91 +191,6 @@ function verificarSesionExistente() {
     document.getElementById('pantalla-login').style.display = 'none';
     configurarInterfazPorRol();
     // El ruteo real lo hará init() una vez cargue los productos
-}
-
-async function entrarAlSistema() {
-    const usuarioId = document.getElementById('login-usuario').value;
-    const pin = document.getElementById('login-pin').value;
-    
-    // Capturamos la tienda que seleccionó en el dropdown
-    const tiendaSelect = document.getElementById('login-tienda');
-    const nombreTienda = tiendaSelect ? tiendaSelect.options[tiendaSelect.selectedIndex].text : 'No especificada';
-
-    if (!usuarioId || !pin) {
-        return Swal.fire('Error', 'Selecciona tu nombre y pon tu PIN.', 'warning');
-    }
-
-    try {
-        const response = await fetch(`${API_URL}/api/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                usuario_id: usuarioId, 
-                pin: pin,
-                sede_id: tiendaSelect.value 
-            })
-        });
-
-        const result = await response.json();
-
-        if (result.exito) {
-            usuarioActivo = result.usuario;
-            
-            // SEGURIDAD: Clientes no pueden entrar al panel ERP
-            // ROLES_ERP viene de config.js — no redeclarar aquí
-            if (!ROLES_ERP.includes(usuarioActivo.rol)) {
-                return Swal.fire('Acceso Denegado', 'Tu cuenta no tiene acceso al panel interno.', 'warning');
-            }
-
-            // Agregamos la tienda y la hora al perfil del usuario
-            usuarioActivo.sede_id = tiendaSelect.value;
-            usuarioActivo.tienda = nombreTienda;
-            usuarioActivo.horaLogin = new Date().toLocaleTimeString();
-            
-            // FIX-1: Guardamos el token en localStorage para que sobreviva recargas
-            if (result.token)         localStorage.setItem('innova_token', result.token);
-            if (result.refresh_token) localStorage.setItem('innova_refresh_token', result.refresh_token);
-            
-            // Guardamos todo junto en la memoria del navegador
-            localStorage.setItem('usuarioInnova', JSON.stringify(usuarioActivo));
-
-            // Ocultamos el login
-            document.getElementById('pantalla-login').style.display = 'none';
-            
-            configurarInterfazPorRol();
-            mostrarUsuarioEnHeader();
-
-            // Lógica de ruteo inicial después del login
-            if (usuarioActivo.rol === 'Operario' || usuarioActivo.rol === 'Jefe_Taller' || usuarioActivo.rol === 'Chofer') {
-                changeView('taller');
-            } else {
-                if (typeof cargarDatosVentaIniciales === 'function') {
-                    const ok = await cargarDatosVentaIniciales();
-                    if (!ok) return;
-                }
-                changeView('catalogo');
-            }
-
-            // Solo mostrar tienda si es vendedor
-            let textoBienvenida = `Rol: ${usuarioActivo.rol}`;
-            if (usuarioActivo.rol === 'Vendedor') {
-                textoBienvenida += ` | Sede: ${usuarioActivo.tienda}`;
-            }
-
-            Swal.fire({
-                title: `¡Hola, ${usuarioActivo.nombre}!`,
-                text: textoBienvenida,
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false
-            });
-        } else {
-            Swal.fire('Acceso Denegado', 'El PIN es incorrecto.', 'error');
-            document.getElementById('login-pin').value = '';
-        }
-    } catch (error) {
-        Swal.fire('Error', 'No hay conexión con el servidor Python.', 'error');
-    }
 }
 
 // ── Usuario activo en el header del panel ─────────────────────────
@@ -328,8 +210,11 @@ function mostrarUsuarioEnHeader() {
         'Jefe_Taller': 'Jefe Taller',
         'ALMACEN':     'Almacén',
     };
-    const rolLabel = ROL_LABELS[usuarioActivo.rol] || usuarioActivo.rol;
-    const nombre   = usuarioActivo.nombre.split(' ')[0];
+    const rolLabel = String(ROL_LABELS[usuarioActivo.rol] || usuarioActivo.rol || 'Usuario');
+    const nombreCompleto = String(usuarioActivo.nombre || 'Usuario').trim() || 'Usuario';
+    const nombre = nombreCompleto.split(/\s+/)[0];
+    const nombreHTML = escapeHTML(nombre);
+    const rolHTML = escapeHTML(rolLabel);
 
     const wrap = document.createElement('div');
     wrap.id = 'header-user-info';
@@ -339,15 +224,15 @@ function mostrarUsuarioEnHeader() {
     `;
     wrap.innerHTML = `
         <div style="text-align:right; line-height:1.3;">
-            <div style="font-size:13px; font-weight:600; color:var(--text, #1e293b);">${nombre}</div>
-            <div style="font-size:10px; color:var(--text-muted, #94a3b8); letter-spacing:0.05em; text-transform:uppercase;">${rolLabel}</div>
+            <div style="font-size:13px; font-weight:600; color:var(--text, #1e293b);">${nombreHTML}</div>
+            <div style="font-size:10px; color:var(--text-muted, #94a3b8); letter-spacing:0.05em; text-transform:uppercase;">${rolHTML}</div>
         </div>
         <div style="
             width:34px; height:34px; border-radius:50%;
             background: linear-gradient(135deg, var(--primary,#2d5a27), var(--accent,#d4af37));
             display:flex; align-items:center; justify-content:center;
             font-size:14px; font-weight:700; color:#fff; flex-shrink:0;
-        ">${nombre.charAt(0).toUpperCase()}</div>
+        ">${escapeHTML(nombre.charAt(0).toUpperCase())}</div>
     `;
     slot.appendChild(wrap);
 }

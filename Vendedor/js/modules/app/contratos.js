@@ -824,7 +824,7 @@ async function gestionarEstadoVenta(ventaId, estadoActual) {
         inputOptions: {
             'Estados': {
                 'Pendiente': 'Marcar como Pendiente',
-                'En producción': 'Marcar como En Producción',
+                'En Producción': 'Marcar como En Producción',
                 'Listo': 'Marcar como Listo',
                 'Despachado': 'Marcar como Despachado',
                 'Entregado': 'Marcar como Entregado'
@@ -1032,7 +1032,12 @@ async function abrirModalLote() {
             return Swal.fire('Sin pendientes', 'No hay materiales pendientes asignados a un proveedor.', 'info');
         }
 
-        const opcionesProv = proveedores.map(p => `<option value="${p.proveedor_id}">${p.proveedor_nombre} (${p.items.length} items)</option>`).join('');
+        const opcionesProv = proveedores.map(p => {
+            const proveedorId = Number(p.proveedor_id);
+            if (!Number.isInteger(proveedorId) || proveedorId <= 0) return '';
+            const cantidadItems = Array.isArray(p.items) ? p.items.length : 0;
+            return `<option value="${proveedorId}">${escapeHTML(p.proveedor_nombre || 'Sin nombre')} (${cantidadItems} items)</option>`;
+        }).join('');
 
         const { value: provId } = await Swal.fire({
             title: 'Cotización por lote',
@@ -1050,16 +1055,27 @@ async function abrirModalLote() {
         if (!provId) return;
         const proveedorSelec = proveedores.find(p => p.proveedor_id == provId);
 
-        let itemsHtml = proveedorSelec.items.map((item, idx) => `
+        let itemsHtml = proveedorSelec.items.map((item, idx) => {
+            let foto = 'imagenes/sin_foto.jpg';
+            try {
+                const candidata = new URL(String(item.foto_url || foto), window.location.origin);
+                if (['http:', 'https:'].includes(candidata.protocol)) foto = candidata.href;
+            } catch (_error) {
+                foto = 'imagenes/sin_foto.jpg';
+            }
+            const cantidad = Number(item.cantidad);
+            const cantidadVisible = Number.isFinite(cantidad) ? cantidad : 0;
+            return `
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; text-align:left; background:#f8fafc; padding:8px; border-radius:6px;">
                 <input type="checkbox" id="chk-lote-${idx}" class="chk-lote-item" value="${idx}" checked style="width:18px;height:18px;">
-                <img src="${item.foto_url || 'imagenes/sin_foto.jpg'}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;">
+                <img src="${escapeAttr(foto)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;">
                 <div style="line-height:1.2;">
-                    <strong style="font-size:13px;">${item.insumo_nombre}</strong><br>
-                    <span style="font-size:11px;color:#64748b;">SKU: ${item.sku || 'N/A'} | Cant: ${item.cantidad || 0} ${item.unidad || ''}</span>
+                    <strong style="font-size:13px;">${escapeHTML(item.insumo_nombre || 'Material sin nombre')}</strong><br>
+                    <span style="font-size:11px;color:#64748b;">SKU: ${escapeHTML(item.sku || 'N/A')} | Cant: ${cantidadVisible} ${escapeHTML(item.unidad || '')}</span>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
 
         const { value: confirmLote } = await Swal.fire({
             title: 'Seleccionar Materiales',
@@ -1089,7 +1105,7 @@ async function abrirModalLote() {
 
         const msgWsp = [
             `Hola ${dLote.nombre_proveedor} 👋, somos *Innova Möbili*.`,``,`Le solicitamos cotización de los siguientes materiales:`,``,msgItems,``,
-            `Por favor ingrese al siguiente link para enviarnos sus precios y fechas:`,`👉 ${dLote.link}`,``,`Tiene 3 días hábiles para responder. Gracias 🙏`
+            `Por favor ingrese al siguiente link para enviarnos sus precios unitarios sin IGV y fechas:`,`👉 ${dLote.link}`,``,`Tiene 3 días hábiles para responder. Gracias 🙏`
         ].join('\n');
 
         window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`, '_blank');

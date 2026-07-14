@@ -4,37 +4,13 @@ Blueprint: usuarios_bp  (sin prefijo de URL)
 """
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt, verify_jwt_in_request
 from werkzeug.security import check_password_hash, generate_password_hash
 from database import get_db_connection, release_db_connection
 from auth_middleware import generar_token, requiere_login, requiere_rol, forzar_logout_global
 from erp_constants import aliases_area
 
 usuarios_bp = Blueprint('usuarios', __name__)
-_seguridad_usuarios_lista = False
-
-
-def _asegurar_columna_telefono(cursor):
-    """
-    Auto-migración segura: agrega la columna `telefono` a `usuarios` si
-    no existe todavía. Se necesita para poder notificar por WhatsApp/SMS
-    a futuro (la capa de notificación ya recibe este campo, ver
-    database.notificar_usuario). Formato libre por ahora — se recomienda
-    incluir código de país, ej: +51987654321.
-    """
-    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);")
-
-
-def _asegurar_columnas_seguridad_usuarios(cursor):
-    """
-    Mantiene compatibilidad con instalaciones antiguas mientras migramos
-    credenciales internas desde texto plano hacia hashes.
-    """
-    global _seguridad_usuarios_lista
-    if _seguridad_usuarios_lista:
-        return
-    _asegurar_columna_telefono(cursor)
-    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);")
-    _seguridad_usuarios_lista = True
 
 
 def _hash_valido(valor_hash, secreto):
@@ -58,6 +34,10 @@ def _credencial_staff_valida(cursor, usuario_id, secreto, password_hash, contras
         return True
 
     if secreto and pin_legacy and secreto == str(pin_legacy):
+        cursor.execute(
+            "UPDATE usuarios SET password_hash = %s WHERE id = %s;",
+            (generate_password_hash(secreto), usuario_id)
+        )
         return True
 
     if secreto and contrasena_legacy and secreto == str(contrasena_legacy):
@@ -76,18 +56,23 @@ def _credencial_staff_valida(cursor, usuario_id, secreto, password_hash, contras
 
 @usuarios_bp.route('/api/usuarios', methods=['GET'])
 # Sin @requiere_login: este endpoint alimenta el dropdown del formulario
-# de login (se llama antes de tener token). Solo devuelve id/nombre/rol.
+# de login (se llama antes de tener token). Sin sesión solo devuelve id/nombre.
 def obtener_usuarios():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("SELECT id, nombre, rol, area_asignada FROM usuarios ORDER BY nombre;")
-        usuarios = [
-            {"id": r[0], "nombre": r[1], "rol": r[2], "area_asignada": r[3]}
-            for r in cursor.fetchall()
-        ]
+        filas = cursor.fetchall()
+        verify_jwt_in_request(optional=True)
+        autenticado = bool(get_jwt())
+        usuarios = []
+        for r in filas:
+            usuario = {"id": r[0], "nombre": r[1]}
+            if autenticado:
+                usuario.update({"rol": r[2], "area_asignada": r[3]})
+            usuarios.append(usuario)
         return jsonify(usuarios), 200
-    except Exception as e:
+    except Exception:
         return jsonify({'error': 'Error al cargar usuarios'}), 500
     finally:
         if 'conexion' in locals() and conexion:
@@ -100,7 +85,6 @@ def obtener_usuarios_detalle():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columnas_seguridad_usuarios(cursor)
         cursor.execute("""
             SELECT id, nombre, rol, email, area_asignada, empresa_nombre, empresa_ruc, telefono
             FROM usuarios ORDER BY nombre;
@@ -123,22 +107,25 @@ def obtener_usuarios_detalle():
 def crear_usuario():
     data = request.get_json(silent=True) or {}
     requeridos = ['nombre', 'correo', 'pin', 'rol', 'area', 'empresa_nombre', 'empresa_ruc']
-    faltantes = [campo for campo in requeridos if campo not in data]
+    faltantes = [campo for campo in requeridos if not str(data.get(campo) or '').strip()]
     if faltantes:
         return jsonify({'error': f"Campos obligatorios faltantes: {', '.join(faltantes)}"}), 400
+    if data['rol'] not in ('Admin', 'Jefe_Taller', 'Vendedor', 'Operario', 'Chofer'):
+        return jsonify({'error': 'Rol de usuario no valido'}), 400
+    secreto_inicial = str(data.get('contrasena') or data['pin']).strip()
+    if len(secreto_inicial) < 4:
+        return jsonify({'error': 'El PIN o contraseña debe tener al menos 4 caracteres'}), 400
 
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columnas_seguridad_usuarios(cursor)
-        contrasena_temporal = (data.get('contrasena') or '').strip() or '123456'
         cursor.execute("""
             INSERT INTO usuarios
                 (nombre, email, pin_acceso, contrasena, password_hash, rol,
                  area_asignada, empresa_nombre, empresa_ruc, telefono)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-        """, (data['nombre'], data['correo'], data['pin'],
-              '', generate_password_hash(contrasena_temporal), data['rol'],
+        """, (data['nombre'], data['correo'].strip().lower(), '',
+              '', generate_password_hash(secreto_inicial), data['rol'],
               data['area'], data['empresa_nombre'], data['empresa_ruc'], data.get('telefono')))
         conexion.commit()
         return jsonify({'exito': True}), 201
@@ -175,13 +162,21 @@ def editar_usuario(usuario_id):
     actualizaciones = {
         col: data[clave] for clave, col in campos_permitidos.items() if clave in data
     }
+    secreto_nuevo = str(data.get('contrasena') or data.get('pin') or '').strip()
+    if secreto_nuevo:
+        if len(secreto_nuevo) < 4:
+            return jsonify({'error': 'El PIN o contraseña debe tener al menos 4 caracteres'}), 400
+        actualizaciones['password_hash'] = generate_password_hash(secreto_nuevo)
+        actualizaciones['pin_acceso'] = ''
+        actualizaciones['contrasena'] = ''
+    if 'rol' in data and data['rol'] not in ('Admin', 'Jefe_Taller', 'Vendedor', 'Operario', 'Chofer'):
+        return jsonify({'error': 'Rol de usuario no valido'}), 400
     if not actualizaciones:
         return jsonify({'error': 'No se envió ningún campo para actualizar'}), 400
 
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columnas_seguridad_usuarios(cursor)
 
         set_clause = ", ".join(f"{col} = %s" for col in actualizaciones.keys())
         valores    = list(actualizaciones.values()) + [usuario_id]
@@ -260,6 +255,8 @@ def obtener_choferes():
 # o directamente si se pasa el limiter como parámetro.
 @usuarios_bp.route('/api/login', methods=['POST'])
 def verificar_pin():
+    conexion = None
+    cursor = None
     try:
         data = request.get_json(silent=True) or {}
         usuario_id    = data.get('usuario_id')
@@ -267,14 +264,18 @@ def verificar_pin():
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columnas_seguridad_usuarios(cursor)
         cursor.execute("""
-            SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email, area_asignada, pin_acceso
-            FROM usuarios WHERE id = %s AND pin_acceso = %s;
-        """, (usuario_id, pin_ingresado))
+            SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email,
+                   area_asignada, password_hash, contrasena, pin_acceso
+            FROM usuarios
+            WHERE id = %s AND COALESCE(estado, true) = true;
+        """, (usuario_id,))
         usuario = cursor.fetchone()
 
-        if usuario:
+        if usuario and _credencial_staff_valida(
+            cursor, usuario[0], str(pin_ingresado or ''), usuario[7], usuario[8], usuario[9]
+        ):
+            conexion.commit()
             tokens = generar_token({
                 "id":            usuario[0],
                 "nombre":        usuario[1],
@@ -295,15 +296,18 @@ def verificar_pin():
                     "area_asignada": usuario[6]
                 }
             })
-            cursor.close(); release_db_connection(conexion)
             return res, 200
 
-        cursor.close(); release_db_connection(conexion)
         return jsonify({"exito": False, "error": "PIN incorrecto"}), 401
 
     except Exception as e:
         print(f"❌ Error en login: {e}")
         return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conexion:
+            release_db_connection(conexion)
 
 
 # ==========================================
@@ -382,6 +386,8 @@ def verificar_email_pin():
     Busca primero en `usuarios` (staff del ERP).
     Si no encuentra, busca en `clientes` (registrados desde el landing).
     """
+    conexion = None
+    cursor = None
     try:
         data = request.get_json(silent=True) or {}
         email = (data.get('email') or '').strip().lower()
@@ -392,7 +398,6 @@ def verificar_email_pin():
 
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _asegurar_columnas_seguridad_usuarios(cursor)
 
         # ── 1. Buscar en usuarios (staff: Admin, Vendedor, Operario…) ──────
         cursor.execute("""
@@ -414,7 +419,6 @@ def verificar_email_pin():
                 "rol":           usuario[2],
                 "area_asignada": usuario[6],
             })
-            cursor.close(); release_db_connection(conexion)
             return jsonify({
                 "exito": True,
                 "token":         tokens["access"],
@@ -437,10 +441,13 @@ def verificar_email_pin():
             WHERE LOWER(email) = %s;
         """, (email,))
         cliente_row = cursor.fetchone()
-        cursor.close(); release_db_connection(conexion)
 
         # Verificar hash — los clientes siempre usan contraseña propia
-        cliente = cliente_row if (cliente_row and check_password_hash(cliente_row[4], pin)) else None
+        cliente = cliente_row if (
+            cliente_row
+            and cliente_row[4]
+            and check_password_hash(cliente_row[4], pin)
+        ) else None
 
         if cliente:
             tokens = generar_token({
@@ -470,6 +477,11 @@ def verificar_email_pin():
     except Exception as e:
         print(f"❌ Error en login email+pin: {e}")
         return jsonify({"error": "Error interno del servidor"}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conexion:
+            release_db_connection(conexion)
 
 
 # ==========================================
@@ -493,44 +505,96 @@ def registrar_usuario_web():
 
     if not nombre or not email or not contrasena:
         return jsonify({'error': 'Nombre, correo y contraseña son obligatorios'}), 400
+    if len(contrasena) < 8:
+        return jsonify({'error': 'La contraseña debe tener al menos 8 caracteres'}), 400
 
     contrasena_hash = generate_password_hash(contrasena)  # nunca guardar texto plano
 
+    conexion = None
+    cursor = None
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
 
-        # Verificar duplicado en clientes
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS clientes (
-                id         SERIAL PRIMARY KEY,
-                nombre     VARCHAR(150) NOT NULL,
-                email      VARCHAR(120),
-                telefono   VARCHAR(20),
-                dni        VARCHAR(20),
-                direccion  TEXT,
-                contrasena VARCHAR(255),
-                fecha_alta TIMESTAMP DEFAULT NOW()
-            );
-        """)
-        cursor.execute("SELECT id FROM clientes WHERE LOWER(email) = %s;", (email,))
+        # Bloquear cada identidad para que dos registros concurrentes no creen
+        # clientes duplicados con distinto correo pero el mismo DNI/teléfono.
+        for clave in (f'cliente-email:{email}', f'cliente-dni:{dni}' if dni else '',
+                      f'cliente-telefono:{telefono}' if telefono else ''):
+            if clave:
+                cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s));", (clave,))
+
+        cursor.execute(
+            "SELECT 1 FROM usuarios WHERE LOWER(email) = %s LIMIT 1;",
+            (email,),
+        )
         if cursor.fetchone():
-            cursor.close(); release_db_connection(conexion)
-            return jsonify({'error': 'Este correo ya está registrado'}), 409
+            return jsonify({'error': 'Ese correo pertenece a una cuenta interna de Innova.'}), 409
 
         cursor.execute("""
-            INSERT INTO clientes (nombre, email, telefono, dni, contrasena)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id;
-        """, (nombre, email, telefono or None, dni or None, contrasena_hash))
+            SELECT id, contrasena, COALESCE(telefono, ''), COALESCE(dni, ''),
+                   COALESCE(email, '')
+            FROM clientes
+            WHERE LOWER(COALESCE(email, '')) = %s
+               OR (
+                    COALESCE(email, '') = ''
+                    AND ((%s <> '' AND dni = %s)
+                         OR (%s <> '' AND telefono = %s))
+               )
+            ORDER BY CASE WHEN LOWER(COALESCE(email, '')) = %s THEN 0 ELSE 1 END
+            FOR UPDATE;
+        """, (email, dni, dni, telefono, telefono, email))
+        coincidencias = cursor.fetchall()
+        if len(coincidencias) > 1:
+            return jsonify({
+                'error': 'Hay más de una ficha comercial con esos datos. Pide a Innova que las unifique.'
+            }), 409
+        existente = coincidencias[0] if coincidencias else None
+        activada = False
+        if existente:
+            cliente_id, hash_existente, telefono_existente, dni_existente, _email_existente = existente
+            if hash_existente:
+                return jsonify({'error': 'Este correo ya está registrado'}), 409
+            coincide_dato = (
+                (dni_existente and dni and dni_existente == dni)
+                or (telefono_existente and telefono and telefono_existente == telefono)
+            )
+            if not coincide_dato:
+                return jsonify({
+                    'error': 'La cuenta comercial ya existe. Usa el mismo DNI o teléfono registrado para activarla.'
+                }), 409
+            cursor.execute("""
+                UPDATE clientes
+                SET nombre = %s,
+                    email = %s,
+                    telefono = COALESCE(NULLIF(%s, ''), telefono),
+                    dni = COALESCE(NULLIF(%s, ''), dni),
+                    contrasena = %s
+                WHERE id = %s
+            """, (nombre, email, telefono, dni, contrasena_hash, cliente_id))
+            activada = True
+        else:
+            cursor.execute("""
+                INSERT INTO clientes (nombre, email, telefono, dni, contrasena)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id;
+            """, (nombre, email, telefono or None, dni or None, contrasena_hash))
+            cliente_id = cursor.fetchone()[0]
         conexion.commit()
-        cursor.close(); release_db_connection(conexion)
         return jsonify({
             'exito':   True,
-            'mensaje': '¡Registro exitoso! Ya puedes rastrear tus pedidos con tu correo.'
-        }), 201
+            'mensaje': (
+                'Cuenta activada. Ya puedes rastrear los pedidos vinculados a este cliente.'
+                if activada else
+                '¡Registro exitoso! Ya puedes rastrear tus pedidos con tu correo.'
+            )
+        }), 200 if activada else 201
 
-    except Exception as e:
+    except Exception:
         import traceback; traceback.print_exc()
         if 'conexion' in locals() and conexion: conexion.rollback()
         return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conexion:
+            release_db_connection(conexion)

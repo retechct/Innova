@@ -1,4 +1,6 @@
 // === MÓDULO: Carrito, pagos y ventas ===
+let clienteSeleccionadoId = null;
+
 function toggleCart() {
     document.getElementById('cart-slider').classList.toggle('open');
     document.getElementById('overlay-cart').classList.toggle('active');
@@ -153,9 +155,27 @@ function _mostrarVoucherSeleccionado(file) {
 
     if (window._voucherPreviewUrl) URL.revokeObjectURL(window._voucherPreviewUrl);
     window._voucherPreviewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
-    confirmacion.innerHTML = `
-        ${window._voucherPreviewUrl ? `<img src="${window._voucherPreviewUrl}" alt="Voucher seleccionado" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #86efac;">` : '<i class="fa-solid fa-file"></i>'}
-        <span><i class="fa-solid fa-circle-check"></i> Voucher subido correctamente<br><small style="font-weight:600;overflow-wrap:anywhere;">${file.name}</small></span>`;
+    confirmacion.replaceChildren();
+    if (window._voucherPreviewUrl) {
+        const preview = document.createElement('img');
+        preview.src = window._voucherPreviewUrl;
+        preview.alt = 'Voucher seleccionado';
+        preview.style.cssText = 'width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #86efac;';
+        confirmacion.appendChild(preview);
+    } else {
+        const archivoIcono = document.createElement('i');
+        archivoIcono.className = 'fa-solid fa-file';
+        confirmacion.appendChild(archivoIcono);
+    }
+
+    const detalle = document.createElement('span');
+    const okIcono = document.createElement('i');
+    okIcono.className = 'fa-solid fa-circle-check';
+    const nombre = document.createElement('small');
+    nombre.style.cssText = 'font-weight:600;overflow-wrap:anywhere;';
+    nombre.textContent = file.name;
+    detalle.append(okIcono, document.createTextNode(' Voucher subido correctamente'), document.createElement('br'), nombre);
+    confirmacion.appendChild(detalle);
 
     // Después de elegir la foto, mostrar los datos que el OCR completará para revisión.
     toggleModoEscanearVoucher(false);
@@ -233,6 +253,9 @@ function actualizarCamposPago() {
         if(divComision) divComision.style.display = 'none'; 
     }
 }
+
+let _voucherOCRSecuencia = 0;
+let _voucherOCRController = null;
 
 function _voucherSetStatus(texto, tipo = 'info') {
     const box = document.getElementById('voucher-ocr-status');
@@ -340,8 +363,25 @@ function _seleccionarEmpresaPorVoucher(datos) {
     return '';
 }
 
-function _aplicarDatosVoucher(datos) {
+function _aplicarDatosVoucher(datos, opciones = {}) {
     if (!datos) return false;
+    const soloSugerencia = Boolean(opciones.soloSugerencia);
+    const confianzaNumero = Number(datos.confianza);
+    if (soloSugerencia) {
+        window._ultimoVoucherOCR = null;
+        const sugerencias = [
+            datos.tipo_pago,
+            datos.entidad,
+            datos.monto_bruto != null ? `S/ ${Number(datos.monto_bruto).toFixed(2)}` : '',
+            datos.numero_operacion ? `Op. ${datos.numero_operacion}` : ''
+        ].filter(Boolean).join(' · ');
+        const pct = Number.isFinite(confianzaNumero) ? Math.round(confianzaNumero * 100) : 0;
+        _voucherSetStatus(
+            `Lectura con baja confianza (${pct}%). Sugerencia: ${sugerencias || 'sin datos claros'}. No se modificaron los campos.`,
+            'warn'
+        );
+        return true;
+    }
     window._ultimoVoucherOCR = datos;
     const entidadDetectada = _normalizarEntidadVoucher(datos.entidad);
     const tipoRaw = String(datos.tipo_pago || '').toLowerCase();
@@ -380,11 +420,24 @@ function _aplicarDatosVoucher(datos) {
 
 async function leerVoucherAutomatico(file) {
     if (!file) return;
+    window._ultimoVoucherOCR = null;
+    const secuencia = ++_voucherOCRSecuencia;
+    if (_voucherOCRController) _voucherOCRController.abort();
+    _voucherOCRController = new AbortController();
+    const controller = _voucherOCRController;
+
     if (!file.type.startsWith('image/')) {
         _voucherSetStatus('Voucher cargado. El autollenado acepta imágenes; completa los datos manualmente.', 'warn');
+        if (_voucherOCRController === controller) _voucherOCRController = null;
+        return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+        _voucherSetStatus('La imagen supera 8 MB. Reduce su tamaño o completa los datos manualmente.', 'warn');
+        if (_voucherOCRController === controller) _voucherOCRController = null;
         return;
     }
     _voucherSetStatus('Leyendo voucher automáticamente...', 'info');
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
         let archivoOCR = file;
         if (typeof _comprimirImagen === 'function') {
@@ -394,10 +447,16 @@ async function leerVoucherAutomatico(file) {
                 console.warn('No se pudo comprimir el voucher para OCR; se usará el original.', e);
             }
         }
+        if (secuencia !== _voucherOCRSecuencia) return;
         const fd = new FormData();
         const extensionOCR = (archivoOCR.type || file.type || 'image/jpeg').includes('webp') ? 'webp' : 'jpg';
         fd.append('archivo', archivoOCR, `voucher-ocr.${extensionOCR}`);
-        const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
+        const res = await apiFetch(`${API_URL}/api/voucher/leer`, {
+            method: 'POST',
+            body: fd,
+            signal: controller.signal
+        });
+        if (secuencia !== _voucherOCRSecuencia) return;
         const contentType = (res.headers.get('content-type') || '').toLowerCase();
         if (!contentType.includes('application/json')) {
             throw new Error('El lector automático no está disponible');
@@ -413,14 +472,25 @@ async function leerVoucherAutomatico(file) {
             );
             return;
         }
-        _aplicarDatosVoucher(data);
+        const confianza = Number(data.confianza);
+        _aplicarDatosVoucher(data, {
+            soloSugerencia: !Number.isFinite(confianza) || confianza < 0.85
+        });
     } catch (e) {
+        if (secuencia !== _voucherOCRSecuencia) return;
         console.info('Autollenado de voucher no disponible:', e);
         window._ultimoVoucherOCR = null;
+        if (e?.name === 'AbortError') {
+            _voucherSetStatus('Gemini tardó demasiado y la lectura fue cancelada. Completa los datos manualmente.', 'warn');
+            return;
+        }
         const detalle = e?.message && !/failed to fetch|networkerror/i.test(e.message)
             ? `: ${e.message}`
             : '';
         _voucherSetStatus(`Voucher cargado. No pudimos leerlo automáticamente${detalle}; completa empresa, monto y operación manualmente.`, 'warn');
+    } finally {
+        clearTimeout(timeoutId);
+        if (_voucherOCRController === controller) _voucherOCRController = null;
     }
 }
 
@@ -478,12 +548,15 @@ async function agregarMetodoPago() {
     Swal.fire({ title: 'Subiendo voucher...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
 
     let comprobante_url = 'Sin imagen';
+    const uploadController = new AbortController();
+    const uploadTimeoutId = setTimeout(() => uploadController.abort(), 20000);
     try {
         const formDataFoto = new FormData();
         formDataFoto.append('archivo', comprobanteInput.files[0]);
         const res = await apiFetch(`${API_URL}/api/upload-voucher`, {
             method: 'POST',
-            body: formDataFoto
+            body: formDataFoto,
+            signal: uploadController.signal
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -497,7 +570,16 @@ async function agregarMetodoPago() {
         Swal.close();
     } catch (e) {
         Swal.close();
+        if (e?.name === 'AbortError') {
+            return Swal.fire(
+                'La subida tardó demasiado',
+                'Cloudinary no respondió a tiempo. Intenta nuevamente; el contrato no fue guardado.',
+                'error'
+            );
+        }
         return Swal.fire('No se pudo subir el voucher', e.message, 'error');
+    } finally {
+        clearTimeout(uploadTimeoutId);
     }
 
     const montoNeto = monto - comision;
@@ -628,6 +710,7 @@ async function guardarVenta() {
     const payload = {
         codigo: document.getElementById('c-codigo').value,
         cliente: document.getElementById('c-nombre').value,
+        cliente_id: clienteSeleccionadoId,
         tipo_documento: document.getElementById('c-tipo-doc')?.value || 'DNI',
         dni: document.getElementById('c-dni').value,
         celular: document.getElementById('c-celular').value,
@@ -694,6 +777,7 @@ async function guardarVenta() {
                     listaPagos = [];
                     document.getElementById('cart-count').innerText = "0";
                 }
+                clienteSeleccionadoId = null;
                 toggleCart();
                 changeView('pedidos'); 
             });
@@ -1125,10 +1209,9 @@ function imprimirContratoElegante() {
             btnGuardar.textContent = 'Guardando...';
 
             try {
-                // A6: Usar el endpoint oficial registrar-web (unifica el flujo de clientes)
-                const resp = await apiFetch(`${API_URL}/api/usuarios/registrar-web`, {
+                const resp = await apiFetch(`${API_URL}/api/clientes/registro`, {
                     method: 'POST',
-                    body: JSON.stringify({ nombre, telefono, email, dni })
+                    body: JSON.stringify({ nombre, telefono, email, dni, direccion })
                 });
                 const data = await resp.json();
 
@@ -1143,6 +1226,7 @@ function imprimirContratoElegante() {
                 document.getElementById('c-celular').value   = telefono || '';
                 document.getElementById('c-dni').value       = dni      || '';
                 document.getElementById('c-direccion').value = direccion || '';
+                clienteSeleccionadoId = data.id;
                 _cerrarModalReg();
 
             } catch (err) {
@@ -1220,6 +1304,7 @@ function imprimirContratoElegante() {
  
         inputNombre.addEventListener('input', () => {
             clearTimeout(debounceTimer);
+            clienteSeleccionadoId = null;
             const q = inputNombre.value.trim();
             if (q.length < 1) { dropdown.style.display = 'none'; return; }
  
@@ -1246,6 +1331,7 @@ function imprimirContratoElegante() {
  
                     dropdown.innerHTML = lista.map(c => `
                         <div class="cli-item"
+                             data-id="${c.id}"
                              data-nombre="${c.nombre}"
                              data-dni="${c.dni}"
                              data-telefono="${c.telefono}"
@@ -1264,6 +1350,7 @@ function imprimirContratoElegante() {
                         item.addEventListener('mouseenter', () => item.style.background = '#f0f9ff');
                         item.addEventListener('mouseleave', () => item.style.background = '');
                         item.addEventListener('click', () => {
+                            clienteSeleccionadoId = Number(item.dataset.id) || null;
                             document.getElementById('c-nombre').value    = item.dataset.nombre;
                             document.getElementById('c-dni').value       = item.dataset.dni       || '';
                             document.getElementById('c-celular').value   = item.dataset.telefono  || '';

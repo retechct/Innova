@@ -5,16 +5,11 @@ async function cargarDatosVentaIniciales({ force = false } = {}) {
     if (!force && window._datosVentaInicialesPromise) return window._datosVentaInicialesPromise;
     window._datosVentaInicialesPromise = (async () => {
     try {
-        const [catRes, matRes] = await Promise.all([
-            fetch(`${API_URL}/api/catalogo`),
-            fetch(`${API_URL}/api/materiales/listas`)
-        ]);
-
+        const catRes = await fetch(`${API_URL}/api/catalogo`);
         allProducts = await catRes.json();
-        maestroMateriales = await matRes.json();
 
-        if (allProducts.error || maestroMateriales.error) {
-            console.error("Error de BD:", allProducts.error || maestroMateriales.error);
+        if (allProducts.error) {
+            console.error("Error de BD:", allProducts.error);
             Swal.fire('Error de Base de Datos', 'Revisa la consola (F12) para ver la tabla que falta.', 'error');
             return false;
         }
@@ -32,13 +27,36 @@ async function cargarDatosVentaIniciales({ force = false } = {}) {
     return window._datosVentaInicialesPromise;
 }
 
+async function cargarMaestroMaterialesVenta({ force = false } = {}) {
+    if (!force && window._maestroMaterialesCargado) return true;
+    if (!force && window._maestroMaterialesPromise) return window._maestroMaterialesPromise;
+    window._maestroMaterialesPromise = (async () => {
+        try {
+            const res = await apiFetch(`${API_URL}/api/materiales/listas`);
+            const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || 'No se pudieron cargar los materiales');
+            maestroMateriales = data;
+            window._maestroMaterialesCargado = true;
+            return true;
+        } catch (e) {
+            console.error('Error cargando materiales:', e);
+            Swal.fire('Materiales no disponibles', e.message || 'No se pudo cargar el maestro de materiales.', 'error');
+            return false;
+        } finally {
+            window._maestroMaterialesPromise = null;
+        }
+    })();
+    return window._maestroMaterialesPromise;
+}
+
 async function init() {
     try {
         // Verificamos si Python nos mandó un error de Base de Datos en lugar de la lista
         
         // Punto 4: Persistencia de Sesión al recargar
         const sesion = localStorage.getItem('usuarioInnova');
-        if (sesion) {
+        const token = localStorage.getItem('innova_token');
+        if (sesion && token) {
             usuarioActivo = JSON.parse(sesion);
 
             // SEGURIDAD: Clientes y roles no autorizados no pueden entrar al panel ERP
@@ -71,6 +89,9 @@ async function init() {
                 if (!ok) return;
                 changeView('catalogo');
             }
+        } else if (sesion) {
+            localStorage.removeItem('usuarioInnova');
+            usuarioActivo = null;
         }
     } catch (e) {
         console.error("Error crítico:", e);

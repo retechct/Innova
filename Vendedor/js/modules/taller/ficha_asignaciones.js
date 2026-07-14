@@ -454,10 +454,14 @@ async function abrirModalDerivar(ticketId) {
 }
 
 /* --- CONFIRMAR LLEGADA DE TELA DESDE LOGÍSTICA --- */
-async function confirmarRecojoLogistica(id, fileInput) {
+async function confirmarRecojoLogistica(id, fileInput, tieneComprobante = false) {
     const file = fileInput ? fileInput.files[0] : null;
-    if (!file) {
+    if (!file && !tieneComprobante) {
         Swal.fire('Comprobante obligatorio', 'Adjunta el voucher o recibo de pago para confirmar el recojo.', 'warning');
+        return;
+    }
+    if (file && file.size > 8 * 1024 * 1024) {
+        Swal.fire('Archivo muy grande', 'El comprobante no puede superar 8 MB.', 'warning');
         return;
     }
 
@@ -471,21 +475,28 @@ async function confirmarRecojoLogistica(id, fileInput) {
     if (!conf.isConfirmed) return;
     
     Swal.fire({ title: 'Guardando...', didOpen: () => Swal.showLoading() });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
     try {
         const formData = new FormData();
         if (file) formData.append('comprobante', file);
         
         const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-recojo`, {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: controller.signal,
         });
         const d = await res.json();
-        if (d.exito) {
-            Swal.fire('¡Recibido!', d.mensaje, 'success');
-            cargarTicketsTaller();
-        } else { Swal.fire('Error', d.error, 'error'); }
+        if (!res.ok || !d.exito) throw new Error(d.error || 'No se pudo confirmar el recojo.');
+        Swal.fire('¡Recibido!', d.mensaje, 'success');
+        cargarTicketsTaller();
     } catch(e) {
-        Swal.fire('Error', 'Error de conexión', 'error');
+        const mensaje = e.name === 'AbortError'
+            ? 'La carga tardó demasiado. Revisa tu conexión e inténtalo otra vez.'
+            : (e.message || 'Error de conexión');
+        Swal.fire('No se pudo registrar el recojo', mensaje, 'error');
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 
@@ -501,10 +512,15 @@ async function confirmarDistribucionTela(id) {
     if (!conf.isConfirmed) return;
 
     Swal.fire({ title: 'Actualizando...', didOpen: () => Swal.showLoading() });
-    const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-distribucion`, { method: 'POST' });
-    const d = await res.json();
-    if (d.exito) { Swal.fire('¡Distribuida!', `Tela entregada. ${d.desbloqueados} tickets desbloqueados.`, 'success'); cargarTicketsTaller(); }
-    else { Swal.fire('Error', d.error, 'error'); }
+    try {
+        const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-distribucion`, { method: 'POST' });
+        const d = await res.json();
+        if (!res.ok || !d.exito) throw new Error(d.error || 'No se pudo distribuir la tela.');
+        Swal.fire('¡Distribuida!', `Tela entregada. ${d.desbloqueados || 0} tickets desbloqueados.`, 'success');
+        cargarTicketsTaller();
+    } catch (e) {
+        Swal.fire('No se pudo distribuir', e.message || 'Error de conexión', 'error');
+    }
 }
 
 /* --- NUEVA FUNCIÓN: ASIGNAR TRABAJADOR REAL --- */

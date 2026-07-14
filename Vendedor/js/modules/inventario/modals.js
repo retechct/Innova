@@ -109,73 +109,11 @@ function _formProducto() {
 function _invMostrarCatalogoBuscador() {
     const searchEl = document.getElementById('search-inv-prod');
     if (!searchEl || searchEl.value.trim() !== '') return;
-
-    // A11: Resetear estado del buscador
-    _invSmartSearchState['catalogo'] = { offset: 10 };
-
-    const cat = document.getElementById('nf-cat')?.value || '';
-    const lista = _invGetCatalogoPorCat(cat);
-
-    const listContainer = document.getElementById('list-inv-prod');
-    if (!listContainer) return;
-
-    const total   = lista.length;
-    const ultimas = lista.slice(0, 10);
-    const header = `<div style="padding:6px 12px;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f1f5f9;">
-        🕐 Últimos en catálogo — escribe para buscar
-    </div>`;
-
-    // "Ver todas" solo aparece si de verdad hay más de 10 (igual que en
-    // el buscador de materiales — mismo patrón, mismo texto).
-    // A11: Cambiado a "Ver más"
-    const restantes = total - 10;
-    const htmlVerMas = total > 10
-        ? `<div class="custom-option-item" id="ver-mas-inv-catalogo" style="justify-content:center; color:#2563eb; font-weight:700; font-size:12px; cursor:pointer;"
-                 onclick="_invMostrarMasCatalogo()">
-               + Ver más (${restantes} restantes) →
-           </div>`
-        : '';
-
-    listContainer.innerHTML = header + ultimas.map(p => _invHtmlItemCatalogo(p)).join('') + htmlVerMas;
-    listContainer.classList.add('show');
+    _invRenderCatalogoBuscador(false);
 }
 
-/**
- * A11: Carga y añade un lote de 30 productos más a la lista del buscador.
- * Reemplaza a `_invMostrarTodasCatalogoBuscador` que tenía un tope fijo.
- */
 function _invMostrarMasCatalogo() {
-    const cat = document.getElementById('nf-cat')?.value || '';
-    const lista = _invGetCatalogoPorCat(cat);
-
-    const listContainer = document.getElementById('list-inv-prod');
-    if (!listContainer) return;
-
-    const state = _invSmartSearchState['catalogo'] || { offset: 10 };
-    const BATCH_SIZE = 30;
-    const newOffset = state.offset + BATCH_SIZE;
-
-    const nuevosItems = lista.slice(state.offset, newOffset);
-    const htmlNuevos = nuevosItems.map(p => _invHtmlItemCatalogo(p)).join('');
-
-    const verMasBoton = document.getElementById('ver-mas-inv-catalogo');
-    if (verMasBoton) {
-        verMasBoton.insertAdjacentHTML('beforebegin', htmlNuevos);
-    } else {
-        listContainer.insertAdjacentHTML('beforeend', htmlNuevos);
-    }
-
-    state.offset = newOffset;
-    _invSmartSearchState['catalogo'] = state;
-
-    if (verMasBoton) {
-        const restantes = lista.length - newOffset;
-        if (restantes > 0) {
-            verMasBoton.innerHTML = `+ Ver más (${restantes} restantes) →`;
-        } else {
-            verMasBoton.remove();
-        }
-    }
+    _invRenderCatalogoBuscador(true);
 }
 
 function _invFiltrarCatalogoBuscador() {
@@ -183,27 +121,46 @@ function _invFiltrarCatalogoBuscador() {
     const texto = (searchEl?.value || '').toLowerCase().trim();
     const listContainer = document.getElementById('list-inv-prod');
     if (!listContainer) return;
+    _invRenderCatalogoBuscador(false);
+}
 
-    if (!texto) { _invMostrarCatalogoBuscador(); return; }
+function _invRenderCatalogoBuscador(avanzar = false) {
+    const searchEl = document.getElementById('search-inv-prod');
+    const listContainer = document.getElementById('list-inv-prod');
+    if (!searchEl || !listContainer) return;
 
+    const texto = searchEl.value.toLowerCase().trim();
     const cat = document.getElementById('nf-cat')?.value || '';
     const lista = _invGetCatalogoPorCat(cat);
     const coincidencias = lista.filter(p =>
+        !texto ||
         (p.nombre || p.nombre_modelo || '').toLowerCase().includes(texto) ||
         (p.categoria || '').toLowerCase().includes(texto)
     );
-    const filtrados = coincidencias.slice(0, 30);
 
-    // Si hay más coincidencias de las que se pintaron, avisamos al pie
-    // (mismo patrón que filtrarMaterial en materiales.js).
-    const htmlAvisoMas = coincidencias.length > filtrados.length
-        ? `<div style="padding:8px 12px; font-size:11px; color:#94a3b8; text-align:center; border-top:1px solid #f1f5f9;">
-               Mostrando ${filtrados.length} de ${coincidencias.length} — sigue escribiendo para afinar
+    const claveBusqueda = `${cat}\u0000${texto}`;
+    const state = _invSmartSearchState.catalogo;
+    const mismoFiltro = state?.claveBusqueda === claveBusqueda;
+    const offset = avanzar && mismoFiltro
+        ? Math.min(state.offset + 10, coincidencias.length)
+        : Math.min(10, coincidencias.length);
+    _invSmartSearchState.catalogo = { claveBusqueda, offset };
+
+    const visibles = coincidencias.slice(0, offset);
+    const restantes = coincidencias.length - offset;
+    const siguienteLote = Math.min(10, restantes);
+    const header = texto ? '' : `<div style="padding:6px 12px;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f1f5f9;">
+        Últimos en catálogo - escribe para buscar
+    </div>`;
+    const htmlVerMas = restantes > 0
+        ? `<div class="custom-option-item" id="ver-mas-inv-catalogo" style="justify-content:center;color:#2563eb;font-weight:700;font-size:12px;cursor:pointer;"
+                 onclick="_invMostrarMasCatalogo()">
+               + Ver ${siguienteLote} más (${restantes} restantes)
            </div>`
         : '';
 
-    listContainer.innerHTML = filtrados.length
-        ? filtrados.map(p => _invHtmlItemCatalogo(p)).join('') + htmlAvisoMas
+    listContainer.innerHTML = visibles.length
+        ? header + visibles.map(p => _invHtmlItemCatalogo(p)).join('') + htmlVerMas
         : `<div style="padding:12px;font-size:12px;color:#94a3b8;text-align:center;">Sin resultados para "${escapeHTML(texto)}"</div>`;
     listContainer.classList.add('show');
 }

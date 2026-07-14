@@ -21,10 +21,9 @@ El token JWT se envía en el header:
 El login (/api/login y /api/login/email) ya devuelve el token.
 """
 
-import os
 import time
 from functools import wraps
-from flask import request, jsonify
+from flask import Blueprint, jsonify
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -179,9 +178,11 @@ def generar_token(usuario: dict) -> dict:
 
 def requiere_login(fn):
     """
-    Verifica que el request tenga un JWT válido.
+    Verifica que el request tenga un JWT válido de un usuario interno.
     Si no, responde 401.
-    Añade g.usuario_id y g.usuario_rol al contexto de Flask.
+
+    Los clientes usan rutas con @requiere_rol('Cliente'); no deben poder
+    reutilizar su token del portal para leer endpoints internos del ERP.
     """
     @wraps(fn)
     def wrapper(*args, **kwargs):
@@ -192,6 +193,9 @@ def requiere_login(fn):
 
         if _token_invalidado_por_corte_global():
             return jsonify({"error": "Tu sesión fue cerrada por el administrador. Vuelve a iniciar sesión."}), 401
+
+        if get_jwt().get("rol") == "Cliente":
+            return jsonify({"error": "Acceso exclusivo para el personal de Innova."}), 403
 
         return fn(*args, **kwargs)
     return wrapper
@@ -251,6 +255,32 @@ def get_usuario_actual() -> dict:
         "rol":           claims.get("rol", ""),
         "area_asignada": claims.get("area_asignada", ""),
     }
+
+
+def usuario_puede_operar(area=None, usuario_asignado_id=None) -> bool:
+    """Autoriza una operacion con la identidad firmada del JWT.
+
+    Admin y Jefe_Taller pueden operar cualquier area. Un operario/chofer solo
+    puede actuar sobre su area (incluyendo aliases) o sobre un trabajo que le
+    fue asignado expresamente.
+    """
+    from erp_constants import aliases_area
+
+    usuario = get_usuario_actual()
+    if usuario.get("rol") in ("Admin", "Jefe_Taller"):
+        return True
+
+    if usuario_asignado_id not in (None, ""):
+        try:
+            if int(usuario["id"]) == int(usuario_asignado_id):
+                return True
+        except (TypeError, ValueError):
+            pass
+
+    if not area:
+        return False
+    area_usuario = str(usuario.get("area_asignada") or "").upper()
+    return area_usuario in aliases_area(area)
 
 
 # ─── GUÍA DE MIGRACIÓN ────────────────────────────────────────────────────────
@@ -349,8 +379,6 @@ ORDEN RECOMENDADO DE MIGRACIÓN:
 
 # ─── Endpoint de renovación de token ─────────────────────────────────────────
 # Registrar en app.py: app.register_blueprint(auth_bp)
-from flask import Blueprint, jsonify
-
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/api/auth/refresh', methods=['POST'])

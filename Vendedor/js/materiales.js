@@ -2,6 +2,7 @@
 
 // A11: Estado para paginación de buscadores inteligentes
 let _smartSearchState = {};
+const _SMART_SEARCH_BATCH_SIZE = 10;
 
 function _resolverUrlImagenMaterial(url) {
     const valor = String(url || '').trim();
@@ -14,7 +15,7 @@ function _resolverUrlImagenMaterial(url) {
 /**
  * mostrarUltimasMaterial — se llama en el onfocus del input de búsqueda.
  * Si el campo está vacío, muestra las últimas 10 telas/materiales ingresados
- * (los últimos del array, que vienen ordenados por id ASC desde el backend).
+ * (el inicio del array, que viene ordenado por id DESC desde el backend).
  * Si ya tiene texto, no hace nada (filtrarMaterial se encarga).
  */
 /**
@@ -75,61 +76,69 @@ function _htmlItemMaterial(tipoInput, tipoData, item) {
     else if (tipoData === 'sillas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
     else if (tipoData === 'butacas') { titulo = item.modelo; subtitulo = `${item.material} - ${item.color}`; }
 
-    const safeTitulo       = titulo.replace(/'/g, "\\'");
     const isAgotado        = item.estado === 'Agotado';
     const isDescontinuado  = item.estado === 'Descontinuado';
     const noDisponible     = isAgotado || isDescontinuado;
     const styleAgotado     = noDisponible ? 'filter: grayscale(1); opacity: 0.5; cursor: not-allowed; background: #f1f5f9;' : '';
-    const provSeguro       = (item.proveedor || '').replace(/'/g, "\'");
-    const action           = noDisponible ? '' : `onclick="seleccionarMaterial('${tipoInput}', '${item.sku}', '${safeTitulo}', '${item.foto_url}', '${provSeguro}')"`;
+    const fotoResuelta     = _resolverUrlImagenMaterial(item.foto_url);
+    const action           = noDisponible ? '' : `onclick="seleccionarMaterial(${jsStringAttr(tipoInput)}, ${jsStringAttr(item.sku)}, ${jsStringAttr(titulo)}, ${jsStringAttr(fotoResuelta)}, ${jsStringAttr(item.proveedor || '')})"`;
     const badge            = isAgotado       ? '<b style="color:red;">(AGOTADO)</b>'
                            : isDescontinuado ? '<b style="color:#6b7280;">(DESCONTINUADO)</b>'
                            : '';
     return `
         <div class="custom-option-item" ${action} style="${styleAgotado}">
-            <img src="${item.foto_url}" class="custom-option-img" onerror="this.src='imagenes/sin_foto.jpg'">
+            <img src="${escapeAttr(fotoResuelta)}" class="custom-option-img" onerror="this.src='imagenes/sin_foto.jpg'">
             <div style="flex-grow:1;">
-                <span class="custom-option-sku">${item.sku} ${badge}</span>
-                <div class="custom-option-text"><strong>${titulo}</strong><br>${subtitulo}</div>
+                <span class="custom-option-sku">${escapeHTML(item.sku || '')} ${badge}</span>
+                <div class="custom-option-text"><strong>${escapeHTML(titulo)}</strong><br>${escapeHTML(subtitulo)}</div>
             </div>
         </div>`;
 }
 
-// Tope duro al "Ver todas" — evita pintar de golpe un maestro con cientos
-// de materiales dentro del dropdown si el catálogo crece mucho.
-const _MATERIAL_TOPE_VER_TODAS = 200;
-
-/**
- * mostrarUltimasMaterial — se llama en el onfocus del input de búsqueda.
- * Si el campo está vacío, muestra las últimas 10 telas/materiales ingresados
- * (los últimos del array, que vienen ordenados por id ASC desde el backend).
- * Si ya tiene texto, no hace nada (filtrarMaterial se encarga).
- */
-function mostrarUltimasMaterial(tipoInput) {
+function _renderBuscadorMaterial(tipoInput, avanzar = false) {
     const searchEl = document.getElementById(`search-${tipoInput}`);
-    if (!searchEl || searchEl.value.trim() !== '') return;
-
-    const tipoData = _tipoDataDesdeInput(tipoInput);
-    if (!maestroMateriales[tipoData]) return;
-
-    const total   = maestroMateriales[tipoData].length;
-    // Últimas 10: tomamos el inicio del array (backend devuelve ORDER BY id DESC)
-    const ultimas = maestroMateriales[tipoData].slice(0, 10);
-
     const listContainer = document.getElementById(`list-${tipoInput}`);
-    if (!listContainer) return;
+    const tipoData = _tipoDataDesdeInput(tipoInput);
+    if (!searchEl || !listContainer || !maestroMateriales[tipoData]) return;
 
-    const htmlHeader = `<div style="padding:6px 12px; font-size:10px; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #f1f5f9;">
-        🕐 Últimas agregadas — escribe para buscar
-    </div>`;
+    const query = searchEl.value.trim().toLowerCase();
+    const coincidencias = query
+        ? maestroMateriales[tipoData].filter(item =>
+            Object.values(item).join(' ').toLowerCase().includes(query)
+        )
+        : maestroMateriales[tipoData];
 
-    const htmlItems = ultimas.map(item => _htmlItemMaterial(tipoInput, tipoData, item)).join('');
+    const anterior = _smartSearchState[tipoInput];
+    const mismaBusqueda = anterior && anterior.query === query && anterior.tipoData === tipoData;
+    const offset = avanzar && mismaBusqueda
+        ? Math.min(anterior.offset + _SMART_SEARCH_BATCH_SIZE, coincidencias.length)
+        : Math.min(_SMART_SEARCH_BATCH_SIZE, coincidencias.length);
+    _smartSearchState[tipoInput] = { query, tipoData, offset };
 
-    // "Ver más" solo aparece si de verdad hay más de 10.
-    const htmlVerMas = total > 10
-        ? `<div class="custom-option-item" style="justify-content:center; color:#2563eb; font-weight:700; font-size:12px; cursor:pointer;"
-                 onclick="mostrarTodasMaterial('${tipoInput}')">
-               + Ver todas (${total}) →
+    if (!coincidencias.length) {
+        listContainer.innerHTML = _htmlBotonPinterest(tipoInput) + `
+            <div style="padding:12px;font-size:12px;color:#94a3b8;text-align:center;">
+                Sin resultados
+            </div>`;
+        listContainer.classList.add('show');
+        return;
+    }
+
+    const visibles = coincidencias.slice(0, offset);
+    const restantes = coincidencias.length - offset;
+    const siguienteLote = Math.min(_SMART_SEARCH_BATCH_SIZE, restantes);
+    const htmlHeader = query
+        ? `<div style="padding:6px 12px;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f1f5f9;">
+               Mostrando ${visibles.length} de ${coincidencias.length} coincidencias
+           </div>`
+        : `<div style="padding:6px 12px;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f1f5f9;">
+               Últimas agregadas - escribe para buscar
+           </div>`;
+    const htmlItems = visibles.map(item => _htmlItemMaterial(tipoInput, tipoData, item)).join('');
+    const htmlVerMas = restantes > 0
+        ? `<div class="custom-option-item" id="ver-mas-${tipoInput}" style="justify-content:center;color:#2563eb;font-weight:700;font-size:12px;cursor:pointer;"
+                 onclick="mostrarMasMaterial('${tipoInput}')">
+               + Ver ${siguienteLote} más (${restantes} restantes)
            </div>`
         : '';
 
@@ -138,62 +147,25 @@ function mostrarUltimasMaterial(tipoInput) {
 }
 
 /**
- * mostrarTodasMaterial — se dispara al hacer click en "Ver todas (N)".
- * Pinta el maestro completo del tipo (con tope de seguridad), sin pasar
- * por el backend: maestroMateriales ya está cargado entero en memoria.
+ * mostrarUltimasMaterial — se llama en el onfocus del input de búsqueda.
+ * Si el campo está vacío, muestra las últimas 10 telas/materiales ingresados
+ * (el inicio del array, que viene ordenado por id DESC desde el backend).
+ * Si ya tiene texto, no hace nada (filtrarMaterial se encarga).
  */
-function mostrarTodasMaterial(tipoInput) {
-    const tipoData = _tipoDataDesdeInput(tipoInput);
-    if (!maestroMateriales[tipoData]) return;
-
-    const listContainer = document.getElementById(`list-${tipoInput}`);
-    if (!listContainer) return;
-
-    const total  = maestroMateriales[tipoData].length;
-    const todas  = maestroMateriales[tipoData].slice(0, _MATERIAL_TOPE_VER_TODAS);
-    const excede = total > _MATERIAL_TOPE_VER_TODAS;
-
-    const htmlHeader = `<div style="padding:6px 12px; font-size:10px; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #f1f5f9;">
-        📋 ${excede ? `Mostrando ${_MATERIAL_TOPE_VER_TODAS} de ${total}` : `Todas (${total})`} — escribe para filtrar
-    </div>`;
-
-    const htmlItems = todas.map(item => _htmlItemMaterial(tipoInput, tipoData, item)).join('');
-
-    listContainer.innerHTML = htmlHeader + _htmlBotonPinterest(tipoInput) + htmlItems;
-    listContainer.classList.add('show');
+function mostrarUltimasMaterial(tipoInput) {
+    const searchEl = document.getElementById(`search-${tipoInput}`);
+    if (!searchEl || searchEl.value.trim() !== '') return;
+    _renderBuscadorMaterial(tipoInput, false);
 }
 
+function mostrarMasMaterial(tipoInput) {
+    _renderBuscadorMaterial(tipoInput, true);
+}
+
+function mostrarTodasMaterial(tipoInput) { mostrarMasMaterial(tipoInput); }
+
 function filtrarMaterial(tipoInput) {
-    const listContainer = document.getElementById(`list-${tipoInput}`);
-    const searchInput   = document.getElementById(`search-${tipoInput}`).value.toLowerCase();
-
-    if (searchInput.trim() === '') {
-        // Si borran todo el texto, volver a mostrar las últimas (igual que focus)
-        mostrarUltimasMaterial(tipoInput);
-        return;
-    }
-
-    const tipoData = _tipoDataDesdeInput(tipoInput);
-    // Protección por si el catálogo aún no carga
-    if (!maestroMateriales[tipoData]) return;
-
-    const coincidencias = maestroMateriales[tipoData].filter(item => {
-        const textoCompleto = Object.values(item).join(' ').toLowerCase();
-        return textoCompleto.includes(searchInput);
-    });
-    const opciones = coincidencias.slice(0, 50); // Máximo 50 resultados pintados al buscar
-
-    const htmlOpcionesBD = opciones.map(item => _htmlItemMaterial(tipoInput, tipoData, item)).join('');
-
-    // Si hay más coincidencias de las que se pintaron, avisamos al pie.
-    const htmlAvisoMas = coincidencias.length > opciones.length
-        ? `<div style="padding:8px 12px; font-size:11px; color:#94a3b8; text-align:center; border-top:1px solid #f1f5f9;">
-               Mostrando ${opciones.length} de ${coincidencias.length} — sigue escribiendo para afinar
-           </div>`
-        : '';
-
-    listContainer.innerHTML = _htmlBotonPinterest(tipoInput) + htmlOpcionesBD + htmlAvisoMas;
-    listContainer.classList.add('show');
+    _renderBuscadorMaterial(tipoInput, false);
 }
 function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl, proveedor) {
     // Guardamos el SKU secreto
@@ -646,6 +618,9 @@ async function editarPlantilla(id) {
         }
 
         const adn = typeof plantilla.config_json === 'string' ? JSON.parse(plantilla.config_json) : plantilla.config_json;
+        if (typeof cargarMaestroMaterialesVenta === 'function' && !(await cargarMaestroMaterialesVenta())) {
+            return;
+        }
 
         // 1. Cerramos la vista de catálogo
         document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
@@ -655,26 +630,26 @@ async function editarPlantilla(id) {
 
         // 2. Abrimos el modal y disparamos la vista base
         if (tipoConfig === 'comedor' || categoriaPlantilla === 'comedor') {
-            openConfigComedor();
+            await openConfigComedor();
             if (adn['comedor-formato']) {
                 document.getElementById('comedor-formato').value = adn['comedor-formato'];
                 actualizarVistaComedor();
             }
         } else if (tipoConfig === 'centro' || categoriaPlantilla.includes('mesa') || categoriaPlantilla.includes('centro')) {
-            openConfigCentro();
+            await openConfigCentro();
             if (adn['centro-tipo']) {
                 document.getElementById('centro-tipo').value = adn['centro-tipo'];
                 actualizarVistaCentro();
             }
         } else if (tipoConfig === 'butaca' || categoriaPlantilla.includes('butaca') || categoriaPlantilla.includes('silla') || categoriaPlantilla.includes('sitial')) {
-            openConfigButaca();
+            await openConfigButaca();
             if (adn['butaca-tipo']) {
                 document.getElementById('butaca-tipo').value = adn['butaca-tipo'];
                 actualizarVistaButaca();
             }
         } else {
             const fotoResucitada = _resolverUrlImagenMaterial(plantilla.foto_url);
-            openConfig(plantilla.nombre, fotoResucitada);
+            await openConfig(plantilla.nombre, fotoResucitada);
             if (adn['sofa-modelo']) {
                 document.getElementById('sofa-modelo').value = adn['sofa-modelo'];
                 actualizarVistaSofa();
@@ -2085,10 +2060,11 @@ async function eliminarMaterialMaestro(sku, tipo) {
  * Recarga el maestro de materiales desde el backend y vuelve a renderizar
  * todas las secciones del Maestro en la vista de taller/admin.
  */
-async function _refreshMaestro() {
+async function _refreshMaestro({ renderizar = true } = {}) {
     try {
         const res = await apiFetch(`${API_URL}/api/materiales/listas`);
         const mat = await res.json();
+        if (!res.ok || mat.error) throw new Error(mat.error || 'No se pudo cargar el maestro');
         // Actualizar el estado global
         maestroMateriales.telas        = mat.telas        || [];
         maestroMateriales.cojines      = mat.cojines      || [];
@@ -2097,6 +2073,7 @@ async function _refreshMaestro() {
         maestroMateriales.bases_comedor = mat.bases_comedor || [];
         maestroMateriales.sillas       = mat.sillas       || [];
         maestroMateriales.butacas      = mat.butacas      || [];
+        window._maestroMaterialesCargado = true;
 
         // TAMBIÉN ACTUALIZAR EL MAESTRO DEL MÓDULO INVENTARIO EN SEGUNDO PLANO
         if (typeof _maestroInv !== 'undefined') {
@@ -2105,12 +2082,16 @@ async function _refreshMaestro() {
             _maestroInv.sillas        = mat.sillas        || [];
             _maestroInv.butacas       = mat.butacas       || [];
         }
-    } catch { /* ignorar error de red — no re-lanzar */ }
+    } catch (e) {
+        console.error('No se pudo refrescar el maestro de materiales:', e);
+        return false;
+    }
 
     // Re-renderizar si la función de Taller está disponible.
-    if (typeof cargarInventarioTaller === 'function') {
+    if (renderizar && typeof cargarInventarioTaller === 'function') {
         await cargarInventarioTaller();
     }
+    return true;
 }
 
 

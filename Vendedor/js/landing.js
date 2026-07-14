@@ -5,8 +5,17 @@
 // ── Navbar: estado sesión cliente ────────────────────────────────
 function imActualizarNavbarCliente() {
   const sesion = localStorage.getItem('usuarioInnova');
-  if (!sesion) return;
-  const u = JSON.parse(sesion);
+  const token = localStorage.getItem('innova_token');
+  if (!sesion || !token) return;
+  let u;
+  try {
+    u = JSON.parse(sesion);
+  } catch (_error) {
+    localStorage.removeItem('usuarioInnova');
+    localStorage.removeItem('innova_token');
+    localStorage.removeItem('innova_refresh_token');
+    return;
+  }
   // Solo aplica si el rol es Cliente (los trabajadores entran al ERP)
   if (u.rol !== 'Cliente') return;
 
@@ -14,9 +23,10 @@ function imActualizarNavbarCliente() {
   if (!navLinks) return;
 
   // Reemplazar botones de registro/login por saludo + cerrar sesión
+  const primerNombre = String(u.nombre || 'Cliente').trim().split(/\s+/)[0] || 'Cliente';
   navLinks.innerHTML = `
     <div id="im-nav-sesion">
-      <p class="im-nav-saludo">Hola, <span>${u.nombre.split(' ')[0]}</span></p>
+      <p class="im-nav-saludo">Hola, <span>${escapeHTML(primerNombre)}</span></p>
       <button class="im-nav-link" onclick="abrirSeguimiento()" style="color:#c9a84c;border-color:rgba(201,168,76,0.4)">
         Mis Pedidos
       </button>
@@ -84,28 +94,11 @@ function imAbrirPanel(tipo) {
   if (tipo === 'login') {
     formLogin.classList.add('active');
     btnLogin.classList.add('active-panel');
-    // Cargar sedes para el dropdown (solo si aún no fueron cargadas)
-    _imCargarSedes();
   } else {
     formReg.classList.add('active');
     btnLogin.classList.remove('active-panel');
   }
   wrapper.classList.add('visible');
-}
-
-async function _imCargarSedes() {
-  const sel = document.getElementById('im-login-sede');
-  if (!sel || sel.options.length > 1) return; // ya cargadas
-  try {
-    const res  = await fetch(`${API_URL}/api/sedes`);
-    const list = await res.json();
-    list.forEach(s => {
-      sel.innerHTML += `<option value="${s.id}">${s.nombre}</option>`;
-    });
-    // Mostrar el wrapper una vez cargadas
-    const wrapper = document.getElementById('im-sede-wrapper');
-    if (wrapper) wrapper.style.display = 'block';
-  } catch(e) { console.warn('No se pudieron cargar sedes', e); }
 }
 
 // ── Scroll suave ─────────────────────────────────────────────────
@@ -170,15 +163,11 @@ async function imEntrarAlSistema() {
       // ROLES_ERP viene de config.js — no redeclarar aquí
       if (!ROLES_ERP.includes(usuarioActivo.rol)) {
         localStorage.removeItem('usuarioInnova');
+        localStorage.removeItem('innova_token');
+        localStorage.removeItem('innova_refresh_token');
         return Swal.fire({ background:'#14100a', color:'#f5f0e8', icon:'warning',
           title:'Sin acceso', text:'Tu cuenta aún no tiene acceso al panel interno.',
           confirmButtonColor:'#c9a84c' });
-      }
-
-      // Trabajador con acceso al panel: recién con token guardado es seguro
-      // pedir /api/sofa-modelos (requiere login). FIX-401-LOOP.
-      if (usuarioActivo.rol !== 'Cliente' && typeof gmPopularSelect === 'function') {
-        gmPopularSelect();
       }
 
       // Trabajador: mostrar modal de sede ANTES de entrar al ERP
@@ -356,8 +345,11 @@ async function imMostrarModalSede() {
     try {
       const res  = await fetch(`${API_URL}/api/sedes`);
       const list = await res.json();
+      if (!res.ok || !Array.isArray(list)) throw new Error('Respuesta de sedes inválida');
       list.forEach(s => {
-        sel.innerHTML += `<option value="${s.id}" data-nombre="${s.nombre}">${s.nombre}</option>`;
+        const option = new Option(String(s.nombre || 'Sede'), String(s.id || ''));
+        option.dataset.nombre = String(s.nombre || 'Sede');
+        sel.add(option);
       });
     } catch(e) { console.warn('No se pudieron cargar sedes', e); }
   }

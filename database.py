@@ -15,7 +15,7 @@ from psycopg2 import pool as pg_pool
 from psycopg2 import Error as Psycopg2Error
 from psycopg2.extensions import TRANSACTION_STATUS_IDLE
 
-BACKEND_URL = os.getenv("BACKEND_URL", "https://innova-4cnn.onrender.com")
+BACKEND_URL = os.getenv("BACKEND_URL", "https://innovamobili.com")
 
 # ─── Pool de conexiones ───────────────────────────────────────────────────────
 # Julio 2026 — DB_HOST ya apunta al endpoint "-pooler" de Neon (PgBouncer),
@@ -140,7 +140,8 @@ def release_db_connection(conn):
         return
     try:
         if conn.closed:
-            return  # ya está cerrada, nada que devolver al pool
+            _db_pool.putconn(conn, close=True)
+            return
         if conn.get_transaction_status() != TRANSACTION_STATUS_IDLE:
             conn.rollback()
         _db_pool.putconn(conn)
@@ -274,6 +275,7 @@ def cloudinary_upload(file_obj, folder: str, max_width: int = 1200):
             {"fetch_format": "webp"},
         ],
         overwrite=False,
+        timeout=20,
     )
 
 
@@ -377,7 +379,7 @@ def _enviar_email_resend(destinatario_email, asunto, mensaje):
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "InnovaERP/1.0 (+https://innova-4cnn.onrender.com)",
+            "User-Agent": "InnovaERP/1.0 (+https://innovamobili.com)",
         },
         method="POST",
     )

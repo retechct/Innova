@@ -17,10 +17,12 @@ function _abrirPDF(urlPdf, logisticaId) {
 // URL para compartir por WhatsApp — usamos el proxy Flask también,
 // así el proveedor puede abrir el PDF desde el link del mensaje.
 function _urlPdfPublica(urlPdf, logisticaId) {
+    const urlSegura = _logUrlImagenSegura(urlPdf);
+    if (urlSegura) return urlSegura;
     if (logisticaId) {
         return `${API_URL}/api/logistica/${logisticaId}/pdf-oc`;
     }
-    return urlPdf || '';
+    return '';
 }
 // ── Helper: normalizar número peruano para wa.me ──────────────────────────────
 function _normalizarTelWA(raw) {
@@ -47,11 +49,34 @@ function _normalizarTelWA(raw) {
 // manda las dos y son distintas, se muestra un mini-carrusel; si solo hay
 // una, se muestra esa; si no hay ninguna, el ícono de "sin foto" de siempre.
 const _logCarouselIdx = {};
+const _logItemsEdicion = new Map();
+let _logProveedoresEdicion = [];
+
+function _logAbrirEditarPorId(itemId) {
+    const id = Number(itemId);
+    const item = _logItemsEdicion.get(id);
+    if (!item) {
+        Swal.fire('Actualiza la bandeja', 'El requerimiento ya no está disponible.', 'info');
+        return;
+    }
+    return _abrirEditarLogistica(item, _logProveedoresEdicion);
+}
+
+function _logUrlImagenSegura(valor) {
+    if (!valor) return '';
+    try {
+        const url = new URL(String(valor), window.location.origin);
+        return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+    } catch (_error) {
+        return '';
+    }
+}
 
 function _logFotosArray(item) {
-    if (Array.isArray(item.fotos) && item.fotos.length) return item.fotos;
-    // Compatibilidad con datos antiguos que solo traían foto_url
-    return item.foto_url ? [item.foto_url] : [];
+    const fotos = Array.isArray(item.fotos) && item.fotos.length
+        ? item.fotos
+        : (item.foto_url ? [item.foto_url] : []);
+    return [...new Set(fotos.map(_logUrlImagenSegura).filter(Boolean))];
 }
 
 // Etiquetas para cada foto del array de _logFotosArray, en el MISMO orden
@@ -204,8 +229,9 @@ window._logCarouselNav = function(idBase, fotos, labels, dir) {
 function _logFotoHTML(item, size, idPrefix) {
     const fotos  = _logFotosArray(item);
     const labels = _logFotoLabels(item);
-    const idBase = `${idPrefix}-${item.id}`;
-    const titulo = (item.insumo || '').replace(/'/g, "\\'");
+    const itemId = Number.isInteger(Number(item.id)) ? Number(item.id) : 0;
+    const idBase = `${idPrefix}-${itemId}`;
+    const tituloJS = jsStringAttr(item.insumo || 'Insumo');
 
     if (fotos.length === 0) {
         return `<div style="width:${size}px;height:${size}px;border-radius:6px;background:#f1f5f9;
@@ -217,41 +243,42 @@ function _logFotoHTML(item, size, idPrefix) {
     if (fotos.length === 1) {
         const etiqueta = labels[0] || '';
         return `<div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;">
-            <img id="${idBase}-img" src="${fotos[0]}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-               onclick="event.stopPropagation();_invLightbox(this.src,'${titulo}')"
-               title="${etiqueta ? etiqueta + ' — ' : ''}Ver foto en grande"
+            <img id="${idBase}-img" src="${escapeAttr(fotos[0])}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
+               onclick="event.stopPropagation();_invLightbox(this.src,${tituloJS})"
+               title="${escapeAttr(etiqueta ? etiqueta + ' — ' : '')}Ver foto en grande"
                style="width:100%;height:100%;object-fit:cover;border-radius:6px;cursor:zoom-in;
                       border:1px solid #e2e8f0;">
             ${etiqueta ? `<span style="position:absolute;bottom:1px;left:1px;right:1px;background:rgba(0,0,0,0.55);
                   color:white;font-size:7px;font-weight:700;text-align:center;border-radius:0 0 5px 5px;
-                  padding:1px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${etiqueta}</span>` : ''}
+                  padding:1px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHTML(etiqueta)}</span>` : ''}
         </div>`;
     }
 
     // 2+ fotos → mini carrusel (insumo + foto del mueble), con etiqueta
     // debajo indicando cuál de las dos se está viendo.
-    const fotosJSON  = JSON.stringify(fotos).replace(/"/g, '&quot;');
-    const labelsJSON = JSON.stringify(labels).replace(/"/g, '&quot;');
+    const fotosJSON  = escapeAttr(JSON.stringify(fotos));
+    const labelsJSON = escapeAttr(JSON.stringify(labels));
+    const idBaseJS = jsStringAttr(idBase);
     const btn = Math.max(15, Math.round(size * 0.36));
     return `<div id="${idBase}" style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;
                   border-radius:6px;overflow:hidden;border:1px solid #e2e8f0;">
-        <img id="${idBase}-img" src="${fotos[0]}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-             onclick="event.stopPropagation();_invLightbox(this.src,'${titulo}')"
+        <img id="${idBase}-img" src="${escapeAttr(fotos[0])}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
+             onclick="event.stopPropagation();_invLightbox(this.src,${tituloJS})"
              title="Ver foto en grande"
              style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;">
-        <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, ${labelsJSON}, -1)"
+        <button onclick="event.stopPropagation();_logCarouselNav(${idBaseJS}, ${fotosJSON}, ${labelsJSON}, -1)"
             style="position:absolute;left:1px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);
                    color:white;border:none;border-radius:50%;width:${btn}px;height:${btn}px;cursor:pointer;
                    font-size:${Math.round(btn * 0.6)}px;line-height:1;padding:0;
                    display:flex;align-items:center;justify-content:center;">‹</button>
-        <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, ${labelsJSON}, 1)"
+        <button onclick="event.stopPropagation();_logCarouselNav(${idBaseJS}, ${fotosJSON}, ${labelsJSON}, 1)"
             style="position:absolute;right:1px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);
                    color:white;border:none;border-radius:50%;width:${btn}px;height:${btn}px;cursor:pointer;
                    font-size:${Math.round(btn * 0.6)}px;line-height:1;padding:0;
                    display:flex;align-items:center;justify-content:center;">›</button>
         <span id="${idBase}-dot" style="position:absolute;bottom:1px;left:1px;right:1px;
               background:rgba(0,0,0,0.55);color:white;font-size:7px;font-weight:700;text-align:center;
-              border-radius:0 0 5px 5px;padding:1px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${labels[0] || ''} · 1/${fotos.length}</span>
+              border-radius:0 0 5px 5px;padding:1px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHTML(labels[0] || '')} · 1/${fotos.length}</span>
     </div>`;
 }
 
@@ -270,6 +297,16 @@ async function cargarLogisticaExterna() {
         ]);
         const items       = await resLog.json();
         const proveedores = await resProv.json();
+        _logItemsEdicion.clear();
+        if (Array.isArray(items)) {
+            items.forEach(item => {
+                const itemId = Number(item.id);
+                if (Number.isInteger(itemId) && itemId > 0) {
+                    _logItemsEdicion.set(itemId, item);
+                }
+            });
+        }
+        _logProveedoresEdicion = Array.isArray(proveedores) ? proveedores : [];
 
         const ESTADOS_COMPLETADOS = ['Recibido', 'Cancelado'];
         // FIX (julio 2026): la tela Interna queda con estado='Recibido' en
@@ -320,8 +357,10 @@ async function cargarLogisticaExterna() {
         function _logFotoHTMLCard(item, idPrefix) {
             const fotos  = _logFotosArray(item);
             const labels = _logFotoLabels(item);
-            const idBase = `${idPrefix}-${item.id}`;
-            const titulo = (item.insumo || '').replace(/'/g, "\\'");
+            const itemId = Number.isInteger(Number(item.id)) ? Number(item.id) : 0;
+            const idBase = `${idPrefix}-${itemId}`;
+            const idBaseJS = jsStringAttr(idBase);
+            const tituloJS = jsStringAttr(item.insumo || 'Insumo');
 
             if (fotos.length === 0) {
                 return `<div style="width:100%;aspect-ratio:4/3;border-radius:12px 12px 0 0;background:#f1f5f9;
@@ -329,28 +368,28 @@ async function cargarLogisticaExterna() {
                               <i class="fa-solid fa-image"></i></div>`;
             }
 
-            const fotosJSON  = JSON.stringify(fotos).replace(/"/g, '&quot;');
-            const labelsJSON = JSON.stringify(labels).replace(/"/g, '&quot;');
+            const fotosJSON  = escapeAttr(JSON.stringify(fotos));
+            const labelsJSON = escapeAttr(JSON.stringify(labels));
             const controles = fotos.length > 1 ? `
-                <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, ${labelsJSON}, -1)"
+                <button onclick="event.stopPropagation();_logCarouselNav(${idBaseJS}, ${fotosJSON}, ${labelsJSON}, -1)"
                     style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);
                            color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;
                            font-size:16px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;">‹</button>
-                <button onclick="event.stopPropagation();_logCarouselNav('${idBase}', ${fotosJSON}, ${labelsJSON}, 1)"
+                <button onclick="event.stopPropagation();_logCarouselNav(${idBaseJS}, ${fotosJSON}, ${labelsJSON}, 1)"
                     style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);
                            color:white;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer;
                            font-size:16px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;">›</button>` : '';
 
             return `<div id="${idBase}" style="position:relative;width:100%;aspect-ratio:4/3;overflow:hidden;
                           border-radius:12px 12px 0 0;background:#f1f5f9;">
-                <img id="${idBase}-img" src="${fotos[0]}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
-                     onclick="event.stopPropagation();_invLightbox(this.src,'${titulo}')"
+                <img id="${idBase}-img" src="${escapeAttr(fotos[0])}" onerror="this.onerror=null;this.src='imagenes/sin_foto.jpg'"
+                     onclick="event.stopPropagation();_invLightbox(this.src,${tituloJS})"
                      title="Ver foto en grande"
                      style="width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block;">
                 ${controles}
                 <span id="${idBase}-dot" style="position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,0.6);
                       color:white;font-size:10px;font-weight:700;border-radius:12px;padding:2px 9px;">
-                      ${labels[0] || ''}${labels[0] ? ' · ' : ''}1/${fotos.length}</span>
+                      ${escapeHTML(labels[0] || '')}${labels[0] ? ' · ' : ''}1/${fotos.length}</span>
             </div>`;
         }
 
@@ -358,6 +397,10 @@ async function cargarLogisticaExterna() {
             const c = coloresEstado[item.estado] || { bg: '#f1f5f9', color: '#475569' };
             const fotoHTML = _logFotoHTMLCard(item, 'logc');
             const medidasTelaHTML = _logMedidasTelaHTML(item);
+            const itemId = Number.isInteger(Number(item.id)) ? Number(item.id) : 0;
+            const precioNumero = Number(item.precio_cotizado);
+            const precioVisible = Number.isFinite(precioNumero) ? precioNumero.toFixed(2) : '';
+            const comprobanteUrl = _logUrlImagenSegura(item.url_comprobante_pago);
             return `
             <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;
                         box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;">
@@ -378,10 +421,10 @@ async function cargarLogisticaExterna() {
                             <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHTML(item.proveedor)}</div>
                             ${item.proveedor_informal ? `<div style="font-size:10px;color:#64748b;margin-top:1px;"><i class="fa-solid fa-phone" style="font-size:9px;"></i> ${escapeHTML(item.proveedor_informal)}</div>` : ''}
                         </div>
-                        ${item.precio_cotizado ? `
+                        ${precioVisible ? `
                         <div style="background:#fef9c3;border-radius:6px;padding:6px 8px;">
                             <div style="font-size:10px;color:#92400e;font-weight:700;text-transform:uppercase;">Precio</div>
-                            <div style="font-weight:900;color:#92400e;">S/ ${item.precio_cotizado.toFixed(2)}</div>
+                            <div style="font-weight:900;color:#92400e;">S/ ${precioVisible}</div>
                         </div>` : `
                         <div style="background:#f8fafc;border-radius:6px;padding:6px 8px;">
                             <div style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Precio</div>
@@ -405,15 +448,15 @@ async function cargarLogisticaExterna() {
                         </div>` : ''}
                     </div>
 
-                    ${item.url_comprobante_pago ? `
-                    <a href="${escapeAttr(item.url_comprobante_pago)}" target="_blank" rel="noopener"
+                    ${comprobanteUrl ? `
+                    <a href="${escapeAttr(comprobanteUrl)}" target="_blank" rel="noopener"
                        style="font-size:11px;font-weight:700;color:#1d4ed8;text-decoration:none;display:inline-flex;align-items:center;gap:4px;margin-bottom:8px;">
                        <i class="fa-solid fa-receipt"></i> Ver comprobante de pago
                     </a>` : ''}
 
                     <div style="flex:1;"></div>
                     ${esAdmin ? `
-                    <button onclick="_abrirEditarLogistica(${JSON.stringify(item).replace(/"/g,'&quot;')}, ${JSON.stringify(proveedores).replace(/"/g,'&quot;')})"
+                    <button onclick="_logAbrirEditarPorId(${itemId})"
                             style="width:100%;background:#0f172a;color:white;border:none;margin-top:4px;
                                    padding:9px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;">
                         <i class="fa-solid fa-pen"></i> Gestionar etapa
@@ -645,13 +688,31 @@ window._logCarouselNav = function(idBase, fotos, labels, dir) {
 async function _abrirEditarLogistica(item, proveedores) {
     // ── Determinar etapa del flujo para mostrar acciones correctas ──
     const estado = item.estado;
+    const itemId = Number.isInteger(Number(item.id)) ? Number(item.id) : 0;
+    const insumoHTML = escapeHTML(item.insumo || 'Material sin nombre');
+    const skuHTML = escapeHTML(item.sku || '');
+    const detalleHTML = escapeHTML(item.detalle_insumo || '');
+    const productoHTML = escapeHTML(item.producto_item || '');
+    const codigoHTML = escapeHTML(item.codigo_venta || 'S/C');
+    const proveedorHTML = escapeHTML(item.proveedor || 'Sin proveedor');
+    const unidadHTML = escapeHTML(item.unidad || '');
+    const fechaEntregaHTML = escapeHTML(item.fecha_entrega_proveedor || '—');
+    const notasHTML = escapeHTML(item.notas_proveedor || '');
+    const proveedorInformalAttr = escapeAttr(item.proveedor_informal || '');
+    const precioNumero = Number(item.precio_cotizado);
+    const precioVisible = Number.isFinite(precioNumero) ? precioNumero.toFixed(2) : '—';
+    const cantidadNumero = Number(item.cantidad);
+    const cantidadVisible = Number.isFinite(cantidadNumero) ? cantidadNumero : '';
+    const comprobanteUrl = _logUrlImagenSegura(item.url_comprobante_pago);
 
     // ETAPA 1 → Editar gestión del insumo (Externo / Informal / Interno)
     if (['POR_PEDIR', 'Pendiente'].includes(estado)) {
         const tipoActual = item.tipo_gestion || 'Externo';
-        const opsProv = `<option value="">— Sin asignar —</option>` + proveedores.map(p =>
-            `<option value="${p.id}" ${item.proveedor_id == p.id ? 'selected' : ''}>${p.nombre} (${p.especialidad})</option>`
-        ).join('');
+        const opsProv = `<option value="">— Sin asignar —</option>` + proveedores.map(p => {
+            const proveedorId = Number(p.id);
+            if (!Number.isInteger(proveedorId) || proveedorId <= 0) return '';
+            return `<option value="${proveedorId}" ${item.proveedor_id == proveedorId ? 'selected' : ''}>${escapeHTML(p.nombre || 'Sin nombre')} (${escapeHTML(p.especialidad || 'Sin especialidad')})</option>`;
+        }).join('');
 
         // Bloque de foto + detalles del insumo desde el maestro
         const fotoHTML = _logFotoHTML(item, 72, 'loge');
@@ -682,12 +743,12 @@ async function _abrirEditarLogistica(item, proveedores) {
                         ${fotoHTML}
                         <div style="flex:1;min-width:0;">
                             <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:2px;">Insumo</div>
-                            <div style="font-weight:900;font-size:15px;line-height:1.2;">${item.insumo}
-                                <span style="color:#94a3b8;font-size:11px;font-weight:400;">${item.sku || ''}</span>
+                            <div style="font-weight:900;font-size:15px;line-height:1.2;">${insumoHTML}
+                                <span style="color:#94a3b8;font-size:11px;font-weight:400;">${skuHTML}</span>
                             </div>
-                            ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;margin-top:3px;">${item.detalle_insumo}</div>` : ''}
-                            ${item.producto_item ? `<div style="font-size:11px;color:#0369a1;margin-top:2px;font-weight:700;"><i class="fa-solid fa-couch" style="font-size:10px;"></i> ${item.producto_item}</div>` : ''}
-                            <div style="font-size:11px;color:#64748b;margin-top:2px;">Pedido: <b style="color:#d97706;">#${item.codigo_venta}</b></div>
+                            ${detalleHTML ? `<div style="font-size:11px;color:#64748b;margin-top:3px;">${detalleHTML}</div>` : ''}
+                            ${productoHTML ? `<div style="font-size:11px;color:#0369a1;margin-top:2px;font-weight:700;"><i class="fa-solid fa-couch" style="font-size:10px;"></i> ${productoHTML}</div>` : ''}
+                            <div style="font-size:11px;color:#64748b;margin-top:2px;">Pedido: <b style="color:#d97706;">#${codigoHTML}</b></div>
                         </div>
                     </div>
 
@@ -696,7 +757,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                         <div>
                             <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Cantidad</label>
                             <input id="sl-cantidad" class="swal2-input" type="number" step="0.01" min="0"
-                                value="${cantidadInicial}" placeholder="Ej: 3.5"
+                                value="${escapeAttr(cantidadInicial)}" placeholder="Ej: 3.5"
                                 style="margin:0;width:100%;">
                         </div>
                         <div>
@@ -748,7 +809,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                     <!-- Nota (solo Externo) -->
                     <div id="sl-nota-wrap" style="display:${tipoActual === 'Externo' ? 'block' : 'none'};">
                         <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Medidas / nota para el proveedor (opcional)</label>
-                        <textarea id="sl-nota" class="swal2-textarea" placeholder="Ej: Tela: 8 mts. Medidas: largo 3m x fondo 2m..." style="margin:0 0 4px;width:100%;font-size:13px;resize:vertical;min-height:60px;">${item.notas_proveedor || ''}</textarea>
+                        <textarea id="sl-nota" class="swal2-textarea" placeholder="Ej: Tela: 8 mts. Medidas: largo 3m x fondo 2m..." style="margin:0 0 4px;width:100%;font-size:13px;resize:vertical;min-height:60px;">${notasHTML}</textarea>
                         <div style="font-size:10px;color:#64748b;margin:0 0 10px;">Si escribes aqui los metros, se mostraran en la tarjeta y saldran en el WhatsApp.</div>
                     </div>
 
@@ -762,7 +823,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                         <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;text-transform:uppercase;color:#475569;">Proveedor / Contacto (nombre y celular)</label>
                         <input id="sl-informal-prov" class="swal2-input" type="text"
                             placeholder="Ej: Juan Pérez · 987654321"
-                            value="${item.proveedor_informal || ''}"
+                            value="${proveedorInformalAttr}"
                             style="margin:0;width:100%;">
                     </div>
 
@@ -850,7 +911,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                     `📋 *Pedido:* #${item.codigo_venta}`,
                     ...(datos.nota          ? [`📝 *Nota:* ${datos.nota}`]                                 : []),
                     ``,
-                    `Por favor respóndenos con el *precio por ${esTela ? 'metro' : 'unidad'}* y la *fecha de entrega*. Gracias 🙏`,
+                    `Por favor respóndenos con el *precio sin IGV por ${esTela ? 'metro' : 'unidad'}* y la *fecha de entrega*. Gracias 🙏`,
                 ].join('\n');
 
                 if (tel) {
@@ -876,10 +937,13 @@ async function _abrirEditarLogistica(item, proveedores) {
 
             // ── INFORMAL: mostrar botón "Enviar al taller" ─────────────────
             if (datos.tipo_gestion === 'Informal') {
+                const esTelaInformal = _logEsTela({ ...item, unidad: datos.unidad || item.unidad });
                 const { isConfirmed: confirmarTaller } = await Swal.fire({
                     icon: 'info',
                     title: '📞 Insumo informal guardado',
-                    html: `Cuando ya tengas el material listo, presiona <b>"Enviar al taller"</b> para desbloquear los tickets de producción.`,
+                    html: esTelaInformal
+                        ? `Cuando ya tengas la tela, presiona <b>"Enviar al taller"</b>. Entrará a la bandeja de Telas y se desbloqueará Tapicería recién al confirmar su distribución.`
+                        : `Cuando ya tengas el material listo, presiona <b>"Enviar al taller"</b> para revisar y desbloquear las tareas que dependan de él.`,
                     confirmButtonText: '📦 Enviar al taller ahora',
                     showCancelButton: true,
                     cancelButtonText: 'Lo haré después',
@@ -943,24 +1007,24 @@ async function _abrirEditarLogistica(item, proveedores) {
                 <div style="text-align:left;font-size:13px;">
                     <div style="background:#e0f2fe;border:1px solid #7dd3fc;border-radius:8px;
                                 padding:10px 12px;margin-bottom:14px;font-size:12px;color:#0369a1;">
-                        Solicitud enviada a <b>${item.proveedor}</b> por WhatsApp.
+                        Solicitud enviada a <b>${proveedorHTML}</b> por WhatsApp.
                         Cuando responda con el precio, regístralo aquí.
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
                         <div>
                             <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:2px;">Insumo</div>
-                            <div style="font-weight:800;">${item.insumo}</div>
-                            ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;">${item.detalle_insumo}</div>` : ''}
-                            ${item.producto_item ? `<div style="font-size:11px;color:#0369a1;font-weight:700;">🛋️ ${item.producto_item}</div>` : ''}
+                            <div style="font-weight:800;">${insumoHTML}</div>
+                            ${detalleHTML ? `<div style="font-size:11px;color:#64748b;">${detalleHTML}</div>` : ''}
+                            ${productoHTML ? `<div style="font-size:11px;color:#0369a1;font-weight:700;">🛋️ ${productoHTML}</div>` : ''}
                         </div>
                         <div>
                             <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:2px;">Pedido</div>
-                            <div style="font-weight:800;color:#d97706;">#${item.codigo_venta}</div>
+                            <div style="font-weight:800;color:#d97706;">#${codigoHTML}</div>
                         </div>
                         ${item.cantidad ? `
                         <div>
                             <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:2px;">Cantidad solicitada</div>
-                            <div style="font-weight:700;">${item.cantidad} ${item.unidad || ''}</div>
+                            <div style="font-weight:700;">${cantidadVisible} ${unidadHTML}</div>
                         </div>` : ''}
                     </div>
                     <div style="color:#64748b;font-size:12px;padding:8px 10px;background:#f8fafc;border-radius:6px;">
@@ -999,7 +1063,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                 ...(item.foto_url       ? [`🔗 *Ref. visual:* ${item.foto_url}`]                      : []),
                 `📋 *Pedido:* #${item.codigo_venta}`,
                 ``,
-                `Por favor dinos el *precio por ${esTela ? 'metro' : 'unidad'}* y la *fecha de entrega*. Gracias 🙏`,
+                `Por favor dinos el *precio sin IGV por ${esTela ? 'metro' : 'unidad'}* y la *fecha de entrega*. Gracias 🙏`,
             ].join('\n');
 
             if (tel) {
@@ -1023,19 +1087,19 @@ async function _abrirEditarLogistica(item, proveedores) {
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
                         <div style="background:#f8fafc;border-radius:8px;padding:10px;">
                             <div style="font-weight:700;color:#475569;font-size:10px;text-transform:uppercase;margin-bottom:4px;">Proveedor</div>
-                            <div style="font-weight:900;">${item.proveedor}</div>
+                            <div style="font-weight:900;">${proveedorHTML}</div>
                         </div>
                         <div style="background:#f8fafc;border-radius:8px;padding:10px;">
                             <div style="font-weight:700;color:#475569;font-size:10px;text-transform:uppercase;margin-bottom:4px;">Insumo</div>
-                            <div style="font-weight:900;">${item.insumo}</div>
+                            <div style="font-weight:900;">${insumoHTML}</div>
                         </div>
                         <div style="background:#fef9c3;border-radius:8px;padding:10px;">
                             <div style="font-weight:700;color:#854d0e;font-size:10px;text-transform:uppercase;margin-bottom:4px;">Precio cotizado</div>
-                            <div style="font-weight:900;font-size:18px;color:#854d0e;">S/ ${item.precio_cotizado ? item.precio_cotizado.toFixed(2) : '—'}</div>
+                            <div style="font-weight:900;font-size:18px;color:#854d0e;">S/ ${precioVisible}</div>
                         </div>
                         <div style="background:#fef9c3;border-radius:8px;padding:10px;">
                             <div style="font-weight:700;color:#854d0e;font-size:10px;text-transform:uppercase;margin-bottom:4px;">Fecha de entrega</div>
-                            <div style="font-weight:900;font-size:14px;color:#854d0e;">${item.fecha_entrega_proveedor || '—'}</div>
+                            <div style="font-weight:900;font-size:14px;color:#854d0e;">${fechaEntregaHTML}</div>
                         </div>
                     </div>
                     <div style="color:#64748b;font-size:12px;margin-bottom:12px;">Al aprobar, se genera la <b>Orden de Compra</b> y se notifica al proveedor.</div>
@@ -1080,6 +1144,8 @@ async function _abrirEditarLogistica(item, proveedores) {
 
                 // Construir número de WhatsApp
                 let tel = _normalizarTelWA(dOC.telefono || item.telefono_proveedor || '');
+                const urlPdfPublica = _logUrlImagenSegura(_urlPdfPublica(dOC.url_pdf, itemId));
+                const numeroOcHTML = escapeHTML(dOC.numero_oc || '');
 
                 const msgOC = [
                     `Hola *${dOC.proveedor || item.proveedor}* 👋, somos *Innova Möbili*.`,
@@ -1093,7 +1159,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                     `📋 *Ref. pedido:* ${item.codigo_venta}`,
                     ``,
                     `📄 *Orden de Compra (PDF):*`,
-                    `👉 ${_urlPdfPublica(dOC.url_pdf, item.id)}`,
+                    `👉 ${urlPdfPublica}`,
                     ``,
                     `Por favor confirme la recepción de este documento. Gracias 🙏`,
                     ``,
@@ -1109,10 +1175,10 @@ async function _abrirEditarLogistica(item, proveedores) {
                             <div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;
                                         padding:10px 14px;margin-bottom:14px;font-size:12px;color:#166534;">
                                 El PDF fue generado y subido correctamente.
-                                ${dOC.numero_oc ? `<br><b>N° OC: ${dOC.numero_oc}</b>` : ''}
+                                ${numeroOcHTML ? `<br><b>N° OC: ${numeroOcHTML}</b>` : ''}
                             </div>
                             <div style="margin-bottom:10px;">
-                                <a href="#" onclick="_abrirPDF('${dOC.url_pdf}', ${item.id});return false;"
+                                <a href="#" onclick="_abrirPDF('', ${itemId});return false;"
                                    style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;
                                           border:1px solid #e2e8f0;border-radius:6px;padding:8px 14px;
                                           font-size:12px;font-weight:700;color:#0f172a;text-decoration:none;">
@@ -1144,25 +1210,32 @@ async function _abrirEditarLogistica(item, proveedores) {
     }
 
     // ETAPA 4 → Orden Enviada / En Tránsito: marcar recibido o actualizar estado
-    if (['Orden Enviada', 'En Tránsito', 'Confirmado', 'Pagado'].includes(estado)) {
-        let estadosPosibles = ['Orden Enviada','Confirmado','En Tránsito','Pagado','Listo para Recojo','Recibido','Cancelado'];
+    if (['Orden Enviada', 'En Tránsito', 'Confirmado', 'Pagado', 'Listo para Recojo'].includes(estado)) {
+        const transicionesUI = {
+            'Orden Enviada': ['Orden Enviada','Confirmado','En Tránsito','Pagado','Listo para Recojo','Recibido','Cancelado'],
+            'Confirmado': ['Confirmado','En Tránsito','Pagado','Listo para Recojo','Recibido','Cancelado'],
+            'En Tránsito': ['En Tránsito','Pagado','Listo para Recojo','Recibido','Cancelado'],
+            'Pagado': ['Pagado','Listo para Recojo','Recibido'],
+            'Listo para Recojo': ['Listo para Recojo','Recibido'],
+        };
+        const estadosPosibles = transicionesUI[estado] || [estado];
         const opsEstado = estadosPosibles.map(e => {
             const label = e === 'Listo para Recojo' ? '📢 Enviar a Cola de Recojo' : e;
             return `<option value="${e}" ${e === estado ? 'selected' : ''}>${label}</option>`;
         }).join('');
 
-        const tienePago = !!item.url_comprobante_pago;
+        const tienePago = !!comprobanteUrl;
 
         const { value: datos, isConfirmed } = await Swal.fire({
             title: `📦 Actualizar estado`,
             html: `
                 <div style="text-align:left;font-size:13px;">
                     <div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7e22ce;">
-                        Orden enviada a <b>${item.proveedor}</b>. Actualiza el estado según el avance.
+                        Orden enviada a <b>${proveedorHTML}</b>. Actualiza el estado según el avance.
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-                        <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Precio acordado</span><br><b style="font-size:16px;">S/ ${item.precio_cotizado ? item.precio_cotizado.toFixed(2) : '—'}</b></div>
-                        <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">F. entrega pactada</span><br><b>${item.fecha_entrega_proveedor || '—'}</b></div>
+                        <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Precio acordado</span><br><b style="font-size:16px;">S/ ${precioVisible}</b></div>
+                        <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">F. entrega pactada</span><br><b>${fechaEntregaHTML}</b></div>
                     </div>
                     <label style="font-weight:700;display:block;margin-bottom:4px;">Nuevo estado</label>
                     <select id="sl-estado" class="swal2-input" style="margin:0 0 14px;width:100%;"
@@ -1177,7 +1250,7 @@ async function _abrirEditarLogistica(item, proveedores) {
                         <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;
                                     padding:10px 12px;margin-bottom:10px;font-size:12px;color:#854d0e;">
                             <b>Registrar pago al proveedor</b> — Adjunta el comprobante (foto o PDF).
-                            ${tienePago ? `<br><a href="${item.url_comprobante_pago}" target="_blank"
+                            ${tienePago ? `<br><a href="${escapeAttr(comprobanteUrl)}" target="_blank" rel="noopener"
                                 style="color:#1d4ed8;font-weight:700;">📄 Ver comprobante anterior</a>` : ''}
                         </div>
                         <label style="font-weight:700;display:block;margin-bottom:6px;font-size:11px;
@@ -1242,19 +1315,20 @@ async function _abrirEditarLogistica(item, proveedores) {
                 Swal.fire({ title: 'Subiendo comprobante...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 const fd = new FormData();
                 fd.append('comprobante', datos.archivo);
-                const resPago = await apiFetch(`${API_URL}/api/logistica/${item.id}/registrar-pago`, {
+                const resPago = await _fetchLogisticaConTimeout(`${API_URL}/api/logistica/${item.id}/registrar-pago`, {
                     method: 'POST',
                     body: fd,
-                });
+                }, 25000);
                 const dPago = await resPago.json();
                 Swal.close();
                 if (!resPago.ok || !dPago.exito) throw new Error(dPago.error || 'Error al subir el comprobante');
+                const comprobanteNuevo = _logUrlImagenSegura(dPago.url);
                 Swal.fire({
                     icon: 'success',
                     title: '💳 Pago registrado',
                     html: `El comprobante fue subido correctamente.<br>
-                           <a href="${dPago.url}" target="_blank"
-                              style="color:#1d4ed8;font-weight:700;font-size:13px;">📄 Ver comprobante</a>`,
+                           ${comprobanteNuevo ? `<a href="${escapeAttr(comprobanteNuevo)}" target="_blank" rel="noopener"
+                              style="color:#1d4ed8;font-weight:700;font-size:13px;">📄 Ver comprobante</a>` : ''}`,
                     timer: 3000,
                     showConfirmButton: false,
                 });
@@ -1269,55 +1343,107 @@ async function _abrirEditarLogistica(item, proveedores) {
             });
             const d = await res.json();
             if (d.error) throw new Error(d.error);
-            const msg = datos.estado === 'Recibido'
-                ? '¡Material recibido! Los tickets relacionados fueron desbloqueados.'
-                : '¡Estado actualizado!';
-            Swal.fire({ icon: 'success', title: msg, timer: 2000, showConfirmButton: false });
+            const msg = d.mensaje || (datos.estado === 'Recibido'
+                ? 'Material recibido. El sistema revisó las dependencias relacionadas.'
+                : 'Estado actualizado.');
+            Swal.fire({ icon: 'success', title: 'Logística actualizada', text: msg, timer: 3000, showConfirmButton: false });
             cargarLogisticaExterna();
         } catch(e) { Swal.fire('Error', e.message, 'error'); }
         return;
     }
 
-    // ETAPA FINAL → Recibido / Cancelado: solo lectura con opción de cancelar
-    const opsEstadoFinal = ['Recibido','Cancelado']
-        .map(e => `<option value="${e}" ${e === estado ? 'selected' : ''}>${e}</option>`).join('');
-
-    const { value: datos, isConfirmed } = await Swal.fire({
+    // ETAPA FINAL → Recibido / Cancelado: solo lectura para preservar trazabilidad.
+    const pagoPendiente = estado === 'Recibido'
+        && String(item.tipo_gestion || 'Externo') === 'Externo'
+        && !comprobanteUrl;
+    const { isConfirmed, value: archivoPagoTardio } = await Swal.fire({
         title: `${estado === 'Recibido' ? '✅' : '❌'} ${estado}`,
         html: `
             <div style="text-align:left;font-size:13px;">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Proveedor</span><br><b>${item.proveedor}</b></div>
-                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Insumo</span><br><b>${item.insumo}</b></div>
-                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Precio final</span><br><b>S/ ${item.precio_cotizado ? item.precio_cotizado.toFixed(2) : '—'}</b></div>
-                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Entrega</span><br><b>${item.fecha_entrega_proveedor || '—'}</b></div>
+                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Proveedor</span><br><b>${proveedorHTML}</b></div>
+                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Insumo</span><br><b>${insumoHTML}</b></div>
+                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Precio final</span><br><b>S/ ${precioVisible}</b></div>
+                    <div><span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;">Entrega</span><br><b>${fechaEntregaHTML}</b></div>
                 </div>
-                <label style="font-weight:700;display:block;margin-bottom:4px;">Cambiar estado</label>
-                <select id="sl-estado" class="swal2-input" style="margin:0;width:100%;">${opsEstadoFinal}</select>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:9px 11px;color:#64748b;font-size:11px;">
+                    Este estado es final y se conserva para no perder la trazabilidad del pedido.
+                </div>
+                ${pagoPendiente ? `
+                <div style="margin-top:12px;background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:10px 11px;color:#854d0e;font-size:11px;">
+                    <b>Pago pendiente:</b> el material se recogió primero. Adjunta ahora el comprobante para cerrar el registro contable.
+                </div>
+                <input id="sl-pago-tardio" type="file" accept="image/*,application/pdf"
+                    style="margin-top:10px;width:100%;font-size:12px;">
+                ` : comprobanteUrl ? `
+                <a href="${escapeAttr(comprobanteUrl)}" target="_blank" rel="noopener"
+                    style="display:inline-block;margin-top:10px;color:#1d4ed8;font-size:11px;font-weight:700;">
+                    Ver comprobante de pago
+                </a>` : ''}
             </div>`,
-        showCancelButton: true,
-        confirmButtonText: 'Guardar',
-        cancelButtonText:  'Cerrar',
-        confirmButtonColor: '#0f172a',
-        preConfirm: () => ({ id: item.id, estado: document.getElementById('sl-estado').value })
+        showCancelButton: pagoPendiente,
+        confirmButtonText: pagoPendiente ? 'Registrar pago' : 'Cerrar',
+        cancelButtonText: 'Cerrar',
+        confirmButtonColor: pagoPendiente ? '#166534' : '#0f172a',
+        preConfirm: () => {
+            if (!pagoPendiente) return null;
+            const archivo = document.getElementById('sl-pago-tardio')?.files[0];
+            if (!archivo) {
+                Swal.showValidationMessage('Adjunta el comprobante de pago.');
+                return false;
+            }
+            if (archivo.size > 8 * 1024 * 1024) {
+                Swal.showValidationMessage('El comprobante no puede superar 8 MB.');
+                return false;
+            }
+            return archivo;
+        },
     });
-    if (!isConfirmed || !datos) return;
+    if (!pagoPendiente || !isConfirmed || !archivoPagoTardio) return;
 
     try {
-        const res = await apiFetch(`${API_URL}/api/logistica/actualizar`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(datos)
+        Swal.fire({ title: 'Registrando pago...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const form = new FormData();
+        form.append('comprobante', archivoPagoTardio);
+        const respuesta = await _fetchLogisticaConTimeout(
+            `${API_URL}/api/logistica/${itemId}/registrar-pago`,
+            { method: 'POST', body: form },
+            25000
+        );
+        const datosPago = await respuesta.json();
+        if (!respuesta.ok || !datosPago.exito) {
+            throw new Error(datosPago.error || 'No se pudo registrar el pago');
+        }
+        Swal.fire({
+            icon: 'success',
+            title: 'Pago registrado',
+            text: 'El material continúa como Recibido y el comprobante quedó asociado.',
+            timer: 2600,
+            showConfirmButton: false,
         });
-        const d = await res.json();
-        if (d.error) throw new Error(d.error);
-        Swal.fire({ icon:'success', title:'Actualizado', timer:1500, showConfirmButton:false });
         cargarLogisticaExterna();
-    } catch(e) { Swal.fire('Error', e.message, 'error'); }
+    } catch (error) {
+        Swal.fire('Error', error.message, 'error');
+    }
 }
 
 // Helper: ingresar cotización manualmente (cuando el proveedor confirma por teléfono/WhatsApp)
 // Renombrado y mejorado: registrar respuesta del proveedor (precio + fecha + foto opcional)
 async function _registrarRespuestaProveedor(item) {
+    const foto = _logFotosArray(item)[0] || '';
+    const insumoHTML = escapeHTML(item.insumo || 'Material sin nombre');
+    const detalleHTML = escapeHTML(item.detalle_insumo || '');
+    const productoHTML = escapeHTML(item.producto_item || '');
+    const proveedorHTML = escapeHTML(item.proveedor || 'Sin proveedor');
+    const notasHTML = escapeHTML(item.notas_proveedor || '');
+    const precioNumero = Number(item.precio_cotizado);
+    const precioAttr = Number.isFinite(precioNumero) && precioNumero > 0
+        ? precioNumero.toFixed(2)
+        : '';
+    const fechaInicial = String(item.fecha_entrega_proveedor || '').split('/').reverse().join('-');
+    const fechaAttr = /^\d{4}-\d{2}-\d{2}$/.test(fechaInicial) ? fechaInicial : '';
+    const adjuntoActual = _logUrlImagenSegura(item.url_cotizacion_adjunta);
+
     const { value: datos, isConfirmed } = await Swal.fire({
         title: `✅ Registrar respuesta del proveedor`,
         width: 500,
@@ -1326,17 +1452,17 @@ async function _registrarRespuestaProveedor(item) {
                 <!-- Resumen del insumo -->
                 <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:14px;
                             display:flex;gap:10px;align-items:center;">
-                    ${item.foto_url
-                        ? `<img src="${item.foto_url}" id="img-insumo-header"
+                    ${foto
+                        ? `<img src="${escapeAttr(foto)}" id="img-insumo-header"
                                style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;flex-shrink:0;"
                                onerror="this.style.display='none';var fb=document.getElementById('icon-insumo-fb');if(fb)fb.style.display='flex';">
                            <div id="icon-insumo-fb" style="display:none;width:52px;height:52px;border-radius:6px;background:#f1f5f9;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📦</div>`
                         : `<div style="width:52px;height:52px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">📦</div>`}
                     <div>
-                        <div style="font-weight:800;font-size:14px;">${item.insumo}</div>
-                        ${item.detalle_insumo ? `<div style="font-size:11px;color:#64748b;">${item.detalle_insumo}</div>` : ''}
-                        ${item.producto_item ? `<div style="font-size:11px;color:#0369a1;font-weight:700;">🛋️ ${item.producto_item}</div>` : ''}
-                        <div style="font-size:11px;color:#d97706;font-weight:700;">Proveedor: ${item.proveedor}</div>
+                        <div style="font-weight:800;font-size:14px;">${insumoHTML}</div>
+                        ${detalleHTML ? `<div style="font-size:11px;color:#64748b;">${detalleHTML}</div>` : ''}
+                        ${productoHTML ? `<div style="font-size:11px;color:#0369a1;font-weight:700;">🛋️ ${productoHTML}</div>` : ''}
+                        <div style="font-size:11px;color:#d97706;font-weight:700;">Proveedor: ${proveedorHTML}</div>
                     </div>
                 </div>
 
@@ -1344,17 +1470,16 @@ async function _registrarRespuestaProveedor(item) {
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
                     <div>
                         <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;
-                                      text-transform:uppercase;color:#475569;">Precio total (S/) *</label>
+                                      text-transform:uppercase;color:#475569;">Precio unitario sin IGV (S/) *</label>
                         <input id="sl-precio" class="swal2-input" type="number" step="0.01" min="0.01"
-                            placeholder="0.00" value="${item.precio_cotizado || ''}"
+                            placeholder="0.00" value="${precioAttr}"
                             style="margin:0;width:100%;">
                     </div>
                     <div>
                         <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;
                                       text-transform:uppercase;color:#475569;">Fecha de entrega *</label>
                         <input id="sl-fecha" class="swal2-input" type="date"
-                            value="${item.fecha_entrega_proveedor
-                                ? item.fecha_entrega_proveedor.split('/').reverse().join('-') : ''}"
+                            value="${fechaAttr}"
                             style="margin:0;width:100%;">
                     </div>
                 </div>
@@ -1363,9 +1488,9 @@ async function _registrarRespuestaProveedor(item) {
                 <label style="font-weight:700;display:block;margin-bottom:4px;font-size:11px;
                               text-transform:uppercase;color:#475569;">Notas / condiciones (opcional)</label>
                 <textarea id="sl-notas" class="swal2-textarea"
-                    placeholder="Ej: precio por metro, incluye flete, etc."
+                    placeholder="Ej: condiciones, flete incluido, disponibilidad, etc."
                     style="margin:0 0 12px;width:100%;font-size:12px;min-height:55px;resize:vertical;"
-                >${item.notas_proveedor || ''}</textarea>
+                >${notasHTML}</textarea>
 
                 <!-- Adjuntar cotización (foto o PDF del WA) -->
                 <label style="font-weight:700;display:block;margin-bottom:6px;font-size:11px;
@@ -1396,10 +1521,10 @@ async function _registrarRespuestaProveedor(item) {
                         📄 <span id="cot-pdf-nombre"></span>
                     </div>
                 </div>
-                ${item.url_cotizacion_adjunta
+                ${adjuntoActual
                     ? `<div style="margin-top:6px;font-size:11px;">
                            📎 Ya hay una cotización adjunta:
-                           <a href="${item.url_cotizacion_adjunta}" target="_blank"
+                           <a href="${escapeAttr(adjuntoActual)}" target="_blank" rel="noopener"
                               style="color:#1d4ed8;font-weight:700;">Ver archivo</a>
                        </div>`
                     : ''}
@@ -1434,9 +1559,17 @@ async function _registrarRespuestaProveedor(item) {
         if (datos.archivo) {
             const fd = new FormData();
             fd.append('archivo', datos.archivo);
-            const resUp = await apiFetch(`${API_URL}/api/upload-voucher`, { method: 'POST', body: fd });
+            const resUp = await _fetchLogisticaConTimeout(
+                `${API_URL}/api/upload-voucher`,
+                { method: 'POST', body: fd },
+                25000
+            );
             const dUp = await resUp.json();
-            if (dUp.url) url_cotizacion = dUp.url;
+            if (!resUp.ok || !dUp.url) {
+                throw new Error(dUp.error || 'No se pudo subir la cotizacion adjunta');
+            }
+            url_cotizacion = _logUrlImagenSegura(dUp.url);
+            if (!url_cotizacion) throw new Error('El servidor devolvió una URL de cotización inválida');
         }
 
         // Guardar precio, fecha, notas y marcar como Cotizado
@@ -1461,7 +1594,7 @@ async function _registrarRespuestaProveedor(item) {
             icon: 'success',
             title: '¡Cotización registrada!',
             html: `Precio: <b>S/ ${parseFloat(datos.precio).toFixed(2)}</b><br>
-                   ${url_cotizacion ? `📎 <a href="${url_cotizacion}" target="_blank" style="color:#1d4ed8;">Ver cotización adjunta</a><br>` : ''}
+                   ${url_cotizacion ? `📎 <a href="${escapeAttr(url_cotizacion)}" target="_blank" rel="noopener" style="color:#1d4ed8;">Ver cotización adjunta</a><br>` : ''}
                    Ahora puedes revisar y aprobar la Orden de Compra.`,
             timer: 3000,
             showConfirmButton: false,
@@ -1506,18 +1639,66 @@ function _voucherLogisticaStatus(texto, tipo = 'info') {
     box.textContent = texto;
 }
 
+async function _fetchLogisticaConTimeout(url, options = {}, timeoutMs = 25000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await apiFetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            throw new Error('La carga tardo demasiado. Revisa tu conexion e intenta nuevamente.');
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+let _voucherLogisticaSecuencia = 0;
+let _voucherLogisticaController = null;
+
 async function _leerVoucherLogisticaAutomatico(file) {
     window._ultimoVoucherLogisticaOCR = null;
     if (!file) return;
+    const secuencia = ++_voucherLogisticaSecuencia;
+    if (_voucherLogisticaController) _voucherLogisticaController.abort();
+    _voucherLogisticaController = new AbortController();
+    const controller = _voucherLogisticaController;
+
     if (!file.type.startsWith('image/')) {
         _voucherLogisticaStatus('Voucher subido. La lectura automática por ahora acepta imágenes; registra el pago manualmente.', 'warn');
+        if (_voucherLogisticaController === controller) _voucherLogisticaController = null;
+        return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+        _voucherLogisticaStatus('La imagen supera 8 MB. Reduce su tamaño o registra el pago manualmente.', 'warn');
+        if (_voucherLogisticaController === controller) _voucherLogisticaController = null;
         return;
     }
     _voucherLogisticaStatus('Leyendo comprobante automáticamente...', 'info');
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
+        let archivoOCR = file;
+        if (typeof _comprimirImagen === 'function') {
+            try {
+                archivoOCR = await _comprimirImagen(file, 1000, 0.82);
+            } catch (error) {
+                console.warn('No se pudo comprimir el voucher de logistica.', error);
+            }
+        }
+        if (secuencia !== _voucherLogisticaSecuencia) return;
         const fd = new FormData();
-        fd.append('archivo', file);
-        const res = await apiFetch(`${API_URL}/api/voucher/leer`, { method: 'POST', body: fd });
+        fd.append('archivo', archivoOCR, 'voucher-logistica.jpg');
+        const res = await apiFetch(`${API_URL}/api/voucher/leer`, {
+            method: 'POST',
+            body: fd,
+            signal: controller.signal
+        });
+        if (secuencia !== _voucherLogisticaSecuencia) return;
+        const contentType = (res.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.includes('application/json')) {
+            throw new Error('El lector Gemini no esta disponible');
+        }
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo leer el comprobante');
         if (data.ok === false) {
@@ -1532,7 +1713,15 @@ async function _leerVoucherLogisticaAutomatico(file) {
         if (data.numero_operacion) partes.push(`Op. ${data.numero_operacion}`);
         _voucherLogisticaStatus(`Comprobante leído: ${partes.join(' · ') || 'revisa el comprobante'}. Se validará contra el precio acordado al guardar.`, 'ok');
     } catch (e) {
+        if (secuencia !== _voucherLogisticaSecuencia) return;
+        if (e?.name === 'AbortError') {
+            _voucherLogisticaStatus('Gemini tardó demasiado y la lectura fue cancelada. Puedes continuar manualmente.', 'warn');
+            return;
+        }
         _voucherLogisticaStatus(`Voucher subido. No se pudo autoleer: ${e.message}. Puedes continuar manualmente.`, 'warn');
+    } finally {
+        clearTimeout(timeoutId);
+        if (_voucherLogisticaController === controller) _voucherLogisticaController = null;
     }
 }
 

@@ -19,96 +19,76 @@ dentro de cada elemento del array muebles.
 
 import io
 import json
+import math
 import traceback
 import openpyxl
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from io import BytesIO, StringIO
-
-import cloudinary.uploader
 from flask import Blueprint, jsonify, request, send_file
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from database import get_db_connection, release_db_connection, limpiar_foto
-from auth_middleware import requiere_login, requiere_rol
+from auth_middleware import get_usuario_actual, requiere_login, requiere_rol
 from notification_service import (
     diagnosticar_correo_prueba,
     enviar_resumen_operativo,
-    enviar_correo_prueba,
     notificar_contrato_creado,
     notificar_estado_contrato,
     resumen_operativo,
 )
 
 ventas_bp = Blueprint('ventas', __name__)
-
-# ─── Migración de esquema (se ejecuta una sola vez por proceso) ───────────────
-_schema_listo = False
-
-def _asegurar_columnas_inventario():
-    """
-    Añade stock_producto_id / stock_pieza_id a items_venta si aún no existen.
-    Se ejecuta con autocommit=True para que un ALTER TABLE no envenene
-    ninguna transacción abierta en caso de error.
-    """
-    global _schema_listo
-    if _schema_listo:
-        return
-    conn = None
-    cur  = None
-    try:
-        conn = get_db_connection()
-        conn.autocommit = True          # DDL fuera de cualquier transacción
-        cur  = conn.cursor()
-        cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS stock_producto_id INTEGER;")
-        cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS stock_pieza_id INTEGER;")
-        cur.execute("ALTER TABLE items_venta ADD COLUMN IF NOT EXISTS es_stock BOOLEAN DEFAULT FALSE;")
-        _schema_listo = True
-    except Exception as e:
-        print(f"⚠️ _asegurar_columnas_inventario: {e}")
-        # Aunque falle el ALTER (columna ya existe en versiones <9.6), marcamos
-        # igual como listo para no reintentar en cada request.
-        _schema_listo = True
-    finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.autocommit = False     # Restaurar antes de devolver al pool
-            release_db_connection(conn)
+_notificaciones_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='innova-email')
 
 
-# ─── Helper: historial de precios ────────────────────────────────────────────
+def _enviar_notificacion_en_segundo_plano(funcion, *args, **kwargs):
+    """Ejecuta una notificacion con su propia conexion fuera del request."""
+    def tarea():
+        conexion = None
+        cursor = None
+        try:
+            conexion = get_db_connection()
+            cursor = conexion.cursor()
+            resultado = funcion(cursor, *args, **kwargs)
+            conexion.commit()
+            print(f"[NOTIF] {funcion.__name__}: {resultado}")
+        except Exception as exc:
+            if conexion:
+                conexion.rollback()
+            print(f"[NOTIF] {funcion.__name__} fallo: {exc}")
+        finally:
+            if cursor:
+                cursor.close()
+            if conexion:
+                release_db_connection(conexion)
 
-def _crear_tabla_historial_precios(cursor):
-    """Crea la tabla si todavía no existe (auto-migración segura)."""
+    _notificaciones_executor.submit(tarea)
+
+def _asociar_logistica_item(
+    cursor, logistica_id, item_id, rol_componente=None, cantidad=None, unidad=None
+):
+    """Mantiene la asociación normalizada y combina roles repetidos del ítem."""
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS historial_precios (
-            id               SERIAL PRIMARY KEY,
-            venta_id         INTEGER       NOT NULL,
-            codigo_venta     VARCHAR(50),
-            precio_original  NUMERIC(10,2) NOT NULL,
-            precio_nuevo     NUMERIC(10,2) NOT NULL,
-            motivo           TEXT          NOT NULL,
-            vendedor_id      INTEGER,
-            vendedor_nombre  VARCHAR(100),
-            admin_id         INTEGER,
-            admin_nombre     VARCHAR(100),
-            estado           VARCHAR(20)   DEFAULT 'Pendiente',
-            notas_admin      TEXT,
-            fecha_solicitud  TIMESTAMP     DEFAULT NOW(),
-            fecha_resolucion TIMESTAMP
-        );
-    """)
-    # Migración lazy: cada solicitud ahora apunta a UN producto específico
-    # del contrato (item_id) y trae un tipo_cambio para saber qué hacer al
-    # aprobar: cambiar el precio de ese item, cambiar su tela/material, o
-    # agregar un producto nuevo al contrato (con su propio precio).
-    cursor.execute("""
-        ALTER TABLE historial_precios
-            ADD COLUMN IF NOT EXISTS item_id         INTEGER,
-            ADD COLUMN IF NOT EXISTS producto_nombre  VARCHAR(200),
-            ADD COLUMN IF NOT EXISTS tipo_cambio      VARCHAR(30) DEFAULT 'precio',
-            ADD COLUMN IF NOT EXISTS detalle_nuevo    TEXT;
-    """)
+        INSERT INTO logistica_externa_items
+            (logistica_id, item_id, rol_componente, cantidad, unidad)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (logistica_id, item_id) DO UPDATE SET
+            rol_componente = CASE
+                WHEN EXCLUDED.rol_componente IS NULL OR EXCLUDED.rol_componente = ''
+                    THEN logistica_externa_items.rol_componente
+                WHEN logistica_externa_items.rol_componente IS NULL
+                     OR logistica_externa_items.rol_componente = ''
+                    THEN EXCLUDED.rol_componente
+                WHEN POSITION(
+                    LOWER(EXCLUDED.rol_componente)
+                    IN LOWER(logistica_externa_items.rol_componente)
+                ) > 0
+                    THEN logistica_externa_items.rol_componente
+                ELSE logistica_externa_items.rol_componente || ', ' || EXCLUDED.rol_componente
+            END,
+            cantidad = COALESCE(EXCLUDED.cantidad, logistica_externa_items.cantidad),
+            unidad = COALESCE(EXCLUDED.unidad, logistica_externa_items.unidad);
+    """, (logistica_id, item_id, rol_componente, cantidad, unidad))
 
 
 def _recalcular_total_venta(cursor, venta_id):
@@ -183,8 +163,12 @@ def _reservar_unidad(cursor, venta_id, codigo_venta,
         )
         fila = cursor.fetchone()
         if not fila:
+            cursor.execute("ROLLBACK TO SAVEPOINT reservar_unidad")
             cursor.execute("RELEASE SAVEPOINT reservar_unidad")
-            return  # La unidad ya no existe; continuar sin romper la transacción
+            raise UnidadNoDisponibleError(
+                f"La unidad de stock {reg_id} ya no existe. Actualiza el inventario "
+                "y elige otra unidad antes de registrar la venta."
+            )
 
         estado_ant, sede_id, barcode = fila
 
@@ -224,13 +208,12 @@ def _reservar_unidad(cursor, venta_id, codigo_venta,
         raise  # Error de negocio: debe abortar toda la venta, no tragárselo
 
     except Exception as e:
-        # Errores técnicos inesperados (no de negocio) — igual que antes,
-        # no rompen la transacción padre por sí solos.
         print(f"⚠️  _reservar_unidad ERROR — tabla={tabla} reg_id={reg_id}")
         print(f"⚠️  Excepción: {type(e).__name__}: {e}")
         print(f"⚠️  Traceback:\n{traceback.format_exc()}")
         cursor.execute("ROLLBACK TO SAVEPOINT reservar_unidad")
         cursor.execute("RELEASE SAVEPOINT reservar_unidad")
+        raise
 
 
 def _liberar_unidades(cursor, venta_id, estado_destino, evento_nombre):
@@ -242,22 +225,28 @@ def _liberar_unidades(cursor, venta_id, estado_destino, evento_nombre):
         ('stock_productos', 'stock_producto_id', 'producto'),
         ('stock_piezas',    'stock_pieza_id',    'pieza'),
     ]:
-        try:
-            cursor.execute(f"""
-                SELECT iv.{col}, sp.estado, sp.sede_id, sp.codigo_barra
-                FROM items_venta iv
-                JOIN {tabla} sp ON sp.id = iv.{col}
-                WHERE iv.venta_id = %s AND iv.{col} IS NOT NULL
-                  AND sp.estado = 'Reservado'
-            """, (venta_id,))
-        except Exception:
-            continue  # La columna puede no existir en BD más antiguas
+        cursor.execute(f"""
+            SELECT iv.{col}, sp.estado, sp.sede_id, sp.codigo_barra
+            FROM items_venta iv
+            JOIN {tabla} sp ON sp.id = iv.{col}
+            WHERE iv.venta_id = %s AND iv.{col} IS NOT NULL
+              AND sp.estado = 'Reservado'
+            FOR UPDATE OF sp
+        """, (venta_id,))
 
+        procesados = set()
         for reg_id, estado_ant, sede_id, barcode in cursor.fetchall():
+            if reg_id in procesados:
+                continue
+            procesados.add(reg_id)
             cursor.execute(
-                f"UPDATE {tabla} SET estado = %s, actualizado_en = NOW() WHERE id = %s",
+                f"""UPDATE {tabla}
+                    SET estado = %s, actualizado_en = NOW()
+                    WHERE id = %s AND estado = 'Reservado'""",
                 (estado_destino, reg_id)
             )
+            if cursor.rowcount != 1:
+                raise RuntimeError(f'La unidad {barcode or reg_id} cambio durante la operacion')
             cursor.execute("""
                 INSERT INTO historial_inventario
                     (tipo_registro, registro_id, codigo_barra, tipo_evento,
@@ -276,44 +265,10 @@ def _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado_venta):
     de cada pieza (taller, cojines, estructuras, despacho, etc.) NO se
     actualizan solos. Esta función los cierra para mantener coherencia.
     """
-    mapa_estados = {
-        'Listo':      'Terminado',
-        'Despachado': 'Terminado',
-        'Entregado':  'Terminado',
-    }
-    ticket_destino = mapa_estados.get(nuevo_estado_venta)
-    if not ticket_destino:
-        return
-
-    # Áreas normales de producción (corte, tapicería, estructuras, cojines...)
-    cursor.execute("""
-        UPDATE tickets_produccion
-        SET estado_ticket = %s,
-            fecha_fin = COALESCE(fecha_fin, CURRENT_TIMESTAMP)
-        WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
-          AND area_trabajo != 'DESPACHO_CENTRAL'
-          AND estado_ticket NOT IN ('Terminado', 'Cancelado', 'Recogido', 'Listo para Recojo')
-    """, (ticket_destino, venta_id))
-
-    # Si el pedido ya se Despachó/Entregó, el material externo se marca como recibido.
-    cursor.execute("""
-        UPDATE logistica_externa
-        SET estado = 'Recibido'
-        WHERE venta_id = %s AND estado NOT IN ('Recibido', 'Cancelado', 'Rechazado')
-    """, (venta_id,))
-
-    # Al marcar la venta como Entregada también debe cerrarse el despacho.
-    # Antes se excluía siempre DESPACHO_CENTRAL, dejando pedidos entregados
-    # visibles en la bandeja del jefe y del chofer.
-    if nuevo_estado_venta == 'Entregado':
-        cursor.execute("""
-            UPDATE tickets_produccion
-            SET estado_ticket = 'Terminado',
-                fecha_fin = COALESCE(fecha_fin, CURRENT_TIMESTAMP)
-            WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
-              AND area_trabajo = 'DESPACHO_CENTRAL'
-              AND estado_ticket NOT IN ('Terminado', 'Cancelado')
-        """, (venta_id,))
+    # El estado general es un resumen, no una orden para inventar avances.
+    # Tickets y compras externas solo cambian desde sus propios flujos, donde
+    # existen responsable, fecha y validaciones de dependencias.
+    return
 
 # ==========================================
 # VENTAS — REGISTRO Y LISTADO
@@ -325,19 +280,77 @@ def guardar_venta():
     if request.method == 'GET':
         return listar_ventas()
 
-    _asegurar_columnas_inventario()   # ← migración segura al primer uso
 
-    datos = request.json
+    actor = get_usuario_actual()
+    if actor.get('rol') not in ('Admin', 'Jefe_Taller', 'Vendedor'):
+        return jsonify({'error': 'Tu rol no puede registrar contratos.'}), 403
+
+    datos = dict(request.get_json(silent=True) or {})
+    if actor.get('rol') == 'Vendedor' or not datos.get('vendedor_id'):
+        datos['vendedor_id'] = int(actor['id'])
+        datos['vendedor_nombre'] = actor.get('nombre', '')
+    faltantes = [campo for campo in ('codigo', 'cliente', 'fecha_emision') if not datos.get(campo)]
+    if faltantes:
+        return jsonify({'error': f"Campos obligatorios faltantes: {', '.join(faltantes)}"}), 400
+    if not isinstance(datos.get('muebles'), list) or not datos['muebles']:
+        return jsonify({'error': 'La venta debe contener al menos un producto.'}), 400
+    if not isinstance(datos.get('pagos', []), list):
+        return jsonify({'error': 'El formato de pagos no es valido.'}), 400
+
+    muebles_normalizados = []
+    for indice, mueble in enumerate(datos['muebles'], start=1):
+        if not isinstance(mueble, dict):
+            return jsonify({'error': f'El producto {indice} tiene un formato invalido.'}), 400
+        tipo = str(mueble.get('tipo') or '').strip()
+        if not tipo:
+            return jsonify({'error': f'El producto {indice} no tiene nombre o modelo.'}), 400
+        try:
+            precio = float(mueble.get('precio'))
+        except (TypeError, ValueError):
+            return jsonify({'error': f'El precio del producto {indice} no es valido.'}), 400
+        if not math.isfinite(precio) or precio < 0:
+            return jsonify({'error': f'El precio del producto {indice} debe ser un numero positivo.'}), 400
+        componentes = mueble.get('componentes', {})
+        if componentes is not None and not isinstance(componentes, dict):
+            return jsonify({'error': f'Los componentes del producto {indice} no son validos.'}), 400
+        normalizado = dict(mueble)
+        normalizado['tipo'] = tipo
+        normalizado['precio'] = round(precio, 2)
+        normalizado['componentes'] = componentes or {}
+        muebles_normalizados.append(normalizado)
+
+    for indice, pago in enumerate(datos.get('pagos', []), start=1):
+        if not isinstance(pago, dict):
+            return jsonify({'error': f'El pago {indice} tiene un formato invalido.'}), 400
+
+    datos['muebles'] = muebles_normalizados
+    # El total contractual se deriva de los items validados; nunca se confía
+    # en el total que pueda enviar o modificar el navegador.
+    datos['monto_total'] = round(sum(m['precio'] for m in muebles_normalizados), 2)
     _paso_actual = "inicio"
     try:
-        print(f"\n{'='*60}")
-        print(f"[VENTA] Iniciando registro — código: {datos.get('codigo')}")
-        print(f"[VENTA] Payload recibido: {datos}")
-        print(f"{'='*60}\n")
+        print(f"[VENTA] Iniciando registro codigo={datos.get('codigo')} "
+              f"vendedor_id={datos.get('vendedor_id')} items={len(datos.get('muebles') or [])}")
 
         conexion = get_db_connection()
         conexion.autocommit = False
         cursor   = conexion.cursor()
+
+        cursor.execute(
+            "SELECT nombre, rol FROM usuarios WHERE id = %s",
+            (datos['vendedor_id'],),
+        )
+        vendedor_row = cursor.fetchone()
+        if not vendedor_row or vendedor_row[1] not in ('Admin', 'Jefe_Taller', 'Vendedor'):
+            raise ValueError('El vendedor asignado no es valido')
+        datos['vendedor_nombre'] = vendedor_row[0]
+
+        if datos.get('cliente_id'):
+            cursor.execute("SELECT nombre FROM clientes WHERE id = %s", (datos['cliente_id'],))
+            cliente_row = cursor.fetchone()
+            if not cliente_row:
+                raise ValueError('El cliente seleccionado ya no existe')
+            datos['cliente'] = cliente_row[0]
 
         lista_pagos_raw = datos.get('pagos', [])
         empresa_pago_resumen = lista_pagos_raw[0].get('empresa', '') if lista_pagos_raw else ''
@@ -349,8 +362,8 @@ def guardar_venta():
                 codigo_venta, nombre_cliente, dni_cliente, celular_cliente,
                 direccion_cliente, vendedor_id, fecha_emision, fecha_entrega,
                 monto_total, vendedor_nombre, moneda, tipo_cambio, tipo_comprobante,
-                empresa_ruc, empresa_pago, sede, nombre_empresa_cliente
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
+                empresa_ruc, empresa_pago, sede, nombre_empresa_cliente, cliente_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
         """, (
             datos['codigo'],          datos['cliente'],
             datos.get('dni'),         datos.get('celular'),
@@ -364,14 +377,14 @@ def guardar_venta():
             datos.get('empresa_ruc'),
             empresa_pago_resumen,
             datos.get('sede', 'Sede Central'),
-            datos.get('empresa_cliente', 'Particular')
+            datos.get('empresa_cliente', 'Particular'),
+            datos.get('cliente_id')
         ))
         venta_id = cursor.fetchone()[0]
         print(f"[PASO 1] OK — venta_id={venta_id}")
 
         _paso_actual = "crear_tabla_historial_precios"
         print(f"[PASO 2] {_paso_actual}")
-        _crear_tabla_historial_precios(cursor)
         cursor.execute("""
             INSERT INTO historial_precios (
                 venta_id, codigo_venta, precio_original, precio_nuevo,
@@ -385,7 +398,7 @@ def guardar_venta():
             datos.get('vendedor_id'),
             datos.get('vendedor_nombre')
         ))
-        print(f"[PASO 2] OK")
+        print("[PASO 2] OK")
 
         # Pagos múltiples
         _paso_actual = "INSERT pagos"
@@ -394,13 +407,16 @@ def guardar_venta():
         for idx_p, p in enumerate(lista_pagos_raw):
             monto_bruto = float(p.get('monto') or 0)
             comision_pos = float(p.get('comision') or 0)
-            if monto_bruto <= 0:
+            if not math.isfinite(monto_bruto) or monto_bruto <= 0:
                 raise ValueError('El monto del pago debe ser mayor a 0')
-            if comision_pos < 0 or comision_pos > monto_bruto:
+            if not math.isfinite(comision_pos) or comision_pos < 0 or comision_pos > monto_bruto:
                 raise ValueError('La comision POS no puede ser negativa ni superar el monto pagado')
-            monto_neto = p.get('monto_neto', monto_bruto - comision_pos)
+            monto_neto = round(monto_bruto - comision_pos, 2)
             total_adelanto += monto_bruto
-            print(f"[PASO 3.{idx_p+1}] Pago: {p}")
+            print(
+                f"[PASO 3.{idx_p+1}] Pago tipo={p.get('tipo')} "
+                f"monto={monto_bruto:.2f}"
+            )
             cursor.execute("""
                 INSERT INTO pagos (
                     venta_id, tipo_pago, entidad, numero_operacion,
@@ -420,7 +436,7 @@ def guardar_venta():
                 "UPDATE ventas SET monto_adelanto = %s WHERE id = %s",
                 (total_adelanto, venta_id)
             )
-            print(f"[PASO 3b] UPDATE monto_adelanto OK")
+            print("[PASO 3b] UPDATE monto_adelanto OK")
 
         # ── Motor Make-vs-Buy ─────────────────────────────────────────────────
         # FIX (julio 2026): este diccionario existía desde antes pero nunca se
@@ -473,9 +489,15 @@ def guardar_venta():
                 foto_url_raw = foto_url_raw[foto_url_raw.index('/uploads/http://') + len('/uploads/'):]
 
             cursor.execute("""
-                INSERT INTO items_venta (venta_id, producto, color_tela, foto_url, precio_unitario, es_stock)
-                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;
-            """, (venta_id, m.get('tipo'), m.get('tela'), foto_url_raw, m.get('precio'), m.get('es_stock', False)))
+                INSERT INTO items_venta (
+                    venta_id, producto, color_tela, foto_url, precio_unitario,
+                    es_stock, catalogo_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;
+            """, (
+                venta_id, m.get('tipo'), m.get('tela'), foto_url_raw,
+                m.get('precio'), m.get('es_stock', False), m.get('catalogo_id')
+            ))
             item_id = cursor.fetchone()[0]
             print(f"[PASO 4.{idx_m+1}] item_id={item_id}")
 
@@ -493,12 +515,18 @@ def guardar_venta():
             # frontend, sin ninguna red de seguridad si por lo que sea no
             # llegaba (JS cacheado viejo, deploy a medias, etc.). Se agregan
             # 'curvo', 'juego de sala' y 'en u' como keywords adicionales.
-            if any(p in nombre_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'multi', 'curvado', 'curvo', 'plantilla', 'juego de sala', 'en u']) \
-               or any(p in categoria_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'sillón', 'sillon']):
+            categorias_sofa = {'sofá', 'sofa', 'seccional', 'modular', 'sillón', 'sillon'}
+            categorias_silla = {'silla', 'butaca', 'sitial', 'puff'}
+            if categoria_lower in categorias_sofa:
                 area_estructura = 'ESTRUCTURAS_MUEBLES'
-            elif any(p in nombre_lower for p in ['silla', 'butaca', 'sitial', 'puff']) \
-                 or any(p in categoria_lower for p in ['silla', 'butaca', 'sitial', 'puff']):
+            elif categoria_lower in categorias_silla:
                 area_estructura = 'ESTRUCTURAS_SILLAS'
+            elif not categoria_lower:
+                # Compatibilidad con contratos creados por frontends antiguos.
+                if any(p in nombre_lower for p in ['sofá', 'sofa', 'seccional', 'modular', 'curvo', 'juego de sala', 'en u']):
+                    area_estructura = 'ESTRUCTURAS_MUEBLES'
+                elif any(p in nombre_lower for p in ['silla', 'butaca', 'sitial', 'puff']):
+                    area_estructura = 'ESTRUCTURAS_SILLAS'
 
             # FIX (julio 2026 - v2): último respaldo para modelos de Sofá
             # personalizados (creados con la "tuerquita ⚙️ Gestionar" del
@@ -652,9 +680,6 @@ def guardar_venta():
                             except (TypeError, ValueError):
                                 cantidad_silla = 1
 
-                            cursor.execute(
-                                "ALTER TABLE logistica_externa ADD COLUMN IF NOT EXISTS cantidad INTEGER;"
-                            )
                             # FIX (julio 2026): se agrega el rol del componente
                             # (ej. "Sillería") entre paréntesis al nombre del
                             # insumo, para que en "Requerimientos" se sepa para
@@ -670,15 +695,21 @@ def guardar_venta():
                             # la creación (aquí siempre 'ESTRUCTURAL', las
                             # sillas nunca llegan por esta rama como tela).
                             cursor.execute(
-                                "ALTER TABLE logistica_externa "
-                                "ADD COLUMN IF NOT EXISTS categoria_insumo VARCHAR(30) DEFAULT 'OTRO';"
-                            )
-                            cursor.execute(
                                 """INSERT INTO logistica_externa
                                        (venta_id, item_id, insumo_nombre, sku, estado, tipo_gestion,
                                         proveedor_id, cantidad, categoria_insumo)
-                                   VALUES (%s, %s, %s, %s, 'Pendiente', 'Externo', %s, %s, 'ESTRUCTURAL')""",
+                                   VALUES (%s, %s, %s, %s, 'Pendiente', 'Externo', %s, %s, 'ESTRUCTURAL')
+                                   RETURNING id""",
                                 (venta_id, item_id, nombre_insumo_silla_ctx, sku, prov_id_silla, cantidad_silla)
+                            )
+                            logistica_silla_id = cursor.fetchone()[0]
+                            _asociar_logistica_item(
+                                cursor,
+                                logistica_silla_id,
+                                item_id,
+                                rol_silla,
+                                cantidad_silla,
+                                'unidad',
                             )
                             continue
 
@@ -781,10 +812,6 @@ def guardar_venta():
                     # segundo ítem también estaba esperando esta tela. Ahora
                     # se guarda en item_ids_extra (lista separada por comas)
                     # para que el semáforo revise también esos item_id.
-                    cursor.execute(
-                        "ALTER TABLE logistica_externa "
-                        "ADD COLUMN IF NOT EXISTS item_ids_extra TEXT DEFAULT NULL;"
-                    )
                     cursor.execute("""
                         SELECT id, insumo_nombre, item_id, COALESCE(item_ids_extra, '')
                         FROM logistica_externa
@@ -822,6 +849,10 @@ def guardar_venta():
                                 (','.join(ids_extra), existing_log_id)
                             )
 
+                        _asociar_logistica_item(
+                            cursor, existing_log_id, item_id, rol_componente or None
+                        )
+
                         continue # Skip insertion
     
                     nombre_insumo_con_rol = f"{nombre_insumo_real} ({rol_componente})" if rol_componente else nombre_insumo_real
@@ -836,15 +867,16 @@ def guardar_venta():
                     categoria_insumo_ins = 'TELA' if tabla == 'maestro_telas' else 'ESTRUCTURAL'
 
                     cursor.execute(
-                        "ALTER TABLE logistica_externa "
-                        "ADD COLUMN IF NOT EXISTS categoria_insumo VARCHAR(30) DEFAULT 'OTRO';"
-                    )
-                    cursor.execute(
                         """INSERT INTO logistica_externa
                                (venta_id, item_id, insumo_nombre, sku, estado, proveedor_id,
                                 tipo_gestion, categoria_insumo)
-                           VALUES (%s, %s, %s, %s, 'Pendiente', %s, 'Externo', %s)""",
+                           VALUES (%s, %s, %s, %s, 'Pendiente', %s, 'Externo', %s)
+                           RETURNING id""",
                         (venta_id, item_id, nombre_insumo_con_rol, sku, prov_id_logistica, categoria_insumo_ins)
+                    )
+                    logistica_id = cursor.fetchone()[0]
+                    _asociar_logistica_item(
+                        cursor, logistica_id, item_id, rol_componente or None
                     )
 
             # Ticket de Despacho
@@ -863,10 +895,15 @@ def guardar_venta():
                 print(f"[PASO 4.{idx_m+1}.e] UPDATE stock catalogo_id={m['catalogo_id']}")
                 cursor.execute("""
                     UPDATE catalogo_productos
-                    SET stock_cantidad = GREATEST(0, stock_cantidad - 1),
+                    SET stock_cantidad = stock_cantidad - 1,
                         en_stock = CASE WHEN stock_cantidad - 1 <= 0 THEN false ELSE en_stock END
-                    WHERE id = %s AND en_stock = true
+                    WHERE id = %s AND en_stock = true AND stock_cantidad > 0
+                    RETURNING stock_cantidad
                 """, (m['catalogo_id'],))
+                if not cursor.fetchone():
+                    raise UnidadNoDisponibleError(
+                        f"El producto {m.get('tipo') or m['catalogo_id']} ya no tiene stock disponible."
+                    )
 
             # ── PUENTE INVENTARIO REAL ────────────────────────────────────────
             _paso_actual = f"mueble[{idx_m}] _reservar_unidad stock_producto_id={m.get('stock_producto_id')} stock_pieza_id={m.get('stock_pieza_id')}"
@@ -898,22 +935,25 @@ def guardar_venta():
                     WHERE r.insumo_id = i.id AND r.producto_id = %s;
                 """, (prod_row[0],))
 
-        print(f"[PASO 5] COMMIT")
+        total_confirmado = _recalcular_total_venta(cursor, venta_id)
+        datos['monto_total'] = total_confirmado
+        print(f"[PASO 5] Total confirmado por items: {total_confirmado:.2f}")
+        print("[PASO 6] COMMIT")
         conexion.commit()
 
-        try:
-            notif = notificar_contrato_creado(
-                cursor,
-                venta_id,
-                datos,
-                cantidad_items=len(datos.get('muebles') or []),
-            )
-            print(f"[NOTIF] Contrato {datos.get('codigo')}: {notif}")
-        except Exception as ex_notif:
-            print(f"[NOTIF] No se pudo notificar contrato {datos.get('codigo')}: {ex_notif}")
+        _enviar_notificacion_en_segundo_plano(
+            notificar_contrato_creado,
+            venta_id,
+            dict(datos),
+            cantidad_items=len(datos.get('muebles') or []),
+        )
 
         print(f"[VENTA] ✅ Venta registrada exitosamente — venta_id={venta_id}\n")
-        return jsonify({"mensaje": "Venta procesada exitosamente", "id": venta_id}), 201
+        return jsonify({
+            "mensaje": "Venta procesada exitosamente",
+            "id": venta_id,
+            "monto_total": total_confirmado,
+        }), 201
 
     except UnidadNoDisponibleError as ex_stock:
         # FIX (julio 2026 - doble venta): antes _reservar_unidad se tragaba
@@ -927,6 +967,11 @@ def guardar_venta():
         print(f"\n[VENTA] ⚠️ Unidad no disponible — venta abortada: {ex_stock}\n")
         return jsonify({"error": str(ex_stock)}), 409
 
+    except ValueError as ex_validacion:
+        if 'conexion' in locals() and conexion:
+            conexion.rollback()
+        return jsonify({'error': str(ex_validacion)}), 400
+
     except Exception as ex:
         if 'conexion' in locals() and conexion: conexion.rollback()
         tb = traceback.format_exc()
@@ -939,9 +984,8 @@ def guardar_venta():
         if "llave duplicada" in error_msg.lower() or "uniqueviolation" in error_msg.lower() or "duplicate key" in error_msg.lower():
             return jsonify({"error": f"El N° de Contrato ({datos.get('codigo')}) ya está registrado en el sistema. Por favor, utiliza un código diferente."}), 400
         return jsonify({
-            "error": error_msg,
-            "paso": _paso_actual,
-            "detalle": tb
+            "error": "No se pudo registrar la venta. Ningun dato fue guardado.",
+            "referencia": _paso_actual
         }), 500
     finally:
         if 'conexion' in locals() and conexion:
@@ -1151,21 +1195,110 @@ def notificaciones_probar_correo():
 
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/estado', methods=['PUT'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def cambiar_estado_venta(venta_id):
-    nuevo_estado = request.json.get('estado')
+    estado_solicitado = (request.get_json(silent=True) or {}).get('estado')
+    aliases_estado = {
+        'En producción': 'En Producción',
+        'En produccion': 'En Producción',
+        'Despachado': 'En Despacho',
+    }
+    nuevo_estado = aliases_estado.get(estado_solicitado, estado_solicitado)
+    estados_permitidos = {'Pendiente', 'En Producción', 'Listo', 'En Despacho', 'Entregado'}
     if not nuevo_estado:
         return jsonify({'error': 'El estado es obligatorio'}), 400
+    if nuevo_estado not in estados_permitidos:
+        return jsonify({'error': 'Estado de venta no valido'}), 400
 
     try:
         conexion = get_db_connection()
         conexion.autocommit = False
         cursor   = conexion.cursor()
 
-        cursor.execute("UPDATE ventas SET estado_general = %s WHERE id = %s", (nuevo_estado, venta_id))
+        cursor.execute("SELECT estado_general FROM ventas WHERE id = %s FOR UPDATE", (venta_id,))
+        venta = cursor.fetchone()
+        if not venta:
+            return jsonify({'error': 'Venta no encontrada'}), 404
+        estado_actual = aliases_estado.get(venta[0], venta[0])
+        if estado_actual == 'Cancelado':
+            return jsonify({'error': 'Una venta cancelada no puede reactivarse desde este control.'}), 409
+        orden_estados = {
+            'Pendiente': 0,
+            'En Producción': 1,
+            'Listo': 2,
+            'En Despacho': 3,
+            'Entregado': 4,
+        }
+        if (
+            estado_actual in orden_estados
+            and orden_estados[nuevo_estado] < orden_estados[estado_actual]
+        ):
+            return jsonify({'error': 'No se puede retroceder el flujo desde este control.'}), 409
 
-        # Sincronizar tickets y logística con el nuevo estado de la venta.
-        _sincronizar_tickets_con_estado_venta(cursor, venta_id, nuevo_estado)
+        if nuevo_estado == 'Listo':
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM tickets_produccion
+                WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
+                  AND area_trabajo != 'DESPACHO_CENTRAL'
+                  AND estado_ticket NOT IN ('Terminado', 'Cancelado', 'Recogido')
+            """, (venta_id,))
+            if cursor.fetchone()[0] > 0:
+                return jsonify({'error': 'Aun hay trabajos de produccion pendientes.'}), 409
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM logistica_externa
+                WHERE venta_id = %s
+                  AND estado NOT IN ('Recibido', 'Cancelado', 'Rechazado')
+            """, (venta_id,))
+            if cursor.fetchone()[0] > 0:
+                return jsonify({'error': 'Aun hay insumos de logistica pendientes.'}), 409
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM logistica_externa
+                WHERE venta_id = %s
+                  AND (categoria_insumo = 'TELA'
+                       OR LOWER(COALESCE(insumo_nombre, '')) LIKE '%%tela%%'
+                       OR LOWER(COALESCE(unidad, '')) IN ('mts', 'metro', 'metros'))
+                  AND COALESCE(estado_distribucion, '') != 'Distribuido'
+                  AND estado NOT IN ('Cancelado', 'Rechazado')
+            """, (venta_id,))
+            if cursor.fetchone()[0] > 0:
+                return jsonify({'error': 'Aun hay telas sin distribuir.'}), 409
+            cursor.execute("""
+                UPDATE tickets_produccion
+                SET estado_ticket = 'Pendiente'
+                WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
+                  AND area_trabajo = 'DESPACHO_CENTRAL'
+                  AND estado_ticket = 'Bloqueado'
+            """, (venta_id,))
+
+        if nuevo_estado == 'En Despacho':
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM tickets_produccion
+                WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
+                  AND area_trabajo = 'DESPACHO_CENTRAL'
+                  AND estado_ticket IN ('En Proceso', 'Terminado', 'Recogido')
+            """, (venta_id,))
+            if cursor.fetchone()[0] == 0:
+                return jsonify({'error': 'No hay un despacho iniciado para este contrato.'}), 409
+
+        if nuevo_estado == 'Entregado':
+            cursor.execute("""
+                SELECT COUNT(*),
+                       COUNT(*) FILTER (
+                           WHERE estado_ticket NOT IN ('Terminado', 'Recogido')
+                       )
+                FROM tickets_produccion
+                WHERE item_id IN (SELECT id FROM items_venta WHERE venta_id = %s)
+                  AND area_trabajo = 'DESPACHO_CENTRAL'
+            """, (venta_id,))
+            total_despachos, pendientes_despacho = cursor.fetchone()
+            if total_despachos == 0 or pendientes_despacho > 0:
+                return jsonify({'error': 'No se puede entregar: aun hay despachos sin finalizar.'}), 409
+
+        cursor.execute("UPDATE ventas SET estado_general = %s WHERE id = %s", (nuevo_estado, venta_id))
 
         # Si la venta se marca como Entregada, las unidades de stock físico
         # que estaban 'Reservado' pasan a 'Vendido'.
@@ -1174,11 +1307,9 @@ def cambiar_estado_venta(venta_id):
         # ─────────────────────────────────────────────────────────────────────
 
         conexion.commit()
-        try:
-            notif = notificar_estado_contrato(cursor, venta_id, nuevo_estado)
-            print(f"[NOTIF] Estado venta {venta_id}: {notif}")
-        except Exception as ex_notif:
-            print(f"[NOTIF] No se pudo notificar estado de venta {venta_id}: {ex_notif}")
+        _enviar_notificacion_en_segundo_plano(
+            notificar_estado_contrato, venta_id, nuevo_estado
+        )
         return jsonify({'exito': True, 'mensaje': f'Estado actualizado a {nuevo_estado}'}), 200
     except Exception as e:
         if 'conexion' in locals() and conexion: conexion.rollback()
@@ -1190,12 +1321,21 @@ def cambiar_estado_venta(venta_id):
 
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/anular', methods=['POST'])
-@requiere_login
+@requiere_rol('Admin', 'Jefe_Taller')
 def anular_venta_completa(venta_id):
     try:
         conexion = get_db_connection()
         conexion.autocommit = False
         cursor   = conexion.cursor()
+
+        cursor.execute("SELECT estado_general FROM ventas WHERE id = %s FOR UPDATE", (venta_id,))
+        venta = cursor.fetchone()
+        if not venta:
+            return jsonify({'error': 'Venta no encontrada'}), 404
+        if venta[0] == 'Cancelado':
+            return jsonify({'exito': True, 'mensaje': 'La venta ya estaba cancelada; no se duplico stock.'}), 200
+        if venta[0] == 'Entregado':
+            return jsonify({'error': 'Una venta entregada no puede anularse sin una devolucion formal.'}), 409
 
         # 1. Marcar venta como Cancelado
         cursor.execute("UPDATE ventas SET estado_general = 'Cancelado' WHERE id = %s", (venta_id,))
@@ -1217,18 +1357,37 @@ def anular_venta_completa(venta_id):
 
         # 4. Devolver stock genérico (contador en catalogo_productos)
         cursor.execute("""
-            SELECT cp.id, iv.es_stock
-            FROM catalogo_productos cp
-            JOIN items_venta iv ON cp.nombre_modelo = iv.producto
-            -- Solo devolver al stock si originalmente se descontó de él
-            WHERE iv.venta_id = %s
-        """, (venta_id,))
+            WITH devoluciones AS (
+                SELECT iv.catalogo_id, COUNT(*) AS cantidad
+                FROM items_venta iv
+                WHERE iv.venta_id = %s
+                  AND iv.es_stock = TRUE
+                  AND iv.catalogo_id IS NOT NULL
+                GROUP BY iv.catalogo_id
+            ), legacy AS (
+                SELECT MIN(cp.id) AS catalogo_id, COUNT(iv.id) AS cantidad
+                FROM items_venta iv
+                JOIN catalogo_productos cp ON cp.nombre_modelo = iv.producto
+                WHERE iv.venta_id = %s
+                  AND iv.es_stock = TRUE
+                  AND iv.catalogo_id IS NULL
+                GROUP BY iv.producto
+                HAVING COUNT(DISTINCT cp.id) = 1
+            )
+            SELECT catalogo_id, SUM(cantidad)
+            FROM (
+                SELECT * FROM devoluciones
+                UNION ALL
+                SELECT * FROM legacy
+            ) cantidades
+            GROUP BY catalogo_id
+        """, (venta_id, venta_id))
         for p in cursor.fetchall():
             cursor.execute("""
                 UPDATE catalogo_productos
-                SET stock_cantidad = stock_cantidad + 1, en_stock = true
+                SET stock_cantidad = stock_cantidad + %s, en_stock = true
                 WHERE id = %s
-            """, (p[0],))
+            """, (p[1], p[0]))
 
         # 5. ── PUENTE INVENTARIO: liberar unidades físicas reservadas ─────────
         _liberar_unidades(cursor, venta_id, 'Disponible', 'Devolucion')
@@ -1243,32 +1402,6 @@ def anular_venta_completa(venta_id):
         if 'conexion' in locals() and conexion:
             if 'cursor' in locals() and cursor: cursor.close()
             release_db_connection(conexion)
-
-
-def _crear_tabla_ventas_eliminadas_log(cursor):
-    """
-    Auditoría de borrados definitivos. La venta y todo lo que cuelga de
-    ella (items, tickets, pagos, logística, historial de precios) se
-    borra de verdad — pero acá queda una fotografía de qué se borró,
-    quién lo hizo y por qué, para siempre. Sin esto, un borrado en
-    cascada es imposible de investigar después.
-    """
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ventas_eliminadas_log (
-            id                      SERIAL PRIMARY KEY,
-            venta_id                INTEGER,
-            codigo_venta            VARCHAR(50),
-            nombre_cliente          VARCHAR(150),
-            monto_total             NUMERIC(10,2),
-            vendedor_nombre         VARCHAR(100),
-            fecha_emision_original  TIMESTAMP,
-            snapshot_items          JSONB,
-            motivo                  TEXT NOT NULL,
-            eliminado_por_id        INTEGER,
-            eliminado_por_nombre    VARCHAR(100),
-            fecha_eliminacion       TIMESTAMP DEFAULT NOW()
-        );
-    """)
 
 
 @ventas_bp.route('/api/ventas/<int:venta_id>/eliminar-completo', methods=['POST'])
@@ -1318,7 +1451,6 @@ def eliminar_venta_completa(venta_id):
         ]
 
         # 1. Dejar rastro ANTES de borrar nada
-        _crear_tabla_ventas_eliminadas_log(cursor)
         cursor.execute("""
             INSERT INTO ventas_eliminadas_log
                 (venta_id, codigo_venta, nombre_cliente, monto_total, vendedor_nombre,
@@ -1430,6 +1562,10 @@ def obtener_mis_ventas(vendedor_id):
                   manda el <select> del frontend, ej. "Entregado")
     """
     from database import paginar
+
+    actor = get_usuario_actual()
+    if actor.get('rol') not in ('Admin', 'Jefe_Taller') and int(actor['id']) != vendedor_id:
+        return jsonify({'error': 'No puedes consultar las ventas de otro vendedor.'}), 403
 
     page     = request.args.get('page', 1)
     per_page = request.args.get('per_page', 20)
@@ -1707,8 +1843,11 @@ def proponer_cambio_precio(codigo):
     precio_nuevo    = data.get('precio_nuevo')
     detalle_nuevo   = (data.get('detalle_nuevo') or '').strip()
     motivo          = (data.get('motivo') or '').strip()
-    vendedor_id     = data.get('vendedor_id')
-    vendedor_nombre = data.get('vendedor_nombre', '')
+    actor            = get_usuario_actual()
+    vendedor_id      = int(actor['id'])
+    vendedor_nombre  = actor.get('nombre', '')
+    if actor.get('rol') not in ('Admin', 'Jefe_Taller', 'Vendedor'):
+        return jsonify({'error': 'Tu rol no puede proponer cambios de contrato.'}), 403
 
     if tipo_cambio not in ('precio', 'material', 'nuevo_producto'):
         return jsonify({'error': 'tipo_cambio invalido'}), 400
@@ -1727,13 +1866,14 @@ def proponer_cambio_precio(codigo):
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _crear_tabla_historial_precios(cursor)
 
-        cursor.execute("SELECT id, monto_total, estado_general FROM ventas WHERE codigo_venta = %s;", (codigo,))
+        cursor.execute("SELECT id, monto_total, estado_general, vendedor_id FROM ventas WHERE codigo_venta = %s;", (codigo,))
         venta = cursor.fetchone()
         if not venta:
             return jsonify({'error': 'Venta no encontrada'}), 404
-        venta_id, monto_total_actual, estado = venta
+        venta_id, monto_total_actual, estado, venta_vendedor_id = venta
+        if actor.get('rol') == 'Vendedor' and int(venta_vendedor_id or 0) != vendedor_id:
+            return jsonify({'error': 'No puedes modificar el contrato de otro vendedor.'}), 403
         if estado in ('Entregado', 'Cancelado'):
             return jsonify({'error': f'No se puede modificar una venta en estado {estado}'}), 400
 
@@ -1784,7 +1924,6 @@ def listar_cambios_precio_pendientes():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _crear_tabla_historial_precios(cursor)
         cursor.execute("""
             SELECT hp.id, hp.codigo_venta, hp.precio_original, hp.precio_nuevo,
                    hp.motivo, hp.vendedor_nombre, hp.fecha_solicitud,
@@ -1902,7 +2041,6 @@ def historial_precios_venta(codigo):
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _crear_tabla_historial_precios(cursor)
         cursor.execute("""
             SELECT precio_original, precio_nuevo, motivo, vendedor_nombre,
                    admin_nombre, estado, notas_admin, fecha_solicitud, fecha_resolucion,
@@ -2103,39 +2241,6 @@ SUELDO_BASE_VENDEDOR = 350.0
 TASA_COMISION        = 0.03
 
 
-def _ensure_tablas_vendedor(cursor):
-    """Crea las tablas auxiliares si no existen (auto-migración segura)."""
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ajustes_sueldo_vendedor (
-            id             SERIAL PRIMARY KEY,
-            usuario_id     INTEGER NOT NULL,
-            tipo           VARCHAR(20) NOT NULL CHECK (tipo IN ('descuento','aumento')),
-            monto          NUMERIC(10,2) NOT NULL CHECK (monto > 0),
-            motivo         TEXT,
-            semana_inicio  DATE NOT NULL,
-            semana_fin     DATE NOT NULL,
-            aplicado       BOOLEAN DEFAULT FALSE,
-            created_at     TIMESTAMP DEFAULT NOW()
-        );
-        CREATE TABLE IF NOT EXISTS cierres_semanales_vendedor (
-            id              SERIAL PRIMARY KEY,
-            usuario_id      INTEGER NOT NULL,
-            semana_inicio   DATE NOT NULL,
-            semana_fin      DATE NOT NULL,
-            sueldo_base     NUMERIC(10,2) DEFAULT 350,
-            comision        NUMERIC(10,2) DEFAULT 0,
-            aumentos        NUMERIC(10,2) DEFAULT 0,
-            descuentos      NUMERIC(10,2) DEFAULT 0,
-            saldo_anterior  NUMERIC(10,2) DEFAULT 0,
-            monto_pagado    NUMERIC(10,2) DEFAULT 0,
-            notas           TEXT,
-            voucher_url     TEXT,
-            created_at      TIMESTAMP DEFAULT NOW(),
-            UNIQUE (usuario_id, semana_inicio)
-        );
-    """)
-
-
 @ventas_bp.route('/api/vendedores/comisiones', methods=['GET'])
 @requiere_rol('Admin')
 def obtener_comisiones_vendedores():
@@ -2147,8 +2252,6 @@ def obtener_comisiones_vendedores():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _ensure_tablas_vendedor(cursor)
-        conexion.commit()
 
         # ── 1. Todos los vendedores registrados en el sistema ──────────────
         filtro_nombre = ""
@@ -2364,7 +2467,6 @@ def registrar_ajuste_vendedor():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _ensure_tablas_vendedor(cursor)
 
         cursor.execute("""
             INSERT INTO ajustes_sueldo_vendedor
@@ -2393,7 +2495,6 @@ def listar_ajustes_vendedor(uid):
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _ensure_tablas_vendedor(cursor)
         cursor.execute("""
             SELECT id, tipo, monto, motivo, semana_inicio, semana_fin, aplicado,
                    TO_CHAR(created_at, 'DD/MM/YYYY HH24:MI') AS fecha
@@ -2464,7 +2565,6 @@ def cerrar_semana_vendedor():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
-        _ensure_tablas_vendedor(cursor)
 
         # Ventas del período para este vendedor
         cursor.execute("""

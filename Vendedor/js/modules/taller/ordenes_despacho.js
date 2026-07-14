@@ -65,6 +65,7 @@ async function cargarOrdenesProduccion(contenedor) {
 
         const ESTADO_BADGE = {
             'Pendiente':    { bg:'#fef3c7', color:'#b45309', icon:'🟡' },
+            'Pendiente en Telas': { bg:'#fef3c7', color:'#b45309', icon:'🟡' },
             'Bloqueado':    { bg:'#e2e8f0', color:'#64748b', icon:'🔒' },
             'En Proceso':   { bg:'#dbeafe', color:'#1e40af', icon:'🔵' },
             'Terminado':    { bg:'#dcfce7', color:'#166534', icon:'✅' },
@@ -94,16 +95,10 @@ async function cargarOrdenesProduccion(contenedor) {
                         const nombre = AREA_NOMBRES[t.area] || t.area.replace(/_/g,' ');
                         // Para logística de tela: mostrar operario asignado y tapicero destino
                         if (t.es_logistica) {
-                            const operarioInfo = (t.trabajador && t.trabajador !== 'Sin asignar')
-                                ? '<span style="opacity:0.75">· ' + t.trabajador + '</span>'
-                                : '<span style="opacity:0.6;color:#dc2626;"> · Sin operario</span>';
-                            const tapiceroInfo = (t.tapicero_destino && t.tapicero_destino !== 'Sin asignar')
-                                ? '<span style="opacity:0.75"> → ' + t.tapicero_destino + '</span>'
-                                : '<span style="opacity:0.6;color:#dc2626;"> → Sin tapicero</span>';
-                            const insumoLabel = t.insumo_nombre ? ' · ' + t.insumo_nombre : '';
-                            return '<span title="Tela externa' + (t.insumo_nombre || '') + '" style="font-size:10px; background:' + b.bg + '; color:' + b.color + '; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap; display:inline-flex; align-items:center; gap:3px;">'
+                            const insumoLabel = t.insumo_nombre ? ' · ' + escapeHTML(t.insumo_nombre) : '';
+                            return '<span title="Trazabilidad de tela" style="font-size:10px; background:' + b.bg + '; color:' + b.color + '; padding:5px 8px; border-radius:8px; font-weight:800; white-space:normal; display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px; line-height:1.4;">'
                                 + b.icon + ' Tela ext.' + insumoLabel
-                                + ' ' + operarioInfo + tapiceroInfo
+                                + ' <span style="font-weight:500;opacity:0.9;">' + renderTrazabilidadTela(t) + '</span>'
                                 + '</span>';
                         }
                         return `<span style="font-size:10px; background:${b.bg}; color:${b.color}; padding:3px 8px; border-radius:20px; font-weight:800; white-space:nowrap;">

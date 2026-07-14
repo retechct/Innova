@@ -1246,8 +1246,13 @@ function renderTicketCardHTML(t, esAdmin) {
 /* Badge de estado para una línea de logística de tela (incluye 'En espera',
    que antes no se pintaba en ningún lado porque ni siquiera llegaba a esta
    bandeja — ver el fix en obtener_tickets_taller, backend). */
+function _estadoLogisticaTelaUI(estado) {
+    return estado === 'Listo para recojo' ? 'En espera' : (estado || 'En espera');
+}
+
 function _badgeLogisticaTela(estado) {
-    if (estado === 'En espera')   return { bg:'#fef3c7', col:'#92400e', txt:'🟡 LISTO PARA RECOJO' };
+    estado = _estadoLogisticaTelaUI(estado);
+    if (estado === 'En espera')   return { bg:'#fef3c7', col:'#92400e', txt:'🟡 PENDIENTE EN TELAS' };
     if (estado === 'En Recojo')   return { bg:'#fef9c3', col:'#854d0e', txt:'🟡 EN RECOJO' };
     if (estado === 'Recogido')    return { bg:'#dcfce7', col:'#166534', txt:'✅ RECOGIDO (POR DISTRIBUIR)' };
     if (estado === 'Distribuido') return { bg:'#dcfce7', col:'#166534', txt:'✅ DISTRIBUIDO' };
@@ -1283,10 +1288,12 @@ function renderContratosTelaBackendHTML(contratos, esAdmin) {
         const lineas = (c.lineas || []).map(l => ({
             id: l.logistica_id,
             producto: `TELA EXTERNA: ${l.insumo || ''}`,
-            estado: l.estado_distribucion || 'En espera',
+            estado: _estadoLogisticaTelaUI(l.estado_distribucion),
             area: 'CORTE_Y_CONTROL_TELAS',
             trabajador: l.operario_id,
             trabajador_nombre: l.operario_nombre || 'Sin asignar',
+            recogido_por: l.recogido_por || '',
+            distribuido_por: l.distribuido_por || '',
             especificaciones: `Ref: ${c.codigo_venta || ''} | SKU: ${l.sku || 'N/A'} | ${l.producto_item || ''}`,
             foto: 'imagenes/sin_foto.jpg',
             item_id: l.item_id || c.venta_id,
@@ -1300,6 +1307,8 @@ function renderContratosTelaBackendHTML(contratos, esAdmin) {
             cliente: c.cliente || '',
             fecha_entrega: c.fecha_entrega || '',
             producto_item: l.producto_item || '',
+            tipo_gestion: l.tipo_gestion || 'Externo',
+            url_comprobante_pago: l.url_comprobante_pago || '',
         }));
 
         const totalesPorUnidad = {};
@@ -1311,18 +1320,24 @@ function renderContratosTelaBackendHTML(contratos, esAdmin) {
             .map(([u, cant]) => `<b>${cant % 1 === 0 ? cant : cant.toFixed(2)} ${escapeHTML(u)}</b>`)
             .join(' &nbsp;+&nbsp; ');
 
-        const idsRecogidos = lineas.filter(l => l.estado === 'Recogido').map(l => l.id);
-        const idsEnRecojo = lineas.filter(l => l.estado === 'En Recojo' || l.estado === 'En espera').map(l => l.id);
+        const esGestionDirecta = l => l.tipo_gestion === 'Interno' || l.tipo_gestion === 'Informal';
+        const estaPendiente = l => ['En Recojo', 'En espera'].includes(_estadoLogisticaTelaUI(l.estado));
+        const idsDistribuibles = lineas
+            .filter(l => l.estado === 'Recogido' || (esGestionDirecta(l) && estaPendiente(l)))
+            .map(l => l.id);
+        const idsEnRecojo = lineas
+            .filter(l => !esGestionDirecta(l) && estaPendiente(l))
+            .map(l => l.id);
         const botonRecojoContratoHTML = (!esAdmin && idsEnRecojo.length > 1)
             ? `<button onclick='confirmarRecojoContratoTela(${JSON.stringify(idsEnRecojo)})'
                    style="width:100%; background:#f59e0b; color:white; border:none; padding:9px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-top:10px;">
                    <i class="fa-solid fa-truck-ramp-box"></i> Confirmar recojo de ${idsEnRecojo.length} telas con un comprobante
                </button>`
             : '';
-        const botonLoteHTML = (!esAdmin && idsRecogidos.length > 1)
-            ? `<button onclick='confirmarDistribucionLote(${JSON.stringify(idsRecogidos)})'
+        const botonLoteHTML = (!esAdmin && idsDistribuibles.length > 1)
+            ? `<button onclick='confirmarDistribucionLote(${JSON.stringify(idsDistribuibles)})'
                    style="width:100%; background:#16a34a; color:white; border:none; padding:9px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-top:10px;">
-                   <i class="fa-solid fa-people-carry-box"></i> Distribuir las ${idsRecogidos.length} lineas ya recogidas de este contrato
+                   <i class="fa-solid fa-people-carry-box"></i> Distribuir ${idsDistribuibles.length} telas de este contrato
                </button>`
             : '';
 
@@ -1387,11 +1402,15 @@ function renderContratosTelaHTML(ticketsLogistica, esAdmin) {
 
         // Botón de lote: solo tiene sentido para quien distribuye (no admin),
         // y solo si hay al menos una línea ya 'Recogido' esperando entrega.
-        const idsRecogidos = lineas.filter(l => l.estado === 'Recogido').map(l => l.id);
-        const botonLoteHTML = (!esAdmin && idsRecogidos.length > 1)
-            ? `<button onclick='confirmarDistribucionLote(${JSON.stringify(idsRecogidos)})'
+        const idsDistribuibles = lineas.filter(l =>
+            l.estado === 'Recogido'
+            || (['Interno', 'Informal'].includes(l.tipo_gestion)
+                && ['En espera', 'En Recojo', 'Listo para recojo'].includes(l.estado))
+        ).map(l => l.id);
+        const botonLoteHTML = (!esAdmin && idsDistribuibles.length > 1)
+            ? `<button onclick='confirmarDistribucionLote(${JSON.stringify(idsDistribuibles)})'
                    style="width:100%; background:#16a34a; color:white; border:none; padding:9px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; margin-top:10px;">
-                   <i class="fa-solid fa-people-carry-box"></i> Distribuir las ${idsRecogidos.length} líneas ya recogidas de este contrato
+                   <i class="fa-solid fa-people-carry-box"></i> Distribuir ${idsDistribuibles.length} telas de este contrato
                </button>`
             : '';
 
@@ -1421,8 +1440,10 @@ function renderContratosTelaHTML(ticketsLogistica, esAdmin) {
 function renderLineaTelaHTML(t, esAdmin) {
     const b = _badgeLogisticaTela(t.estado);
     const nombreInsumo = (t.producto || '').replace(/^TELA EXTERNA:\s*/, '');
-    const insumoSafe = nombreInsumo.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const insumoSafe = escapeHTML(nombreInsumo);
     const cantidadTxt = (Number(t.cantidad) || 0) % 1 === 0 ? Number(t.cantidad) : Number(t.cantidad).toFixed(2);
+    const responsable = t.distribuido_por || t.recogido_por || t.trabajador_nombre || 'Sin asignar';
+    const gestion = escapeHTML(t.tipo_gestion || 'Externo');
 
     return `
     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
@@ -1431,7 +1452,8 @@ function renderLineaTelaHTML(t, esAdmin) {
             <span style="font-size:9px; font-weight:900; padding:3px 7px; border-radius:4px; background:${b.bg}; color:${b.col}; white-space:nowrap;">${b.txt}</span>
         </div>
         <div style="font-size:10px; color:#64748b; margin-bottom:8px;">
-            SKU: ${t.sku || 'N/A'} &nbsp;·&nbsp; Cant.: <b>${cantidadTxt} ${t.unidad || ''}</b> &nbsp;·&nbsp; Proveedor: ${t.proveedor || 'Sin proveedor'}
+            SKU: ${escapeHTML(t.sku || 'N/A')} &nbsp;·&nbsp; Cant.: <b>${cantidadTxt} ${escapeHTML(t.unidad || '')}</b> &nbsp;·&nbsp; Gestión: ${gestion} &nbsp;·&nbsp; Proveedor: ${escapeHTML(t.proveedor || 'Sin proveedor')}
+            <br>Responsable: <b>${escapeHTML(responsable)}</b>
         </div>
         ${renderBotonTicket(t, false, false, false, esAdmin)}
     </div>`;
@@ -1451,22 +1473,16 @@ async function confirmarDistribucionLote(ids) {
     if (!conf.isConfirmed) return;
 
     Swal.fire({ title: 'Distribuyendo...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-    let okCount = 0, desbloqueadosTotal = 0, errores = [];
-    for (const id of ids) {
-        try {
-            const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-distribucion`, { method: 'POST' });
-            const d = await res.json();
-            if (d.exito) { okCount++; desbloqueadosTotal += (d.desbloqueados || 0); }
-            else { errores.push(`#${id}: ${d.error || 'error'}`); }
-        } catch (e) {
-            errores.push(`#${id}: error de conexión`);
-        }
-    }
-
-    if (errores.length === 0) {
-        Swal.fire('¡Distribuidas!', `${okCount} línea(s) entregadas. ${desbloqueadosTotal} ticket(s) desbloqueado(s).`, 'success');
-    } else {
-        Swal.fire('Parcialmente completado', `${okCount} OK. Fallaron: ${errores.join(', ')}`, 'warning');
+    try {
+        const res = await apiFetch(`${API_URL}/api/logistica/telas/confirmar-distribucion-lote`, {
+            method: 'POST',
+            body: JSON.stringify({ ids })
+        });
+        const d = await res.json();
+        if (!res.ok || !d.exito) throw new Error(d.error || 'No se pudo distribuir el lote');
+        Swal.fire('Distribuidas', `${d.actualizados} linea(s) entregadas. ${d.desbloqueados || 0} ticket(s) desbloqueado(s).`, 'success');
+    } catch (e) {
+        Swal.fire('No se distribuyo el lote', e.message || 'Error de conexion', 'error');
     }
     cargarTicketsTaller();
 }
@@ -1490,34 +1506,37 @@ async function confirmarRecojoContratoTela(ids) {
                 Swal.showValidationMessage('Adjunta el comprobante para continuar');
                 return false;
             }
+            if (file.size > 8 * 1024 * 1024) {
+                Swal.showValidationMessage('El comprobante no puede superar 8 MB');
+                return false;
+            }
             return file;
         }
     });
     if (!isConfirmed || !archivo) return;
 
     Swal.fire({ title: 'Registrando recojo...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-    let okCount = 0;
-    const errores = [];
-    for (const id of ids) {
-        try {
-            const formData = new FormData();
-            formData.append('comprobante', archivo);
-            const res = await apiFetch(`${API_URL}/api/logistica/${id}/confirmar-recojo`, {
-                method: 'POST',
-                body: formData
-            });
-            const d = await res.json();
-            if (d.exito) okCount++;
-            else errores.push(`#${id}: ${d.error || 'error'}`);
-        } catch (e) {
-            errores.push(`#${id}: error de conexion`);
-        }
-    }
-
-    if (errores.length) {
-        Swal.fire('Recojo parcial', `${okCount} tela(s) registrada(s). Pendientes: ${errores.join(', ')}`, 'warning');
-    } else {
-        Swal.fire('Recojo confirmado', `${okCount} tela(s) quedaron registradas como recogidas.`, 'success');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    try {
+        const formData = new FormData();
+        formData.append('comprobante', archivo);
+        formData.append('ids', JSON.stringify(ids));
+        const res = await apiFetch(`${API_URL}/api/logistica/telas/confirmar-recojo-lote`, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+        });
+        const d = await res.json();
+        if (!res.ok || !d.exito) throw new Error(d.error || 'No se pudo registrar el lote');
+        Swal.fire('Recojo confirmado', `${d.actualizados} tela(s) quedaron registradas como recogidas.`, 'success');
+    } catch (e) {
+        const mensaje = e.name === 'AbortError'
+            ? 'La carga tardo demasiado. Revisa tu conexion e intentalo otra vez.'
+            : (e.message || 'Error de conexion');
+        Swal.fire('No se registro el recojo', mensaje, 'error');
+    } finally {
+        clearTimeout(timeoutId);
     }
     cargarTicketsTaller();
 }

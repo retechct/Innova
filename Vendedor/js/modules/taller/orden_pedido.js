@@ -478,7 +478,34 @@ async function descargarPDFOrdenTaller(data) {
    este archivo). */
 
 /* ── HELPER: Botón de acción correcto según rol, estado y área ── */
+function renderTrazabilidadTela(t) {
+    const recogidoPor = String(t.recogido_por || '').trim();
+    const distribuidoPor = String(t.distribuido_por || '').trim();
+    const responsable = String(t.trabajador_nombre || t.trabajador || '').trim();
+    const destino = String(t.tapicero_destino || '').trim();
+    const acciones = [];
+
+    if (recogidoPor) acciones.push(`Ingresó/recogió: <b>${escapeHTML(recogidoPor)}</b>`);
+    if (distribuidoPor) acciones.push(`Distribuyó: <b>${escapeHTML(distribuidoPor)}</b>`);
+    if (!acciones.length && responsable && responsable !== 'Sin asignar') {
+        acciones.push(`Responsable: <b>${escapeHTML(responsable)}</b>`);
+    }
+    if (!acciones.length) acciones.push('Sin responsable registrado todavía');
+    if (destino && destino !== 'Sin asignar') {
+        acciones.push(`Destino: <b>${escapeHTML(destino)}</b>`);
+    }
+
+    return acciones.join(' · ');
+}
+
 function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
+    const ticketId = Number(t.id);
+    if (!Number.isSafeInteger(ticketId) || ticketId <= 0) {
+        return '<button disabled style="width:100%;padding:8px;border:0;border-radius:6px;">Ticket inválido</button>';
+    }
+    const areaArgumento = jsStringAttr(t.area || '');
+    const productoArgumento = jsStringAttr(t.producto || '');
+    const trabajadorNombreHTML = escapeHTML(t.trabajador_nombre || 'Sin asignar');
     const isListoParaRecojo = t.estado === 'Listo para Recojo';
     const isRecogido        = t.estado === 'Recogido';
     const esAreaEstructura  = t.area === 'ESTRUCTURAS_MUEBLES' || t.area === 'ESTRUCTURAS_SILLAS';
@@ -486,31 +513,47 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
     // ── LOGÍSTICA EXTERNA (TELAS): se evalúa ANTES del bloque esAdmin,
     // porque ese bloque hace return temprano y nunca llegaría aquí ──
     if (t.es_logistica) {
-        if (esAdmin) {
-            return `<div style="background:#e0f2fe; color:#0369a1; padding:8px; border-radius:8px; text-align:center; font-size:11px; font-weight:bold;">
-                        <i class="fa-solid fa-users"></i> Bandeja compartida de Telas
-                    </div>`;
-        } else {
-            if (t.estado === 'En Recojo' || t.estado === 'En espera') {
-                return `<div style="margin-top:10px; padding:10px; background:#fef9c3; border-radius:8px; border:1px solid #fde047;">
-                            <label style="font-size:9px; font-weight:900; color:#854d0e; display:block; margin-bottom:6px;">📷 SUBIR VOUCHER / RECIBO DE PAGO:</label>
-                            <input type="file" id="foto-voucher-${t.id}" accept="image/*,application/pdf" style="width:100%; margin-bottom:8px; font-size:11px;">
-                            <button onclick="confirmarRecojoLogistica(${t.id}, document.getElementById('foto-voucher-${t.id}'))"
+        const estadoTela = t.estado === 'Listo para recojo' ? 'En espera' : t.estado;
+        const gestionDirecta = t.tipo_gestion === 'Interno' || t.tipo_gestion === 'Informal';
+        const pendienteEnTelas = estadoTela === 'En Recojo' || estadoTela === 'En espera';
+        const trazabilidadAdmin = esAdmin
+            ? `<div style="background:#e0f2fe; color:#0369a1; padding:8px; border-radius:8px; text-align:center; font-size:11px; font-weight:bold; margin-bottom:8px;">
+                   <i class="fa-solid fa-users"></i> Bandeja compartida de Telas
+                   <div style="margin-top:4px; font-weight:500; line-height:1.4;">${renderTrazabilidadTela(t)}</div>
+               </div>`
+            : '';
+        if (gestionDirecta && pendienteEnTelas) {
+            return `${trazabilidadAdmin}<button onclick="confirmarDistribucionTela(${ticketId})"
+                            style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                            <i class="fa-solid fa-people-carry-box"></i> Entregar a Tapicería
+                        </button>`;
+        }
+        if (pendienteEnTelas) {
+            const tieneComprobante = Boolean(t.url_comprobante_pago);
+            return `${trazabilidadAdmin}<div style="margin-top:10px; padding:10px; background:#fef9c3; border-radius:8px; border:1px solid #fde047;">
+                            ${tieneComprobante
+                                ? '<div style="font-size:10px;font-weight:800;color:#166534;margin-bottom:8px;"><i class="fa-solid fa-circle-check"></i> Comprobante ya registrado</div>'
+                                : `<label style="font-size:9px; font-weight:900; color:#854d0e; display:block; margin-bottom:6px;">📷 SUBIR VOUCHER / RECIBO DE PAGO:</label>
+                                   <input type="file" id="foto-voucher-${ticketId}" accept="image/*,application/pdf" style="width:100%; margin-bottom:8px; font-size:11px;">`}
+                            <button onclick="confirmarRecojoLogistica(${ticketId}, document.getElementById('foto-voucher-${ticketId}'), ${tieneComprobante})"
                                 style="width:100%; background:#f59e0b; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
                                 <i class="fa-solid fa-truck-ramp-box"></i> Confirmar Recojo
                             </button>
                         </div>`;
-            } else if (t.estado === 'Recogido') {
-                return `<button onclick="confirmarDistribucionTela(${t.id})"
+        } else if (estadoTela === 'Recogido') {
+            return `${trazabilidadAdmin}<button onclick="confirmarDistribucionTela(${ticketId})"
                             style="width:100%; background:#16a34a; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
                             <i class="fa-solid fa-people-carry-box"></i> Entregar a Tapicería
                         </button>`;
-            }
-            // Otros estados no accionables para Telas.
-            return `<div style="background:#fef3c7; color:#92400e; padding:8px; border-radius:8px; text-align:center; font-size:11px;">
+        } else if (estadoTela === 'Distribuido') {
+            return `${trazabilidadAdmin}<div style="background:#dcfce7; color:#166534; padding:8px; border-radius:8px; text-align:center; font-size:11px; font-weight:bold;">
+                            <i class="fa-solid fa-circle-check"></i> Entregada a Tapicería
+                        </div>`;
+        }
+        // Otros estados no accionables para Telas.
+        return `${trazabilidadAdmin}<div style="background:#fef3c7; color:#92400e; padding:8px; border-radius:8px; text-align:center; font-size:11px;">
                         <i class="fa-solid fa-clock"></i> Esperando avance de logística
                     </div>`;
-        }
     }
 
     // ── ADMIN: solo ve botón para ASIGNAR, nunca para terminar ──
@@ -528,11 +571,11 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
             }
             if (isEnProceso) {
                 return `<div style="background:#dbeafe; color:#1e40af; padding:10px; border-radius:8px; text-align:center; font-size:11px; font-weight:bold;">
-                            <i class="fa-solid fa-truck"></i> En ruta — Chofer: ${t.trabajador_nombre}
+                            <i class="fa-solid fa-truck"></i> En ruta — Chofer: ${trabajadorNombreHTML}
                         </div>`;
             }
             // Pendiente desbloqueado → admin puede asignar chofer
-            return `<button onclick="asignarChoferDespacho(${t.id})"
+            return `<button onclick="asignarChoferDespacho(${ticketId})"
                         style="width:100%; background:#0f172a; color:white; border:none; padding:10px; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer;">
                         <i class="fa-solid fa-truck"></i> Asignar Chofer y Despachar
                     </button>`;
@@ -556,10 +599,10 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
             const areaTap = t.area === 'TAPICERIA_SOFAS' || t.area === 'TAPICERIA_SILLAS' || t.area === 'ARMADO_COJINES';
             if (areaTap) {
                 const trabajadorInfo = t.trabajador
-                    ? `<div style="background:#f0fdf4; color:#166534; padding:6px; border-radius:6px; text-align:center; font-size:10px; margin-bottom:6px;"><i class="fa-solid fa-user-check"></i> Pre-asignado: <b>${t.trabajador_nombre}</b></div>`
+                    ? `<div style="background:#f0fdf4; color:#166534; padding:6px; border-radius:6px; text-align:center; font-size:10px; margin-bottom:6px;"><i class="fa-solid fa-user-check"></i> Pre-asignado: <b>${trabajadorNombreHTML}</b></div>`
                     : '';
                 return `${trabajadorInfo}
-                    <button onclick="asignarTrabajador(${t.id}, '${t.area}')"
+                    <button onclick="asignarTrabajador(${ticketId}, ${areaArgumento})"
                         style="width:100%; background:#94a3b8; color:white; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">
                         <i class="fa-solid fa-user-clock"></i> ${t.trabajador ? 'Reasignar' : 'Pre-asignar'} Tapicero
                     </button>
@@ -576,17 +619,16 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
         }
         if (t.trabajador) {
             // Ya tiene asignado — mostrar nombre + botón para reasignar si es necesario
-            const nombreSafe = (t.trabajador_nombre || 'Asignado').replace(/'/g, "\\'");
             return `<div style="background:#f0fdf4; color:#166534; padding:8px; border-radius:8px; text-align:center; font-size:11px; margin-bottom:6px;">
-                        <i class="fa-solid fa-user-check"></i> <b>${t.trabajador_nombre || 'Asignado'}</b>
+                        <i class="fa-solid fa-user-check"></i> <b>${trabajadorNombreHTML}</b>
                     </div>
-                    <button onclick="asignarTrabajador(${t.id}, '${t.area}')"
+                    <button onclick="asignarTrabajador(${ticketId}, ${areaArgumento})"
                         style="width:100%; background:#e2e8f0; color:#475569; border:none; padding:7px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">
                         <i class="fa-solid fa-arrows-rotate"></i> Reasignar
                     </button>`;
         }
         // Sin asignar → botón de asignación
-        return `<button onclick="asignarTrabajador(${t.id}, '${t.area}')"
+        return `<button onclick="asignarTrabajador(${ticketId}, ${areaArgumento})"
                     style="width:100%; background:#558fc5; color:white; border:none; padding:10px; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer;">
                     <i class="fa-solid fa-user-plus"></i> Asignar Maestro
                 </button>`;
@@ -626,9 +668,9 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
     const usuarioEsTelas = usuarioActivo.area_asignada === 'CORTE_Y_CONTROL_TELAS' || usuarioActivo.area_asignada === 'TELAS';
     if (esAreaTelas && usuarioEsTelas && (t.estado === 'Pendiente' || isEnProceso)) {
         const specsB64Derivar = btoa(unescape(encodeURIComponent(t.especificaciones || '')));
-        return `<button onclick="abrirModalDerivar(${t.id})"
-                    data-ticket-id="${t.id}"
-                    data-specs="${specsB64Derivar}"
+        return `<button onclick="abrirModalDerivar(${ticketId})"
+                    data-ticket-id="${ticketId}"
+                    data-specs="${escapeAttr(specsB64Derivar)}"
                     style="width:100%; background:#f97316; color:white; border:none; padding:10px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; margin-top:4px;">
                     ✂️ Subir Foto y Derivar Material
                 </button>`;
@@ -639,7 +681,7 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
         if (t.area === 'DESPACHO_CENTRAL') {
             return `<div style="padding:10px; background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">
                         <p style="font-size:11px; font-weight:bold; color:#475569; margin:0 0 10px 0; text-align:center;">
-                            <i class="fa-solid fa-truck"></i> Chofer: <b>${t.trabajador_nombre}</b>
+                            <i class="fa-solid fa-truck"></i> Chofer: <b>${trabajadorNombreHTML}</b>
                         </p>
                         <label style="font-size:9px; font-weight:900; color:#475569; display:block; margin-bottom:6px;">📷 FOTO DE ENTREGA AL CLIENTE:</label>
                         <div style="display:flex;gap:6px;margin-bottom:8px;">
@@ -647,21 +689,21 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                                           border-radius:7px;font-size:10px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:4px;text-align:center;">
                                 📷 Tomar foto
-                                <input type="file" id="foto-evid-cam-${t.id}" accept="image/*" capture="environment"
-                                       style="display:none;" onchange="_syncFotoEvid(this, '${t.id}')">
+                                <input type="file" id="foto-evid-cam-${ticketId}" accept="image/*" capture="environment"
+                                       style="display:none;" onchange="_syncFotoEvid(this, ${ticketId})">
                             </label>
                             <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:7px 4px;
                                           border-radius:7px;font-size:10px;font-weight:700;display:flex;
                                           align-items:center;justify-content:center;gap:4px;text-align:center;">
                                 📁 Archivo
-                                <input type="file" id="foto-evid-${t.id}" accept="image/*"
-                                       style="display:none;" onchange="_syncFotoEvid(this, '${t.id}')">
+                                <input type="file" id="foto-evid-${ticketId}" accept="image/*"
+                                       style="display:none;" onchange="_syncFotoEvid(this, ${ticketId})">
                             </label>
                         </div>
-                        <div id="foto-evid-preview-${t.id}" style="display:none;margin-bottom:6px;">
-                            <img id="foto-evid-img-${t.id}" src="" style="max-height:70px;border-radius:6px;border:1px solid #e2e8f0;">
+                        <div id="foto-evid-preview-${ticketId}" style="display:none;margin-bottom:6px;">
+                            <img id="foto-evid-img-${ticketId}" src="" style="max-height:70px;border-radius:6px;border:1px solid #e2e8f0;">
                         </div>
-                        <button onclick="finalizarTicketTaller(${t.id}, document.getElementById('foto-evid-cam-${t.id}')?.files[0] ? document.getElementById('foto-evid-cam-${t.id}') : document.getElementById('foto-evid-${t.id}'), '${t.area}', '${t.producto}')"
+                        <button onclick="finalizarTicketTaller(${ticketId}, document.getElementById('foto-evid-cam-${ticketId}')?.files[0] ? document.getElementById('foto-evid-cam-${ticketId}') : document.getElementById('foto-evid-${ticketId}'), ${areaArgumento}, ${productoArgumento})"
                             style="width:100%; background:#22c55e; color:white; border:none; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
                             <i class="fa-solid fa-check-double"></i> CONFIRMAR ENTREGA
                         </button>
@@ -680,21 +722,21 @@ function renderBotonTicket(t, isBloqueado, isTerminado, isEnProceso, esAdmin) {
                                       border-radius:7px;font-size:10px;font-weight:700;display:flex;
                                       align-items:center;justify-content:center;gap:4px;text-align:center;">
                             📷 Tomar foto
-                            <input type="file" id="foto-evid-cam-${t.id}" accept="image/*" capture="environment"
-                                   style="display:none;" onchange="_syncFotoEvid(this, '${t.id}')">
+                            <input type="file" id="foto-evid-cam-${ticketId}" accept="image/*" capture="environment"
+                                   style="display:none;" onchange="_syncFotoEvid(this, ${ticketId})">
                         </label>
                         <label style="flex:1;cursor:pointer;background:#e2e8f0;color:#0f172a;padding:7px 4px;
                                       border-radius:7px;font-size:10px;font-weight:700;display:flex;
                                       align-items:center;justify-content:center;gap:4px;text-align:center;">
                             📁 Archivo
-                            <input type="file" id="foto-evid-${t.id}" accept="image/*"
-                                   style="display:none;" onchange="_syncFotoEvid(this, '${t.id}')">
+                            <input type="file" id="foto-evid-${ticketId}" accept="image/*"
+                                   style="display:none;" onchange="_syncFotoEvid(this, ${ticketId})">
                         </label>
                     </div>
-                    <div id="foto-evid-preview-${t.id}" style="display:none;margin-bottom:6px;">
-                        <img id="foto-evid-img-${t.id}" src="" style="max-height:70px;border-radius:6px;border:1px solid #e2e8f0;">
+                    <div id="foto-evid-preview-${ticketId}" style="display:none;margin-bottom:6px;">
+                        <img id="foto-evid-img-${ticketId}" src="" style="max-height:70px;border-radius:6px;border:1px solid #e2e8f0;">
                     </div>
-                    <button onclick="finalizarTicketTaller(${t.id}, document.getElementById('foto-evid-cam-${t.id}')?.files[0] ? document.getElementById('foto-evid-cam-${t.id}') : document.getElementById('foto-evid-${t.id}'), '${t.area}', '${t.producto}')"
+                    <button onclick="finalizarTicketTaller(${ticketId}, document.getElementById('foto-evid-cam-${ticketId}')?.files[0] ? document.getElementById('foto-evid-cam-${ticketId}') : document.getElementById('foto-evid-${ticketId}'), ${areaArgumento}, ${productoArgumento})"
                         style="width:100%; background:${colorFinalizar}; color:white; border:none; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
                         ${labelFinalizar}
                     </button>

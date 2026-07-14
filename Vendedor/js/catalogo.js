@@ -543,6 +543,7 @@ async function addStockItemToCart(itemId, nombre, precio, foto, isPieza = false,
 /* --- LÓGICA DEL NUEVO MODAL DE SOFÁS --- */
 /* --- REEMPLAZA TU FUNCIÓN openConfig COMPLETA --- */
 async function openConfig(name, img) {
+    if (typeof cargarMaestroMaterialesVenta === 'function' && !(await cargarMaestroMaterialesVenta())) return;
     if (!_cartaAbriendoPlantilla) _cartaPlantillaActiva = null;
     tempItem = { name, img };
     const modal = document.getElementById('modal-config');
@@ -1226,7 +1227,8 @@ async function confirmarComedor() {
 /* ----------------------------------------------------------- */
 
 /* --- 6. CARRITO Y STEPPER --- */
-function openConfigComedor() {
+async function openConfigComedor() {
+    if (typeof cargarMaestroMaterialesVenta === 'function' && !(await cargarMaestroMaterialesVenta())) return;
     if (!_cartaAbriendoPlantilla) _cartaPlantillaActiva = null;
     document.querySelectorAll('#modal-config-comedor input[type="text"], #modal-config-comedor input[type="number"], #modal-config-comedor input[type="hidden"]').forEach(inp => inp.value = '');
     document.querySelectorAll('#modal-config-comedor select').forEach(sel => sel.selectedIndex = 0);
@@ -1302,7 +1304,8 @@ function actualizarVistaComedor() {
 
 /* --- 7. PYTHON GUARDAR --- */
 
-function openConfigCentro() {
+async function openConfigCentro() {
+    if (typeof cargarMaestroMaterialesVenta === 'function' && !(await cargarMaestroMaterialesVenta())) return;
     if (!_cartaAbriendoPlantilla) _cartaPlantillaActiva = null;
     document.querySelectorAll('#modal-config-centro input').forEach(inp => inp.value = '');
     document.getElementById('centro-notas').value = '';
@@ -1417,7 +1420,8 @@ async function confirmarCentro() {
 /* ================================================================= */
 /* --- LÓGICA DE BUTACAS Y SILLERÍA SUELTA --- */
 /* ================================================================= */
-function openConfigButaca() {
+async function openConfigButaca() {
+    if (typeof cargarMaestroMaterialesVenta === 'function' && !(await cargarMaestroMaterialesVenta())) return;
     if (!_cartaAbriendoPlantilla) _cartaPlantillaActiva = null;
     document.querySelectorAll('#modal-config-butaca input').forEach(inp => inp.value = '');
     document.getElementById('butaca-cantidad').value = '1';
@@ -1927,7 +1931,8 @@ function _cartaAplicarReceta(p, tipoConfig) {
     setTimeout(aplicarValores, 120);
 }
 
-function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
+async function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
+    if (typeof cargarMaestroMaterialesVenta === 'function' && !(await cargarMaestroMaterialesVenta())) return;
     const nombre = p.nombre || p.nombre_modelo || '';
     _cartaPlantillaActiva = {
         id: p.id,
@@ -1940,41 +1945,44 @@ function _cartaAbrirConfiguradorPlantilla(p, tipoConfig) {
     };
 
     _cartaAbriendoPlantilla = true;
-    if (tipoConfig === 'sofa') {
-        openConfig(nombre, p.foto || '');
-        const precioEl = document.getElementById('conf-precio');
-        const nombreEl = document.getElementById('sofa-nombre-libre');
-        if (precioEl && p.precio > 0) precioEl.value = p.precio;
-        if (nombreEl) nombreEl.value = nombre;
-        _cartaAplicarReceta(p, tipoConfig);
+    try {
+        if (tipoConfig === 'sofa') {
+            await openConfig(nombre, p.foto || '');
+            const precioEl = document.getElementById('conf-precio');
+            const nombreEl = document.getElementById('sofa-nombre-libre');
+            if (precioEl && p.precio > 0) precioEl.value = p.precio;
+            if (nombreEl) nombreEl.value = nombre;
+            _cartaAplicarReceta(p, tipoConfig);
+            return;
+        }
+        if (tipoConfig === 'comedor') {
+            await openConfigComedor();
+            const precioEl = document.getElementById('conf-precio-comedor');
+            if (precioEl && p.precio > 0) precioEl.value = p.precio;
+            _cartaAplicarReceta(p, tipoConfig);
+            return;
+        }
+        if (tipoConfig === 'centro') {
+            await openConfigCentro();
+            const precioEl = document.getElementById('conf-precio-centro');
+            if (precioEl && p.precio > 0) precioEl.value = p.precio;
+            _cartaAplicarReceta(p, tipoConfig);
+            return;
+        }
+        if (tipoConfig === 'butaca') {
+            await openConfigButaca();
+            const precioEl = document.getElementById('conf-precio-butaca');
+            const nombreEl = document.getElementById('butaca-nombre-libre');
+            if (precioEl && p.precio > 0) precioEl.value = p.precio;
+            if (nombreEl) nombreEl.value = nombre;
+            _cartaAplicarReceta(p, tipoConfig);
+        }
+    } catch (e) {
+        _cartaPlantillaActiva = null;
+        throw e;
+    } finally {
         _cartaAbriendoPlantilla = false;
-        return;
     }
-    if (tipoConfig === 'comedor') {
-        openConfigComedor();
-        const precioEl = document.getElementById('conf-precio-comedor');
-        if (precioEl && p.precio > 0) precioEl.value = p.precio;
-        _cartaAplicarReceta(p, tipoConfig);
-        _cartaAbriendoPlantilla = false;
-        return;
-    }
-    if (tipoConfig === 'centro') {
-        openConfigCentro();
-        const precioEl = document.getElementById('conf-precio-centro');
-        if (precioEl && p.precio > 0) precioEl.value = p.precio;
-        _cartaAplicarReceta(p, tipoConfig);
-        _cartaAbriendoPlantilla = false;
-        return;
-    }
-    if (tipoConfig === 'butaca') {
-        openConfigButaca();
-        const precioEl = document.getElementById('conf-precio-butaca');
-        const nombreEl = document.getElementById('butaca-nombre-libre');
-        if (precioEl && p.precio > 0) precioEl.value = p.precio;
-        if (nombreEl) nombreEl.value = nombre;
-        _cartaAplicarReceta(p, tipoConfig);
-    }
-    _cartaAbriendoPlantilla = false;
 }
 
 function _cartaConsumirPlantillaActiva(tipoConfig) {
@@ -1984,12 +1992,12 @@ function _cartaConsumirPlantillaActiva(tipoConfig) {
     return p;
 }
 
-window._cartaSeleccionarModelo = function(productoId) {
+window._cartaSeleccionarModelo = async function(productoId) {
     const p = allProducts.find(x => x.id === productoId);
     if (!p) return;
     const tipoConfig = _cartaTipoConfig(p);
     if (tipoConfig) {
-        _cartaAbrirConfiguradorPlantilla(p, tipoConfig);
+        await _cartaAbrirConfiguradorPlantilla(p, tipoConfig);
         return;
     }
     const nombre = p.nombre || p.nombre_modelo || '';
