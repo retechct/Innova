@@ -42,6 +42,17 @@ function _normalizarTelWA(raw) {
     return '51' + tel;
 }
 
+function _extraerTelWA(raw) {
+    if (!raw) return '';
+    const texto = String(raw);
+    const candidatos = texto.match(/(?:\+?51[\s\-.]*)?(?:9[\d\s\-.()]{8,})/g) || [texto];
+    for (const candidato of candidatos) {
+        const tel = _normalizarTelWA(candidato);
+        if (tel) return tel;
+    }
+    return '';
+}
+
 // ── Foto(s) del insumo en Logística Externa ───────────────────────────────
 // Un requerimiento puede tener hasta 2 fotos: la del insumo del maestro
 // (la que sale del buscador inteligente al elegir la parte del catálogo)
@@ -876,12 +887,6 @@ async function _abrirEditarLogistica(item, proveedores) {
 
             // ── EXTERNO con proveedor: WhatsApp directo sin formulario online ──
             if (datos.tipo_gestion === 'Externo' && datos.proveedor_id) {
-                // Marcar como Cotizacion Enviada
-                await apiFetch(`${API_URL}/api/logistica/actualizar`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: item.id, estado: 'Cotizacion Enviada' })
-                });
-
                 const provData = proveedores.find(p => p.id == datos.proveedor_id) || {};
                 let tel = _normalizarTelWA(provData.telefono || '');
 
@@ -916,6 +921,10 @@ async function _abrirEditarLogistica(item, proveedores) {
 
                 if (tel) {
                     window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msgWsp)}`, '_blank');
+                    await apiFetch(`${API_URL}/api/logistica/actualizar`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: item.id, estado: 'Cotizacion Enviada' })
+                    });
                 } else {
                     await Swal.fire({
                         icon: 'warning', title: 'Sin teléfono registrado',
@@ -938,8 +947,25 @@ async function _abrirEditarLogistica(item, proveedores) {
             // ── INFORMAL: mostrar botón "Enviar al taller" ─────────────────
             if (datos.tipo_gestion === 'Informal') {
                 const esTelaInformal = _logEsTela({ ...item, unidad: datos.unidad || item.unidad });
+                const telInformal = _extraerTelWA(datos.proveedor_informal || '');
+                if (telInformal) {
+                    const msgWsp = [
+                        `Hola, somos *Innova Mobili*.`,
+                        ``,
+                        `Necesitamos el siguiente material:`,
+                        ``,
+                        `*Material:* ${item.insumo}`,
+                        ...(item.sku ? [`*SKU:* ${item.sku}`] : []),
+                        ...(item.detalle_insumo ? [`*Detalle:* ${item.detalle_insumo}`] : []),
+                        ...(datos.cantidad ? [`*Cantidad:* ${datos.cantidad} ${datos.unidad || ''}`] : []),
+                        ...(item.foto_url ? [`*Ref. visual:* ${item.foto_url}`] : []),
+                        `*Pedido:* #${item.codigo_venta}`,
+                        ...(datos.nota ? [`*Nota:* ${datos.nota}`] : []),
+                    ].join('\n');
+                    window.open(`https://wa.me/${telInformal}?text=${encodeURIComponent(msgWsp)}`, '_blank');
+                }
                 const { isConfirmed: confirmarTaller } = await Swal.fire({
-                    icon: 'info',
+                    icon: telInformal ? 'success' : 'info',
                     title: '📞 Insumo informal guardado',
                     html: esTelaInformal
                         ? `Cuando ya tengas la tela, presiona <b>"Enviar al taller"</b>. Entrará a la bandeja de Telas y se desbloqueará Tapicería recién al confirmar su distribución.`

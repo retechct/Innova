@@ -1624,7 +1624,13 @@ def obtener_telas_por_contrato():
                 l.operario_id,
                 COALESCE(ud.nombre, ur.nombre, u.nombre, 'Sin asignar') AS operario_nombre,
                 COALESCE(ur.nombre, '') AS recogido_por,
-                COALESCE(ud.nombre, '') AS distribuido_por
+                COALESCE(ud.nombre, '') AS distribuido_por,
+                COALESCE(
+                    (SELECT foto_url FROM maestro_telas WHERE sku = l.sku LIMIT 1),
+                    (SELECT i2.foto_url FROM items_venta i2 WHERE i2.id = l.item_id LIMIT 1),
+                    (SELECT i2.foto_url FROM items_venta i2 WHERE i2.venta_id = l.venta_id AND l.item_id IS NULL LIMIT 1),
+                    ''
+                ) AS foto_url
             FROM logistica_externa l
             JOIN ventas v ON l.venta_id = v.id
             LEFT JOIN items_venta i ON i.id = l.item_id
@@ -1714,6 +1720,7 @@ def obtener_telas_por_contrato():
                 "operario_nombre": r[22],
                 "recogido_por": r[23],
                 "distribuido_por": r[24],
+                "foto_url": limpiar_foto((r[25] or '').split('|')[0]) if r[25] else "",
             })
 
         return jsonify(list(tarjetas.values())), 200

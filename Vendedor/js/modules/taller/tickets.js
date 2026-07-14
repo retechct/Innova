@@ -1327,6 +1327,7 @@ function renderContratosTelaBackendHTML(contratos, esAdmin) {
             producto_item: l.producto_item || '',
             tipo_gestion: l.tipo_gestion || 'Externo',
             url_comprobante_pago: l.url_comprobante_pago || '',
+            foto_url: l.foto_url || '',
         }));
 
         const totalesPorUnidad = {};
@@ -1462,18 +1463,32 @@ function renderLineaTelaHTML(t, esAdmin) {
     const cantidadTxt = (Number(t.cantidad) || 0) % 1 === 0 ? Number(t.cantidad) : Number(t.cantidad).toFixed(2);
     const responsable = t.distribuido_por || t.recogido_por || t.trabajador_nombre || 'Sin asignar';
     const gestion = escapeHTML(t.tipo_gestion || 'Externo');
+    const fotoSrc = t.foto_url || t.foto || '';
+    const fotoHTML = fotoSrc && !fotoSrc.includes('sin_foto')
+        ? `<img src="${fotoSrc}" alt="${insumoSafe}"
+                style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #dbeafe;flex-shrink:0;cursor:zoom-in;background:#f1f5f9;"
+                onclick="event.stopPropagation();ampliarImagen('${fotoSrc}')"
+                onerror="this.style.display='none'">`
+        : `<div style="width:72px;height:72px;border-radius:8px;border:1px dashed #cbd5e1;background:#f1f5f9;color:#94a3b8;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="fa-solid fa-image"></i>
+           </div>`;
 
     return `
     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
-            <span style="font-size:12px; font-weight:800; color:#0f172a;">${insumoSafe}</span>
-            <span style="font-size:9px; font-weight:900; padding:3px 7px; border-radius:4px; background:${b.bg}; color:${b.col}; white-space:nowrap;">${b.txt}</span>
+        <div style="display:flex; gap:10px; align-items:flex-start;">
+            ${fotoHTML}
+            <div style="flex:1;min-width:0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span style="font-size:12px; font-weight:800; color:#0f172a;">${insumoSafe}</span>
+                    <span style="font-size:9px; font-weight:900; padding:3px 7px; border-radius:4px; background:${b.bg}; color:${b.col}; white-space:nowrap;">${b.txt}</span>
+                </div>
+                <div style="font-size:10px; color:#64748b; margin-bottom:8px;">
+                    SKU: ${escapeHTML(t.sku || 'N/A')} &nbsp;·&nbsp; Cant.: <b>${cantidadTxt} ${escapeHTML(t.unidad || '')}</b> &nbsp;·&nbsp; Gestión: ${gestion} &nbsp;·&nbsp; Proveedor: ${escapeHTML(t.proveedor || 'Sin proveedor')}
+                    <br>Responsable: <b>${escapeHTML(responsable)}</b>
+                </div>
+                ${renderBotonTicket(t, false, false, false, esAdmin)}
+            </div>
         </div>
-        <div style="font-size:10px; color:#64748b; margin-bottom:8px;">
-            SKU: ${escapeHTML(t.sku || 'N/A')} &nbsp;·&nbsp; Cant.: <b>${cantidadTxt} ${escapeHTML(t.unidad || '')}</b> &nbsp;·&nbsp; Gestión: ${gestion} &nbsp;·&nbsp; Proveedor: ${escapeHTML(t.proveedor || 'Sin proveedor')}
-            <br>Responsable: <b>${escapeHTML(responsable)}</b>
-        </div>
-        ${renderBotonTicket(t, false, false, false, esAdmin)}
     </div>`;
 }
 
