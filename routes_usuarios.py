@@ -4,7 +4,6 @@ Blueprint: usuarios_bp  (sin prefijo de URL)
 """
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt, verify_jwt_in_request
 from werkzeug.security import check_password_hash, generate_password_hash
 from database import get_db_connection, release_db_connection
 from auth_middleware import generar_token, requiere_login, requiere_rol, forzar_logout_global
@@ -55,22 +54,17 @@ def _credencial_staff_valida(cursor, usuario_id, secreto, password_hash, contras
 # ==========================================
 
 @usuarios_bp.route('/api/usuarios', methods=['GET'])
-# Sin @requiere_login: este endpoint alimenta el dropdown del formulario
-# de login (se llama antes de tener token). Sin sesión solo devuelve id/nombre.
+@requiere_login
 def obtener_usuarios():
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("SELECT id, nombre, rol, area_asignada FROM usuarios ORDER BY nombre;")
         filas = cursor.fetchall()
-        verify_jwt_in_request(optional=True)
-        autenticado = bool(get_jwt())
-        usuarios = []
-        for r in filas:
-            usuario = {"id": r[0], "nombre": r[1]}
-            if autenticado:
-                usuario.update({"rol": r[2], "area_asignada": r[3]})
-            usuarios.append(usuario)
+        usuarios = [
+            {"id": r[0], "nombre": r[1], "rol": r[2], "area_asignada": r[3]}
+            for r in filas
+        ]
         return jsonify(usuarios), 200
     except Exception:
         return jsonify({'error': 'Error al cargar usuarios'}), 500

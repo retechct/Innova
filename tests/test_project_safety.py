@@ -100,6 +100,8 @@ class ProjectSafetyTests(unittest.TestCase):
         self.assertIn("generate_password_hash", usuarios_py)
         self.assertIn("_credencial_staff_valida", usuarios_py)
         self.assertNotIn("AND (pin_acceso = %s OR contrasena = %s)", usuarios_py)
+        self.assertIn("@usuarios_bp.route('/api/usuarios', methods=['GET'])\n@requiere_login", usuarios_py)
+        self.assertNotIn("verify_jwt_in_request(optional=True)", usuarios_py)
 
     def test_frontend_has_html_escape_helpers(self):
         helpers_js = read("Vendedor/js/helpers.js")
