@@ -1136,6 +1136,7 @@ def obtener_ordenes_produccion():
             for lg in logistica_telas:
                 log_id, insumo_nombre, estado_dist, operario_nombre, tapicero_destino = lg
                 estado_display = {
+                    'En espera':   'Pendiente en Telas',
                     'En Recojo':   'En Recojo',
                     'Recogido':    'Recogido',
                     'Distribuido': 'Distribuido',
@@ -2341,6 +2342,23 @@ def _validar_contrato_listo_para_despacho(cursor, ticket_id):
         return ticket, {
             'error': f'Aún hay {pendientes_logistica} insumo(s) de logística externa del contrato sin recibir. '
                      f'No se puede despachar.'
+        }, 409
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM logistica_externa
+        WHERE venta_id = %s
+          AND (categoria_insumo = 'TELA'
+               OR LOWER(COALESCE(insumo_nombre, '')) LIKE '%%tela%%'
+               OR LOWER(COALESCE(unidad, '')) = 'mts')
+          AND COALESCE(estado_distribucion, '') NOT IN ('Distribuido')
+          AND estado NOT IN ('Cancelado')
+    """, (venta_id,))
+    pendientes_telas = cursor.fetchone()[0]
+    if pendientes_telas > 0:
+        return ticket, {
+            'error': f'Aún hay {pendientes_telas} tela(s) sin distribuir al área correspondiente. '
+                     f'Márcalas como Distribuido desde la bandeja de Telas antes de despachar.'
         }, 409
 
     return ticket, None, None

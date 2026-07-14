@@ -417,7 +417,10 @@ async function leerVoucherAutomatico(file) {
     } catch (e) {
         console.info('Autollenado de voucher no disponible:', e);
         window._ultimoVoucherOCR = null;
-        _voucherSetStatus('Voucher cargado. No pudimos leerlo automáticamente; completa empresa, monto y operación manualmente.', 'warn');
+        const detalle = e?.message && !/failed to fetch|networkerror/i.test(e.message)
+            ? `: ${e.message}`
+            : '';
+        _voucherSetStatus(`Voucher cargado. No pudimos leerlo automáticamente${detalle}; completa empresa, monto y operación manualmente.`, 'warn');
     }
 }
 

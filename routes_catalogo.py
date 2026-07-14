@@ -103,7 +103,7 @@ def _leer_voucher_automatico(archivo):
     }
     proveedor = os.getenv('VOUCHER_OCR_PROVIDER', '').strip().lower()
     if proveedor not in lectores:
-        proveedor = 'openai' if os.getenv('OPENAI_API_KEY') else 'gemini'
+        proveedor = 'gemini' if os.getenv('GEMINI_API_KEY') else 'openai'
 
     proveedores = [proveedor]
     alterno = 'gemini' if proveedor == 'openai' else 'openai'

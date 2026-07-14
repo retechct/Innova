@@ -38,6 +38,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_jwt_extended import JWTManager
+from werkzeug.exceptions import HTTPException
 try:
     from flask_compress import Compress
 except ImportError:
@@ -91,6 +92,8 @@ def manejar_error_api(ex):
         if os.getenv('DEBUG_API_ERRORS', '').lower() in ('1', 'true', 'yes'):
             return jsonify({'error': str(ex), 'tipo': type(ex).__name__}), 500
         return jsonify({'error': 'Error interno del servidor'}), 500
+    if isinstance(ex, HTTPException):
+        return ex
     raise ex
 
 # Restringir CORS al dominio de producción.
