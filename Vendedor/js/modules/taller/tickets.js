@@ -968,8 +968,18 @@ async function cargarTicketsTaller() {
         const res     = await apiFetch(url);
         const tickets = await res.json();
 
-        if (!Array.isArray(tickets)) {
-            contenedor.innerHTML = `<p style="color:red; text-align:center;">Error: ${tickets.error || 'Respuesta inválida del servidor'}</p>`;
+        if (!res.ok || !Array.isArray(tickets)) {
+            const codigo = tickets?.codigo ? ` (${tickets.codigo})` : '';
+            const mensaje = `${tickets?.error || 'Respuesta inválida del servidor'}${codigo}`;
+            contenedor.innerHTML = `
+                <p style="color:#b91c1c; text-align:center; margin:18px 0 10px;">
+                    ${escapeHTML(mensaje)}
+                </p>
+                <div style="text-align:center;">
+                    <button type="button" class="btn-filter-taller" onclick="cargarTicketsTaller()" title="Reintentar carga">
+                        <i class="fa-solid fa-rotate-right"></i> Reintentar
+                    </button>
+                </div>`;
             return;
         }
 
@@ -1104,7 +1114,15 @@ async function cargarTicketsTaller() {
 
     } catch (err) {
         console.error('Error cargando taller:', err);
-        contenedor.innerHTML = '<p style="color:red; text-align:center;">❌ Error al conectar con el servidor.</p>';
+        contenedor.innerHTML = `
+            <p style="color:#b91c1c; text-align:center; margin:18px 0 10px;">
+                ${escapeHTML(err?.message || 'No se pudo conectar con el servidor.')}
+            </p>
+            <div style="text-align:center;">
+                <button type="button" class="btn-filter-taller" onclick="cargarTicketsTaller()" title="Reintentar carga">
+                    <i class="fa-solid fa-rotate-right"></i> Reintentar
+                </button>
+            </div>`;
     }
 }
 

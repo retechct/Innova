@@ -14,7 +14,7 @@ from io import BytesIO
 from zoneinfo import ZoneInfo
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request, send_file
 from database import get_db_connection, release_db_connection, limpiar_foto, notificar_usuario, cloudinary_upload
 from auth_middleware import (
     get_usuario_actual,
@@ -788,11 +788,12 @@ def obtener_tickets_taller():
                 })
                 
         return jsonify(tickets), 200
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print("Error en tickets taller:", e)
-        return jsonify({'error': str(e), 'tipo': type(e).__name__}), 500
+    except Exception:
+        current_app.logger.exception("Error al cargar los tickets del taller")
+        return jsonify({
+            'error': 'No se pudieron cargar los tickets del taller.',
+            'codigo': 'TALLER_TICKETS_ERROR',
+        }), 500
     finally:
         if 'conexion' in locals() and conexion:
             cursor.close(); release_db_connection(conexion)

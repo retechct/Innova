@@ -1,6 +1,7 @@
 """Prepare a legacy Innova database and apply pending Alembic revisions."""
 
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -13,6 +14,7 @@ from sqlalchemy.pool import NullPool
 ROOT = Path(__file__).resolve().parent.parent
 ALEMBIC_INI = ROOT / "migrations" / "alembic.ini"
 LEGACY_BASELINE = "20260709_roles_areas_operativas"
+MIGRATION_LOCK_ID = 2026071401
 CORE_TABLES = (
     "usuarios",
     "ventas",
@@ -22,6 +24,27 @@ CORE_TABLES = (
     "stock_productos",
     "stock_piezas",
 )
+
+
+@contextmanager
+def _migration_lock(url):
+    """Serializa migraciones si Render inicia mas de un proceso o instancia."""
+    engine = create_engine(url, poolclass=NullPool)
+    try:
+        with engine.connect() as connection:
+            connection.execute(
+                text("SELECT pg_advisory_lock(:lock_id)"),
+                {"lock_id": MIGRATION_LOCK_ID},
+            )
+            try:
+                yield
+            finally:
+                connection.execute(
+                    text("SELECT pg_advisory_unlock(:lock_id)"),
+                    {"lock_id": MIGRATION_LOCK_ID},
+                )
+    finally:
+        engine.dispose()
 
 
 def _database_url():
@@ -76,21 +99,37 @@ def _database_state(url):
 
 def upgrade_database():
     url = _database_url()
-    tables, revision = _database_state(url)
-    config = Config(str(ALEMBIC_INI))
+    with _migration_lock(url):
+        tables, revision = _database_state(url)
+        config = Config(str(ALEMBIC_INI))
 
-    if not revision:
-        missing_core = [name for name, exists in tables.items() if not exists]
-        if missing_core:
-            raise RuntimeError(
-                "La base no tiene historial Alembic ni el esquema heredado completo. "
-                "Faltan tablas base: " + ", ".join(missing_core)
-            )
-        print(f"[MIGRATIONS] Base heredada detectada; stamp {LEGACY_BASELINE}.")
-        command.stamp(config, LEGACY_BASELINE)
+        if not revision:
+            missing_core = [name for name, exists in tables.items() if not exists]
+            if missing_core:
+                raise RuntimeError(
+                    "La base no tiene historial Alembic ni el esquema heredado completo. "
+                    "Faltan tablas base: " + ", ".join(missing_core)
+                )
+            print(f"[MIGRATIONS] Base heredada detectada; stamp {LEGACY_BASELINE}.")
+            command.stamp(config, LEGACY_BASELINE)
 
-    command.upgrade(config, "head")
-    print("[MIGRATIONS] Esquema actualizado a head.")
+        command.upgrade(config, "head")
+        print("[MIGRATIONS] Esquema actualizado a head.")
+
+
+def upgrade_database_on_render(env=None):
+    """Aplica Alembic al importar la app aunque el Start Command sea antiguo."""
+    values = os.environ if env is None else env
+    on_render = str(values.get("RENDER", "")).strip().lower() == "true"
+    is_preview = str(values.get("IS_PULL_REQUEST", "")).strip().lower() == "true"
+    skip = str(values.get("SKIP_DB_MIGRATIONS", "")).strip().lower() in {
+        "1", "true", "yes",
+    }
+    if not on_render or is_preview or skip:
+        return False
+
+    upgrade_database()
+    return True
 
 
 if __name__ == "__main__":

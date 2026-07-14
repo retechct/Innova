@@ -46,9 +46,11 @@ except ImportError:
     Compress = None
 from datetime import timedelta
 from dotenv import load_dotenv
+from migrations.bootstrap import upgrade_database_on_render
 
 # ─── Carga de variables de entorno ───────────────────────────────────────────
 load_dotenv()
+upgrade_database_on_render()
 
 # ─── Validación de secretos críticos ─────────────────────────────────────────
 # Si JWT_SECRET_KEY no está seteada en el entorno, la app NO debe arrancar.
