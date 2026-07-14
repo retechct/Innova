@@ -36,6 +36,7 @@ from notification_service import (
     notificar_estado_contrato,
     resumen_operativo,
 )
+from workflow_rules import normalizar_codigo_contrato
 
 ventas_bp = Blueprint('ventas', __name__)
 _notificaciones_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='innova-email')
@@ -292,6 +293,10 @@ def guardar_venta():
     faltantes = [campo for campo in ('codigo', 'cliente', 'fecha_emision') if not datos.get(campo)]
     if faltantes:
         return jsonify({'error': f"Campos obligatorios faltantes: {', '.join(faltantes)}"}), 400
+    try:
+        datos['codigo'] = normalizar_codigo_contrato(datos.get('codigo'))
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
     if not isinstance(datos.get('muebles'), list) or not datos['muebles']:
         return jsonify({'error': 'La venta debe contener al menos un producto.'}), 400
     if not isinstance(datos.get('pagos', []), list):

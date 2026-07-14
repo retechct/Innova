@@ -1,13 +1,199 @@
 // === MÓDULO: Carrito, pagos y ventas ===
 let clienteSeleccionadoId = null;
 
+const _VENTA_DRAFT_VERSION = 1;
+const _VENTA_DRAFT_TTL_MS = 12 * 60 * 60 * 1000;
+const _VENTA_DRAFT_KEY_PREFIX = 'innova_venta_borrador';
+const _VENTA_DRAFT_FIELDS = [
+    'c-codigo', 'c-nombre', 'c-tipo-doc', 'c-dni', 'c-celular',
+    'c-direccion', 'c-comprobante-tipo', 'c-emision', 'c-entrega',
+    'v-moneda', 'v-tipo-cambio', 'pago-tipo', 'pago-entidad',
+    'pago-operacion', 'pago-monto', 'pago-empresa', 'pago-comision'
+];
+let _ventaDraftTimer = null;
+let _restaurandoBorradorVenta = false;
+
+function _usuarioBorradorVentaId() {
+    if (usuarioActivo?.id) return String(usuarioActivo.id);
+    try {
+        const guardado = JSON.parse(localStorage.getItem('usuarioInnova') || 'null');
+        return guardado?.id ? String(guardado.id) : '';
+    } catch (_error) {
+        return '';
+    }
+}
+
+function _claveBorradorVenta() {
+    const usuarioId = _usuarioBorradorVentaId();
+    return usuarioId ? `${_VENTA_DRAFT_KEY_PREFIX}:${usuarioId}` : '';
+}
+
+function _sanearCodigoContrato(valor) {
+    const codigo = String(valor || '').trim().slice(0, 50);
+    if (!codigo) return '';
+    if (/https?:\/\/|res\.cloudinary\.com|ver\s+foto\s+adjunta|[<>]/i.test(codigo)) return '';
+    return codigo;
+}
+
+function _limpiarCodigoContratoContaminado() {
+    const input = document.getElementById('c-codigo');
+    if (!input) return;
+    const saneado = _sanearCodigoContrato(input.value);
+    if (input.value.trim() && !saneado) input.value = '';
+}
+
+function _capturarCamposBorradorVenta() {
+    return Object.fromEntries(_VENTA_DRAFT_FIELDS.map(id => {
+        const element = document.getElementById(id);
+        const valor = id === 'c-codigo'
+            ? _sanearCodigoContrato(element?.value)
+            : String(element?.value ?? '');
+        return [id, valor];
+    }));
+}
+
+function _guardarBorradorVenta() {
+    if (_restaurandoBorradorVenta) return false;
+    const clave = _claveBorradorVenta();
+    if (!clave) return false;
+
+    try {
+        const borrador = {
+            version: _VENTA_DRAFT_VERSION,
+            guardadoEn: Date.now(),
+            usuarioId: _usuarioBorradorVentaId(),
+            cart,
+            listaPagos,
+            clienteSeleccionadoId,
+            currentStep,
+            sliderAbierto: document.getElementById('cart-slider')?.classList.contains('open') || false,
+            campos: _capturarCamposBorradorVenta(),
+        };
+        sessionStorage.setItem(clave, JSON.stringify(borrador));
+        return true;
+    } catch (error) {
+        console.warn('No se pudo guardar el borrador de venta:', error);
+        return false;
+    }
+}
+
+function _programarGuardadoBorradorVenta() {
+    if (_restaurandoBorradorVenta) return;
+    clearTimeout(_ventaDraftTimer);
+    _ventaDraftTimer = setTimeout(_guardarBorradorVenta, 120);
+}
+
+function _descartarBorradorVenta() {
+    clearTimeout(_ventaDraftTimer);
+    const clave = _claveBorradorVenta();
+    if (!clave) return;
+    try {
+        sessionStorage.removeItem(clave);
+    } catch (_error) {}
+}
+
+function _restaurarBorradorVenta() {
+    const clave = _claveBorradorVenta();
+    _limpiarCodigoContratoContaminado();
+    if (!clave) return false;
+
+    let borrador;
+    try {
+        borrador = JSON.parse(sessionStorage.getItem(clave) || 'null');
+    } catch (_error) {
+        sessionStorage.removeItem(clave);
+        return false;
+    }
+    if (!borrador || borrador.version !== _VENTA_DRAFT_VERSION) return false;
+    if (Date.now() - Number(borrador.guardadoEn || 0) > _VENTA_DRAFT_TTL_MS) {
+        sessionStorage.removeItem(clave);
+        return false;
+    }
+    if (String(borrador.usuarioId || '') !== _usuarioBorradorVentaId()) return false;
+
+    _restaurandoBorradorVenta = true;
+    try {
+        cart = (Array.isArray(borrador.cart) ? borrador.cart : [])
+            .slice(0, 100)
+            .filter(item => item && typeof item === 'object' && String(item.name || '').trim())
+            .map(item => ({ ...item, price: Number(item.price) }))
+            .filter(item => Number.isFinite(item.price) && item.price >= 0);
+        listaPagos = (Array.isArray(borrador.listaPagos) ? borrador.listaPagos : [])
+            .slice(0, 20)
+            .filter(pago => pago && typeof pago === 'object')
+            .map(pago => ({
+                ...pago,
+                monto: Number(pago.monto),
+                comision: Number(pago.comision || 0),
+                monto_neto: Number(pago.monto_neto ?? pago.monto),
+            }))
+            .filter(pago => Number.isFinite(pago.monto) && pago.monto > 0);
+        clienteSeleccionadoId = Number(borrador.clienteSeleccionadoId) || null;
+
+        const campos = borrador.campos && typeof borrador.campos === 'object'
+            ? borrador.campos
+            : {};
+        const tipoPago = document.getElementById('pago-tipo');
+        if (tipoPago && campos['pago-tipo']) tipoPago.value = campos['pago-tipo'];
+        if (typeof actualizarCamposPago === 'function') actualizarCamposPago();
+
+        for (const id of _VENTA_DRAFT_FIELDS) {
+            const element = document.getElementById(id);
+            if (!element || !(id in campos)) continue;
+            element.value = id === 'c-codigo'
+                ? _sanearCodigoContrato(campos[id])
+                : String(campos[id] ?? '');
+        }
+        if (typeof actualizarValidacionDoc === 'function') actualizarValidacionDoc();
+        if (typeof toggleTipoCambio === 'function') toggleTipoCambio();
+
+        currentStep = [1, 2, 3].includes(Number(borrador.currentStep))
+            ? Number(borrador.currentStep)
+            : 1;
+        updateCartUI();
+        actualizarPagosUI();
+        goToStep(currentStep);
+
+        const slider = document.getElementById('cart-slider');
+        const overlay = document.getElementById('overlay-cart');
+        slider?.classList.toggle('open', Boolean(borrador.sliderAbierto && cart.length));
+        overlay?.classList.toggle('active', Boolean(borrador.sliderAbierto && cart.length));
+        const contador = document.getElementById('cart-count');
+        if (contador) contador.innerText = String(cart.length);
+    } finally {
+        _restaurandoBorradorVenta = false;
+    }
+
+    _limpiarCodigoContratoContaminado();
+    return true;
+}
+
+function _instalarPersistenciaBorradorVenta() {
+    const guardarSiEsCampoVenta = event => {
+        if (_VENTA_DRAFT_FIELDS.includes(event.target?.id)) {
+            _programarGuardadoBorradorVenta();
+        }
+    };
+    document.addEventListener('input', guardarSiEsCampoVenta);
+    document.addEventListener('change', guardarSiEsCampoVenta);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') _guardarBorradorVenta();
+    });
+    window.addEventListener('pagehide', _guardarBorradorVenta);
+    window.addEventListener('pageshow', _restaurarBorradorVenta);
+}
+
+_instalarPersistenciaBorradorVenta();
+
 function toggleCart() {
     document.getElementById('cart-slider').classList.toggle('open');
     document.getElementById('overlay-cart').classList.toggle('active');
     if(document.getElementById('cart-slider').classList.contains('open')) {
-        document.getElementById('c-emision').value = new Date().toISOString().split('T')[0];
-        goToStep(1);
+        const emision = document.getElementById('c-emision');
+        if (emision && !emision.value) emision.value = new Date().toISOString().split('T')[0];
+        goToStep(currentStep || 1);
     }
+    _programarGuardadoBorradorVenta();
 }
 
 function addToCart(name, price, img, details, componentes = {}, categoria = null) {
@@ -29,6 +215,7 @@ function updateCartUI() {
         </div>
     `).join('');
     calcularTotales();
+    _programarGuardadoBorradorVenta();
 }
 
 function removeItem(i) { cart.splice(i, 1); updateCartUI(); document.getElementById('cart-count').innerText = cart.length; }
@@ -119,6 +306,7 @@ function goToStep(step) {
     if(step === 1) btn.innerHTML = 'CONTINUAR A CLIENTE <i class="fa-solid fa-arrow-right"></i>';
     else if(step === 2) btn.innerHTML = 'CONTINUAR A PAGO <i class="fa-solid fa-arrow-right"></i>';
     else btn.innerHTML = '<i class="fa-solid fa-print"></i> FINALIZAR VENTA';
+    _programarGuardadoBorradorVenta();
 }
 
 function toggleModoEscanearVoucher(activo) {
@@ -188,10 +376,23 @@ function handleNextStep() {
     }
     else if (currentStep === 2) { 
         // 1. Capturamos todos los datos importantes
-        const codigo = document.getElementById('c-codigo').value;
+        const codigoInput = document.getElementById('c-codigo');
+        const codigoOriginal = codigoInput.value.trim();
+        const codigo = _sanearCodigoContrato(codigoOriginal);
         const nombre = document.getElementById('c-nombre').value;
         const dni = document.getElementById('c-dni').value;
         const celular = document.getElementById('c-celular').value;
+
+        if (codigoOriginal && !codigo) {
+            codigoInput.value = '';
+            _programarGuardadoBorradorVenta();
+            return Swal.fire(
+                'Número de contrato inválido',
+                'Ese campo debe contener el número del contrato físico, no una foto ni un enlace.',
+                'warning'
+            );
+        }
+        codigoInput.value = codigo;
 
         // 2. VALIDACIÓN: Obligamos a que DNI y Celular estén llenos
         if (!codigo || !nombre || !dni || !celular) {
@@ -499,7 +700,9 @@ function limpiarFormularioVenta() {
     const camposCliente = ['c-codigo', 'c-nombre', 'c-dni', 'c-celular', 'c-direccion', 'c-entrega'];
     camposCliente.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
 
+    cart = [];
     listaPagos = [];
+    clienteSeleccionadoId = null;
     document.getElementById('pago-monto').value = '';
     document.getElementById('pago-operacion').value = '';
     document.getElementById('pago-empresa').value = '';
@@ -516,7 +719,11 @@ function limpiarFormularioVenta() {
 
     actualizarCamposPago(); 
     actualizarPagosUI();
+    updateCartUI();
+    const contador = document.getElementById('cart-count');
+    if (contador) contador.innerText = '0';
     goToStep(1);
+    _descartarBorradorVenta();
 }
 
 async function agregarMetodoPago() {
@@ -688,12 +895,24 @@ function actualizarPagosUI() {
     document.getElementById('res-total').innerText = `S/ ${totalVenta.toFixed(2)}`;
     document.getElementById('res-adelanto').innerText = `S/ ${totalAdelanto.toFixed(2)}`;
     document.getElementById('res-saldo').innerText = `S/ ${(totalVenta - totalAdelanto).toFixed(2)}`;
+    _programarGuardadoBorradorVenta();
 }
 /* ================================================================= */
 /* --- LÓGICA DEL CONFIGURADOR DE COMEDORES (Y VENTAS) --- */
 /* ================================================================= */
 
 async function guardarVenta() {
+    const codigoInput = document.getElementById('c-codigo');
+    const codigoContrato = _sanearCodigoContrato(codigoInput?.value);
+    if (!codigoContrato) {
+        if (codigoInput) codigoInput.value = '';
+        return Swal.fire(
+            'Número de contrato inválido',
+            'Ingresa el número del contrato físico; no se aceptan enlaces ni fotos en ese campo.',
+            'warning'
+        );
+    }
+    codigoInput.value = codigoContrato;
     if (cart.length === 0) return Swal.fire('Carrito Vacío', 'No hay muebles en la cotización.', 'warning');
     if (listaPagos.length === 0) return Swal.fire('Falta Pago', 'Debes registrar al menos un adelanto o método de pago.', 'warning');
     
@@ -708,7 +927,7 @@ async function guardarVenta() {
     const tipoComprobanteActivo = document.getElementById('c-comprobante-tipo')?.value || 'Boleta';
 
     const payload = {
-        codigo: document.getElementById('c-codigo').value,
+        codigo: codigoContrato,
         cliente: document.getElementById('c-nombre').value,
         cliente_id: clienteSeleccionadoId,
         tipo_documento: document.getElementById('c-tipo-doc')?.value || 'DNI',

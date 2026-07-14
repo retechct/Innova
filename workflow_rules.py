@@ -80,6 +80,25 @@ ESTADOS_DISTRIBUCION_TELA = {
 }
 
 
+def normalizar_codigo_contrato(valor):
+    codigo = str(valor or "").strip()
+    codigo_lower = codigo.casefold()
+    if not codigo:
+        raise ValueError("El numero de contrato fisico es obligatorio")
+    if (
+        len(codigo) > 50
+        or "://" in codigo
+        or "res.cloudinary.com" in codigo_lower
+        or "ver foto adjunta" in codigo_lower
+        or "<" in codigo
+        or ">" in codigo
+    ):
+        raise ValueError(
+            "El numero de contrato fisico no puede contener enlaces ni fotos"
+        )
+    return codigo
+
+
 def ticket_esta_terminado(estado):
     return estado in ESTADOS_TICKET_TERMINALES
 

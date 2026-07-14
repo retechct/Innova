@@ -10,6 +10,7 @@ from workflow_rules import (
     cotizacion_esta_vigente,
     estructura_disponible_para_tapiceria,
     ids_items_logistica,
+    normalizar_codigo_contrato,
     normalizar_fecha_cotizacion,
     normalizar_estado_distribucion,
     normalizar_estado_logistica,
@@ -30,6 +31,18 @@ from frontend_rules import es_ruta_frontend
 
 
 class WorkflowIntegrityTests(unittest.TestCase):
+    def test_numero_contrato_no_acepta_fotos_ni_enlaces(self):
+        self.assertEqual(normalizar_codigo_contrato("  F-2026/0042  "), "F-2026/0042")
+        for invalido in (
+            "",
+            "Ver foto adjunta: https://res.cloudinary.com/demo/image.jpg",
+            "https://example.com/contrato",
+            "<img src=x>",
+        ):
+            with self.subTest(invalido=invalido):
+                with self.assertRaises(ValueError):
+                    normalizar_codigo_contrato(invalido)
+
     def test_contrato_ficticio_sofa_tela_y_dos_entregas(self):
         # C-TEST-001: sofa + butaca comparten tela externa.
         estructura = ["Listo para Recojo", "Recogido"]

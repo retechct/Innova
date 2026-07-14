@@ -216,6 +216,7 @@ function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl, proveedor) {
         noteInput.type = 'text';
         noteInput.id = noteInputId;
         noteInput.className = 'form-input-sm';
+        noteInput.autocomplete = 'off';
         noteInput.placeholder = 'Añadir nota a esta pieza (opcional)';
         noteInput.style.cssText = 'flex: 1; font-size: 11px; border: 1px dashed #a78bfa; background-color: #fdf4ff; box-sizing: border-box; margin: 0;';
 
@@ -284,9 +285,13 @@ function seleccionarMaterial(tipoInput, sku, nombre, fotoUrl, proveedor) {
     
     if (noteInput) {
         if (sku.startsWith('REQ-PIN-')) {
-            noteInput.value = `Ver foto adjunta: ${fotoUrl}`;
+            // La foto ya viaja separada en dataset.foto. No copiar su URL a la
+            // nota: Chrome puede restaurar inputs dinamicos en otra posicion.
+            noteInput.value = '';
+            noteInput.placeholder = 'Referencia visual adjunta (nota opcional)';
         } else {
-            noteInput.value = ''; 
+            noteInput.value = '';
+            noteInput.placeholder = 'Añadir nota a esta pieza (opcional)';
         }
     }
     

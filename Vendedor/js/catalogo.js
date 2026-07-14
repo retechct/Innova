@@ -1656,6 +1656,12 @@ async function procesarNotasConFotos(tipos) {
     
     for (let tipo of tipos) {
         let notaTexto = document.getElementById(`nota-${tipo}`)?.value || '';
+        // Compatibilidad con borradores antiguos: la foto se guarda en su
+        // campo propio, nunca como una URL visible dentro de la nota.
+        notaTexto = String(notaTexto)
+            .replace(/ver\s+foto\s+adjunta\s*:\s*https?:\/\/\S+/gi, '')
+            .replace(/https?:\/\/res\.cloudinary\.com\/\S+/gi, '')
+            .trim();
         let fotoUrl = '';
         let input = document.getElementById(`foto-nota-${tipo}`);
         

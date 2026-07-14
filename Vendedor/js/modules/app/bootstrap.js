@@ -5,5 +5,6 @@
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     verificarSesionExistente();
+    if (typeof _restaurarBorradorVenta === 'function') _restaurarBorradorVenta();
     init();
 });
