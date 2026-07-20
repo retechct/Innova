@@ -40,6 +40,26 @@ async function _intentarRefresh() {
 }
 
 function apiFetch(url, options = {}) {
+    const metodo = String(options.method || 'GET').toUpperCase();
+    const esEscritura = !['GET', 'HEAD', 'OPTIONS'].includes(metodo);
+    if (esEscritura && usuarioActivo?.solo_lectura) {
+        const payload = {
+            error: 'Cuenta de demostracion: esta accion esta bloqueada para proteger los datos del ERP.',
+            codigo: 'CUENTA_SOLO_LECTURA',
+            solo_lectura: true
+        };
+        Swal.fire({
+            background: '#14100a', color: '#f5f0e8', icon: 'info',
+            title: 'Modo demostracion',
+            text: 'Puedes recorrer y consultar todo el ERP, pero no modificar sus datos.',
+            confirmButtonColor: '#c9a84c'
+        });
+        return Promise.resolve(new Response(JSON.stringify(payload), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+        }));
+    }
+
     const token = localStorage.getItem('innova_token');
     const esFormData = options.body instanceof FormData;
     const fetchConToken = (tk) => fetch(url, {

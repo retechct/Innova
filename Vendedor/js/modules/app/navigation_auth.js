@@ -210,7 +210,9 @@ function mostrarUsuarioEnHeader() {
         'Jefe_Taller': 'Jefe Taller',
         'ALMACEN':     'Almacén',
     };
-    const rolLabel = String(ROL_LABELS[usuarioActivo.rol] || usuarioActivo.rol || 'Usuario');
+    const rolLabel = usuarioActivo.solo_lectura
+        ? 'Demo · Solo lectura'
+        : String(ROL_LABELS[usuarioActivo.rol] || usuarioActivo.rol || 'Usuario');
     const nombreCompleto = String(usuarioActivo.nombre || 'Usuario').trim() || 'Usuario';
     const nombre = nombreCompleto.split(/\s+/)[0];
     const nombreHTML = escapeHTML(nombre);

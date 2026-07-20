@@ -1041,7 +1041,7 @@ async function listarUsuarios() {
         container.innerHTML = usuarios.map(u => `
             <div class="card" style="padding:15px; border-left: 5px solid #a78bfa; background:white; position:relative;">
                 <div style="position:absolute; top:10px; right:10px; font-size:9px; background:#f3f4f6; padding:2px 6px; border-radius:4px; font-weight:bold; color:#4b5563;">RUC: ${u.ruc}</div>
-                <div style="font-size:10px; font-weight:900; color:#a78bfa; margin-bottom:5px;">${u.rol.toUpperCase()}</div>
+                <div style="font-size:10px; font-weight:900; color:#a78bfa; margin-bottom:5px;">${u.solo_lectura ? 'DEMO · SOLO LECTURA' : u.rol.toUpperCase()}</div>
                 <h4 style="margin:0; color:#1e293b;">${u.nombre}</h4>
                 <p style="font-size:12px; margin:5px 0; color:#64748b;">Sede: <b>${u.empresa}</b></p>
                 <p style="font-size:11px; margin:2px 0; color:#64748b;">Área: ${u.area || 'GENERAL'}</p>
@@ -1067,11 +1067,21 @@ function actualizarReglasEmpresa() {
     }
 }
 
+function actualizarReglasCuentaDemo() {
+    const soloLectura = document.getElementById('nu-solo-lectura')?.checked;
+    const rolSelect = document.getElementById('nu-rol');
+    if (!rolSelect) return;
+    if (soloLectura) rolSelect.value = 'Admin';
+    rolSelect.disabled = Boolean(soloLectura);
+    actualizarReglasEmpresa();
+}
+
 async function guardarUsuario() {
     const nombre = document.getElementById('nu-nombre').value;
     const correo = document.getElementById('nu-correo').value;
     const pin = document.getElementById('nu-pin').value;
-    const rol = document.getElementById('nu-rol').value;
+    const solo_lectura = Boolean(document.getElementById('nu-solo-lectura')?.checked);
+    const rol = solo_lectura ? 'Admin' : document.getElementById('nu-rol').value;
     const area = document.getElementById('nu-area').value;
     const empresaSelect = document.getElementById('nu-empresa');
     const empresa_nombre = empresaSelect.options[empresaSelect.selectedIndex].text;
@@ -1083,13 +1093,15 @@ async function guardarUsuario() {
         const res = await apiFetch(`${API_URL}/api/usuarios/nuevo`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ nombre, correo, pin, rol, area, empresa_nombre, empresa_ruc })
+            body: JSON.stringify({ nombre, correo, pin, rol, area, empresa_nombre, empresa_ruc, solo_lectura })
         });
         if(res.ok) {
             Swal.fire('¡Éxito!', 'Usuario creado correctamente.', 'success');
             document.getElementById('nu-nombre').value = '';
             document.getElementById('nu-correo').value = '';
             document.getElementById('nu-pin').value = '';
+            document.getElementById('nu-solo-lectura').checked = false;
+            actualizarReglasCuentaDemo();
             listarUsuarios();
         }
     } catch(e) { Swal.fire('Error', 'Fallo de conexión', 'error'); }

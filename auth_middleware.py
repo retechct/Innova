@@ -23,7 +23,7 @@ El login (/api/login y /api/login/email) ya devuelve el token.
 
 import time
 from functools import wraps
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -168,10 +168,31 @@ def generar_token(usuario: dict) -> dict:
         "nombre":        usuario.get("nombre", ""),
         "rol":           usuario.get("rol", ""),
         "area_asignada": usuario.get("area_asignada", ""),
+        # La marca viaja firmada dentro del JWT. El cliente puede ocultar
+        # botones por comodidad, pero no puede retirar esta restriccion sin
+        # invalidar la firma del token.
+        "solo_lectura":  bool(usuario.get("solo_lectura", False)),
     }
     access  = create_access_token(identity=identity, additional_claims=additional_claims)
     refresh = create_refresh_token(identity=identity, additional_claims=additional_claims)
     return {"access": access, "refresh": refresh}
+
+
+_METODOS_SOLO_LECTURA = frozenset(("GET", "HEAD", "OPTIONS"))
+
+
+def _bloqueo_solo_lectura(claims):
+    """Impide toda escritura antes de entrar a la funcion de la ruta."""
+    if claims.get("solo_lectura") and request.method not in _METODOS_SOLO_LECTURA:
+        return jsonify({
+            "error": (
+                "Cuenta de demostracion: esta accion esta bloqueada para "
+                "proteger los datos del ERP."
+            ),
+            "codigo": "CUENTA_SOLO_LECTURA",
+            "solo_lectura": True,
+        }), 403
+    return None
 
 
 # ─── Decorador: solo requiere estar logueado ─────────────────────────────────
@@ -194,8 +215,13 @@ def requiere_login(fn):
         if _token_invalidado_por_corte_global():
             return jsonify({"error": "Tu sesión fue cerrada por el administrador. Vuelve a iniciar sesión."}), 401
 
-        if get_jwt().get("rol") == "Cliente":
+        claims = get_jwt()
+        if claims.get("rol") == "Cliente":
             return jsonify({"error": "Acceso exclusivo para el personal de Innova."}), 403
+
+        bloqueo = _bloqueo_solo_lectura(claims)
+        if bloqueo:
+            return bloqueo
 
         return fn(*args, **kwargs)
     return wrapper
@@ -223,6 +249,10 @@ def requiere_rol(*roles_permitidos):
 
             claims = get_jwt()
             rol_usuario = claims.get("rol", "")
+
+            bloqueo = _bloqueo_solo_lectura(claims)
+            if bloqueo:
+                return bloqueo
 
             if rol_usuario not in roles_permitidos:
                 return jsonify({
@@ -254,6 +284,7 @@ def get_usuario_actual() -> dict:
         "nombre":        claims.get("nombre", ""),
         "rol":           claims.get("rol", ""),
         "area_asignada": claims.get("area_asignada", ""),
+        "solo_lectura":  bool(claims.get("solo_lectura", False)),
     }
 
 
@@ -402,6 +433,7 @@ def refresh_token():
                 "nombre":        claims.get("nombre", ""),
                 "rol":           claims.get("rol", ""),
                 "area_asignada": claims.get("area_asignada", ""),
+                "solo_lectura":  bool(claims.get("solo_lectura", False)),
             }
         )
         return jsonify({"access": new_access}), 200

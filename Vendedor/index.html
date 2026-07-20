@@ -850,6 +850,10 @@
                     <option value="ARMADO_COJINES">Área: Cojinería</option>
                     <option value="DESPACHO">Área: Despacho</option>
                 </select>
+                <label style="display:flex;align-items:center;gap:8px;background:#ede9fe;color:#5b21b6;padding:10px 12px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;">
+                    <input type="checkbox" id="nu-solo-lectura" onchange="actualizarReglasCuentaDemo()">
+                    Cuenta demo · acceso total sin cambios
+                </label>
                 <button class="btn-primary" onclick="guardarUsuario()" style="background:#7c3aed;">CREAR ACCESO</button>
             </div>
         </div>

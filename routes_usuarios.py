@@ -80,12 +80,14 @@ def obtener_usuarios_detalle():
         conexion = get_db_connection()
         cursor   = conexion.cursor()
         cursor.execute("""
-            SELECT id, nombre, rol, email, area_asignada, empresa_nombre, empresa_ruc, telefono
+            SELECT id, nombre, rol, email, area_asignada, empresa_nombre, empresa_ruc,
+                   telefono, COALESCE(solo_lectura, false)
             FROM usuarios ORDER BY nombre;
         """)
         usuarios = [
             {"id": r[0], "nombre": r[1], "rol": r[2], "email": r[3],
-             "area": r[4], "empresa": r[5], "ruc": r[6], "telefono": r[7] or ''}
+             "area": r[4], "empresa": r[5], "ruc": r[6], "telefono": r[7] or '',
+             "solo_lectura": bool(r[8])}
             for r in cursor.fetchall()
         ]
         return jsonify(usuarios), 200
@@ -116,11 +118,12 @@ def crear_usuario():
         cursor.execute("""
             INSERT INTO usuarios
                 (nombre, email, pin_acceso, contrasena, password_hash, rol,
-                 area_asignada, empresa_nombre, empresa_ruc, telefono)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                 area_asignada, empresa_nombre, empresa_ruc, telefono, solo_lectura)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """, (data['nombre'], data['correo'].strip().lower(), '',
               '', generate_password_hash(secreto_inicial), data['rol'],
-              data['area'], data['empresa_nombre'], data['empresa_ruc'], data.get('telefono')))
+              data['area'], data['empresa_nombre'], data['empresa_ruc'], data.get('telefono'),
+              bool(data.get('solo_lectura', False))))
         conexion.commit()
         return jsonify({'exito': True}), 201
     except Exception as e:
@@ -152,6 +155,7 @@ def editar_usuario(usuario_id):
         'area':           'area_asignada',
         'empresa_nombre': 'empresa_nombre',
         'empresa_ruc':    'empresa_ruc',
+        'solo_lectura':   'solo_lectura',
     }
     actualizaciones = {
         col: data[clave] for clave, col in campos_permitidos.items() if clave in data
@@ -260,7 +264,8 @@ def verificar_pin():
         cursor   = conexion.cursor()
         cursor.execute("""
             SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email,
-                   area_asignada, password_hash, contrasena, pin_acceso
+                   area_asignada, password_hash, contrasena, pin_acceso,
+                   COALESCE(solo_lectura, false)
             FROM usuarios
             WHERE id = %s AND COALESCE(estado, true) = true;
         """, (usuario_id,))
@@ -275,6 +280,7 @@ def verificar_pin():
                 "nombre":        usuario[1],
                 "rol":           usuario[2],
                 "area_asignada": usuario[6],
+                "solo_lectura":  usuario[10],
             })
             res = jsonify({
                 "exito": True,
@@ -287,7 +293,8 @@ def verificar_pin():
                     "empresa":       usuario[3],
                     "ruc":           usuario[4],
                     "email":         usuario[5],
-                    "area_asignada": usuario[6]
+                    "area_asignada": usuario[6],
+                    "solo_lectura":  bool(usuario[10])
                 }
             })
             return res, 200
@@ -396,7 +403,8 @@ def verificar_email_pin():
         # ── 1. Buscar en usuarios (staff: Admin, Vendedor, Operario…) ──────
         cursor.execute("""
             SELECT id, nombre, rol, empresa_nombre, empresa_ruc, email,
-                   area_asignada, password_hash, contrasena, pin_acceso
+                   area_asignada, password_hash, contrasena, pin_acceso,
+                   COALESCE(solo_lectura, false)
             FROM usuarios
             WHERE LOWER(email) = %s
               AND COALESCE(estado, true) = true;
@@ -412,6 +420,7 @@ def verificar_email_pin():
                 "nombre":        usuario[1],
                 "rol":           usuario[2],
                 "area_asignada": usuario[6],
+                "solo_lectura":  usuario[10],
             })
             return jsonify({
                 "exito": True,
@@ -424,7 +433,8 @@ def verificar_email_pin():
                     "empresa":       usuario[3],
                     "ruc":           usuario[4],
                     "email":         usuario[5],
-                    "area_asignada": usuario[6]
+                    "area_asignada": usuario[6],
+                    "solo_lectura":  bool(usuario[10])
                 }
             }), 200
 

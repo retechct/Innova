@@ -102,6 +102,8 @@ async function init() {
 // Función centralizada para manejar permisos de UI
 function configurarInterfazPorRol() {
     if (!usuarioActivo) return;
+
+    configurarAvisoSoloLectura();
     
     const btnTaller      = document.getElementById('btn-menu-taller');
     const btnStockProduccion = document.getElementById('btn-menu-stock-produccion'); // ← nuevo
@@ -187,6 +189,28 @@ if (esAdmin || esJefeTaller) {
     if (btnScanGlobal) {
         btnScanGlobal.style.display = (esAdmin || esVendedor || esJefeTaller) ? 'flex' : 'none';
     }
+}
+
+function configurarAvisoSoloLectura() {
+    const existente = document.getElementById('aviso-cuenta-demo');
+    if (!usuarioActivo?.solo_lectura) {
+        if (existente) existente.remove();
+        return;
+    }
+    if (existente) return;
+
+    const aviso = document.createElement('div');
+    aviso.id = 'aviso-cuenta-demo';
+    aviso.setAttribute('role', 'status');
+    aviso.style.cssText = [
+        'position:fixed', 'left:50%', 'bottom:18px', 'transform:translateX(-50%)',
+        'z-index:9998', 'background:#7c3aed', 'color:#fff', 'padding:10px 18px',
+        'border-radius:999px', 'box-shadow:0 8px 28px rgba(15,23,42,.28)',
+        'font:700 12px Inter,sans-serif', 'letter-spacing:.02em',
+        'pointer-events:none', 'white-space:nowrap'
+    ].join(';');
+    aviso.innerHTML = '<i class="fa-solid fa-eye"></i> DEMO · SOLO LECTURA';
+    document.body.appendChild(aviso);
 }
 
 function toggleSidebar() {
