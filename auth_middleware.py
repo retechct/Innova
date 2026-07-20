@@ -288,6 +288,14 @@ def get_usuario_actual() -> dict:
     }
 
 
+def usuario_es_solo_lectura() -> bool:
+    """True cuando el JWT actual corresponde a una cuenta demo."""
+    try:
+        return bool(get_jwt().get("solo_lectura", False))
+    except RuntimeError:
+        return False
+
+
 def usuario_puede_operar(area=None, usuario_asignado_id=None) -> bool:
     """Autoriza una operacion con la identidad firmada del JWT.
 

@@ -20,6 +20,7 @@ from auth_middleware import (
     get_usuario_actual,
     requiere_login,
     requiere_rol,
+    usuario_es_solo_lectura,
     usuario_puede_operar,
 )
 from erp_constants import AREA_ALIASES
@@ -2841,6 +2842,9 @@ def asignar_chofer_despacho():
 @requiere_login
 def logistica_pendientes_por_proveedor():
     """Agrupa filas pendientes de logística externa por proveedor."""
+    if usuario_es_solo_lectura():
+        return jsonify([]), 200
+
     conexion = None
     try:
         conexion = get_db_connection()
@@ -4296,6 +4300,22 @@ def resumen_logistica():
     except ValueError:
         return jsonify({'error': 'Formato de fecha inválido. Usa YYYY-MM-DD.'}), 400
 
+    if usuario_es_solo_lectura():
+        return jsonify({
+            'desde':            desde.strftime('%d/%m/%Y'),
+            'hasta':            hasta.strftime('%d/%m/%Y'),
+            'total_registros':  0,
+            'total_pagado':     0,
+            'total_recibido':   0,
+            'total_gastos':     0,
+            'total_periodo':    0,
+            'por_categoria':    {},
+            'por_proveedor':    {},
+            'por_dia':          {},
+            'movimientos':      [],
+            'gastos_logistica': [],
+        }), 200
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -4482,6 +4502,9 @@ def servir_pdf_oc(id):
     El browser abre el HTML en ventana nueva y puede imprimirlo como PDF.
     Elimina la dependencia de Cloudinary y problemas de Content-Type.
     """
+    if usuario_es_solo_lectura():
+        return jsonify({'error': 'Orden no disponible en cuenta demo.'}), 403
+
     from flask import make_response
     conexion = None
     try:
@@ -5000,6 +5023,9 @@ def servir_pdf_oc_publico(token):
 @produccion_bp.route('/api/stock-estructuras', methods=['GET'])
 @requiere_login
 def listar_stock_estructuras():
+    if usuario_es_solo_lectura():
+        return jsonify([]), 200
+
     # Filtros opcionales
     desde       = (request.args.get('desde') or '').strip()
     hasta       = (request.args.get('hasta') or '').strip()
@@ -5093,6 +5119,9 @@ def exportar_stock_estructuras_excel():
     'Estructuras Antiguas' (campo es_antiguo), usando los mismos filtros
     opcionales que el listado normal (desde, hasta, carpintero, pago).
     """
+    if usuario_es_solo_lectura():
+        return jsonify({'error': 'Exportacion no disponible en cuenta demo.'}), 403
+
     desde       = (request.args.get('desde') or '').strip()
     hasta       = (request.args.get('hasta') or '').strip()
     carpintero  = (request.args.get('carpintero') or '').strip()
@@ -5998,6 +6027,9 @@ def historial_pagos_carpinteros():
     semana: cualquier fecha dentro de la semana (filtra semana_inicio <= fecha <= semana_fin).
     Sin filtros devuelve los últimos 100 registros.
     """
+    if usuario_es_solo_lectura():
+        return jsonify([]), 200
+
     carpintero = (request.args.get('carpintero') or '').strip()
     semana     = (request.args.get('semana') or '').strip()
 
@@ -6053,6 +6085,9 @@ def historial_pagos_carpinteros():
 @requiere_login
 def listar_carpinteros():
     """Devuelve nombres únicos de carpinteros que tienen estructuras registradas."""
+    if usuario_es_solo_lectura():
+        return jsonify([]), 200
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -6142,6 +6177,13 @@ def listar_gastos_logistica():
     """
     GET /api/logistica/gastos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&categoria=Flete
     """
+    if usuario_es_solo_lectura():
+        return jsonify({
+            'gastos': [],
+            'total': 0,
+            'count': 0,
+        }), 200
+
     desde_str = request.args.get('desde', '')
     hasta_str = request.args.get('hasta', '')
     categoria = (request.args.get('categoria') or '').strip()

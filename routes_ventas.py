@@ -28,7 +28,12 @@ from flask import Blueprint, jsonify, request, send_file
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from database import get_db_connection, release_db_connection, limpiar_foto
-from auth_middleware import get_usuario_actual, requiere_login, requiere_rol
+from auth_middleware import (
+    get_usuario_actual,
+    requiere_login,
+    requiere_rol,
+    usuario_es_solo_lectura,
+)
 from notification_service import (
     diagnosticar_correo_prueba,
     enviar_resumen_operativo,
@@ -40,6 +45,30 @@ from workflow_rules import normalizar_codigo_contrato
 
 ventas_bp = Blueprint('ventas', __name__)
 _notificaciones_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='innova-email')
+
+
+def _resumen_operativo_demo_vacio():
+    return {
+        "tickets_pendientes": 0,
+        "tickets_en_proceso": 0,
+        "tickets_bloqueados": 0,
+        "logistica_externa_pendiente": 0,
+        "cambios_precio_pendientes": 0,
+        "total_alertas": 0,
+    }
+
+
+def _comisiones_demo_vacias():
+    return {
+        'vendedores': [],
+        'total_ventas': 0,
+        'total_contratos': 0,
+        'total_comision': 0,
+        'total_sueldos': 0,
+        'total_neto': 0,
+        'sueldo_base': SUELDO_BASE_VENDEDOR,
+        'tasa': TASA_COMISION,
+    }
 
 
 def _enviar_notificacion_en_segundo_plano(funcion, *args, **kwargs):
@@ -1000,6 +1029,9 @@ def guardar_venta():
 
 def listar_ventas():
     """Devuelve todas las ventas sumando los pagos múltiples."""
+    if usuario_es_solo_lectura():
+        return jsonify([]), 200
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -1092,6 +1124,14 @@ def reporte_ventas_rapidas():
     except (TypeError, ValueError):
         limit = 200
 
+    if usuario_es_solo_lectura():
+        return jsonify({
+            'items': [],
+            'total_items': 0,
+            'total_monto': 0,
+            'limit': limit,
+        }), 200
+
     condiciones = ["iv.color_tela ILIKE %s"]
     params = ["%VENTA RAPIDA%"]
     if desde:
@@ -1165,6 +1205,9 @@ def _cerrar_db_silencioso(cursor=None, conexion=None):
 def notificaciones_resumen_operativo():
     """Consulta o envia por correo el resumen operativo pendiente."""
     enviar = request.method == 'POST' or request.args.get('enviar') == '1'
+    if usuario_es_solo_lectura():
+        return jsonify(_resumen_operativo_demo_vacio()), 200
+
     try:
         conexion = get_db_connection()
         cursor = conexion.cursor()
@@ -1569,6 +1612,14 @@ def obtener_mis_ventas(vendedor_id):
     from database import paginar
 
     actor = get_usuario_actual()
+    if usuario_es_solo_lectura():
+        return jsonify({
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "total_pages": 1,
+        })
+
     if actor.get('rol') not in ('Admin', 'Jefe_Taller') and int(actor['id']) != vendedor_id:
         return jsonify({'error': 'No puedes consultar las ventas de otro vendedor.'}), 403
 
@@ -1665,6 +1716,9 @@ def ver_tickets_area(area):
 @ventas_bp.route('/api/pedido/detalle/<codigo>', methods=['GET'])
 @requiere_login
 def obtener_detalle_pedido(codigo):
+    if usuario_es_solo_lectura():
+        return jsonify({"error": "Pedido no disponible en cuenta demo."}), 404
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -1739,6 +1793,14 @@ def items_editables_venta(codigo):
     le quiere pedir un cambio (precio, tela/material, o agregar uno nuevo).
     Usado por el paso 1 del modal 'Cambiar precio' en el frontend.
     """
+    if usuario_es_solo_lectura():
+        return jsonify({
+            'codigo_venta': codigo,
+            'estado_venta': '',
+            'monto_total': 0,
+            'items': [],
+        }), 200
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -1926,6 +1988,9 @@ def proponer_cambio_precio(codigo):
 @ventas_bp.route('/api/cambios-precio/pendientes', methods=['GET'])
 @requiere_rol('Admin', 'Jefe_Taller')
 def listar_cambios_precio_pendientes():
+    if usuario_es_solo_lectura():
+        return jsonify([]), 200
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -2043,6 +2108,9 @@ def rechazar_cambio_precio(cambio_id):
 @ventas_bp.route('/api/ventas/<codigo>/historial-precios', methods=['GET'])
 @requiere_login
 def historial_precios_venta(codigo):
+    if usuario_es_solo_lectura():
+        return jsonify([]), 200
+
     try:
         conexion = get_db_connection()
         cursor   = conexion.cursor()
@@ -2075,6 +2143,9 @@ def historial_precios_venta(codigo):
 @ventas_bp.route('/api/ventas/exportar', methods=['GET'])
 @requiere_rol('Admin', 'Jefe_Taller')
 def exportar_ventas_excel():
+    if usuario_es_solo_lectura():
+        return jsonify({'error': 'Exportacion no disponible en cuenta demo.'}), 403
+
     try:
         inicio_str = request.args.get('inicio')
         fin_str = request.args.get('fin')
@@ -2249,6 +2320,9 @@ TASA_COMISION        = 0.03
 @ventas_bp.route('/api/vendedores/comisiones', methods=['GET'])
 @requiere_rol('Admin')
 def obtener_comisiones_vendedores():
+    if usuario_es_solo_lectura():
+        return jsonify(_comisiones_demo_vacias()), 200
+
     desde    = request.args.get('desde', '')
     hasta    = request.args.get('hasta', '')
     vendedor = request.args.get('vendedor', '').strip()
@@ -2496,6 +2570,9 @@ def registrar_ajuste_vendedor():
 @requiere_rol('Admin')
 def listar_ajustes_vendedor(uid):
     """Lista todos los ajustes (descuentos/aumentos) de un vendedor."""
+    if usuario_es_solo_lectura():
+        return jsonify([]), 200
+
     conexion = None
     try:
         conexion = get_db_connection()

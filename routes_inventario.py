@@ -21,7 +21,12 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from flask import Blueprint, request, jsonify, send_file
 from database import get_db_connection, release_db_connection
-from auth_middleware import get_usuario_actual, requiere_login, requiere_rol
+from auth_middleware import (
+    get_usuario_actual,
+    requiere_login,
+    requiere_rol,
+    usuario_es_solo_lectura,
+)
 from sku_utils import generar_sku_maestro, normalizar_sku_maestro
 
 inventario_bp = Blueprint('inventario', __name__)
@@ -1823,6 +1828,9 @@ def listar_ventas_tienda():
     Lista las ventas directas registradas desde Stock en Tienda.
     Params opcionales: ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&sede=nombre
     """
+    if usuario_es_solo_lectura():
+        return jsonify([]), 200
+
     desde = request.args.get('desde', '')
     hasta = request.args.get('hasta', '')
     sede  = request.args.get('sede', '')
